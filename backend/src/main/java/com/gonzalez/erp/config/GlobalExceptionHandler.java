@@ -4,6 +4,8 @@ import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.modules.branches.exception.BranchNameAlreadyExistsException;
 import com.gonzalez.erp.modules.categories.exception.CategoryNameAlreadyExistsException;
+import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveException;
+import com.gonzalez.erp.modules.products.exception.ProductSkuAlreadyExistsException;
 import com.gonzalez.erp.modules.roles.exception.RoleCodeAlreadyExistsException;
 import com.gonzalez.erp.modules.roles.exception.RoleNameAlreadyExistsException;
 import com.gonzalez.erp.modules.users.exception.UserEmailAlreadyExistsException;
@@ -46,7 +48,7 @@ public class GlobalExceptionHandler {
                 ));
     }
 
-    @ExceptionHandler({BranchNameAlreadyExistsException.class, RoleNameAlreadyExistsException.class, RoleCodeAlreadyExistsException.class, UserEmailAlreadyExistsException.class, UserUsernameAlreadyExistsException.class})
+    @ExceptionHandler({BranchNameAlreadyExistsException.class, RoleNameAlreadyExistsException.class, RoleCodeAlreadyExistsException.class, UserEmailAlreadyExistsException.class, UserUsernameAlreadyExistsException.class, ProductSkuAlreadyExistsException.class, ProductCategoryNotActiveException.class})
     public ResponseEntity<ErrorResponse> handleNameAlreadyExists(
             RuntimeException ex, HttpServletRequest request) {
         return ResponseEntity
