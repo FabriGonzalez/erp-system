@@ -16,10 +16,10 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 springdoc:
   api-docs:
-    version: openapi_3_1
+    path: /v3/api-docs       # JSON/YAML definition path
   swagger-ui:
-    path: /swagger-ui.html
-
+    path: /swagger-ui.html   # Web UI access path
+    operations-sorter: alpha # Sort endpoints alphabetically
 app:
   jwt:
     secret: ${JWT_SECRET}
