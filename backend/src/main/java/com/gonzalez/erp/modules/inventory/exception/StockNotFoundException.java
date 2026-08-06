@@ -3,7 +3,7 @@ package com.gonzalez.erp.modules.inventory.exception;
 public class StockNotFoundException extends RuntimeException {
 
     public StockNotFoundException(Long id) {
-        super("Stock not found with id: ".formatted(id));
+        super("Stock not found with id: %s".formatted(id));
     }
 
     public StockNotFoundException(Long productId, Long branchId) {

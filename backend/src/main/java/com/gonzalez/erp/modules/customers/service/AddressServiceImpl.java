@@ -60,7 +60,7 @@ public class AddressServiceImpl implements AddressService {
             makeMain(customer, address);
         }
 
-        addressRepository.save(address)
+        addressRepository.save(address);
 
         return AddressMapper.toResponse(address);
     }
@@ -105,7 +105,7 @@ public class AddressServiceImpl implements AddressService {
                     .findFirst()
                     .ifPresentOrElse(
                             replacement -> makeMain(customer, replacement),
-                            () -> address.removeAsMain();
+                            () -> address.removeAsMain()
                     );
         }
 

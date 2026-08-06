@@ -95,20 +95,4 @@ public class CustomerAddressController {
             @PathVariable Long addressId) {
         return ResponseEntity.ok(addressService.activate(customerId, addressId));
     }
-
-    @PatchMapping("/{addressId}/deactivate")
-    @Operation(summary = "Desactivar dirección")
-    @ApiResponse(responseCode = "200", description = "Dirección desactivada")
-    @ApiResponse(responseCode = "404", description = "Dirección o cliente no encontrado",
-            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    public ResponseEntity<AddressResponse> deactivate(
-            @Parameter(description = "ID del cliente")
-            @PathVariable Long customerId,
-
-            @Parameter(description = "ID de la dirección")
-            @PathVariable Long addressId) {
-
-        return ResponseEntity.ok(
-                addressService.deactivate(customerId, addressId));
-    }
 }
