@@ -2,6 +2,7 @@ package com.gonzalez.erp.modules.transfers.entity;
 
 import com.gonzalez.erp.common.entity.BaseEntity;
 import com.gonzalez.erp.modules.branches.entity.Branch;
+import com.gonzalez.erp.modules.transfers.exception.InvalidStockTransferException;
 import com.gonzalez.erp.modules.users.entity.User;
 import jakarta.persistence.*;
 import lombok.*;

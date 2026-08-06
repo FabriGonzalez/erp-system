@@ -4,6 +4,8 @@ import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.modules.branches.exception.BranchNameAlreadyExistsException;
 import com.gonzalez.erp.modules.categories.exception.CategoryNameAlreadyExistsException;
+import com.gonzalez.erp.modules.customers.exception.CustomerDocumentAlreadyExistsException;
+import com.gonzalez.erp.modules.customers.exception.InvalidCustomerDocumentException;
 import com.gonzalez.erp.modules.inventory.exception.InsufficientStockException;
 import com.gonzalez.erp.modules.inventory.exception.StockAlreadyExistsException;
 import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
@@ -15,6 +17,7 @@ import com.gonzalez.erp.modules.transfers.exception.InvalidStockTransferExceptio
 import com.gonzalez.erp.modules.users.exception.UserEmailAlreadyExistsException;
 import com.gonzalez.erp.modules.users.exception.UserUsernameAlreadyExistsException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -52,7 +55,7 @@ public class GlobalExceptionHandler {
                 ));
     }
 
-    @ExceptionHandler({BranchNameAlreadyExistsException.class, RoleNameAlreadyExistsException.class, RoleCodeAlreadyExistsException.class, UserEmailAlreadyExistsException.class, UserUsernameAlreadyExistsException.class, ProductSkuAlreadyExistsException.class, ProductCategoryNotActiveException.class})
+    @ExceptionHandler({BranchNameAlreadyExistsException.class, RoleNameAlreadyExistsException.class, RoleCodeAlreadyExistsException.class, UserEmailAlreadyExistsException.class, UserUsernameAlreadyExistsException.class, ProductSkuAlreadyExistsException.class, ProductCategoryNotActiveException.class, CustomerDocumentAlreadyExistsException.class})
     public ResponseEntity<ErrorResponse> handleNameAlreadyExists(
             RuntimeException ex, HttpServletRequest request) {
         return ResponseEntity
@@ -60,6 +63,19 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of(
                         HttpStatus.CONFLICT.value(),
                         HttpStatus.CONFLICT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(InvalidCustomerDocumentException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCustomerDocument(
+            InvalidCustomerDocumentException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
                         ex.getMessage(),
                         request.getRequestURI()
                 ));
@@ -131,6 +147,19 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_REQUEST.value(),
                         HttpStatus.BAD_REQUEST.getReasonPhrase(),
                         String.join("; ", errors),
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(
+                        HttpStatus.CONFLICT.value(),
+                        HttpStatus.CONFLICT.getReasonPhrase(),
+                        "Resource already exists or violates a data constraint",
                         request.getRequestURI()
                 ));
     }

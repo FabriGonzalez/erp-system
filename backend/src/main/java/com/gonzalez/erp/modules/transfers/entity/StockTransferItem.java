@@ -3,6 +3,7 @@ package com.gonzalez.erp.modules.transfers.entity;
 import com.gonzalez.erp.common.entity.BaseEntity;
 import com.gonzalez.erp.modules.products.entity.Product;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
 import lombok.*;
 
 @Entity
