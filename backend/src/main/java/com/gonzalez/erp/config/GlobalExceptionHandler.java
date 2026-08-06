@@ -11,6 +11,7 @@ import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveExcep
 import com.gonzalez.erp.modules.products.exception.ProductSkuAlreadyExistsException;
 import com.gonzalez.erp.modules.roles.exception.RoleCodeAlreadyExistsException;
 import com.gonzalez.erp.modules.roles.exception.RoleNameAlreadyExistsException;
+import com.gonzalez.erp.modules.transfers.exception.InvalidStockTransferException;
 import com.gonzalez.erp.modules.users.exception.UserEmailAlreadyExistsException;
 import com.gonzalez.erp.modules.users.exception.UserUsernameAlreadyExistsException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -93,6 +94,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InsufficientStockException.class)
     public ResponseEntity<ErrorResponse> handleInsufficientStock(
             InsufficientStockException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(InvalidStockTransferException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidStockTransfer(
+            InvalidStockTransferException ex, HttpServletRequest request) {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of(
