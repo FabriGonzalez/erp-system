@@ -1,5 +1,6 @@
 package com.gonzalez.erp.modules.products.dto.response;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public record ProductResponse(
@@ -7,6 +8,7 @@ public record ProductResponse(
         String name,
         String sku,
         String description,
+        BigDecimal price,
         Long categoryId,
         String categoryName,
         boolean active,

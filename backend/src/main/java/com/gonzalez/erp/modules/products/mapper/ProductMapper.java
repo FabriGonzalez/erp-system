@@ -13,6 +13,7 @@ public final class ProductMapper {
                 product.getName(),
                 product.getSku(),
                 product.getDescription(),
+                product.getPrice(),
                 product.getCategory().getId(),
                 product.getCategory().getName(),
                 product.isActive(),

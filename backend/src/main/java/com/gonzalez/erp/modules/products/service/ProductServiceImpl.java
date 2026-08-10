@@ -55,6 +55,7 @@ public class ProductServiceImpl implements ProductService {
                 .name(request.name())
                 .sku(request.sku())
                 .description(request.description())
+                .price(request.price())
                 .category(category)
                 .build();
 
@@ -73,6 +74,7 @@ public class ProductServiceImpl implements ProductService {
         product.update(
                 request.name(),
                 request.description(),
+                request.price(),
                 category
         );
         return ProductMapper.toResponse(product);

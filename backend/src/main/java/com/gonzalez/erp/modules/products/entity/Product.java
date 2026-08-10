@@ -8,12 +8,16 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "products")
@@ -37,6 +41,11 @@ public class Product extends BaseEntity {
     @Column(length = 500)
     private String description;
 
+    @NotNull(message = "Product price is required")
+    @DecimalMin(value = "0.0", message = "Product price cannot be negative")
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal price;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
@@ -45,9 +54,10 @@ public class Product extends BaseEntity {
     @Builder.Default
     private boolean active = true;
 
-    public void update(String name, String description, Category category) {
+    public void update(String name, String description, BigDecimal price, Category category) {
         this.name = name;
         this.description = description;
+        this.price = price;
         this.category = category;
     }
 
