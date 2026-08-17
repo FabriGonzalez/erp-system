@@ -14,6 +14,7 @@ import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveExcep
 import com.gonzalez.erp.modules.products.exception.ProductSkuAlreadyExistsException;
 import com.gonzalez.erp.modules.roles.exception.RoleCodeAlreadyExistsException;
 import com.gonzalez.erp.modules.roles.exception.RoleNameAlreadyExistsException;
+import com.gonzalez.erp.modules.shipments.exception.OrderAlreadyHasShipmentException;
 import com.gonzalez.erp.modules.transfers.exception.InvalidStockTransferException;
 import com.gonzalez.erp.modules.users.exception.UserEmailAlreadyExistsException;
 import com.gonzalez.erp.modules.users.exception.UserUsernameAlreadyExistsException;
@@ -59,6 +60,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({BranchNameAlreadyExistsException.class, RoleNameAlreadyExistsException.class, RoleCodeAlreadyExistsException.class, UserEmailAlreadyExistsException.class, UserUsernameAlreadyExistsException.class, ProductSkuAlreadyExistsException.class, ProductCategoryNotActiveException.class, CustomerDocumentAlreadyExistsException.class})
     public ResponseEntity<ErrorResponse> handleNameAlreadyExists(
             RuntimeException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(
+                        HttpStatus.CONFLICT.value(),
+                        HttpStatus.CONFLICT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(OrderAlreadyHasShipmentException.class)
+    public ResponseEntity<ErrorResponse> handleOrderAlreadyHasShipment(
+            OrderAlreadyHasShipmentException ex, HttpServletRequest request) {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of(

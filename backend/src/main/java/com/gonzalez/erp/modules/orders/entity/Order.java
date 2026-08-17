@@ -64,6 +64,11 @@ public class Order extends BaseEntity {
                     "Order is already cancelled");
         }
 
+        if (!isDraft() && !isConfirmed()) {
+            throw new InvalidOrderException(
+                    "Only draft or confirmed orders can be cancelled");
+        }
+
         this.status = OrderStatus.CANCELLED;
         this.cancelledAt = LocalDateTime.now();
     }
