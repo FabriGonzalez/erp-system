@@ -1,6 +1,6 @@
 package com.gonzalez.erp.modules.customers.dto.response;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record AddressResponse(
         Long id,
@@ -15,6 +15,6 @@ public record AddressResponse(
         String reference,
         boolean primary,
         boolean active,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        Instant createdAt,
+        Instant updatedAt
 ) {}

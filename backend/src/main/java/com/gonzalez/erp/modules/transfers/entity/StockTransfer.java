@@ -7,7 +7,7 @@ import com.gonzalez.erp.modules.users.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -38,7 +38,7 @@ public class StockTransfer extends BaseEntity {
     private User createdBy;
 
     @Column(name = "confirmed_at")
-    private LocalDateTime confirmedAt;
+    private Instant confirmedAt;
 
     @OneToMany(mappedBy = "transfer", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
@@ -51,7 +51,7 @@ public class StockTransfer extends BaseEntity {
         }
 
         this.status = StockTransferStatus.CONFIRMED;
-        this.confirmedAt = LocalDateTime.now();
+        this.confirmedAt = Instant.now();
     }
 
     public void cancel() {

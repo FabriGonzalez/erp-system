@@ -1,9 +1,9 @@
 package com.gonzalez.erp.common.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record ErrorResponse(
-        LocalDateTime timestamp,
+        Instant timestamp,
         int status,
         String error,
         String message,
@@ -11,7 +11,7 @@ public record ErrorResponse(
 ) {
     public static ErrorResponse of(int status, String error, String message, String path) {
         return new ErrorResponse(
-                LocalDateTime.now(),
+                Instant.now(),
                 status,
                 error,
                 message,

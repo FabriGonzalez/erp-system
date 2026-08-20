@@ -1,12 +1,12 @@
 package com.gonzalez.erp.modules.categories.dto.response;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record CategoryResponse(
         Long id,
         String name,
         String description,
         boolean active,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        Instant createdAt,
+        Instant updatedAt
 ) {}

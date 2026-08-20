@@ -1,6 +1,6 @@
 package com.gonzalez.erp.modules.inventory.dto.response;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record StockResponse(
         Long id,
@@ -9,7 +9,7 @@ public record StockResponse(
         Long branchId,
         String branchName,
         Integer quantity,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        Instant createdAt,
+        Instant updatedAt
 ) {
 }

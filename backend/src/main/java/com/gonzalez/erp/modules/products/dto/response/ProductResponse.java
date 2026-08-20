@@ -1,7 +1,7 @@
 package com.gonzalez.erp.modules.products.dto.response;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record ProductResponse(
         Long id,
@@ -12,6 +12,6 @@ public record ProductResponse(
         Long categoryId,
         String categoryName,
         boolean active,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        Instant createdAt,
+        Instant updatedAt
 ) {}

@@ -1,6 +1,6 @@
 package com.gonzalez.erp.modules.customers.dto.response;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record CustomerResponse(
         Long id,
@@ -12,6 +12,6 @@ public record CustomerResponse(
         String documentNumber,
         String observations,
         boolean active,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        Instant createdAt,
+        Instant updatedAt
 ) {}

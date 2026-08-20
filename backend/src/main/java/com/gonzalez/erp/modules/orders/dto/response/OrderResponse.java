@@ -2,7 +2,7 @@ package com.gonzalez.erp.modules.orders.dto.response;
 
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 public record OrderResponse(
@@ -14,10 +14,10 @@ public record OrderResponse(
         Long createdById,
         String createdByUsername,
         OrderStatus status,
-        LocalDateTime confirmedAt,
-        LocalDateTime cancelledAt,
+        Instant confirmedAt,
+        Instant cancelledAt,
         List<OrderItemResponse> items,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        Instant createdAt,
+        Instant updatedAt
 ) {
 }

@@ -1,6 +1,6 @@
 package com.gonzalez.erp.modules.shipments.dto.response;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record ShipmentResponse(
         Long id,
@@ -14,7 +14,7 @@ public record ShipmentResponse(
         String postalCode,
         String country,
         String reference,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        Instant createdAt,
+        Instant updatedAt
 ) {
 }

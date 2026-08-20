@@ -2,7 +2,7 @@ package com.gonzalez.erp.modules.inventory.dto.response;
 
 import com.gonzalez.erp.modules.inventory.entity.StockMovementType;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record StockMovementResponse(
         Long id,
@@ -14,7 +14,7 @@ public record StockMovementResponse(
         String reason,
         Long referenceId,
         String referenceType,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        Instant createdAt,
+        Instant updatedAt
 ) {
 }

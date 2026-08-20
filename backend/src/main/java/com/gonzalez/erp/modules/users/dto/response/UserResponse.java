@@ -1,6 +1,6 @@
 package com.gonzalez.erp.modules.users.dto.response;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record UserResponse(
         Long id,
@@ -11,6 +11,6 @@ public record UserResponse(
         Long roleId,
         String roleName,
         boolean active,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        Instant createdAt,
+        Instant updatedAt
 ) {}

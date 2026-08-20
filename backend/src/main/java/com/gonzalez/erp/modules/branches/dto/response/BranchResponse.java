@@ -1,6 +1,6 @@
 package com.gonzalez.erp.modules.branches.dto.response;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record BranchResponse(
         Long id,
@@ -8,6 +8,6 @@ public record BranchResponse(
         String address,
         String phone,
         boolean active,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        Instant createdAt,
+        Instant updatedAt
 ) {}

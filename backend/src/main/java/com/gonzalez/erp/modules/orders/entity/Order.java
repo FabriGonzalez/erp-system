@@ -8,7 +8,7 @@ import com.gonzalez.erp.modules.users.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -39,10 +39,10 @@ public class Order extends BaseEntity {
     private OrderStatus status = OrderStatus.DRAFT;
 
     @Column(name = "confirmed_at")
-    private LocalDateTime confirmedAt;
+    private Instant confirmedAt;
 
     @Column(name = "cancelled_at")
-    private LocalDateTime cancelledAt;
+    private Instant cancelledAt;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
@@ -55,7 +55,7 @@ public class Order extends BaseEntity {
         }
 
         this.status = OrderStatus.CONFIRMED;
-        this.confirmedAt = LocalDateTime.now();
+        this.confirmedAt = Instant.now();
     }
 
     public void cancel() {
@@ -70,7 +70,7 @@ public class Order extends BaseEntity {
         }
 
         this.status = OrderStatus.CANCELLED;
-        this.cancelledAt = LocalDateTime.now();
+        this.cancelledAt = Instant.now();
     }
 
     public void addItem(OrderItem item) {

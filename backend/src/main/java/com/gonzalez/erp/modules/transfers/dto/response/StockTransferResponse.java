@@ -2,7 +2,7 @@ package com.gonzalez.erp.modules.transfers.dto.response;
 
 import com.gonzalez.erp.modules.transfers.entity.StockTransferStatus;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 public record StockTransferResponse(
@@ -14,9 +14,9 @@ public record StockTransferResponse(
         StockTransferStatus status,
         Long createdById,
         String createdByUsername,
-        LocalDateTime confirmedAt,
+        Instant confirmedAt,
         List<StockTransferItemResponse> items,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        Instant createdAt,
+        Instant updatedAt
 ) {
 }

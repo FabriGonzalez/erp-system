@@ -19,7 +19,7 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Configuration
 @EnableWebSecurity
@@ -63,7 +63,7 @@ public class SecurityConfig {
                     {"status":401,"error":"Unauthorized","message":"%s","timestamp":"%s","path":"%s"}
                     """.formatted(
                             authException.getMessage(),
-                            LocalDateTime.now(),
+                            Instant.now(),
                             request.getRequestURI())
             );
         };
