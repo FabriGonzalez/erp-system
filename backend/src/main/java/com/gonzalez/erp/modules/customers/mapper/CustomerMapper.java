@@ -16,6 +16,7 @@ public final class CustomerMapper {
                 customer.getDocumentType(),
                 customer.getDocumentNumber(),
                 customer.getObservations(),
+                customer.getCompany().getId(),
                 customer.isActive(),
                 customer.getCreatedAt(),
                 customer.getUpdatedAt()

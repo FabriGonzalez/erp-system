@@ -7,7 +7,9 @@ import java.util.List;
 import java.util.Optional;
 
 public interface BranchRepository extends JpaRepository<Branch, Long> {
-    Optional<Branch> findByName(String name);
-    boolean existsByName(String name);
-    List<Branch> findByActive(boolean active);
+    Optional<Branch> findByNameAndCompanyId(String name, Long companyId);
+    boolean existsByNameAndCompanyId(String name, Long companyId);
+    List<Branch> findByCompanyId(Long companyId);
+    List<Branch> findByCompanyIdAndActive(Long companyId, boolean active);
+    Optional<Branch> findByIdAndCompanyId(Long id, Long companyId);
 }

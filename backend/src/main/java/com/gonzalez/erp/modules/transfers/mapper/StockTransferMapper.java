@@ -7,8 +7,7 @@ import com.gonzalez.erp.modules.transfers.entity.StockTransferItem;
 
 public final class StockTransferMapper {
 
-    private StockTransferMapper() {
-    }
+    private StockTransferMapper() {}
 
     public static StockTransferResponse toResponse(StockTransfer transfer) {
         return new StockTransferResponse(
@@ -32,7 +31,7 @@ public final class StockTransferMapper {
     private static StockTransferItemResponse toItemResponse(StockTransferItem item) {
         return new StockTransferItemResponse(
                 item.getId(),
-                item.getProduct().getSku(),
+                item.getProduct().getId(),
                 item.getProduct().getName(),
                 item.getQuantity()
         );

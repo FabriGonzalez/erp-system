@@ -1,12 +1,11 @@
 package com.gonzalez.erp.modules.inventory.dto.request;
 
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 public record StockAdjustRequest(
-        @NotBlank(message = "productId is required")
-        String productId,
+        @NotNull(message = "productId is required")
+        Long productId,
 
         @NotNull(message = "branchId is required")
         Long branchId,
@@ -15,9 +14,6 @@ public record StockAdjustRequest(
         @NotNull(message = "quantity is required")
         Integer newQuantity,
 
-        @NotBlank(message = "reason is required")
+        @NotNull(message = "reason is required")
         String reason
-) {
-
-
-}
+) {}

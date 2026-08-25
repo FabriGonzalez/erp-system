@@ -1,10 +1,8 @@
 package com.gonzalez.erp.modules.categories.entity;
 
 import com.gonzalez.erp.common.entity.BaseEntity;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
-import jakarta.validation.constraints.NotBlank;
+import com.gonzalez.erp.modules.companies.entity.Company;
+import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,7 +10,15 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "categories")
+@Table(
+        name = "categories",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_category_company_name",
+                        columnNames = {"company_id", "name"}
+                )
+        }
+)
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
@@ -20,12 +26,16 @@ import lombok.NoArgsConstructor;
 public class Category extends BaseEntity {
 
     @Size(max = 100, message = "Category name must not exceed 100 characters")
-    @Column(nullable = false, unique = true, length = 100)
+    @Column(nullable = false, length = 100)
     private String name;
 
     @Size(max = 500, message = "Description must not exceed 500 characters")
     @Column(length = 500)
     private String description;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
     @Column(nullable = false)
     @Builder.Default

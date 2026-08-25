@@ -1,6 +1,7 @@
 package com.gonzalez.erp.modules.customers.entity;
 
 import com.gonzalez.erp.common.entity.BaseEntity;
+import com.gonzalez.erp.modules.companies.entity.Company;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -10,8 +11,8 @@ import java.util.List;
 @Entity
 @Table(name = "customers", uniqueConstraints = {
         @UniqueConstraint(
-                name = "uk_customer_document",
-                columnNames = {"document_type", "document_number"}
+                name = "uk_customer_company_document",
+                columnNames = {"company_id", "document_type", "document_number"}
         )
 })
 @Getter
@@ -40,6 +41,10 @@ public class Customer extends BaseEntity {
 
     @Column(columnDefinition = "TEXT")
     private String observations;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
     @Column(nullable = false)
     @Builder.Default

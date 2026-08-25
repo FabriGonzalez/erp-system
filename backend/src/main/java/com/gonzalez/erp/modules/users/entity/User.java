@@ -1,6 +1,7 @@
 package com.gonzalez.erp.modules.users.entity;
 
 import com.gonzalez.erp.common.entity.BaseEntity;
+import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.roles.entity.Role;
 import jakarta.persistence.*;
 import lombok.*;
@@ -28,6 +29,10 @@ public class User extends BaseEntity {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "company_id")
+    private Company company;
 
     @Column(nullable = false)
     @Builder.Default

@@ -30,8 +30,7 @@ public class JwtUtil {
 
         return Jwts.builder()
                 .subject(userDetails.getUsername())
-                .claim("userId", userDetails.getUserId())
-                .claim("role", userDetails.getRoleCode())
+                .claim("companyId", userDetails.getCompanyId())
                 .issuedAt(now)
                 .expiration(expiration)
                 .signWith(secretKey)

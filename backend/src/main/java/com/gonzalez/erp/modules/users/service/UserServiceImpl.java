@@ -1,6 +1,9 @@
 package com.gonzalez.erp.modules.users.service;
 
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.config.security.SecurityUtils;
+import com.gonzalez.erp.modules.companies.entity.Company;
+import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.roles.entity.Role;
 import com.gonzalez.erp.modules.roles.repository.RoleRepository;
 import com.gonzalez.erp.modules.users.dto.request.UserRequest;
@@ -25,13 +28,15 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final CompanyRepository companyRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
     public List<UserResponse> findAll(Boolean active) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
         List<User> users = (active != null)
-                ? userRepository.findByActive(active)
-                : userRepository.findAll();
+                ? userRepository.findByCompanyIdAndActive(companyId, active)
+                : userRepository.findByCompanyId(companyId);
         return users.stream().map(UserMapper::toResponse).toList();
     }
 
@@ -43,14 +48,17 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserResponse create(UserRequest request) {
-        if (userRepository.existsByEmail(request.email())) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+
+        if (userRepository.existsByEmailAndCompanyId(request.email(), companyId)) {
             throw new UserEmailAlreadyExistsException(request.email());
         }
-        if (userRepository.existsByUsername(request.username())) {
+        if (userRepository.existsByUsernameAndCompanyId(request.username(), companyId)) {
             throw new UserUsernameAlreadyExistsException(request.username());
         }
         Role role = roleRepository.findById(request.roleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Role not found with id: " + request.roleId()));
+        Company company = companyRepository.getReferenceById(companyId);
 
         User user = User.builder()
                 .username(request.username())
@@ -59,6 +67,7 @@ public class UserServiceImpl implements UserService {
                 .firstName(request.firstName())
                 .lastName(request.lastName())
                 .role(role)
+                .company(company)
                 .build();
         return UserMapper.toResponse(userRepository.save(user));
     }
@@ -67,13 +76,14 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse update(Long id, UserUpdateRequest request) {
         User user = findUserOrThrow(id);
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
 
         if (!user.getEmail().equals(request.email())
-                && userRepository.existsByEmail(request.email())) {
+                && userRepository.existsByEmailAndCompanyIdAndIdNot(request.email(), companyId, id)) {
             throw new UserEmailAlreadyExistsException(request.email());
         }
         if (!user.getUsername().equals(request.username())
-                && userRepository.existsByUsername(request.username())) {
+                && userRepository.existsByUsernameAndCompanyIdAndIdNot(request.username(), companyId, id)) {
             throw new UserUsernameAlreadyExistsException(request.username());
         }
         Role role = roleRepository.findById(request.roleId())
@@ -100,7 +110,12 @@ public class UserServiceImpl implements UserService {
     }
 
     private User findUserOrThrow(Long id) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+
         return userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+                .filter(user -> user.getCompany() != null
+                        && companyId.equals(user.getCompany().getId()))
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("User not found with id: " + id));
     }
 }

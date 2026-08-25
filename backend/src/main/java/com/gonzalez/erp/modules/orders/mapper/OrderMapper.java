@@ -8,8 +8,7 @@ import com.gonzalez.erp.modules.orders.entity.OrderItem;
 
 public final class OrderMapper {
 
-    private OrderMapper() {
-    }
+    private OrderMapper() {}
 
     public static OrderResponse toResponse(Order order) {
         Customer customer = order.getCustomer();
@@ -44,7 +43,7 @@ public final class OrderMapper {
     private static OrderItemResponse toItemResponse(OrderItem item) {
         return new OrderItemResponse(
                 item.getId(),
-                item.getProduct().getSku(),
+                item.getProduct().getId(),
                 item.getProduct().getName(),
                 item.getQuantity(),
                 item.getUnitPrice()

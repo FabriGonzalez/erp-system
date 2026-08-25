@@ -1,6 +1,7 @@
 package com.gonzalez.erp.modules.inventory.service;
 
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.inventory.dto.response.StockMovementResponse;
 import com.gonzalez.erp.modules.inventory.entity.StockMovement;
 import com.gonzalez.erp.modules.inventory.entity.StockMovementType;
@@ -21,7 +22,13 @@ public class StockMovementServiceImpl implements StockMovementService {
 
     @Override
     public List<StockMovementResponse> findAll() {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+
         return stockMovementRepository.findAll().stream()
+                .filter(movement ->
+                        movement.getStock() != null
+                                && movement.getStock().getCompany() != null
+                                && companyId.equals(movement.getStock().getCompany().getId()))
                 .map(StockMovementMapper::toResponse)
                 .toList();
     }
@@ -34,20 +41,38 @@ public class StockMovementServiceImpl implements StockMovementService {
 
     @Override
     public List<StockMovementResponse> findByStockId(Long stockId) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+
         return stockMovementRepository.findByStockIdOrderByCreatedAtDesc(stockId).stream()
+                .filter(movement ->
+                        movement.getStock() != null
+                                && movement.getStock().getCompany() != null
+                                && companyId.equals(movement.getStock().getCompany().getId()))
                 .map(StockMovementMapper::toResponse)
                 .toList();
     }
 
     @Override
     public List<StockMovementResponse> findByType(StockMovementType type) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+
         return stockMovementRepository.findByType(type).stream()
+                .filter(movement ->
+                        movement.getStock() != null
+                                && movement.getStock().getCompany() != null
+                                && companyId.equals(movement.getStock().getCompany().getId()))
                 .map(StockMovementMapper::toResponse)
                 .toList();
     }
 
     private StockMovement findMovementOrThrow(Long id) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+
         return stockMovementRepository.findById(id)
+                .filter(movement ->
+                        movement.getStock() != null
+                                && movement.getStock().getCompany() != null
+                                && companyId.equals(movement.getStock().getCompany().getId()))
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Stock movement not found with id: " + id));
     }

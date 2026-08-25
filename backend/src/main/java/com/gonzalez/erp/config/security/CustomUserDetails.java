@@ -25,6 +25,8 @@ public class CustomUserDetails implements UserDetails {
     private final Set<Permission> permissions;
     private final Collection<? extends GrantedAuthority> authorities;
     private final boolean active;
+    private final Long companyId;
+    private final String companyName;
 
     public CustomUserDetails(User user) {
         this.userId = user.getId();
@@ -36,6 +38,8 @@ public class CustomUserDetails implements UserDetails {
         this.lastName = user.getLastName();
         this.roleName = user.getRole().getName();
         this.permissions = user.getRole().getPermissions();
+        this.companyId = user.getCompany() != null ? user.getCompany().getId() : null;
+        this.companyName = user.getCompany() != null ? user.getCompany().getName() : null;
 
         Set<GrantedAuthority> auths = user.getRole().getPermissions().stream()
                 .map(p -> new SimpleGrantedAuthority(p.name()))

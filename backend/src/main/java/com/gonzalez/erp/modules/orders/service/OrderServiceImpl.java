@@ -2,7 +2,10 @@ package com.gonzalez.erp.modules.orders.service;
 
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.CustomUserDetails;
+import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
+import com.gonzalez.erp.modules.companies.entity.Company;
+import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.customers.repository.CustomerRepository;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
 import com.gonzalez.erp.modules.inventory.entity.StockMovement;
@@ -45,6 +48,7 @@ public class OrderServiceImpl implements OrderService {
     private final ProductRepository productRepository;
     private final CustomerRepository customerRepository;
     private final UserRepository userRepository;
+    private final CompanyRepository companyRepository;
 
     @Override
     public List<OrderResponse> findAll(OrderStatus status) {
@@ -65,13 +69,16 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public OrderResponse create(OrderRequest request) {
-        Set<String> seenProducts = new HashSet<>();
+        Set<Long> seenProducts = new HashSet<>();
         for (OrderItemRequest item : request.items()) {
             if (!seenProducts.add(item.productId())) {
                 throw new InvalidOrderException(
                         "Duplicate product in order items: " + item.productId());
             }
         }
+
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+        Company company = companyRepository.getReferenceById(companyId);
 
         Order order = Order.builder()
                 .branch(branchRepository.getReferenceById(request.branchId()))
@@ -82,12 +89,13 @@ public class OrderServiceImpl implements OrderService {
                         : null)
                 .createdBy(userRepository.getReferenceById(getCurrentUserId()))
                 .status(OrderStatus.DRAFT)
+                .company(company)
                 .build();
 
         for (OrderItemRequest itemRequest : request.items()) {
             var product = productRepository.findById(itemRequest.productId())
                     .orElseThrow(() -> new ResourceNotFoundException(
-                            "Product not found with sku: " + itemRequest.productId()));
+                            "Product not found with id: " + itemRequest.productId()));
 
             OrderItem item = OrderItem.builder()
                     .product(product)
@@ -109,12 +117,12 @@ public class OrderServiceImpl implements OrderService {
         checkStatus(order, OrderStatus.DRAFT, "confirmed");
 
         for (OrderItem item : order.getItems()) {
-            String productId = item.getProduct().getSku();
+            Long productId = item.getProduct().getId();
             Long branchId = order.getBranch().getId();
 
             Stock stock = stockRepository
                     .findByProductIdAndBranchId(productId, branchId)
-                    .orElseThrow(() -> new StockNotFoundException(productId, branchId));
+                    .orElseThrow(() -> new StockNotFoundException(productId.toString(), branchId));
 
             if (stock.getQuantity() < item.getQuantity()) {
                 throw new InsufficientStockException(
@@ -123,12 +131,12 @@ public class OrderServiceImpl implements OrderService {
         }
 
         for (OrderItem item : order.getItems()) {
-            String productId = item.getProduct().getSku();
+            Long productId = item.getProduct().getId();
             Long branchId = order.getBranch().getId();
 
             Stock stock = stockRepository
                     .findByProductIdAndBranchId(productId, branchId)
-                    .orElseThrow(() -> new StockNotFoundException(productId, branchId));
+                    .orElseThrow(() -> new StockNotFoundException(productId.toString(), branchId));
 
             int previousQuantity = stock.getQuantity();
             stock.setQuantity(previousQuantity - item.getQuantity());
@@ -162,12 +170,12 @@ public class OrderServiceImpl implements OrderService {
 
         if (order.isConfirmed()) {
             for (OrderItem item : order.getItems()) {
-                String productId = item.getProduct().getSku();
+                Long productId = item.getProduct().getId();
                 Long branchId = order.getBranch().getId();
 
                 Stock stock = stockRepository
                         .findByProductIdAndBranchId(productId, branchId)
-                        .orElseThrow(() -> new StockNotFoundException(productId, branchId));
+                        .orElseThrow(() -> new StockNotFoundException(productId.toString(), branchId));
 
                 int previousQuantity = stock.getQuantity();
                 stock.setQuantity(previousQuantity + item.getQuantity());

@@ -8,11 +8,13 @@ import java.util.Optional;
 
 public interface StockRepository extends JpaRepository<Stock, Long> {
 
-    Optional<Stock> findByProductIdAndBranchId(String productId, Long branchId);
+    Optional<Stock> findByProductIdAndBranchId(Long productId, Long branchId);
 
-    boolean existsByProductIdAndBranchId(String productId, Long branchId);
+    boolean existsByProductIdAndBranchId(Long productId, Long branchId);
 
     List<Stock> findByBranchId(Long branchId);
 
-    List<Stock> findByProductId(String productId);
+    List<Stock> findByProductId(Long productId);
+
+    List<Stock> findByCompanyId(Long companyId);
 }

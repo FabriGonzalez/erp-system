@@ -2,6 +2,7 @@ package com.gonzalez.erp.config;
 
 import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.modules.companies.exception.CompanyNameAlreadyExistsException;
 import com.gonzalez.erp.modules.branches.exception.BranchNameAlreadyExistsException;
 import com.gonzalez.erp.modules.categories.exception.CategoryNameAlreadyExistsException;
 import com.gonzalez.erp.modules.customers.exception.CustomerDocumentAlreadyExistsException;
@@ -44,21 +45,19 @@ public class GlobalExceptionHandler {
                 ));
     }
 
-    @ExceptionHandler(CategoryNameAlreadyExistsException.class)
-    public ResponseEntity<ErrorResponse> handleCategoryNameAlreadyExists(
-            CategoryNameAlreadyExistsException ex, HttpServletRequest request) {
-        return ResponseEntity
-                .status(HttpStatus.CONFLICT)
-                .body(ErrorResponse.of(
-                        HttpStatus.CONFLICT.value(),
-                        HttpStatus.CONFLICT.getReasonPhrase(),
-                        ex.getMessage(),
-                        request.getRequestURI()
-                ));
-    }
-
-    @ExceptionHandler({BranchNameAlreadyExistsException.class, RoleNameAlreadyExistsException.class, RoleCodeAlreadyExistsException.class, UserEmailAlreadyExistsException.class, UserUsernameAlreadyExistsException.class, ProductSkuAlreadyExistsException.class, ProductCategoryNotActiveException.class, CustomerDocumentAlreadyExistsException.class})
-    public ResponseEntity<ErrorResponse> handleNameAlreadyExists(
+    @ExceptionHandler({
+            CompanyNameAlreadyExistsException.class,
+            BranchNameAlreadyExistsException.class,
+            CategoryNameAlreadyExistsException.class,
+            RoleNameAlreadyExistsException.class,
+            RoleCodeAlreadyExistsException.class,
+            UserEmailAlreadyExistsException.class,
+            UserUsernameAlreadyExistsException.class,
+            ProductSkuAlreadyExistsException.class,
+            ProductCategoryNotActiveException.class,
+            CustomerDocumentAlreadyExistsException.class
+    })
+    public ResponseEntity<ErrorResponse> handleConflict(
             RuntimeException ex, HttpServletRequest request) {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
@@ -205,3 +204,4 @@ public class GlobalExceptionHandler {
                 ));
     }
 }
+

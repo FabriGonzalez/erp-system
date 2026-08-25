@@ -5,13 +5,12 @@ import com.gonzalez.erp.modules.inventory.entity.Stock;
 
 public final class StockMapper {
 
-    private StockMapper() {
-    }
+    private StockMapper() {}
 
     public static StockResponse toResponse(Stock stock) {
         return new StockResponse(
                 stock.getId(),
-                stock.getProduct().getSku(),
+                stock.getProduct().getId(),
                 stock.getProduct().getName(),
                 stock.getBranch().getId(),
                 stock.getBranch().getName(),

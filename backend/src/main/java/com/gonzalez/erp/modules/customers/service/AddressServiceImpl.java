@@ -1,6 +1,7 @@
 package com.gonzalez.erp.modules.customers.service;
 
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.customers.dto.request.AddressRequest;
 import com.gonzalez.erp.modules.customers.dto.response.AddressResponse;
 import com.gonzalez.erp.modules.customers.entity.Address;
@@ -132,8 +133,12 @@ public class AddressServiceImpl implements AddressService {
     }
 
     private Customer findCustomerOrThrow(Long customerId) {
-        return customerRepository.findById(customerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+
+        return customerRepository.findByIdAndCompanyId(customerId, companyId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Customer not found with id: " + customerId));
     }
 
     private Address findAddressOrThrow(Long customerId, Long addressId) {

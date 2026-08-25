@@ -9,6 +9,7 @@ public final class ProductMapper {
 
     public static ProductResponse toResponse(Product product) {
         return new ProductResponse(
+                product.getId(),
                 product.getSku(),
                 product.getName(),
                 product.getColor(),
@@ -17,6 +18,7 @@ public final class ProductMapper {
                 product.getPrice(),
                 product.getCategory().getId(),
                 product.getCategory().getName(),
+                product.getCompany().getId(),
                 product.isActive(),
                 product.getCreatedAt(),
                 product.getUpdatedAt()

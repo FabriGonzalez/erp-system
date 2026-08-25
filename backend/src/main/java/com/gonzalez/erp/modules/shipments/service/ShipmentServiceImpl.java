@@ -1,6 +1,7 @@
 package com.gonzalez.erp.modules.shipments.service;
 
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.orders.entity.Order;
 import com.gonzalez.erp.modules.orders.repository.OrderRepository;
 import com.gonzalez.erp.modules.shipments.dto.request.ShipmentRequest;
@@ -51,24 +52,27 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .build();
 
         Shipment saved = shipmentRepository.saveAndFlush(shipment);
+
         return ShipmentMapper.toResponse(saved);
     }
 
     @Override
     public ShipmentResponse findByOrderId(Long orderId) {
         findOrderOrThrow(orderId);
+
         Shipment shipment = shipmentRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Shipment not found for order id: " + orderId));
+
         return ShipmentMapper.toResponse(shipment);
     }
 
     @Override
     @Transactional
-    public ShipmentResponse update(Long orderId, ShipmentRequest request){
+    public ShipmentResponse update(Long orderId, ShipmentRequest request) {
         Order order = findOrderOrThrow(orderId);
 
-        if(!order.isDraft()){
+        if (!order.isDraft()) {
             throw new InvalidShipmentException(
                     "Shipment can only be updated while the order is in DRAFT");
         }
@@ -93,14 +97,17 @@ public class ShipmentServiceImpl implements ShipmentService {
     }
 
     private Order findOrderOrThrow(Long orderId) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+
         return orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Order not found with id: " + orderId));
+                .filter(order -> order.getCompany() != null
+                        && companyId.equals(order.getCompany().getId()))
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Order not found with id: " + orderId));
     }
 
     private String trim(String value) {
         return value == null ? null : value.trim();
     }
-
-
 }

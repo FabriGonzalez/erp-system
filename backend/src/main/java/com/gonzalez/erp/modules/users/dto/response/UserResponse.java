@@ -10,6 +10,8 @@ public record UserResponse(
         String lastName,
         Long roleId,
         String roleName,
+        Long companyId,
+        String companyName,
         boolean active,
         Instant createdAt,
         Instant updatedAt

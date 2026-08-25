@@ -1,14 +1,9 @@
 package com.gonzalez.erp.modules.products.entity;
 
-import com.gonzalez.erp.common.entity.AuditableEntity;
+import com.gonzalez.erp.common.entity.BaseEntity;
 import com.gonzalez.erp.modules.categories.entity.Category;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+import com.gonzalez.erp.modules.companies.entity.Company;
+import jakarta.persistence.*;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -21,14 +16,21 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "products")
+@Table(
+        name = "products",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_product_company_sku",
+                        columnNames = {"company_id", "sku"}
+                )
+        }
+)
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Product extends AuditableEntity {
+public class Product extends BaseEntity {
 
-    @Id
     @NotBlank(message = "SKU is required")
     @Size(max = 50, message = "SKU must not exceed 50 characters")
     @Column(nullable = false, length = 50)
@@ -61,6 +63,10 @@ public class Product extends AuditableEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
     @Column(nullable = false)
     @Builder.Default

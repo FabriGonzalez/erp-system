@@ -1,6 +1,5 @@
 package com.gonzalez.erp.modules.categories.mapper;
 
-import com.gonzalez.erp.modules.categories.dto.request.CategoryRequest;
 import com.gonzalez.erp.modules.categories.dto.response.CategoryResponse;
 import com.gonzalez.erp.modules.categories.entity.Category;
 
@@ -13,6 +12,7 @@ public final class CategoryMapper {
                 category.getId(),
                 category.getName(),
                 category.getDescription(),
+                category.getCompany().getId(),
                 category.isActive(),
                 category.getCreatedAt(),
                 category.getUpdatedAt()

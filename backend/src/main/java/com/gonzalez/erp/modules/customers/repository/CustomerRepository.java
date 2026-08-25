@@ -10,12 +10,14 @@ import java.util.Optional;
 
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
-    boolean existsByDocumentTypeAndDocumentNumber(
+    boolean existsByCompanyIdAndDocumentTypeAndDocumentNumber(
+            Long companyId,
             String documentType,
             String documentNumber
     );
 
-    Optional<Customer> findByDocumentTypeAndDocumentNumberAndIdNot(
+    Optional<Customer> findByCompanyIdAndDocumentTypeAndDocumentNumberAndIdNot(
+            Long companyId,
             String documentType,
             String documentNumber,
             Long id
@@ -23,7 +25,8 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
     @Query("""
             SELECT c FROM Customer c
-            WHERE (:active IS NULL OR c.active = :active)
+            WHERE c.company.id = :companyId
+              AND (:active IS NULL OR c.active = :active)
               AND (
                    LOWER(COALESCE(c.firstName, '')) LIKE CONCAT('%', LOWER(:search), '%')
                    OR LOWER(COALESCE(c.lastName, '')) LIKE CONCAT('%', LOWER(:search), '%')
@@ -32,15 +35,20 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
               )
             """)
     List<Customer> searchWithText(
+            @Param("companyId") Long companyId,
             @Param("active") Boolean active,
             @Param("search") String search
     );
 
     @Query("""
             SELECT c FROM Customer c
-            WHERE (:active IS NULL OR c.active = :active)
+            WHERE c.company.id = :companyId
+              AND (:active IS NULL OR c.active = :active)
             """)
     List<Customer> searchWithoutText(
+            @Param("companyId") Long companyId,
             @Param("active") Boolean active
     );
+
+    Optional<Customer> findByIdAndCompanyId(Long id, Long companyId);
 }

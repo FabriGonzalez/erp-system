@@ -1,8 +1,11 @@
 package com.gonzalez.erp.modules.products.service;
 
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.categories.entity.Category;
 import com.gonzalez.erp.modules.categories.repository.CategoryRepository;
+import com.gonzalez.erp.modules.companies.entity.Company;
+import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.products.dto.request.ProductRequest;
 import com.gonzalez.erp.modules.products.dto.request.ProductUpdateRequest;
 import com.gonzalez.erp.modules.products.dto.response.ProductResponse;
@@ -24,32 +27,38 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final CompanyRepository companyRepository;
 
     @Override
     public List<ProductResponse> findAll(Boolean active) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
         List<Product> products = (active != null)
-                ? productRepository.findByActive(active)
-                : productRepository.findAll();
+                ? productRepository.findByCompanyIdAndActive(companyId, active)
+                : productRepository.findByCompanyId(companyId);
         return products.stream()
                 .map(ProductMapper::toResponse)
                 .toList();
     }
 
     @Override
-    public ProductResponse findById(String sku) {
-        Product product = findProductOrThrow(sku);
+    public ProductResponse findById(Long id) {
+        Product product = findProductOrThrow(id);
         return ProductMapper.toResponse(product);
     }
 
     @Override
     @Transactional
     public ProductResponse create(ProductRequest request) {
-        if (productRepository.existsById(request.sku())) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+
+        if (productRepository.existsBySkuAndCompanyId(request.sku(), companyId)) {
             throw new ProductSkuAlreadyExistsException(request.sku());
         }
 
         Category category = findCategoryOrThrow(request.categoryId());
         checkCategoryActive(category);
+
+        Company company = companyRepository.getReferenceById(companyId);
 
         Product product = Product.builder()
                 .sku(request.sku())
@@ -59,17 +68,22 @@ public class ProductServiceImpl implements ProductService {
                 .description(request.description())
                 .price(request.price())
                 .category(category)
+                .company(company)
                 .build();
 
         Product saved = productRepository.saveAndFlush(product);
-
         return ProductMapper.toResponse(saved);
     }
 
     @Override
     @Transactional
-    public ProductResponse update(String sku, ProductUpdateRequest request) {
-        Product product = findProductOrThrow(sku);
+    public ProductResponse update(Long id, ProductUpdateRequest request) {
+        Product product = findProductOrThrow(id);
+
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+        if (productRepository.existsBySkuAndCompanyIdAndIdNot(request.sku(), companyId, id)) {
+            throw new ProductSkuAlreadyExistsException(request.sku());
+        }
 
         Category category = findCategoryOrThrow(request.categoryId());
         checkCategoryActive(category);
@@ -87,28 +101,38 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
-    public ProductResponse deactivate(String sku) {
-        Product product = findProductOrThrow(sku);
+    public ProductResponse deactivate(Long id) {
+        Product product = findProductOrThrow(id);
         product.deactivate();
         return ProductMapper.toResponse(product);
     }
 
     @Override
     @Transactional
-    public ProductResponse activate(String sku) {
-        Product product = findProductOrThrow(sku);
+    public ProductResponse activate(Long id) {
+        Product product = findProductOrThrow(id);
         product.activate();
         return ProductMapper.toResponse(product);
     }
 
-    private Product findProductOrThrow(String sku) {
-        return productRepository.findById(sku)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found with sku: " + sku));
+    private Product findProductOrThrow(Long id) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+
+        return productRepository.findById(id)
+                .filter(product -> product.getCompany() != null
+                        && companyId.equals(product.getCompany().getId()))
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Product not found with id: " + id));
     }
 
     private Category findCategoryOrThrow(Long id) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+
         return categoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Category not found with id: " + id));
+                .filter(category -> category.getCompany() != null
+                        && companyId.equals(category.getCompany().getId()))
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Category not found with id: " + id));
     }
 
     private void checkCategoryActive(Category category) {

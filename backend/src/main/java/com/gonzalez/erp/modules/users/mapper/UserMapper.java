@@ -15,6 +15,8 @@ public final class UserMapper {
                 user.getLastName(),
                 user.getRole().getId(),
                 user.getRole().getName(),
+                user.getCompany() != null ? user.getCompany().getId() : null,
+                user.getCompany() != null ? user.getCompany().getName() : null,
                 user.isActive(),
                 user.getCreatedAt(),
                 user.getUpdatedAt()

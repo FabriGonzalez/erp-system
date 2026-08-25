@@ -11,6 +11,7 @@ public record CustomerResponse(
         String documentType,
         String documentNumber,
         String observations,
+        Long companyId,
         boolean active,
         Instant createdAt,
         Instant updatedAt

@@ -12,6 +12,7 @@ public final class BranchMapper {
                 branch.getName(),
                 branch.getAddress(),
                 branch.getPhone(),
+                branch.getCompany().getId(),
                 branch.isActive(),
                 branch.getCreatedAt(),
                 branch.getUpdatedAt()

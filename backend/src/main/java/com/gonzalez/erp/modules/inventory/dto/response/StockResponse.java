@@ -4,12 +4,11 @@ import java.time.Instant;
 
 public record StockResponse(
         Long id,
-        String productId,
+        Long productId,
         String productName,
         Long branchId,
         String branchName,
         Integer quantity,
         Instant createdAt,
         Instant updatedAt
-) {
-}
+) {}

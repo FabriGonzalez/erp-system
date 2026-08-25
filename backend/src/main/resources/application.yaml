@@ -21,14 +21,16 @@ spring:
 
 springdoc:
   api-docs:
-    path: /v3/api-docs       # JSON/YAML definition path
+    path: /v3/api-docs
   swagger-ui:
-    path: /swagger-ui.html   # Web UI access path
-    operations-sorter: alpha # Sort endpoints alphabetically
+    path: /swagger-ui.html
+    operations-sorter: alpha
+
 app:
   jwt:
     secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
-  admin:
-    email: ${ADMIN_EMAIL:admin@erp.local}
-    password: ${ADMIN_PASSWORD:}
+  platform-admin:
+    username: ${ERP_PLATFORM_ADMIN_USERNAME:platform_admin}
+    email: ${ERP_PLATFORM_ADMIN_EMAIL:platform@erp.local}
+    password: ${ERP_PLATFORM_ADMIN_PASSWORD:}

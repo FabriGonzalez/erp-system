@@ -1,15 +1,24 @@
 package com.gonzalez.erp.modules.branches.entity;
 
 import com.gonzalez.erp.common.entity.BaseEntity;
+import com.gonzalez.erp.modules.companies.entity.Company;
 import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "branches")
+@Table(
+        name = "branches",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_branch_company_name",
+                        columnNames = {"company_id", "name"}
+                )
+        }
+)
 @Getter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Branch extends BaseEntity {
 
-    @Column(nullable = false, unique = true, length = 100)
+    @Column(nullable = false, length = 100)
     private String name;
 
     @Column(length = 200)
@@ -17,6 +26,10 @@ public class Branch extends BaseEntity {
 
     @Column(length = 20)
     private String phone;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
     @Column(nullable = false)
     @Builder.Default

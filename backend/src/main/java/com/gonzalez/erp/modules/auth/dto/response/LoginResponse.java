@@ -13,5 +13,7 @@ public record LoginResponse(
         String firstName,
         String lastName,
         String roleName,
-        Set<Permission> permissions
+        Set<Permission> permissions,
+        Long companyId,
+        String companyName
 ) {}

@@ -7,6 +7,7 @@ public record BranchResponse(
         String name,
         String address,
         String phone,
+        Long companyId,
         boolean active,
         Instant createdAt,
         Instant updatedAt

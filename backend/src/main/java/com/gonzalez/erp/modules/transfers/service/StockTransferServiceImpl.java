@@ -2,7 +2,10 @@ package com.gonzalez.erp.modules.transfers.service;
 
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.CustomUserDetails;
+import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
+import com.gonzalez.erp.modules.companies.entity.Company;
+import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
 import com.gonzalez.erp.modules.inventory.entity.StockMovement;
 import com.gonzalez.erp.modules.inventory.entity.StockMovementType;
@@ -44,13 +47,19 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final BranchRepository branchRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
+    private final CompanyRepository companyRepository;
 
     @Override
     public List<StockTransferResponse> findAll(StockTransferStatus status) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+
         List<StockTransfer> transfers = (status != null)
                 ? stockTransferRepository.findByStatus(status)
                 : stockTransferRepository.findAll();
+
         return transfers.stream()
+                .filter(transfer -> transfer.getCompany() != null
+                        && companyId.equals(transfer.getCompany().getId()))
                 .map(StockTransferMapper::toResponse)
                 .toList();
     }
@@ -69,7 +78,7 @@ public class StockTransferServiceImpl implements StockTransferService {
                     "Origin and destination branches must be different");
         }
 
-        Set<String> seenProducts = new HashSet<>();
+        Set<Long> seenProducts = new HashSet<>();
         for (StockTransferItemRequest item : request.items()) {
             if (!seenProducts.add(item.productId())) {
                 throw new InvalidStockTransferException(
@@ -77,11 +86,15 @@ public class StockTransferServiceImpl implements StockTransferService {
             }
         }
 
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+        Company company = companyRepository.getReferenceById(companyId);
+
         StockTransfer transfer = StockTransfer.builder()
                 .originBranch(branchRepository.getReferenceById(request.originBranchId()))
                 .destinationBranch(branchRepository.getReferenceById(request.destinationBranchId()))
                 .status(StockTransferStatus.DRAFT)
                 .createdBy(userRepository.getReferenceById(getCurrentUserId()))
+                .company(company)
                 .items(new ArrayList<>())
                 .build();
 
@@ -106,13 +119,13 @@ public class StockTransferServiceImpl implements StockTransferService {
         checkStatus(transfer, StockTransferStatus.DRAFT, "confirmed");
 
         for (StockTransferItem item : transfer.getItems()) {
-            String productId = item.getProduct().getSku();
+            Long productId = item.getProduct().getId();
             Long originBranchId = transfer.getOriginBranch().getId();
             Long destinationBranchId = transfer.getDestinationBranch().getId();
 
             Stock originStock = stockRepository
                     .findByProductIdAndBranchId(productId, originBranchId)
-                    .orElseThrow(() -> new StockNotFoundException(productId, originBranchId));
+                    .orElseThrow(() -> new StockNotFoundException(productId.toString(), originBranchId));
 
             if (originStock.getQuantity() < item.getQuantity()) {
                 throw new InsufficientStockException(
@@ -170,7 +183,11 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     private StockTransfer findTransferOrThrow(Long id) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+
         return stockTransferRepository.findById(id)
+                .filter(transfer -> transfer.getCompany() != null
+                        && companyId.equals(transfer.getCompany().getId()))
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Stock transfer not found with id: " + id));
     }
@@ -193,11 +210,15 @@ public class StockTransferServiceImpl implements StockTransferService {
         return userDetails.getUserId();
     }
 
-    private Stock createStock(String productId, Long branchId) {
+    private Stock createStock(Long productId, Long branchId) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+        Company company = companyRepository.getReferenceById(companyId);
+
         Stock stock = Stock.builder()
                 .product(productRepository.getReferenceById(productId))
                 .branch(branchRepository.getReferenceById(branchId))
                 .quantity(0)
+                .company(company)
                 .build();
 
         return stockRepository.save(stock);

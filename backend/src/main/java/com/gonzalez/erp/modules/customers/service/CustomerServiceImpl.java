@@ -1,6 +1,9 @@
 package com.gonzalez.erp.modules.customers.service;
 
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.config.security.SecurityUtils;
+import com.gonzalez.erp.modules.companies.entity.Company;
+import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.customers.dto.request.CustomerRequest;
 import com.gonzalez.erp.modules.customers.dto.response.CustomerResponse;
 import com.gonzalez.erp.modules.customers.entity.Customer;
@@ -21,14 +24,16 @@ import java.util.Locale;
 public class CustomerServiceImpl implements CustomerService {
 
     private final CustomerRepository customerRepository;
+    private final CompanyRepository companyRepository;
 
     @Override
     public List<CustomerResponse> findAll(Boolean active, String search) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
         String normalizedSearch = normalizeSearch(search);
 
         List<Customer> customers = normalizedSearch == null
-                ? customerRepository.searchWithoutText(active)
-                : customerRepository.searchWithText(active, normalizedSearch);
+                ? customerRepository.searchWithoutText(companyId, active)
+                : customerRepository.searchWithText(companyId, active, normalizedSearch);
 
         return customers.stream()
                 .map(CustomerMapper::toResponse)
@@ -43,14 +48,17 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional
     public CustomerResponse create(CustomerRequest request) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
         String documentType = normalizeDocumentType(request.documentType());
         String documentNumber = normalizeDocumentNumber(request.documentNumber());
         validateDocumentPair(documentType, documentNumber);
 
         if (documentType != null
-                && customerRepository.existsByDocumentTypeAndDocumentNumber(documentType, documentNumber)) {
+                && customerRepository.existsByCompanyIdAndDocumentTypeAndDocumentNumber(companyId, documentType, documentNumber)) {
             throw new CustomerDocumentAlreadyExistsException(documentType, documentNumber);
         }
+
+        Company company = companyRepository.getReferenceById(companyId);
 
         Customer customer = Customer.builder()
                 .firstName(trim(request.firstName()))
@@ -60,6 +68,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .documentType(documentType)
                 .documentNumber(documentNumber)
                 .observations(trim(request.observations()))
+                .company(company)
                 .build();
 
         return CustomerMapper.toResponse(customerRepository.save(customer));
@@ -69,14 +78,15 @@ public class CustomerServiceImpl implements CustomerService {
     @Transactional
     public CustomerResponse update(Long id, CustomerRequest request) {
         Customer customer = findCustomerOrThrow(id);
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
 
         String documentType = normalizeDocumentType(request.documentType());
         String documentNumber = normalizeDocumentNumber(request.documentNumber());
         validateDocumentPair(documentType, documentNumber);
 
         if (documentType != null
-                && customerRepository.findByDocumentTypeAndDocumentNumberAndIdNot(
-                        documentType, documentNumber, id).isPresent()) {
+                && customerRepository.findByCompanyIdAndDocumentTypeAndDocumentNumberAndIdNot(
+                        companyId, documentType, documentNumber, id).isPresent()) {
             throw new CustomerDocumentAlreadyExistsException(documentType, documentNumber);
         }
 
@@ -110,8 +120,11 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     private Customer findCustomerOrThrow(Long id) {
-        return customerRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + id));
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+
+        return customerRepository.findByIdAndCompanyId(id, companyId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Customer not found with id: " + id));
     }
 
     private String trim(String value) {
