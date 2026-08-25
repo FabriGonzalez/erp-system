@@ -24,11 +24,17 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     public List<CustomerResponse> findAll(Boolean active, String search) {
-        return customerRepository.search(active, normalizeSearch(search)).stream()
+        String normalizedSearch = normalizeSearch(search);
+
+        List<Customer> customers = normalizedSearch == null
+                ? customerRepository.searchWithoutText(active)
+                : customerRepository.searchWithText(active, normalizedSearch);
+
+        return customers.stream()
                 .map(CustomerMapper::toResponse)
                 .toList();
     }
-
+    
     @Override
     public CustomerResponse findById(Long id) {
         return CustomerMapper.toResponse(findCustomerOrThrow(id));

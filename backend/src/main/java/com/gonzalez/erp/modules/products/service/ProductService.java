@@ -10,13 +10,13 @@ public interface ProductService {
 
     List<ProductResponse> findAll(Boolean active);
 
-    ProductResponse findById(Long id);
+    ProductResponse findById(String sku);
 
     ProductResponse create(ProductRequest request);
 
-    ProductResponse update(Long id, ProductUpdateRequest request);
+    ProductResponse update(String sku, ProductUpdateRequest request);
 
-    ProductResponse deactivate(Long id);
+    ProductResponse deactivate(String sku);
 
-    ProductResponse activate(Long id);
+    ProductResponse activate(String sku);
 }

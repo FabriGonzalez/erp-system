@@ -44,7 +44,7 @@ public final class OrderMapper {
     private static OrderItemResponse toItemResponse(OrderItem item) {
         return new OrderItemResponse(
                 item.getId(),
-                item.getProduct().getId(),
+                item.getProduct().getSku(),
                 item.getProduct().getName(),
                 item.getQuantity(),
                 item.getUnitPrice()

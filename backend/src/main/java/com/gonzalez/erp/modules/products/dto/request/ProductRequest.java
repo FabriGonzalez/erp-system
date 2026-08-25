@@ -16,6 +16,14 @@ public record ProductRequest(
         @Size(max = 50, message = "SKU must not exceed 50 characters")
         String sku,
 
+        @NotBlank(message = "Color is required")
+        @Size(max = 50, message = "Color must not exceed 50 characters")
+        String color,
+
+        @NotBlank(message = "Talle is required")
+        @Size(max = 50, message = "Talle must not exceed 50 characters")
+        String talle,
+
         @Size(max = 500, message = "Description must not exceed 500 characters")
         String description,
 

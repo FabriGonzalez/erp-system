@@ -1,10 +1,11 @@
 package com.gonzalez.erp.modules.products.entity;
 
-import com.gonzalez.erp.common.entity.BaseEntity;
+import com.gonzalez.erp.common.entity.AuditableEntity;
 import com.gonzalez.erp.modules.categories.entity.Category;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -25,17 +26,28 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Product extends BaseEntity {
+public class Product extends AuditableEntity {
+
+    @Id
+    @NotBlank(message = "SKU is required")
+    @Size(max = 50, message = "SKU must not exceed 50 characters")
+    @Column(nullable = false, length = 50)
+    private String sku;
 
     @NotBlank(message = "Product name is required")
     @Size(max = 100, message = "Product name must not exceed 100 characters")
     @Column(nullable = false, length = 100)
     private String name;
 
-    @NotBlank(message = "SKU is required")
-    @Size(max = 50, message = "SKU must not exceed 50 characters")
-    @Column(nullable = false, unique = true, length = 50)
-    private String sku;
+    @NotBlank(message = "Color is required")
+    @Size(max = 50, message = "Color must not exceed 50 characters")
+    @Column(nullable = false, length = 50)
+    private String color;
+
+    @NotBlank(message = "Talle is required")
+    @Size(max = 50, message = "Talle must not exceed 50 characters")
+    @Column(nullable = false, length = 50)
+    private String talle;
 
     @Size(max = 500, message = "Description must not exceed 500 characters")
     @Column(length = 500)
@@ -54,8 +66,10 @@ public class Product extends BaseEntity {
     @Builder.Default
     private boolean active = true;
 
-    public void update(String name, String description, BigDecimal price, Category category) {
+    public void update(String name, String color, String talle, String description, BigDecimal price, Category category) {
         this.name = name;
+        this.color = color;
+        this.talle = talle;
         this.description = description;
         this.price = price;
         this.category = category;

@@ -35,16 +35,16 @@ public class ProductController {
         return ResponseEntity.ok(productService.findAll(active));
     }
 
-    @GetMapping("/{id}")
-    @Operation(summary = "Obtener producto por ID", description = "Busca y retorna un producto por su identificador.")
+    @GetMapping("/{sku}")
+    @Operation(summary = "Obtener producto por SKU", description = "Busca y retorna un producto por su SKU.")
     public ResponseEntity<ProductResponse> findById(
-            @Parameter(description = "ID del producto a buscar")
-            @PathVariable Long id) {
-        return ResponseEntity.ok(productService.findById(id));
+            @Parameter(description = "SKU del producto a buscar")
+            @PathVariable String sku) {
+        return ResponseEntity.ok(productService.findById(sku));
     }
 
     @PostMapping
-    @Operation(summary = "Crear producto", description = "Crea un nuevo producto con nombre, SKU único, descripción opcional y categoría.")
+    @Operation(summary = "Crear producto", description = "Crea un nuevo producto con SKU único, nombre, color, talle, descripción opcional y categoría.")
     @ApiResponse(responseCode = "201", description = "Producto creado exitosamente")
     @ApiResponse(responseCode = "404", description = "Categoría no encontrada",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -55,39 +55,39 @@ public class ProductController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @PatchMapping("/{id}")
-    @Operation(summary = "Actualizar producto", description = "Actualiza el nombre, descripción y/o categoría de un producto existente. El SKU no es modificable.")
+    @PatchMapping("/{sku}")
+    @Operation(summary = "Actualizar producto", description = "Actualiza el nombre, color, talle, descripción y/o categoría de un producto existente. El SKU no es modificable.")
     @ApiResponse(responseCode = "200", description = "Producto actualizado exitosamente")
     @ApiResponse(responseCode = "404", description = "Producto o categoría no encontrado",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @ApiResponse(responseCode = "409", description = "La categoría está desactivada",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<ProductResponse> update(
-            @Parameter(description = "ID del producto a actualizar")
-            @PathVariable Long id,
+            @Parameter(description = "SKU del producto a actualizar")
+            @PathVariable String sku,
             @Valid @RequestBody ProductUpdateRequest request) {
-        return ResponseEntity.ok(productService.update(id, request));
+        return ResponseEntity.ok(productService.update(sku, request));
     }
 
-    @PatchMapping("/{id}/deactivate")
+    @PatchMapping("/{sku}/deactivate")
     @Operation(summary = "Desactivar producto", description = "Desactiva lógicamente un producto (soft delete).")
     @ApiResponse(responseCode = "200", description = "Producto desactivado exitosamente")
     @ApiResponse(responseCode = "404", description = "Producto no encontrado",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<ProductResponse> deactivate(
-            @Parameter(description = "ID del producto a desactivar")
-            @PathVariable Long id) {
-        return ResponseEntity.ok(productService.deactivate(id));
+            @Parameter(description = "SKU del producto a desactivar")
+            @PathVariable String sku) {
+        return ResponseEntity.ok(productService.deactivate(sku));
     }
 
-    @PatchMapping("/{id}/activate")
+    @PatchMapping("/{sku}/activate")
     @Operation(summary = "Activar producto", description = "Reactiva un producto previamente desactivado.")
     @ApiResponse(responseCode = "200", description = "Producto activado exitosamente")
     @ApiResponse(responseCode = "404", description = "Producto no encontrado",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<ProductResponse> activate(
-            @Parameter(description = "ID del producto a activar")
-            @PathVariable Long id) {
-        return ResponseEntity.ok(productService.activate(id));
+            @Parameter(description = "SKU del producto a activar")
+            @PathVariable String sku) {
+        return ResponseEntity.ok(productService.activate(sku));
     }
 }

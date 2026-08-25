@@ -10,19 +10,37 @@ import java.util.Optional;
 
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
-    boolean existsByDocumentTypeAndDocumentNumber(String documentType, String documentNumber);
+    boolean existsByDocumentTypeAndDocumentNumber(
+            String documentType,
+            String documentNumber
+    );
 
     Optional<Customer> findByDocumentTypeAndDocumentNumberAndIdNot(
-            String documentType, String documentNumber, Long id);
+            String documentType,
+            String documentNumber,
+            Long id
+    );
 
     @Query("""
             SELECT c FROM Customer c
             WHERE (:active IS NULL OR c.active = :active)
-              AND (:search IS NULL
-                   OR LOWER(COALESCE(c.firstName, '')) LIKE CONCAT('%', LOWER(:search), '%')
+              AND (
+                   LOWER(COALESCE(c.firstName, '')) LIKE CONCAT('%', LOWER(:search), '%')
                    OR LOWER(COALESCE(c.lastName, '')) LIKE CONCAT('%', LOWER(:search), '%')
                    OR LOWER(COALESCE(c.phone, '')) LIKE CONCAT('%', LOWER(:search), '%')
-                   OR LOWER(COALESCE(c.documentNumber, '')) LIKE CONCAT('%', LOWER(:search), '%'))
+                   OR LOWER(COALESCE(c.documentNumber, '')) LIKE CONCAT('%', LOWER(:search), '%')
+              )
             """)
-    List<Customer> search(@Param("active") Boolean active, @Param("search") String search);
+    List<Customer> searchWithText(
+            @Param("active") Boolean active,
+            @Param("search") String search
+    );
+
+    @Query("""
+            SELECT c FROM Customer c
+            WHERE (:active IS NULL OR c.active = :active)
+            """)
+    List<Customer> searchWithoutText(
+            @Param("active") Boolean active
+    );
 }

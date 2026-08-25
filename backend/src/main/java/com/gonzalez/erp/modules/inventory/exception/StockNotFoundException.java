@@ -6,7 +6,7 @@ public class StockNotFoundException extends RuntimeException {
         super("Stock not found with id: %s".formatted(id));
     }
 
-    public StockNotFoundException(Long productId, Long branchId) {
-        super("Stock not found for product id: %s and branch id: %s".formatted(productId, branchId));
+    public StockNotFoundException(String productId, Long branchId) {
+        super("Stock not found for product sku: %s and branch id: %s".formatted(productId, branchId));
     }
 }

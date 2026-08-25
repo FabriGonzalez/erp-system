@@ -46,8 +46,8 @@ public class StockController {
     @GetMapping("/product/{productId}")
     @Operation(summary = "Obtener stock por producto", description = "Busca el stock de un producto en todas las sucursales.")
     public ResponseEntity<List<StockResponse>> findByProductId(
-            @Parameter(description = "ID del producto")
-            @PathVariable Long productId) {
+            @Parameter(description = "SKU del producto")
+            @PathVariable String productId) {
         return ResponseEntity.ok(stockService.findByProductId(productId));
     }
 

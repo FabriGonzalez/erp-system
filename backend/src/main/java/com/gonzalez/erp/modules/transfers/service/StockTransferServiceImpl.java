@@ -69,7 +69,7 @@ public class StockTransferServiceImpl implements StockTransferService {
                     "Origin and destination branches must be different");
         }
 
-        Set<Long> seenProducts = new HashSet<>();
+        Set<String> seenProducts = new HashSet<>();
         for (StockTransferItemRequest item : request.items()) {
             if (!seenProducts.add(item.productId())) {
                 throw new InvalidStockTransferException(
@@ -94,7 +94,7 @@ public class StockTransferServiceImpl implements StockTransferService {
             transfer.getItems().add(item);
         }
 
-        StockTransfer saved = stockTransferRepository.save(transfer);
+        StockTransfer saved = stockTransferRepository.saveAndFlush(transfer);
         return StockTransferMapper.toResponse(saved);
     }
 
@@ -106,7 +106,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         checkStatus(transfer, StockTransferStatus.DRAFT, "confirmed");
 
         for (StockTransferItem item : transfer.getItems()) {
-            Long productId = item.getProduct().getId();
+            String productId = item.getProduct().getSku();
             Long originBranchId = transfer.getOriginBranch().getId();
             Long destinationBranchId = transfer.getDestinationBranch().getId();
 
@@ -193,7 +193,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         return userDetails.getUserId();
     }
 
-    private Stock createStock(Long productId, Long branchId) {
+    private Stock createStock(String productId, Long branchId) {
         Stock stock = Stock.builder()
                 .product(productRepository.getReferenceById(productId))
                 .branch(branchRepository.getReferenceById(branchId))

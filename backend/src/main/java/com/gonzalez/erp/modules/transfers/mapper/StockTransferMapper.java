@@ -32,7 +32,7 @@ public final class StockTransferMapper {
     private static StockTransferItemResponse toItemResponse(StockTransferItem item) {
         return new StockTransferItemResponse(
                 item.getId(),
-                item.getProduct().getId(),
+                item.getProduct().getSku(),
                 item.getProduct().getName(),
                 item.getQuantity()
         );

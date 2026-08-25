@@ -65,7 +65,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public OrderResponse create(OrderRequest request) {
-        Set<Long> seenProducts = new HashSet<>();
+        Set<String> seenProducts = new HashSet<>();
         for (OrderItemRequest item : request.items()) {
             if (!seenProducts.add(item.productId())) {
                 throw new InvalidOrderException(
@@ -87,7 +87,7 @@ public class OrderServiceImpl implements OrderService {
         for (OrderItemRequest itemRequest : request.items()) {
             var product = productRepository.findById(itemRequest.productId())
                     .orElseThrow(() -> new ResourceNotFoundException(
-                            "Product not found with id: " + itemRequest.productId()));
+                            "Product not found with sku: " + itemRequest.productId()));
 
             OrderItem item = OrderItem.builder()
                     .product(product)
@@ -97,7 +97,7 @@ public class OrderServiceImpl implements OrderService {
             order.addItem(item);
         }
 
-        Order saved = orderRepository.save(order);
+        Order saved = orderRepository.saveAndFlush(order);
         return OrderMapper.toResponse(saved);
     }
 
@@ -109,7 +109,7 @@ public class OrderServiceImpl implements OrderService {
         checkStatus(order, OrderStatus.DRAFT, "confirmed");
 
         for (OrderItem item : order.getItems()) {
-            Long productId = item.getProduct().getId();
+            String productId = item.getProduct().getSku();
             Long branchId = order.getBranch().getId();
 
             Stock stock = stockRepository
@@ -123,7 +123,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         for (OrderItem item : order.getItems()) {
-            Long productId = item.getProduct().getId();
+            String productId = item.getProduct().getSku();
             Long branchId = order.getBranch().getId();
 
             Stock stock = stockRepository
@@ -162,7 +162,7 @@ public class OrderServiceImpl implements OrderService {
 
         if (order.isConfirmed()) {
             for (OrderItem item : order.getItems()) {
-                Long productId = item.getProduct().getId();
+                String productId = item.getProduct().getSku();
                 Long branchId = order.getBranch().getId();
 
                 Stock stock = stockRepository

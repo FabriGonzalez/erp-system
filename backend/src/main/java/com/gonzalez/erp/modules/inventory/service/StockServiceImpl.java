@@ -47,7 +47,7 @@ public class StockServiceImpl implements StockService {
     }
 
     @Override
-    public StockResponse findByProductIdAndBranchId(Long productId, Long branchId) {
+    public StockResponse findByProductIdAndBranchId(String productId, Long branchId) {
         Stock stock = stockRepository.findByProductIdAndBranchId(productId, branchId)
                 .orElseThrow(() -> new StockNotFoundException(productId, branchId));
         return StockMapper.toResponse(stock);
@@ -61,7 +61,7 @@ public class StockServiceImpl implements StockService {
     }
 
     @Override
-    public List<StockResponse> findByProductId(Long productId) {
+    public List<StockResponse> findByProductId(String productId) {
         return stockRepository.findByProductId(productId).stream()
                 .map(StockMapper::toResponse)
                 .toList();

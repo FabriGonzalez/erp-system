@@ -50,7 +50,7 @@ public class ShipmentServiceImpl implements ShipmentService {
                 .reference(trim(request.reference()))
                 .build();
 
-        Shipment saved = shipmentRepository.save(shipment);
+        Shipment saved = shipmentRepository.saveAndFlush(shipment);
         return ShipmentMapper.toResponse(saved);
     }
 
