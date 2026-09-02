@@ -12,5 +12,4 @@ public interface AddressRepository extends JpaRepository<Address, Long> {
     Optional<Address> findByIdAndCustomerId(Long addressId, Long customerId);
     List<Address> findByCustomerIdAndActiveTrueOrderByIdAsc(Long customerId);
     Optional<Address> findByCustomerIdAndMainAddressTrue(Long customerId);
-    Optional<Customer> findByIdAndCompanyId(Long id, Long companyId);
 }
