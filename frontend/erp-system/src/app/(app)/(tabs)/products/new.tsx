@@ -8,6 +8,7 @@ import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useProductStore } from '@/stores/product-store';
+import { SharedStyles } from '@/styles/shared';
 import { ProductFormData } from '@/types/product';
 
 export default function NewProductScreen() {
@@ -47,10 +48,10 @@ export default function NewProductScreen() {
     return (
         <Screen style={styles.container}>
             {/* Header con botón Back */}
-            <View style={styles.header}>
+            <View style={SharedStyles.header}>
                 <Pressable
                     onPress={() => router.back()}
-                    style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
                     disabled={isSubmitting}
                 >
                     <SymbolView
@@ -59,13 +60,13 @@ export default function NewProductScreen() {
                         tintColor={Colors.text}
                     />
                 </Pressable>
-                <Text style={styles.headerTitle}>Nuevo Producto</Text>
-                <View style={styles.headerSpacer} />
+                <Text style={SharedStyles.headerTitle}>Nuevo Producto</Text>
+                <View style={SharedStyles.headerSpacer} />
             </View>
 
             {/* Banner de Éxito */}
             {successMessage && (
-                <View style={styles.successBanner}>
+                <View style={SharedStyles.successBanner}>
                     <SymbolView
                         name={{
                             ios: 'checkmark.circle.fill',
@@ -75,7 +76,7 @@ export default function NewProductScreen() {
                         size={20}
                         tintColor={Colors.success}
                     />
-                    <Text style={styles.successText}>{successMessage}</Text>
+                    <Text style={SharedStyles.successText}>{successMessage}</Text>
                 </View>
             )}
 
@@ -95,45 +96,5 @@ const styles = StyleSheet.create({
     container: {
         padding: 0,
         backgroundColor: Colors.background,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.md,
-        backgroundColor: Colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
-    },
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
-    },
-    pressed: {
-        opacity: 0.7,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    headerSpacer: {
-        width: 32,
-    },
-    successBanner: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#DCFCE7',
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.md,
-        gap: Spacing.sm,
-        borderBottomWidth: 1,
-        borderBottomColor: '#BBF7D0',
-    },
-    successText: {
-        color: '#166534',
-        fontSize: 14,
-        fontWeight: '600',
     },
 });

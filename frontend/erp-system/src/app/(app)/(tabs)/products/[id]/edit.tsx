@@ -8,12 +8,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { SharedStyles } from '@/styles/shared';
 import { useProductStore } from '@/stores/product-store';
 import { ProductFormData } from '@/types/product';
 
 export default function EditProductScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
-    const { products, categories, updateProduct, toggleProductActive } = useProductStore();
+    const { products, categories, updateProduct } = useProductStore();
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -23,10 +24,10 @@ export default function EditProductScreen() {
     if (!product) {
         return (
             <Screen style={styles.container}>
-                <View style={styles.header}>
+                <View style={SharedStyles.header}>
                     <Pressable
                         onPress={() => router.back()}
-                        style={styles.backButton}
+                        style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
                     >
                         <SymbolView
                             name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
@@ -34,8 +35,8 @@ export default function EditProductScreen() {
                             tintColor={Colors.text}
                         />
                     </Pressable>
-                    <Text style={styles.headerTitle}>Producto</Text>
-                    <View style={styles.headerSpacer} />
+                    <Text style={SharedStyles.headerTitle}>Producto</Text>
+                    <View style={SharedStyles.headerSpacer} />
                 </View>
                 <EmptyState
                     title="Producto no encontrado"
@@ -76,11 +77,10 @@ export default function EditProductScreen() {
 
     return (
         <Screen style={styles.container}>
-            {/* Header con botón Back y acción rápida de Estado */}
-            <View style={styles.header}>
+            <View style={SharedStyles.header}>
                 <Pressable
                     onPress={() => router.back()}
-                    style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
                     disabled={isSubmitting}
                 >
                     <SymbolView
@@ -89,31 +89,12 @@ export default function EditProductScreen() {
                         tintColor={Colors.text}
                     />
                 </Pressable>
-
-                <Text style={styles.headerTitle}>Editar Producto</Text>
-
-                <Pressable
-                    style={[
-                        styles.quickStatusButton,
-                        product.active ? styles.activeQuickButton : styles.inactiveQuickButton,
-                    ]}
-                    onPress={() => toggleProductActive(product.id)}
-                    disabled={isSubmitting}
-                >
-                    <Text
-                        style={[
-                            styles.quickStatusText,
-                            product.active ? styles.activeQuickText : styles.inactiveQuickText,
-                        ]}
-                    >
-                        {product.active ? 'Activo' : 'Inactivo'}
-                    </Text>
-                </Pressable>
+                <Text style={SharedStyles.headerTitle}>Editar Producto</Text>
+                <View style={SharedStyles.headerSpacer} />
             </View>
 
-            {/* Banner de Éxito */}
             {successMessage && (
-                <View style={styles.successBanner}>
+                <View style={SharedStyles.successBanner}>
                     <SymbolView
                         name={{
                             ios: 'checkmark.circle.fill',
@@ -123,11 +104,10 @@ export default function EditProductScreen() {
                         size={20}
                         tintColor={Colors.success}
                     />
-                    <Text style={styles.successText}>{successMessage}</Text>
+                    <Text style={SharedStyles.successText}>{successMessage}</Text>
                 </View>
             )}
 
-            {/* Formulario */}
             <ProductForm
                 initialValues={{
                     name: product.name,
@@ -151,66 +131,5 @@ const styles = StyleSheet.create({
     container: {
         padding: 0,
         backgroundColor: Colors.background,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.md,
-        backgroundColor: Colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
-    },
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
-    },
-    pressed: {
-        opacity: 0.7,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    headerSpacer: {
-        width: 32,
-    },
-    quickStatusButton: {
-        paddingHorizontal: Spacing.sm + 2,
-        paddingVertical: 4,
-        borderRadius: 8,
-    },
-    activeQuickButton: {
-        backgroundColor: '#DCFCE7',
-    },
-    inactiveQuickButton: {
-        backgroundColor: '#F1F5F9',
-    },
-    quickStatusText: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    activeQuickText: {
-        color: '#16A34A',
-    },
-    inactiveQuickText: {
-        color: Colors.textSecondary,
-    },
-    successBanner: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#DCFCE7',
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.md,
-        gap: Spacing.sm,
-        borderBottomWidth: 1,
-        borderBottomColor: '#BBF7D0',
-    },
-    successText: {
-        color: '#166534',
-        fontSize: 14,
-        fontWeight: '600',
     },
 });

@@ -1,9 +1,8 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Screen } from '@/components/ui/Screen';
 import { MenuListItem } from '@/components/ui/MenuListItem';
+import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useAuthStore } from '@/stores/auth-store';
@@ -29,11 +28,11 @@ export default function MoreScreen() {
                         <Text style={styles.avatarText}>
                             {user?.name
                                 ? user.name
-                                      .split(' ')
-                                      .map((n) => n[0])
-                                      .join('')
-                                      .slice(0, 2)
-                                      .toUpperCase()
+                                    .split(' ')
+                                    .map((n) => n[0])
+                                    .join('')
+                                    .slice(0, 2)
+                                    .toUpperCase()
                                 : 'U'}
                         </Text>
                     </View>
@@ -52,6 +51,12 @@ export default function MoreScreen() {
                 <Text style={styles.sectionTitle}>General</Text>
                 <View style={styles.section}>
                     <MenuListItem
+                        title="Clientes"
+                        subtitle="Gestión de clientes y direcciones"
+                        iconName={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
+                        onPress={() => router.push('/customers' as any)}
+                    />
+                    <MenuListItem
                         title="Sucursal activa"
                         subtitle={activeBranch?.name ?? 'Ninguna seleccionada'}
                         iconName={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
@@ -61,7 +66,7 @@ export default function MoreScreen() {
                         title="Mi Perfil"
                         subtitle="Detalles de tu cuenta"
                         iconName={{ ios: 'person.fill', android: 'person', web: 'person' }}
-                        onPress={() => {}}
+                        onPress={() => { }}
                         showChevron={false}
                     />
                 </View>
@@ -75,14 +80,14 @@ export default function MoreScreen() {
                                 title="Usuarios"
                                 subtitle="Administrar empleados y permisos"
                                 iconName={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
-                                onPress={() => {}}
+                                onPress={() => { }}
                                 showChevron={false}
                             />
                             <MenuListItem
                                 title="Sucursales"
                                 subtitle="Configurar locales y almacenes"
                                 iconName={{ ios: 'building.2.fill', android: 'store', web: 'store' }}
-                                onPress={() => {}}
+                                onPress={() => { }}
                                 showChevron={false}
                             />
                         </View>

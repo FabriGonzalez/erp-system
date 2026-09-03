@@ -1,13 +1,11 @@
 import {
-    StyleSheet,
-    View,
-    ViewProps,
-} from 'react-native';
+    SafeAreaView,
+    SafeAreaViewProps,
+} from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
 
-type ScreenProps = ViewProps;
+type ScreenProps = SafeAreaViewProps;
 
 export function Screen({
     style,
@@ -15,19 +13,22 @@ export function Screen({
     ...props
 }: ScreenProps) {
     return (
-        <View
-            style={[styles.container, style]}
+        <SafeAreaView
+            edges={['top', 'left', 'right']}
+            style={[
+                styles.container,
+                style,
+            ]}
             {...props}
         >
             {children}
-        </View>
+        </SafeAreaView>
     );
 }
 
-const styles = StyleSheet.create({
+const styles = {
     container: {
         flex: 1,
-        backgroundColor: Colors.background,
-        padding: Spacing.xl,
+        backgroundColor: Colors.background
     },
-});
+};

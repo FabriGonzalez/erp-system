@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
-    Modal,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -14,7 +13,7 @@ import { SymbolView } from 'expo-symbols';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { Category, ProductFormData } from '@/types/product';
-import { AppButton } from '@/components/ui/AppButton';
+import { CategoryModal } from './CategoryModal';
 
 type ProductFormProps = {
     initialValues?: Partial<ProductFormData>;
@@ -86,13 +85,19 @@ export function ProductForm({
         });
     }
 
+    function handleCategorySelect(id: string) {
+        setCategoryId(id);
+        if (errors.categoryId) {
+            setErrors((prev) => ({ ...prev, categoryId: '' }));
+        }
+    }
+
     return (
         <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContainer}
             keyboardShouldPersistTaps="handled"
         >
-            {/* Nombre */}
             <View style={styles.formGroup}>
                 <Text style={styles.label}>
                     Nombre del producto <Text style={styles.required}>*</Text>
@@ -111,7 +116,6 @@ export function ProductForm({
                 {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
             </View>
 
-            {/* SKU y Precio en dos columnas */}
             <View style={styles.row}>
                 <View style={[styles.formGroup, styles.flex1]}>
                     <Text style={styles.label}>
@@ -152,7 +156,6 @@ export function ProductForm({
                 </View>
             </View>
 
-            {/* Categoría */}
             <View style={styles.formGroup}>
                 <Text style={styles.label}>
                     Categoría <Text style={styles.required}>*</Text>
@@ -180,7 +183,6 @@ export function ProductForm({
                 ) : null}
             </View>
 
-            {/* Descripción */}
             <View style={styles.formGroup}>
                 <Text style={styles.label}>Descripción (Opcional)</Text>
                 <TextInput
@@ -196,7 +198,6 @@ export function ProductForm({
                 />
             </View>
 
-            {/* Estado Activo / Inactivo */}
             <View style={styles.switchRow}>
                 <View style={styles.switchLabelContainer}>
                     <Text style={styles.switchTitle}>Estado del Producto</Text>
@@ -215,7 +216,6 @@ export function ProductForm({
                 />
             </View>
 
-            {/* Acciones */}
             <View style={styles.actionsContainer}>
                 <Pressable
                     style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
@@ -241,81 +241,13 @@ export function ProductForm({
                 </Pressable>
             </View>
 
-            {/* Modal Selector de Categorías */}
-            <Modal
+            <CategoryModal
                 visible={categoryModalVisible}
-                animationType="slide"
-                transparent
-                onRequestClose={() => setCategoryModalVisible(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Seleccionar Categoría</Text>
-                            <Pressable
-                                onPress={() => setCategoryModalVisible(false)}
-                                style={styles.modalCloseButton}
-                            >
-                                <SymbolView
-                                    name={{ ios: 'xmark.circle.fill', android: 'close', web: 'close' }}
-                                    size={24}
-                                    tintColor={Colors.textSecondary}
-                                />
-                            </Pressable>
-                        </View>
-
-                        <ScrollView style={styles.modalList}>
-                            {categories.map((cat) => {
-                                const isSelected = cat.id === categoryId;
-                                return (
-                                    <Pressable
-                                        key={cat.id}
-                                        style={[
-                                            styles.categoryItem,
-                                            isSelected && styles.categoryItemSelected,
-                                        ]}
-                                        onPress={() => {
-                                            setCategoryId(cat.id);
-                                            if (errors.categoryId) {
-                                                setErrors((prev) => ({ ...prev, categoryId: '' }));
-                                            }
-                                            setCategoryModalVisible(false);
-                                        }}
-                                    >
-                                        <View style={styles.categoryItemInfo}>
-                                            <Text
-                                                style={[
-                                                    styles.categoryItemName,
-                                                    isSelected && styles.categoryItemNameSelected,
-                                                ]}
-                                            >
-                                                {cat.name}
-                                            </Text>
-                                            {cat.description ? (
-                                                <Text style={styles.categoryItemDesc}>
-                                                    {cat.description}
-                                                </Text>
-                                            ) : null}
-                                        </View>
-
-                                        {isSelected && (
-                                            <SymbolView
-                                                name={{
-                                                    ios: 'checkmark.circle.fill',
-                                                    android: 'check_circle',
-                                                    web: 'check_circle',
-                                                }}
-                                                size={20}
-                                                tintColor={Colors.primary}
-                                            />
-                                        )}
-                                    </Pressable>
-                                );
-                            })}
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
+                categories={categories}
+                selectedCategoryId={categoryId}
+                onSelect={handleCategorySelect}
+                onClose={() => setCategoryModalVisible(false)}
+            />
         </ScrollView>
     );
 }
@@ -325,25 +257,31 @@ const styles = StyleSheet.create({
         padding: Spacing.lg,
         paddingBottom: Spacing.xxl * 2,
     },
+
     formGroup: {
         marginBottom: Spacing.lg,
     },
+
     row: {
         flexDirection: 'row',
         gap: Spacing.md,
     },
+
     flex1: {
         flex: 1,
     },
+
     label: {
         fontSize: 14,
         fontWeight: '600',
         color: Colors.text,
         marginBottom: Spacing.xs + 2,
     },
+
     required: {
         color: Colors.error,
     },
+
     input: {
         height: 48,
         borderWidth: 1,
@@ -354,20 +292,24 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.surface,
         color: Colors.text,
     },
+
     inputError: {
         borderColor: Colors.error,
         backgroundColor: '#FFF5F5',
     },
+
     errorText: {
         fontSize: 12,
         color: Colors.error,
         marginTop: 4,
         fontWeight: '500',
     },
+
     textArea: {
         height: 85,
         paddingTop: Spacing.md,
     },
+
     selectButton: {
         height: 48,
         borderWidth: 1,
@@ -379,13 +321,16 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
     },
+
     selectButtonText: {
         fontSize: 15,
         color: Colors.text,
     },
+
     placeholderText: {
         color: Colors.textSecondary,
     },
+
     switchRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -397,24 +342,29 @@ const styles = StyleSheet.create({
         borderColor: Colors.border,
         marginBottom: Spacing.xl,
     },
+
     switchLabelContainer: {
         flex: 1,
         marginRight: Spacing.md,
     },
+
     switchTitle: {
         fontSize: 15,
         fontWeight: '600',
         color: Colors.text,
     },
+
     switchSubtitle: {
         fontSize: 12,
         color: Colors.textSecondary,
         marginTop: 2,
     },
+
     actionsContainer: {
         gap: Spacing.sm,
         marginTop: Spacing.sm,
     },
+
     submitButton: {
         backgroundColor: Colors.primary,
         height: 50,
@@ -427,19 +377,23 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 2,
     },
+
     submitButtonDisabled: {
         opacity: 0.7,
     },
+
     submittingContent: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.sm,
     },
+
     submitButtonText: {
         color: '#FFFFFF',
         fontSize: 16,
         fontWeight: '600',
     },
+
     cancelButton: {
         height: 48,
         borderRadius: 10,
@@ -447,70 +401,10 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         backgroundColor: 'transparent',
     },
+
     cancelButtonText: {
         color: Colors.textSecondary,
         fontSize: 15,
         fontWeight: '500',
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.4)',
-        justifyContent: 'flex-end',
-    },
-    modalContent: {
-        backgroundColor: Colors.surface,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        maxHeight: '60%',
-        paddingBottom: Spacing.xl,
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
-    },
-    modalTitle: {
-        fontSize: 17,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    modalCloseButton: {
-        padding: 4,
-    },
-    modalList: {
-        padding: Spacing.md,
-    },
-    categoryItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: Spacing.md,
-        paddingHorizontal: Spacing.md,
-        borderRadius: 10,
-        marginBottom: Spacing.xs,
-    },
-    categoryItemSelected: {
-        backgroundColor: '#EFF6FF',
-    },
-    categoryItemInfo: {
-        flex: 1,
-        marginRight: Spacing.sm,
-    },
-    categoryItemName: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: Colors.text,
-    },
-    categoryItemNameSelected: {
-        color: Colors.primary,
-    },
-    categoryItemDesc: {
-        fontSize: 12,
-        color: Colors.textSecondary,
-        marginTop: 2,
     },
 });

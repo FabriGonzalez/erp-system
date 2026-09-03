@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { SharedStyles } from '@/styles/shared';
 
 type SectionHeaderProps = {
     title: string;
@@ -15,7 +16,7 @@ export function SectionHeader({ title, actionLabel, onAction }: SectionHeaderPro
             {actionLabel && onAction && (
                 <Pressable onPress={onAction} style={({ pressed }) => [
                     styles.actionButton,
-                    pressed && styles.pressed
+                    pressed && SharedStyles.pressed
                 ]}>
                     <Text style={styles.actionText}>{actionLabel}</Text>
                 </Pressable>
@@ -45,8 +46,5 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: Colors.primary,
-    },
-    pressed: {
-        opacity: 0.7,
     },
 });

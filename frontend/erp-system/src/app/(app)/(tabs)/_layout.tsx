@@ -1,8 +1,11 @@
+import { Colors } from '@/constants/colors';
 import { Tabs } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { Colors } from '@/constants/colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabsLayout() {
+    const insets = useSafeAreaInsets();
+
     return (
         <Tabs
             screenOptions={{
@@ -13,8 +16,8 @@ export default function TabsLayout() {
                     backgroundColor: Colors.surface,
                     borderTopColor: Colors.border,
                     borderTopWidth: 1,
-                    height: 60,
-                    paddingBottom: 8,
+                    height: 60 + insets.bottom,
+                    paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
                     paddingTop: 8,
                 },
                 tabBarLabelStyle: {
@@ -80,4 +83,4 @@ export default function TabsLayout() {
             />
         </Tabs>
     );
-}
+}

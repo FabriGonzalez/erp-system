@@ -1,16 +1,15 @@
-import { ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/ui/Screen';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { Typography } from '@/constants/typography';
 
+import { mockDashboardStats } from '@/data/mock-dashboard';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
-import { mockDashboardStats, mockRecentOrders } from '@/data/mock-dashboard';
 
 export default function HomeScreen() {
     const user = useAuthStore((state) => state.user);
@@ -98,48 +97,6 @@ export default function HomeScreen() {
                         <Text style={styles.actionButtonText}>Inventario</Text>
                     </Pressable>
                 </View>
-
-                {/* Pedidos Recientes */}
-                <SectionHeader
-                    title="Pedidos Recientes"
-                    actionLabel="Ver todos"
-                    onAction={() => router.push('/(app)/(tabs)/orders')}
-                />
-                
-                {mockRecentOrders.length === 0 ? (
-                    <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyText}>No hay pedidos recientes</Text>
-                    </View>
-                ) : (
-                    <View style={styles.ordersList}>
-                        {mockRecentOrders.map((order) => {
-                            const badge = getStatusBadgeStyle(order.status);
-                            return (
-                                <Pressable
-                                    key={order.id}
-                                    style={({ pressed }) => [styles.orderCard, pressed && styles.pressed]}
-                                    onPress={() => router.push(`/(app)/(tabs)/orders`)}
-                                >
-                                    <View style={styles.orderInfo}>
-                                        <Text style={styles.orderNumber}>{order.orderNumber}</Text>
-                                        <Text style={styles.customerName}>{order.customerName}</Text>
-                                        <Text style={styles.orderDate}>{order.date}</Text>
-                                    </View>
-                                    <View style={styles.orderMeta}>
-                                        <Text style={styles.orderTotal}>
-                                            ${order.total.toLocaleString('es-AR')}
-                                        </Text>
-                                        <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                                            <Text style={[styles.badgeText, { color: badge.text }]}>
-                                                {badge.label}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                </Pressable>
-                            );
-                        })}
-                    </View>
-                )}
             </ScrollView>
         </Screen>
     );
