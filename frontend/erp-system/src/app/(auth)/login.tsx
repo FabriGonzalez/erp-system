@@ -1,19 +1,19 @@
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
 import { Screen } from '@/components/ui/Screen';
+import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
-import { Colors } from '@/constants/colors';
-import { mockUser, mockEmployee } from '@/data/mock-user';
+import { mockEmployee, mockUser } from '@/data/mock-user';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
+    ActivityIndicator,
     StyleSheet,
     Text,
     View,
-    ActivityIndicator,
 } from 'react-native';
 
 export default function LoginScreen() {
@@ -88,6 +88,7 @@ export default function LoginScreen() {
                     }}
                     secureTextEntry
                     editable={!isLoading}
+                    autoCapitalize="none"
                 />
 
                 {errorMsg && (
@@ -193,4 +194,4 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         fontSize: 12,
     },
-});
+});
