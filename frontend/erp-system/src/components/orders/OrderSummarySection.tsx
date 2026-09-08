@@ -1,18 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import {
     ActivityIndicator,
     Pressable,
     StyleSheet,
     Text,
-    TextInput,
-    View,
+    View
 } from 'react-native';
 
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
+import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import { DeliveryType, getBalanceDue, getPaymentStatus } from '@/types/order';
+import { AppInput } from '../ui/AppInput';
 
 type OrderSummarySectionProps = {
     total: number;
@@ -28,7 +29,6 @@ type OrderSummarySectionProps = {
 
 export function OrderSummarySection({
     total,
-    itemsCount,
     deliveryType,
     branchName,
     isSubmitting,
@@ -39,23 +39,15 @@ export function OrderSummarySection({
 }: OrderSummarySectionProps) {
     const amountPaid = useOrderDraftStore((state) => state.amountPaid);
     const setAmountPaid = useOrderDraftStore((state) => state.setAmountPaid);
+    const [paymentMode, setPaymentMode] = useState<'TOTAL' | 'PARTIAL'>('TOTAL');
+
+    const customer = useOrderDraftStore((state) => state.customer);
+
+    const isAnonymousCustomer = customer.id === CUSTOMER_ANONYMOUS.id;
 
     const [inputValue, setInputValue] = useState(
         amountPaid > 0 ? String(amountPaid) : '',
     );
-    const isFirstMount = useRef(true);
-
-    // Sync input when total changes (e.g. items updated)
-    useEffect(() => {
-        if (isFirstMount.current) {
-            isFirstMount.current = false;
-            return;
-        }
-        // If user had paid total, keep it in sync with new total
-        if (amountPaid > 0 && amountPaid === total) {
-            setInputValue(String(total));
-        }
-    }, [total]);
 
     const isPickup = deliveryType === 'LOCAL_PICKUP';
 
@@ -64,8 +56,18 @@ export function OrderSummarySection({
         total,
     );
 
-    const balanceDue = getBalanceDue({ total, amountPaid: parsedAmount });
-    const paymentStatus = getPaymentStatus({ total, amountPaid: parsedAmount });
+    const effectiveAmountPaid =
+        paymentMode === 'TOTAL' ? total : parsedAmount;
+
+    const balanceDue = getBalanceDue({
+        total,
+        amountPaid: effectiveAmountPaid,
+    });
+
+    const paymentStatus = getPaymentStatus({
+        total,
+        amountPaid: effectiveAmountPaid,
+    });
 
     function handleInputChange(text: string) {
         const cleaned = text.replace(/[^0-9]/g, '');
@@ -74,9 +76,17 @@ export function OrderSummarySection({
         setAmountPaid(value);
     }
 
-    function handlePayTotal() {
-        setInputValue(String(total));
+    function handleSelectTotal() {
+        setPaymentMode('TOTAL');
         setAmountPaid(total);
+    }
+
+    function handleSelectPartial() {
+        if (isAnonymousCustomer) {
+            return;
+        }
+
+        setPaymentMode('PARTIAL');
     }
 
     const paymentStatusColor =
@@ -135,46 +145,99 @@ export function OrderSummarySection({
                     </Text>
                 </View>
 
-                {/* Entregó */}
                 <View style={styles.divider} />
 
-                <View style={styles.entregaHeader}>
-                    <Text style={styles.entregaTitle}>Entregó</Text>
+                <Text style={styles.entregaTitle}>Pagó</Text>
+
+                <View style={styles.paymentOptions}>
                     <Pressable
-                        style={styles.payTotalBtn}
-                        onPress={handlePayTotal}
-                        disabled={total === 0}
+                        style={[
+                            styles.paymentOption,
+                            paymentMode === 'TOTAL' && styles.paymentOptionActive,
+                        ]}
+                        onPress={handleSelectTotal}
                     >
-                        <Text style={styles.payTotalBtnText}>Pagar total</Text>
+                        <Text
+                            style={[
+                                styles.paymentOptionText,
+                                paymentMode === 'TOTAL' &&
+                                styles.paymentOptionTextActive,
+                            ]}
+                        >
+                            Total
+                        </Text>
+                    </Pressable>
+
+                    <Pressable
+                        style={[
+                            styles.paymentOption,
+                            paymentMode === 'PARTIAL' &&
+                            styles.paymentOptionActive,
+                            isAnonymousCustomer &&
+                            styles.paymentOptionDisabled,
+                        ]}
+                        onPress={handleSelectPartial}
+                        disabled={isAnonymousCustomer}
+                    >
+                        <Text
+                            style={[
+                                styles.paymentOptionText,
+                                paymentMode === 'PARTIAL' &&
+                                styles.paymentOptionTextActive,
+                                isAnonymousCustomer &&
+                                styles.paymentOptionTextDisabled,
+                            ]}
+                        >
+                            Parcial
+                        </Text>
                     </Pressable>
                 </View>
 
-                <View style={styles.inputRow}>
-                    <Text style={styles.currencyPrefix}>$</Text>
-                    <TextInput
-                        style={styles.amountInput}
-                        value={inputValue}
-                        onChangeText={handleInputChange}
-                        keyboardType="numeric"
-                        placeholder="0"
-                        placeholderTextColor={Colors.textSecondary}
-                        maxLength={12}
-                        editable={total > 0}
-                    />
-                </View>
+                {isAnonymousCustomer && (
+                    <Text style={styles.paymentRestriction}>
+                        El pago parcial requiere un cliente identificado.
+                    </Text>
+                )}
 
-                <View style={styles.balanceRow}>
-                    <View style={[styles.statusPill, { backgroundColor: paymentStatusBg }]}>
-                        <Text style={[styles.statusPillText, { color: paymentStatusColor }]}>
-                            {paymentStatusLabel}
-                        </Text>
-                    </View>
-                    {balanceDue > 0 && (
-                        <Text style={styles.balanceText}>
-                            Debe: ${balanceDue.toLocaleString('es-AR')}
-                        </Text>
-                    )}
-                </View>
+                {paymentMode === 'PARTIAL' && (
+                    <>
+                        <View style={styles.inputRow}>
+                            <Text style={styles.currencyPrefix}>$</Text>
+                            <AppInput
+                                style={styles.amountInput}
+                                value={inputValue}
+                                onChangeText={handleInputChange}
+                                keyboardType="numeric"
+                                placeholder="0"
+                                maxLength={12}
+                            />
+                        </View>
+
+                        <View style={styles.balanceRow}>
+                            <View
+                                style={[
+                                    styles.statusPill,
+                                    { backgroundColor: paymentStatusBg },
+                                ]}
+                            >
+                                <Text
+                                    style={[
+                                        styles.statusPillText,
+                                        { color: paymentStatusColor },
+                                    ]}
+                                >
+                                    {paymentStatusLabel}
+                                </Text>
+                            </View>
+
+                            {balanceDue > 0 && (
+                                <Text style={styles.balanceText}>
+                                    Debe: ${balanceDue.toLocaleString('es-AR')}
+                                </Text>
+                            )}
+                        </View>
+                    </>
+                )}
             </View>
 
             <View style={styles.actionsContainer}>
@@ -274,6 +337,7 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: Colors.text,
+        marginBottom: Spacing.md,
     },
     payTotalBtn: {
         backgroundColor: Colors.primaryLight,
@@ -289,7 +353,7 @@ const styles = StyleSheet.create({
     inputRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colors.muted,
+        backgroundColor: Colors.surface,
         borderRadius: 10,
         borderWidth: 1,
         borderColor: Colors.border,
@@ -297,10 +361,10 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.sm,
     },
     currencyPrefix: {
-        fontSize: 18,
+        fontSize: 22,
         fontWeight: '700',
         color: Colors.text,
-        marginRight: 4,
+        marginRight: Spacing.xs,
     },
     amountInput: {
         flex: 1,
@@ -308,6 +372,10 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: Colors.text,
         paddingVertical: Spacing.sm,
+
+        borderWidth: 0,
+        backgroundColor: 'transparent',
+        paddingHorizontal: 0,
     },
     balanceRow: {
         flexDirection: 'row',
@@ -363,5 +431,51 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         fontSize: 15,
         fontWeight: '500',
+    },
+
+    paymentOptions: {
+        flexDirection: 'row',
+        gap: Spacing.sm,
+        marginBottom: Spacing.md,
+    },
+
+    paymentOption: {
+        flex: 1,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: 10,
+        paddingVertical: Spacing.md,
+        alignItems: 'center',
+        backgroundColor: Colors.surface,
+    },
+
+    paymentOptionActive: {
+        borderColor: Colors.primary,
+        backgroundColor: Colors.primaryLight,
+    },
+
+    paymentOptionText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: Colors.textSecondary,
+    },
+
+    paymentOptionTextActive: {
+        color: Colors.primary,
+    },
+
+    paymentOptionDisabled: {
+        opacity: 0.45,
+    },
+
+    paymentRestriction: {
+        fontSize: 12,
+        color: Colors.error,
+        marginTop: -Spacing.sm,
+        marginBottom: Spacing.sm,
+    },
+
+    paymentOptionTextDisabled: {
+        color: Colors.textSecondary,
     },
 });

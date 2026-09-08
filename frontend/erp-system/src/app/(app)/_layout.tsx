@@ -1,16 +1,17 @@
-import { Slot } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '@/constants/colors';
 
 import { AppHeader } from '@/components/app/AppHeader';
+import { Colors } from '@/constants/colors';
 
 export default function AppLayout() {
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <AppHeader />
+
             <View style={styles.content}>
-                <Slot />
+                <Stack screenOptions={{ headerShown: false }} />
             </View>
         </SafeAreaView>
     );
@@ -24,4 +25,4 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
     },
-});
+});

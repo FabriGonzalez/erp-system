@@ -16,7 +16,7 @@ import { Spacing } from '@/constants/spacing';
 import { useOrderStore } from '@/stores/order-store';
 import { SharedStyles } from '@/styles/shared';
 import { getBalanceDue, Order } from '@/types/order';
-import { formatDate } from '@/utils/format';
+import { formatCurrency, formatDate } from '@/utils/format';
 
 export default function CustomerDebtsScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -40,13 +40,6 @@ export default function CustomerDebtsScreen() {
         () => pendingOrders.reduce((sum, o) => sum + getBalanceDue(o), 0),
         [pendingOrders],
     );
-
-    function handleViewOrder(orderId: string) {
-        router.push({
-            pathname: '/orders/[id]',
-            params: { id: orderId },
-        });
-    }
 
     return (
         <Screen style={styles.screen}>
@@ -90,7 +83,7 @@ export default function CustomerDebtsScreen() {
                 <View style={styles.totalBanner}>
                     <Text style={styles.totalBannerLabel}>Deuda total</Text>
                     <Text style={styles.totalBannerAmount}>
-                        ${totalDebt.toLocaleString('es-AR')}
+                        {formatCurrency(totalDebt)}
                     </Text>
                 </View>
             )}
@@ -111,22 +104,14 @@ export default function CustomerDebtsScreen() {
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContainer}
                     showsVerticalScrollIndicator={false}
-                    renderItem={({ item }) => (
-                        <DebtOrderCard order={item} onPress={() => handleViewOrder(item.id)} />
-                    )}
+                    renderItem={({ item }) => <DebtOrderCard order={item} />}
                 />
             )}
         </Screen>
     );
 }
 
-function DebtOrderCard({
-    order,
-    onPress,
-}: {
-    order: Order;
-    onPress: () => void;
-}) {
+function DebtOrderCard({ order }: { order: Order }) {
     const balance = getBalanceDue(order);
 
     return (
@@ -136,34 +121,40 @@ function DebtOrderCard({
                     <Text style={styles.orderNumber}>{order.orderNumber}</Text>
                     <Text style={styles.orderDate}>{formatDate(order.createdAt)}</Text>
                 </View>
-                <Pressable
-                    style={({ pressed }) => [
-                        styles.viewBtn,
-                        pressed && styles.viewBtnPressed,
-                    ]}
-                    onPress={onPress}
-                >
-                    <Text style={styles.viewBtnText}>Ver pedido</Text>
-                </Pressable>
+            </View>
+
+            {/* Productos pedidos */}
+            <View style={styles.itemsList}>
+                {order.items.map((item) => (
+                    <View key={item.id} style={styles.itemRow}>
+                        <Text style={styles.itemName} numberOfLines={1}>
+                            {item.productName}
+                            {item.quantity > 1 ? `  x${item.quantity}` : ''}
+                        </Text>
+                        <Text style={styles.itemPrice}>
+                            {formatCurrency(item.subtotal)}
+                        </Text>
+                    </View>
+                ))}
             </View>
 
             <View style={styles.amountsRow}>
                 <View style={styles.amountCol}>
                     <Text style={styles.amountLabel}>Total</Text>
                     <Text style={styles.amountValue}>
-                        ${order.total.toLocaleString('es-AR')}
+                        {formatCurrency(order.total)}
                     </Text>
                 </View>
                 <View style={styles.amountCol}>
                     <Text style={styles.amountLabel}>Entregó</Text>
                     <Text style={[styles.amountValue, { color: Colors.success }]}>
-                        ${order.amountPaid.toLocaleString('es-AR')}
+                        {formatCurrency(order.amountPaid)}
                     </Text>
                 </View>
                 <View style={styles.amountCol}>
                     <Text style={styles.amountLabel}>Debe</Text>
                     <Text style={[styles.amountValue, { color: Colors.error }]}>
-                        ${balance.toLocaleString('es-AR')}
+                        {formatCurrency(balance)}
                     </Text>
                 </View>
             </View>
@@ -269,19 +260,29 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         marginTop: 2,
     },
-    viewBtn: {
-        backgroundColor: Colors.primaryLight,
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 5,
-        borderRadius: 8,
+    itemsList: {
+        borderTopWidth: 1,
+        borderTopColor: Colors.muted,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.muted,
+        paddingVertical: Spacing.xs,
     },
-    viewBtnPressed: {
-        opacity: 0.7,
+    itemRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 4,
+        gap: Spacing.sm,
     },
-    viewBtnText: {
-        color: Colors.primary,
-        fontSize: 12,
+    itemName: {
+        flex: 1,
+        fontSize: 13,
+        color: Colors.text,
+    },
+    itemPrice: {
+        fontSize: 13,
         fontWeight: '600',
+        color: Colors.text,
     },
     amountsRow: {
         flexDirection: 'row',

@@ -9,7 +9,6 @@ import {
     View,
 } from 'react-native';
 
-import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
@@ -106,7 +105,6 @@ export default function DebtorsScreen() {
                             }
                         >
                             <View style={styles.cardHeader}>
-                                <Avatar name={item.customerName} />
                                 <View style={styles.cardInfo}>
                                     <Text style={styles.customerName}>{item.customerName}</Text>
                                     <Text style={styles.ordersCount}>

@@ -86,7 +86,7 @@ export default function OrdersScreen() {
 
     function handleViewOrder(id: string) {
         router.push({
-            pathname: '/orders/[id]',
+            pathname: '/(app)/orders/[id]',
             params: { id },
         });
     }

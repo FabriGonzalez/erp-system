@@ -9,11 +9,11 @@ import {
     View,
 } from 'react-native';
 
-import { OrderTimeline } from '@/components/orders/OrderTimeline';
 import { OrderActions } from '@/components/orders/OrderActions';
 import { OrderHeader } from '@/components/orders/OrderHeader';
 import { OrderInfoCard } from '@/components/orders/OrderInfoCard';
 import { OrderProducts } from '@/components/orders/OrderProducts';
+import { OrderTimeline } from '@/components/orders/OrderTimeline';
 import { SuccessBanner } from '@/components/orders/SuccessBanner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
