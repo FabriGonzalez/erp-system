@@ -1,16 +1,16 @@
 import { SymbolView } from 'expo-symbols';
-import { Pressable, View, Text, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 
-interface ProductsErrorStateProps {
-    errorMessage?: string | null;
+type ErrorStateProps = {
+    message?: string | null;
     onRetry: () => void;
-}
+};
 
-export function ProductsErrorState({ errorMessage, onRetry }: ProductsErrorStateProps) {
+export function ErrorState({ message, onRetry }: ErrorStateProps) {
     return (
         <View style={styles.container}>
             <SymbolView
@@ -22,15 +22,15 @@ export function ProductsErrorState({ errorMessage, onRetry }: ProductsErrorState
             <Text style={styles.title}>Ocurrió un error</Text>
 
             <Text style={styles.description}>
-                {errorMessage ?? 'No se pudieron cargar los productos. Intenta nuevamente.'}
+                {message ?? 'No se pudieron cargar los datos. Intenta nuevamente.'}
             </Text>
 
             <Pressable
+                onPress={onRetry}
                 style={({ pressed }) => [
                     styles.retryButton,
                     pressed && SharedStyles.pressed,
                 ]}
-                onPress={onRetry}
             >
                 <Text style={styles.retryButtonText}>Reintentar</Text>
             </Pressable>
@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     },
 
     retryButtonText: {
-        color: '#FFFFFF',
+        color: Colors.white,
         fontSize: 14,
         fontWeight: '600',
     },

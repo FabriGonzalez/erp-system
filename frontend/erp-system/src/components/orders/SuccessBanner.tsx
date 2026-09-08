@@ -30,16 +30,16 @@ const styles = StyleSheet.create({
     banner: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#DCFCE7',
+        backgroundColor: Colors.successLight,
         paddingHorizontal: Spacing.lg,
         paddingVertical: Spacing.md,
         gap: Spacing.sm,
         borderBottomWidth: 1,
-        borderBottomColor: '#BBF7D0',
+        borderBottomColor: Colors.successBorder,
     },
 
     text: {
-        color: '#166534',
+        color: Colors.successDark,
         fontSize: 14,
         fontWeight: '600',
     },

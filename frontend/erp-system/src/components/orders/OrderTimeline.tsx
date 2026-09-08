@@ -115,7 +115,7 @@ export function OrderTimeline({ order }: OrderTimelineProps) {
                                             web: 'check',
                                         }}
                                         size={14}
-                                        tintColor="#FFFFFF"
+                                        tintColor={Colors.white}
                                     />
                                 ) : isCurrent && !isCancelled ? (
                                     <View style={styles.currentDot} />
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
         width: 8,
         height: 8,
         borderRadius: 4,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: Colors.white,
     },
     line: {
         width: 2,

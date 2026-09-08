@@ -14,13 +14,16 @@ type OrderDraftState = {
     deliveryType: DeliveryType;
     address: CustomerAddress | undefined;
     items: OrderItem[];
+    amountPaid: number;
 
     initNewOrder: () => void;
     initEditOrder: (order: Order, customer: Customer) => void;
 
     setCustomer: (customer: Customer) => void;
+    updateCustomer: (customer: Customer) => void;
     setDeliveryType: (deliveryType: DeliveryType) => void;
     setAddress: (address: CustomerAddress) => void;
+    setAmountPaid: (amount: number) => void;
 
     addItem: (product: Product, maxStock: number) => void;
     updateItemQuantity: (
@@ -39,6 +42,7 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
     deliveryType: 'LOCAL_PICKUP',
     address: undefined,
     items: [],
+    amountPaid: 0,
 
     initNewOrder: () => {
         set({
@@ -47,6 +51,7 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
             deliveryType: 'LOCAL_PICKUP',
             address: undefined,
             items: [],
+            amountPaid: 0,
         });
     },
 
@@ -57,6 +62,7 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
             deliveryType: order.deliveryType,
             address: order.address,
             items: order.items,
+            amountPaid: order.amountPaid,
         });
     },
 
@@ -65,6 +71,10 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
             customer,
             address: undefined,
         });
+    },
+
+    updateCustomer: (customer) => {
+        set({ customer });
     },
 
     setDeliveryType: (deliveryType) => {
@@ -76,6 +86,10 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
 
     setAddress: (address) => {
         set({ address });
+    },
+
+    setAmountPaid: (amountPaid) => {
+        set({ amountPaid });
     },
 
     addItem: (product, maxStock) => {
@@ -176,6 +190,7 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
             deliveryType: 'LOCAL_PICKUP',
             address: undefined,
             items: [],
+            amountPaid: 0,
         });
     },
 }));

@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 
+import { Avatar } from '@/components/ui/Avatar';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
@@ -25,7 +26,7 @@ export function OrderCustomerSection({
                 style={({ pressed }) => [styles.card, pressed && SharedStyles.pressed]}
                 onPress={onSelectCustomer}
             >
-                <View style={styles.avatar}>
+                <Avatar style={styles.avatar}>
                     <SymbolView
                         name={{
                             ios: isAnonymous ? 'person.fill.questionmark' : 'person.fill',
@@ -35,7 +36,7 @@ export function OrderCustomerSection({
                         size={22}
                         tintColor={Colors.primary}
                     />
-                </View>
+                </Avatar>
 
                 <View style={styles.info}>
                     <Text style={styles.customerName}>{customer.name}</Text>
@@ -77,12 +78,6 @@ const styles = StyleSheet.create({
         borderColor: Colors.border,
     },
     avatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#EFF6FF',
-        alignItems: 'center',
-        justifyContent: 'center',
         marginRight: Spacing.md,
     },
     info: {

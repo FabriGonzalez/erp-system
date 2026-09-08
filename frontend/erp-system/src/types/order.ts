@@ -9,6 +9,8 @@ export type OrderStatus =
     | 'DELIVERED'
     | 'CANCELLED';
 
+export type PaymentStatus = 'PENDING' | 'PARTIAL' | 'PAID';
+
 export type DeliveryType = 'LOCAL_PICKUP' | 'SHIPPING';
 
 export type OrderItem = {
@@ -32,6 +34,7 @@ export type Order = {
     branchName: string;
     items: OrderItem[];
     total: number;
+    amountPaid: number;
     status: OrderStatus;
     createdAt: string;
     updatedAt: string;
@@ -50,6 +53,22 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
     DELIVERED: 'Entregado',
     CANCELLED: 'Cancelado',
 };
+
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+    PENDING: 'Pendiente',
+    PARTIAL: 'Pago parcial',
+    PAID: 'Pagado',
+};
+
+export function getPaymentStatus(order: Pick<Order, 'total' | 'amountPaid'>): PaymentStatus {
+    if (order.amountPaid <= 0) return 'PENDING';
+    if (order.amountPaid >= order.total) return 'PAID';
+    return 'PARTIAL';
+}
+
+export function getBalanceDue(order: Pick<Order, 'total' | 'amountPaid'>): number {
+    return Math.max(0, order.total - order.amountPaid);
+}
 
 export const DELIVERY_TYPE_LABELS: Record<DeliveryType, string> = {
     LOCAL_PICKUP: 'Retiro',

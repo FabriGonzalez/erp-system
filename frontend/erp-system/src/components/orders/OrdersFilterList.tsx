@@ -1,8 +1,9 @@
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { SharedStyles } from '@/styles/shared';
+
+import { FilterChip } from '@/components/ui/FilterChip';
 
 import {
     DELIVERY_TYPE_LABELS,
@@ -11,22 +12,28 @@ import {
     OrderStatusFilter,
 } from '@/types/order';
 
-const STATUS_FILTERS: { label: string; value: OrderStatusFilter }[] = [
-    { label: 'Todos', value: 'ALL' },
-    { label: ORDER_STATUS_LABELS.DRAFT, value: 'DRAFT' },
-    { label: ORDER_STATUS_LABELS.CONFIRMED, value: 'CONFIRMED' },
-    { label: ORDER_STATUS_LABELS.IN_PREPARATION, value: 'IN_PREPARATION' },
-    { label: ORDER_STATUS_LABELS.READY_TO_SHIP, value: 'READY_TO_SHIP' },
-    { label: ORDER_STATUS_LABELS.SHIPPED, value: 'SHIPPED' },
-    { label: ORDER_STATUS_LABELS.DELIVERED, value: 'DELIVERED' },
-    { label: ORDER_STATUS_LABELS.CANCELLED, value: 'CANCELLED' },
-];
+const STATUS_FILTERS: {
+    label: string;
+    value: OrderStatusFilter;
+}[] = [
+        { label: 'Todos', value: 'ALL' },
+        { label: ORDER_STATUS_LABELS.DRAFT, value: 'DRAFT' },
+        { label: ORDER_STATUS_LABELS.CONFIRMED, value: 'CONFIRMED' },
+        { label: ORDER_STATUS_LABELS.IN_PREPARATION, value: 'IN_PREPARATION' },
+        { label: ORDER_STATUS_LABELS.READY_TO_SHIP, value: 'READY_TO_SHIP' },
+        { label: ORDER_STATUS_LABELS.SHIPPED, value: 'SHIPPED' },
+        { label: ORDER_STATUS_LABELS.DELIVERED, value: 'DELIVERED' },
+        { label: ORDER_STATUS_LABELS.CANCELLED, value: 'CANCELLED' },
+    ];
 
-const DELIVERY_FILTERS: { label: string; value: OrderDeliveryFilter }[] = [
-    { label: 'Todos', value: 'ALL' },
-    { label: DELIVERY_TYPE_LABELS.LOCAL_PICKUP, value: 'LOCAL_PICKUP' },
-    { label: DELIVERY_TYPE_LABELS.SHIPPING, value: 'SHIPPING' },
-];
+const DELIVERY_FILTERS: {
+    label: string;
+    value: OrderDeliveryFilter;
+}[] = [
+        { label: 'Todos', value: 'ALL' },
+        { label: DELIVERY_TYPE_LABELS.LOCAL_PICKUP, value: 'LOCAL_PICKUP' },
+        { label: DELIVERY_TYPE_LABELS.SHIPPING, value: 'SHIPPING' },
+    ];
 
 interface OrdersFilterListProps {
     statusFilter: OrderStatusFilter;
@@ -42,95 +49,61 @@ export function OrdersFilterList({
     onDeliveryChange,
 }: OrdersFilterListProps) {
     return (
-        <>
-            <View style={styles.filtersSection}>
-                <Text style={styles.filterTitle}>Estado</Text>
+        <View style={styles.filterSection}>
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filtersContent}
+            >
+                <View style={styles.filterGroup}>
+                    {STATUS_FILTERS.map((item) => (
+                        <FilterChip
+                            key={item.value}
+                            label={item.label}
+                            selected={statusFilter === item.value}
+                            onPress={() => onStatusChange(item.value)}
+                        />
+                    ))}
+                </View>
 
-                <FlatList
-                    horizontal
-                    data={STATUS_FILTERS}
-                    keyExtractor={(item) => item.value}
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.filtersContent}
-                    renderItem={({ item }) => {
-                        const selected = statusFilter === item.value;
+                <View style={styles.filterDivider} />
 
-                        return (
-                            <Pressable
-                                onPress={() => onStatusChange(item.value)}
-                                style={({ pressed }) => [
-                                    SharedStyles.filterChip,
-                                    selected && SharedStyles.filterChipSelected,
-                                    pressed && SharedStyles.pressed,
-                                ]}
-                            >
-                                <Text
-                                    style={[
-                                        SharedStyles.filterChipText,
-                                        selected && SharedStyles.filterChipTextSelected,
-                                    ]}
-                                >
-                                    {item.label}
-                                </Text>
-                            </Pressable>
-                        );
-                    }}
-                />
-            </View>
-
-            <View style={styles.filtersSection}>
-                <Text style={styles.filterTitle}>Entrega</Text>
-
-                <FlatList
-                    horizontal
-                    data={DELIVERY_FILTERS}
-                    keyExtractor={(item) => item.value}
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.filtersContent}
-                    renderItem={({ item }) => {
-                        const selected = deliveryTypeFilter === item.value;
-
-                        return (
-                            <Pressable
-                                onPress={() => onDeliveryChange(item.value)}
-                                style={({ pressed }) => [
-                                    SharedStyles.filterChip,
-                                    selected && SharedStyles.filterChipSelected,
-                                    pressed && SharedStyles.pressed,
-                                ]}
-                            >
-                                <Text
-                                    style={[
-                                        SharedStyles.filterChipText,
-                                        selected && SharedStyles.filterChipTextSelected,
-                                    ]}
-                                >
-                                    {item.label}
-                                </Text>
-                            </Pressable>
-                        );
-                    }}
-                />
-            </View>
-        </>
+                <View style={styles.filterGroup}>
+                    {DELIVERY_FILTERS.map((item) => (
+                        <FilterChip
+                            key={item.value}
+                            label={item.label}
+                            selected={deliveryTypeFilter === item.value}
+                            onPress={() => onDeliveryChange(item.value)}
+                        />
+                    ))}
+                </View>
+            </ScrollView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    filtersSection: {
-        marginTop: Spacing.md,
-    },
-
-    filterTitle: {
-        marginHorizontal: Spacing.md,
+    filterSection: {
         marginBottom: Spacing.xs,
-        fontSize: 13,
-        fontWeight: '600',
-        color: Colors.textSecondary,
     },
 
     filtersContent: {
-        paddingHorizontal: Spacing.md,
+        paddingHorizontal: Spacing.lg,
+        paddingVertical: Spacing.xs + 2,
+        alignItems: 'center',
+    },
+
+    filterGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
         gap: Spacing.xs,
+    },
+
+    filterDivider: {
+        width: 1,
+        height: 20,
+        backgroundColor: Colors.border,
+        marginHorizontal: Spacing.sm,
     },
 });

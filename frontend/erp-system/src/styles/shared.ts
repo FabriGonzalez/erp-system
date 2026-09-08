@@ -43,16 +43,16 @@ export const SharedStyles = StyleSheet.create({
     successBanner: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#DCFCE7',
+        backgroundColor: Colors.successLight,
         paddingHorizontal: Spacing.lg,
         paddingVertical: Spacing.md,
         gap: Spacing.sm,
         borderBottomWidth: 1,
-        borderBottomColor: '#BBF7D0',
+        borderBottomColor: Colors.successBorder,
     },
 
     successText: {
-        color: '#166534',
+        color: Colors.successDark,
         fontSize: 14,
         fontWeight: '600',
     },
@@ -64,15 +64,14 @@ export const SharedStyles = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.border,
     },
-
     searchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginHorizontal: Spacing.md,
+        marginHorizontal: Spacing.lg,
         marginTop: Spacing.sm,
         paddingHorizontal: Spacing.md,
-        minHeight: 48,
-        borderRadius: 12,
+        height: 44,
+        borderRadius: 10,
         backgroundColor: Colors.surface,
         borderWidth: 1,
         borderColor: Colors.border,
@@ -80,9 +79,11 @@ export const SharedStyles = StyleSheet.create({
 
     searchInput: {
         flex: 1,
-        justifyContent: 'center',
         marginLeft: Spacing.sm,
-        minHeight: 46,
+        height: '100%',
+        borderWidth: 0,
+        backgroundColor: 'transparent',
+        paddingHorizontal: 0,
     },
 
     filterChip: {
@@ -106,7 +107,7 @@ export const SharedStyles = StyleSheet.create({
     },
 
     filterChipTextSelected: {
-        color: '#FFFFFF',
+        color: Colors.white,
     },
 
     errorContainer: {
@@ -116,7 +117,7 @@ export const SharedStyles = StyleSheet.create({
         marginTop: Spacing.md,
         padding: Spacing.md,
         borderRadius: 12,
-        backgroundColor: '#FEF2F2',
+        backgroundColor: Colors.errorLight,
         borderWidth: 1,
         borderColor: '#FECACA',
     },
@@ -169,7 +170,7 @@ export const SharedStyles = StyleSheet.create({
     },
 
     buttonPrimaryText: {
-        color: '#FFFFFF',
+        color: Colors.white,
         fontSize: 14,
         fontWeight: '600',
     },
@@ -198,9 +199,9 @@ export const SharedStyles = StyleSheet.create({
         borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#FEF2F2',
+        backgroundColor: Colors.errorLight,
         borderWidth: 1,
-        borderColor: '#FCA5A5',
+        borderColor: Colors.errorBorder,
     },
 
     buttonDangerText: {

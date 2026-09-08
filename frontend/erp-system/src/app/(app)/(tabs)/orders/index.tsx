@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useMemo } from 'react';
 import {
-    ActivityIndicator,
     FlatList,
     Pressable,
     RefreshControl,
@@ -11,11 +10,12 @@ import {
     View,
 } from 'react-native';
 
-import { OrderCard } from '@/components/OrderCard';
+import { OrderCard } from '@/components/orders/OrderCard';
 import { OrdersErrorState } from '@/components/orders/OrdersErrorState';
 import { OrdersFilterList } from '@/components/orders/OrdersFilterList';
 import { OrdersSearchBar } from '@/components/orders/OrdersSearchBar';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
@@ -81,12 +81,12 @@ export default function OrdersScreen() {
         deliveryTypeFilter !== 'ALL';
 
     function handleCreateOrder() {
-        router.push({ pathname: '/(app)/(tabs)/orders/new' });
+        router.push({ pathname: '/orders/new' });
     }
 
     function handleViewOrder(id: string) {
         router.push({
-            pathname: '/(app)/(tabs)/orders/[id]',
+            pathname: '/orders/[id]',
             params: { id },
         });
     }
@@ -127,7 +127,7 @@ export default function OrdersScreen() {
                                 web: 'add',
                             }}
                             size={18}
-                            tintColor="#FFFFFF"
+                            tintColor={Colors.white}
                         />
 
                         <Text style={styles.addButtonText}>Nuevo</Text>
@@ -155,11 +155,7 @@ export default function OrdersScreen() {
             )}
 
             {isLoading ? (
-                <View style={SharedStyles.loadingContainer}>
-                    <ActivityIndicator size="large" color={Colors.primary} />
-
-                    <Text style={SharedStyles.loadingText}>Cargando pedidos...</Text>
-                </View>
+                <LoadingState label="Cargando pedidos..." />
             ) : (
                 <FlatList
                     data={filteredOrders}
@@ -256,15 +252,15 @@ const styles = StyleSheet.create({
     },
 
     addButtonText: {
-        color: '#FFFFFF',
+        color: Colors.white,
         fontSize: 14,
         fontWeight: '600',
     },
 
     listContent: {
         paddingHorizontal: Spacing.lg,
-        paddingTop: Spacing.sm,
-        paddingBottom: Spacing.xxl * 2,
+        paddingTop: Spacing.md,
+        paddingBottom: Spacing.md,
         gap: Spacing.sm,
     },
 

@@ -1,12 +1,14 @@
 import { router } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { Avatar } from '@/components/ui/Avatar';
 import { MenuListItem } from '@/components/ui/MenuListItem';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
+import { getInitials } from '@/utils/format';
 
 export default function MoreScreen() {
     const { user, logout } = useAuthStore();
@@ -24,18 +26,15 @@ export default function MoreScreen() {
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContainer}>
                 {/* Perfil Resumen */}
                 <View style={styles.profileCard}>
-                    <View style={styles.avatar}>
-                        <Text style={styles.avatarText}>
-                            {user?.name
-                                ? user.name
-                                    .split(' ')
-                                    .map((n) => n[0])
-                                    .join('')
-                                    .slice(0, 2)
-                                    .toUpperCase()
-                                : 'U'}
-                        </Text>
-                    </View>
+                    <Avatar
+                        initials={user?.name ? getInitials(user.name) : 'U'}
+                        size={60}
+                        fontWeight="700"
+                        fontSize={20}
+                        backgroundColor={Colors.primary}
+                        textColor={Colors.white}
+                        style={styles.avatar}
+                    />
                     <View style={styles.profileInfo}>
                         <Text style={styles.profileName}>{user?.name ?? 'Usuario'}</Text>
                         <Text style={styles.profileEmail}>{user?.email ?? ''}</Text>
@@ -55,6 +54,12 @@ export default function MoreScreen() {
                         subtitle="Gestión de clientes y direcciones"
                         iconName={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
                         onPress={() => router.push('/customers' as any)}
+                    />
+                    <MenuListItem
+                        title="Clientes que deben"
+                        subtitle="Pedidos con saldo pendiente"
+                        iconName={{ ios: 'exclamationmark.circle.fill', android: 'warning', web: 'warning' }}
+                        onPress={() => router.push('/customers/debtors')}
                     />
                     <MenuListItem
                         title="Sucursal activa"
@@ -131,18 +136,7 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.xl,
     },
     avatar: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: Colors.primary,
-        alignItems: 'center',
-        justifyContent: 'center',
         marginRight: Spacing.lg,
-    },
-    avatarText: {
-        color: '#FFFFFF',
-        fontSize: 20,
-        fontWeight: '700',
     },
     profileInfo: {
         flex: 1,
@@ -160,7 +154,7 @@ const styles = StyleSheet.create({
     },
     roleBadge: {
         alignSelf: 'flex-start',
-        backgroundColor: '#EFF6FF',
+        backgroundColor: Colors.primaryLight,
         borderRadius: 6,
         paddingHorizontal: Spacing.sm,
         paddingVertical: 2,

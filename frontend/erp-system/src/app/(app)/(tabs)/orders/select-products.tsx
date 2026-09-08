@@ -165,7 +165,7 @@ export default function SelectProductsScreen() {
                                         <SymbolView
                                             name={{ ios: 'plus', android: 'add', web: 'add' }}
                                             size={16}
-                                            tintColor={isOutOfStock ? Colors.textSecondary : '#FFFFFF'}
+                                            tintColor={isOutOfStock ? Colors.textSecondary : Colors.white}
                                         />
                                         <Text style={[styles.addButtonText, isOutOfStock && styles.addButtonTextDisabled]}>
                                             Agregar
@@ -198,7 +198,7 @@ export default function SelectProductsScreen() {
                         <SymbolView
                             name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
                             size={16}
-                            tintColor="#FFFFFF"
+                            tintColor={Colors.white}
                         />
                     </Pressable>
                 </View>
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
         gap: 4,
     },
     addButtonText: {
-        color: '#FFFFFF',
+        color: Colors.white,
         fontSize: 13,
         fontWeight: '600',
     },
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
     qtyControls: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F1F5F9',
+        backgroundColor: Colors.muted,
         borderRadius: 8,
         paddingHorizontal: 4,
         paddingVertical: 2,
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
         gap: 4,
     },
     confirmCartBtnText: {
-        color: '#FFFFFF',
+        color: Colors.white,
         fontSize: 14,
         fontWeight: '600',
     },

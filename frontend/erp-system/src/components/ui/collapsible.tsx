@@ -3,8 +3,8 @@ import { PropsWithChildren, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
-import { Spacing } from '@/constants/theme';
 import { Colors } from '@/constants/colors';
+import { Spacing } from '@/constants/spacing';
 
 export function Collapsible({ children, title }: PropsWithChildren & { title: string }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -39,23 +39,23 @@ export function Collapsible({ children, title }: PropsWithChildren & { title: st
 
 const styles = StyleSheet.create({
   container: {
-    gap: Spacing.two,
+    gap: Spacing.sm,
   },
   heading: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: Spacing.sm,
   },
   pressedHeading: {
     opacity: 0.7,
   },
   button: {
-    width: Spacing.four,
-    height: Spacing.four,
+    width: Spacing.xl,
+    height: Spacing.xl,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: Colors.muted,
   },
   titleText: {
     fontSize: 14,
@@ -63,11 +63,11 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   content: {
-    marginTop: Spacing.three,
-    borderRadius: Spacing.three,
-    marginLeft: Spacing.four,
-    padding: Spacing.four,
-    backgroundColor: '#F8FAFC',
+    marginTop: Spacing.lg,
+    borderRadius: Spacing.lg,
+    marginLeft: Spacing.xl,
+    padding: Spacing.xl,
+    backgroundColor: Colors.background,
   },
 });
 

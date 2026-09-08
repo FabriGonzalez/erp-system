@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     },
 
     categoryItemSelected: {
-        backgroundColor: '#EFF6FF',
+        backgroundColor: Colors.primaryLight,
     },
 
     categoryItemInfo: {

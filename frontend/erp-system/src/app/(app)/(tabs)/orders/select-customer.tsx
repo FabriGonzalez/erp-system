@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { AppInput } from '@/components/ui/AppInput';
+import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
@@ -18,6 +19,7 @@ import { useCustomerStore } from '@/stores/customer-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
 import { Customer, CUSTOMER_ANONYMOUS } from '@/types/customer';
+import { getInitials } from '@/utils/format';
 
 export default function SelectCustomerScreen() {
     const { customers, searchQuery, setSearchQuery } = useCustomerStore();
@@ -43,8 +45,7 @@ export default function SelectCustomerScreen() {
 
     function handleCreateNewCustomer() {
         router.push({
-            pathname: '/customers/new',
-            params: { fromOrder: 'true' },
+            pathname: '/orders/new-customer',
         });
     }
 
@@ -101,13 +102,16 @@ export default function SelectCustomerScreen() {
                             ]}
                             onPress={() => handleSelectCustomer(CUSTOMER_ANONYMOUS)}
                         >
-                            <View style={styles.anonymousAvatar}>
+                            <Avatar
+                                backgroundColor={Colors.primaryLight}
+                                style={styles.anonymousAvatar}
+                            >
                                 <SymbolView
                                     name={{ ios: 'person.fill.questionmark', android: 'person', web: 'person' }}
                                     size={20}
                                     tintColor={Colors.primary}
                                 />
-                            </View>
+                            </Avatar>
                             <View style={styles.cardInfo}>
                                 <Text style={styles.cardTitle}>{CUSTOMER_ANONYMOUS.name}</Text>
                                 <Text style={styles.cardSub}>Sin registro de comprador (venta genérica)</Text>
@@ -145,18 +149,15 @@ export default function SelectCustomerScreen() {
                             ]}
                             onPress={() => handleSelectCustomer(item)}
                         >
-                            <View style={styles.avatar}>
-                                <Text style={styles.avatarText}>
-                                    {item.name
-                                        ? item.name
-                                            .split(' ')
-                                            .map((n) => n[0])
-                                            .join('')
-                                            .slice(0, 2)
-                                            .toUpperCase()
-                                        : 'C'}
-                                </Text>
-                            </View>
+                            <Avatar
+                                name={item.name}
+                                initials={item.name ? getInitials(item.name) : 'C'}
+                                backgroundColor={Colors.muted}
+                                textColor={Colors.text}
+                                fontWeight="700"
+                                fontSize={14}
+                                style={styles.avatar}
+                            />
 
                             <View style={styles.cardInfo}>
                                 <Text style={styles.cardTitle}>{item.name}</Text>
@@ -225,12 +226,6 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.lg,
     },
     anonymousAvatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#EFF6FF',
-        alignItems: 'center',
-        justifyContent: 'center',
         marginRight: Spacing.md,
     },
     listSectionTitle: {
@@ -256,18 +251,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#F0F9FF',
     },
     avatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#F1F5F9',
-        alignItems: 'center',
-        justifyContent: 'center',
         marginRight: Spacing.md,
-    },
-    avatarText: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: Colors.text,
     },
     cardInfo: {
         flex: 1,

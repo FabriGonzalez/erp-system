@@ -35,7 +35,7 @@ export function OrderAddressSection({
                                 web: 'warning',
                             }}
                             size={20}
-                            tintColor="#D97706"
+                            tintColor={Colors.warningDark}
                         />
                         <Text style={styles.warningTitle}>
                             Sin direcciones registradas
@@ -77,14 +77,25 @@ export function OrderAddressSection({
                             </Text>
                         </View>
 
-                        <Pressable
-                            onPress={onSelectAddress}
-                            style={styles.changeBtn}
-                        >
-                            <Text style={styles.changeBtnText}>
-                                Cambiar dirección
-                            </Text>
-                        </Pressable>
+                        <View style={styles.addressActions}>
+                            <Pressable
+                                onPress={onAddCustomerAddress}
+                                style={styles.linkBtn}
+                            >
+                                <Text style={styles.linkBtnText}>
+                                    Agregar dirección
+                                </Text>
+                            </Pressable>
+
+                            <Pressable
+                                onPress={onSelectAddress}
+                                style={styles.linkBtn}
+                            >
+                                <Text style={styles.linkBtnText}>
+                                    Cambiar
+                                </Text>
+                            </Pressable>
+                        </View>
                     </View>
 
                     <Text style={styles.streetText}>
@@ -99,37 +110,60 @@ export function OrderAddressSection({
                     </Text>
                 </View>
             ) : (
-                <Pressable
-                    style={({ pressed }) => [
-                        styles.selectPromptCard,
-                        pressed && SharedStyles.pressed,
-                    ]}
-                    onPress={onSelectAddress}
-                >
-                    <SymbolView
-                        name={{
-                            ios: 'mappin.circle',
-                            android: 'location_on',
-                            web: 'location_on',
-                        }}
-                        size={22}
-                        tintColor={Colors.primary}
-                    />
+                <View style={styles.selectGroup}>
+                    <Pressable
+                        style={({ pressed }) => [
+                            styles.selectPromptCard,
+                            pressed && SharedStyles.pressed,
+                        ]}
+                        onPress={onSelectAddress}
+                    >
+                        <SymbolView
+                            name={{
+                                ios: 'mappin.circle',
+                                android: 'location_on',
+                                web: 'location_on',
+                            }}
+                            size={22}
+                            tintColor={Colors.primary}
+                        />
 
-                    <Text style={styles.selectPromptText}>
-                        Seleccionar dirección de envío
-                    </Text>
+                        <Text style={styles.selectPromptText}>
+                            Seleccionar dirección de envío
+                        </Text>
 
-                    <SymbolView
-                        name={{
-                            ios: 'chevron.right',
-                            android: 'chevron_right',
-                            web: 'chevron_right',
-                        }}
-                        size={16}
-                        tintColor={Colors.textSecondary}
-                    />
-                </Pressable>
+                        <SymbolView
+                            name={{
+                                ios: 'chevron.right',
+                                android: 'chevron_right',
+                                web: 'chevron_right',
+                            }}
+                            size={16}
+                            tintColor={Colors.textSecondary}
+                        />
+                    </Pressable>
+
+                    <Pressable
+                        style={({ pressed }) => [
+                            styles.addAddressBtn,
+                            pressed && SharedStyles.pressed,
+                        ]}
+                        onPress={onAddCustomerAddress}
+                    >
+                        <SymbolView
+                            name={{
+                                ios: 'plus.circle.fill',
+                                android: 'add_circle',
+                                web: 'add_circle',
+                            }}
+                            size={18}
+                            tintColor={Colors.primary}
+                        />
+                        <Text style={styles.addAddressBtnText}>
+                            Agregar nueva dirección
+                        </Text>
+                    </Pressable>
+                </View>
             )}
         </View>
     );
@@ -140,7 +174,7 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.lg,
     },
     warningCard: {
-        backgroundColor: '#FEF3C7',
+        backgroundColor: Colors.warningLight,
         borderRadius: 12,
         padding: Spacing.md,
         borderWidth: 1,
@@ -167,7 +201,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: Colors.surface,
         borderRadius: 8,
         paddingVertical: Spacing.sm,
         paddingHorizontal: Spacing.md,
@@ -194,7 +228,7 @@ const styles = StyleSheet.create({
         marginBottom: 6,
     },
     labelBadge: {
-        backgroundColor: '#EFF6FF',
+        backgroundColor: Colors.primaryLight,
         paddingHorizontal: Spacing.xs + 2,
         paddingVertical: 2,
         borderRadius: 4,
@@ -204,13 +238,21 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: Colors.primary,
     },
-    changeBtn: {
+    addressActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+    },
+    linkBtn: {
         paddingVertical: 2,
     },
-    changeBtnText: {
+    linkBtnText: {
         fontSize: 12,
         fontWeight: '600',
         color: Colors.primary,
+    },
+    selectGroup: {
+        gap: Spacing.sm,
     },
     streetText: {
         fontSize: 15,

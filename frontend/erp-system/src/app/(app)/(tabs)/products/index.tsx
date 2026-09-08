@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useMemo } from 'react';
 import {
-    ActivityIndicator,
     FlatList,
     Pressable,
     RefreshControl,
@@ -11,12 +10,13 @@ import {
     View,
 } from 'react-native';
 
-import { ProductCard } from '@/components/ProductCard';
+import { ProductCard } from '@/components/products/ProductCard';
 import { ProductsSearchBar } from '@/components/products/ProductsSearchBar';
 import { ProductsFilterChips } from '@/components/products/ProductsFilterChips';
 import { CategoryPills } from '@/components/products/CategoryPills';
-import { ProductsErrorState } from '@/components/products/ProductsErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
@@ -118,7 +118,7 @@ export default function ProductsScreen() {
                         <SymbolView
                             name={{ ios: 'plus', android: 'add', web: 'add' }}
                             size={18}
-                            tintColor="#FFFFFF"
+                            tintColor={Colors.white}
                         />
                         <Text style={styles.createButtonText}>Nuevo</Text>
                     </Pressable>
@@ -156,15 +156,12 @@ export default function ProductsScreen() {
             </View>
 
             {isLoading && (
-                <View style={SharedStyles.loadingContainer}>
-                    <ActivityIndicator size="large" color={Colors.primary} />
-                    <Text style={SharedStyles.loadingText}>Cargando productos...</Text>
-                </View>
+                <LoadingState label="Cargando productos..." />
             )}
 
             {!isLoading && isError && (
-                <ProductsErrorState
-                    errorMessage={errorMessage}
+                <ErrorState
+                    message={errorMessage}
                     onRetry={reloadProducts}
                 />
             )}
@@ -269,7 +266,7 @@ const styles = StyleSheet.create({
     },
 
     createButtonText: {
-        color: '#FFFFFF',
+        color: Colors.white,
         fontSize: 14,
         fontWeight: '600',
     },

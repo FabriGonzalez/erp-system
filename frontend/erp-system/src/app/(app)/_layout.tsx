@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/colors';
 
-import { AppHeader } from '@/components/AppHeader';
+import { AppHeader } from '@/components/app/AppHeader';
 
 export default function AppLayout() {
     return (

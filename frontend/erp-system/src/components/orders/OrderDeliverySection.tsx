@@ -87,6 +87,6 @@ const styles = StyleSheet.create({
         color: Colors.text,
     },
     deliveryOptionTextActive: {
-        color: '#FFFFFF',
+        color: Colors.white,
     },
 });

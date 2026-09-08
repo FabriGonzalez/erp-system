@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     },
 
     confirmButtonText: {
-        color: '#FFFFFF',
+        color: Colors.white,
         fontSize: 14,
         fontWeight: '600',
     },
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     },
 
     advanceButtonText: {
-        color: '#FFFFFF',
+        color: Colors.white,
         fontSize: 14,
         fontWeight: '600',
     },
@@ -115,9 +115,9 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#FEF2F2',
+        backgroundColor: Colors.errorLight,
         borderWidth: 1,
-        borderColor: '#FCA5A5',
+        borderColor: Colors.errorBorder,
     },
 
     cancelButtonText: {

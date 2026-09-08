@@ -19,35 +19,58 @@ import { CustomerAddress } from '@/types/customer';
 export default function SelectAddressScreen() {
     const customer = useOrderDraftStore((state) => state.customer);
     const currentAddress = useOrderDraftStore((state) => state.address);
-    const setDraftAddress = useOrderDraftStore((state) => state.setAddress);
+    const setDraftAddress = useOrderDraftStore(
+        (state) => state.setAddress,
+    );
 
     function handleSelectAddress(address: CustomerAddress) {
         setDraftAddress(address);
         router.back();
     }
 
+    function handleAddAddress() {
+        router.push({
+            pathname: '/orders/add-address',
+            params: { id: customer.id },
+        });
+    }
+
     return (
         <Screen style={styles.screen}>
-            {/* Header */}
             <View style={SharedStyles.header}>
                 <Pressable
                     onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
+                    style={({ pressed }) => [
+                        SharedStyles.backButton,
+                        pressed && SharedStyles.pressed,
+                    ]}
                 >
                     <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
+                        name={{
+                            ios: 'chevron.left',
+                            android: 'arrow_back',
+                            web: 'arrow_back',
+                        }}
                         size={24}
                         tintColor={Colors.text}
                     />
                 </Pressable>
-                <Text style={SharedStyles.headerTitle}>Seleccionar Dirección</Text>
+
+                <Text style={SharedStyles.headerTitle}>
+                    Seleccionar Dirección
+                </Text>
+
                 <View style={SharedStyles.headerSpacer} />
             </View>
 
             <View style={styles.subHeader}>
-                <Text style={styles.customerName}>Cliente: {customer.name}</Text>
+                <Text style={styles.customerName}>
+                    Cliente: {customer.name}
+                </Text>
+
                 <Text style={styles.subTitle}>
-                    Elegí a qué dirección del cliente querés enviar este pedido.
+                    Elegí a qué dirección del cliente querés enviar este
+                    pedido.
                 </Text>
             </View>
 
@@ -56,17 +79,35 @@ export default function SelectAddressScreen() {
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContainer}
                 showsVerticalScrollIndicator={false}
+                ListHeaderComponent={
+                    <Pressable
+                        style={({ pressed }) => [
+                            styles.addAddressBtn,
+                            pressed && SharedStyles.pressed,
+                        ]}
+                        onPress={handleAddAddress}
+                    >
+                        <SymbolView
+                            name={{
+                                ios: 'plus.circle.fill',
+                                android: 'add_circle',
+                                web: 'add_circle',
+                            }}
+                            size={18}
+                            tintColor={Colors.primary}
+                        />
+
+                        <Text style={styles.addAddressBtnText}>
+                            Agregar nueva dirección
+                        </Text>
+                    </Pressable>
+                }
                 ListEmptyComponent={
                     <EmptyState
                         title="Sin direcciones registradas"
                         description="Este cliente no tiene direcciones asociadas a su perfil."
                         actionLabel="Agregar dirección"
-                        onAction={() =>
-                            router.push({
-                                pathname: '/(app)/customers/new',
-                                params: { fromOrder: 'true' },
-                            })
-                        }
+                        onAction={handleAddAddress}
                     />
                 }
                 renderItem={({ item }) => {
@@ -82,21 +123,31 @@ export default function SelectAddressScreen() {
                             onPress={() => handleSelectAddress(item)}
                         >
                             <View style={styles.labelBadge}>
-                                <Text style={styles.labelBadgeText}>{item.label}</Text>
+                                <Text style={styles.labelBadgeText}>
+                                    {item.label}
+                                </Text>
                             </View>
 
                             <View style={styles.addressInfo}>
                                 <Text style={styles.streetText}>
                                     {item.street} {item.number}
                                 </Text>
+
                                 <Text style={styles.cityText}>
-                                    {item.city}, {item.province} {item.zipCode ? `(${item.zipCode})` : ''}
+                                    {item.city}, {item.province}{' '}
+                                    {item.zipCode
+                                        ? `(${item.zipCode})`
+                                        : ''}
                                 </Text>
                             </View>
 
                             {isSelected && (
                                 <SymbolView
-                                    name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
+                                    name={{
+                                        ios: 'checkmark.circle.fill',
+                                        android: 'check_circle',
+                                        web: 'check_circle',
+                                    }}
                                     size={20}
                                     tintColor={Colors.primary}
                                 />
@@ -133,6 +184,24 @@ const styles = StyleSheet.create({
         padding: Spacing.lg,
         paddingBottom: Spacing.xxl * 2,
     },
+    addAddressBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.surface,
+        borderRadius: 12,
+        padding: Spacing.md,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        borderColor: Colors.primary,
+        gap: Spacing.xs,
+        marginBottom: Spacing.md,
+    },
+    addAddressBtnText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: Colors.primary,
+    },
     addressCard: {
         backgroundColor: Colors.surface,
         borderRadius: 12,
@@ -147,7 +216,7 @@ const styles = StyleSheet.create({
     },
     labelBadge: {
         alignSelf: 'flex-start',
-        backgroundColor: '#EFF6FF',
+        backgroundColor: Colors.primaryLight,
         paddingHorizontal: Spacing.xs + 2,
         paddingVertical: 2,
         borderRadius: 4,

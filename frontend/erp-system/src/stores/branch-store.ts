@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import { Branch } from '@/types/auth';
+import { Branch } from '@/types/branch';
 
 type BranchState = {
     activeBranch: Branch | null;

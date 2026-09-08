@@ -17,6 +17,7 @@ type OrderUpdate = Pick<
     | 'address'
     | 'items'
     | 'total'
+    | 'amountPaid'
 >;
 
 type OrderState = {

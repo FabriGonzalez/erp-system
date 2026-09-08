@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingVertical: Spacing.sm,
         borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
+        borderBottomColor: Colors.muted,
     },
 
     productInfo: {

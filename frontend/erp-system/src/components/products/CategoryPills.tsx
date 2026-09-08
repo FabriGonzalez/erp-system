@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: Spacing.md,
         paddingVertical: 5,
         borderRadius: 8,
-        backgroundColor: '#F1F5F9',
+        backgroundColor: Colors.muted,
     },
 
     categoryPillActive: {
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     },
 
     categoryPillTextActive: {
-        color: '#FFFFFF',
+        color: Colors.white,
         fontWeight: '600',
     },
 });

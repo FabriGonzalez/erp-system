@@ -7,7 +7,7 @@ import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
-import { Branch } from '@/types/auth';
+import { Branch } from '@/types/branch';
 
 export default function ActiveBranchScreen() {
     const user = useAuthStore((state) => state.user);
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     },
     activeItem: {
         borderColor: Colors.primary,
-        backgroundColor: '#EFF6FF',
+        backgroundColor: Colors.primaryLight,
     },
     branchInfo: {
         flexDirection: 'row',

@@ -1,10 +1,12 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 
+import { Avatar } from '@/components/ui/Avatar';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 import { Customer } from '@/types/customer';
+import { getInitials } from '@/utils/format';
 
 type CustomerCardProps = {
     customer: Customer;
@@ -19,18 +21,14 @@ export function CustomerCard({ customer, onPress }: CustomerCardProps) {
             style={({ pressed }) => [styles.card, pressed && SharedStyles.pressed]}
             onPress={onPress}
         >
-            <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                    {customer.name
-                        ? customer.name
-                            .split(' ')
-                            .map((n) => n[0])
-                            .join('')
-                            .slice(0, 2)
-                            .toUpperCase()
-                        : 'C'}
-                </Text>
-            </View>
+            <Avatar
+                name={customer.name}
+                initials={customer.name ? getInitials(customer.name) : 'C'}
+                size={44}
+                fontWeight="700"
+                fontSize={16}
+                style={styles.avatar}
+            />
 
             <View style={styles.info}>
                 <Text style={styles.name}>{customer.name}</Text>
@@ -78,18 +76,7 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.sm,
     },
     avatar: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: '#EFF6FF',
-        alignItems: 'center',
-        justifyContent: 'center',
         marginRight: Spacing.md,
-    },
-    avatarText: {
-        color: Colors.primary,
-        fontSize: 16,
-        fontWeight: '700',
     },
     info: {
         flex: 1,

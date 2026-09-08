@@ -90,10 +90,11 @@ export function OrderForm({
     }
 
     function handleAddCustomerAddress() {
-        // La pantalla para agregar una dirección a un cliente existente
-        // se conectará cuando terminemos select-address.
+        router.push({
+            pathname: '/orders/add-address',
+            params: { id: customer.id },
+        });
     }
-
     function handleAddProducts() {
         router.push('/orders/select-products');
     }
@@ -213,7 +214,7 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         padding: Spacing.md,
         borderWidth: 1,
-        borderColor: '#FCA5A5',
+        borderColor: Colors.errorBorder,
         marginBottom: Spacing.lg,
     },
     errorBoxText: {

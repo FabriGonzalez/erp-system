@@ -20,7 +20,7 @@ export function OrderHeader({ order }: OrderHeaderProps) {
         if (router.canGoBack()) {
             router.back();
         } else {
-            router.replace('/(app)/(tabs)/orders');
+            router.replace('/orders');
         }
     };
 

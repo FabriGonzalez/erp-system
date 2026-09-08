@@ -14,7 +14,7 @@ export function Screen({
 }: ScreenProps) {
     return (
         <SafeAreaView
-            edges={['top', 'left', 'right']}
+            edges={['left', 'right']}
             style={[
                 styles.container,
                 style,

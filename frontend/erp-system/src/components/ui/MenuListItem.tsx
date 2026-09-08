@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
         borderBottomColor: Colors.border,
     },
     pressed: {
-        backgroundColor: '#F1F5F9',
+        backgroundColor: Colors.muted,
     },
     leftContent: {
         flexDirection: 'row',

@@ -26,24 +26,24 @@ export function ProductCard({
         if (isOutOfStock) {
             return {
                 bg: '#FEE2E2',
-                text: '#DC2626',
+                text: Colors.error,
                 label: 'Sin stock',
-                dot: '#DC2626',
+                dot: Colors.error,
             };
         }
         if (isLowStock) {
             return {
-                bg: '#FEF3C7',
-                text: '#D97706',
+                bg: Colors.warningLight,
+                text: Colors.warningDark,
                 label: `Bajo stock (${stock})`,
-                dot: '#F59E0B',
+                dot: Colors.warning,
             };
         }
         return {
-            bg: '#DCFCE7',
-            text: '#16A34A',
+            bg: Colors.successLight,
+            text: Colors.success,
             label: `Stock: ${stock}`,
-            dot: '#16A34A',
+            dot: Colors.success,
         };
     }
 
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
         letterSpacing: 0.5,
     },
     categoryBadge: {
-        backgroundColor: '#EFF6FF',
+        backgroundColor: Colors.primaryLight,
         paddingHorizontal: Spacing.sm,
         paddingVertical: 2,
         borderRadius: 6,
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#F0FDF4',
     },
     inactiveBadge: {
-        backgroundColor: '#F1F5F9',
+        backgroundColor: Colors.muted,
     },
     statusDot: {
         width: 6,
@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingTop: Spacing.sm,
         borderTopWidth: 1,
-        borderTopColor: '#F1F5F9',
+        borderTopColor: Colors.muted,
     },
     priceLabel: {
         fontSize: 11,

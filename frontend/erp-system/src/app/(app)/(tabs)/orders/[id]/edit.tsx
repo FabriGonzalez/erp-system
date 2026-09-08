@@ -30,6 +30,7 @@ export default function EditOrderScreen() {
     const deliveryType = useOrderDraftStore((state) => state.deliveryType);
     const address = useOrderDraftStore((state) => state.address);
     const items = useOrderDraftStore((state) => state.items);
+    const amountPaid = useOrderDraftStore((state) => state.amountPaid);
     const resetDraft = useOrderDraftStore((state) => state.reset);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -107,6 +108,7 @@ export default function EditOrderScreen() {
                 address,
                 items,
                 total,
+                amountPaid,
             });
 
             resetDraft();

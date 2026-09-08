@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useMemo } from 'react';
 import {
-    ActivityIndicator,
     FlatList,
     Pressable,
     RefreshControl,
@@ -14,6 +13,7 @@ import {
 import { CustomerCard } from '@/components/customers/CustomerCard';
 import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
@@ -45,6 +45,13 @@ export default function CustomersScreen() {
 
     function handleCreateCustomer() {
         router.push('/customers/new');
+    }
+
+    function handleViewCustomer(id: string) {
+        router.push({
+            pathname: '/customers/[id]',
+            params: { id },
+        });
     }
 
     return (
@@ -79,7 +86,7 @@ export default function CustomersScreen() {
                     <SymbolView
                         name={{ ios: 'plus', android: 'add', web: 'add' }}
                         size={18}
-                        tintColor="#FFFFFF"
+                        tintColor={Colors.white}
                     />
                     <Text style={styles.createButtonText}>Nuevo</Text>
                 </Pressable>
@@ -95,10 +102,7 @@ export default function CustomersScreen() {
             </View>
 
             {isLoading && (
-                <View style={SharedStyles.loadingContainer}>
-                    <ActivityIndicator size="large" color={Colors.primary} />
-                    <Text style={SharedStyles.loadingText}>Cargando clientes...</Text>
-                </View>
+                <LoadingState label="Cargando clientes..." />
             )}
 
             {!isLoading && isError && (
@@ -147,9 +151,7 @@ export default function CustomersScreen() {
                     renderItem={({ item }) => (
                         <CustomerCard
                             customer={item}
-                            onPress={() => {
-                                // Reservado para futura pantalla de detalle de cliente si fuera necesario
-                            }}
+                            onPress={() => handleViewCustomer(item.id)}
                         />
                     )}
                 />
@@ -202,7 +204,7 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     createButtonText: {
-        color: '#FFFFFF',
+        color: Colors.white,
         fontSize: 14,
         fontWeight: '600',
     },
@@ -230,7 +232,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
     },
     retryButtonText: {
-        color: '#FFFFFF',
+        color: Colors.white,
         fontWeight: '600',
     },
 });

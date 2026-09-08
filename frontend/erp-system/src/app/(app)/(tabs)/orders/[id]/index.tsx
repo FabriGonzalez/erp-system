@@ -9,7 +9,7 @@ import {
     View,
 } from 'react-native';
 
-import { OrderTimeline } from '@/components/OrderTimeline';
+import { OrderTimeline } from '@/components/orders/OrderTimeline';
 import { OrderActions } from '@/components/orders/OrderActions';
 import { OrderHeader } from '@/components/orders/OrderHeader';
 import { OrderInfoCard } from '@/components/orders/OrderInfoCard';
@@ -114,7 +114,7 @@ export default function OrderDetailScreen() {
     }
 
     function handleEdit() {
-        router.push(`/(app)/(tabs)/orders/${currentOrder.id}/edit`);
+        router.push(`/orders/${currentOrder.id}/edit`);
     }
 
     function handleConfirm() {

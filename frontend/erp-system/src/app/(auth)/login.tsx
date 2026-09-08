@@ -61,12 +61,12 @@ export default function LoginScreen() {
 
     return (
         <Screen style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.title}>ERP System</Text>
-                <Text style={styles.subtitle}>Inicia sesión para continuar</Text>
-            </View>
 
             <View style={styles.form}>
+                <View style={styles.header}>
+                    <Text style={styles.title}>ERP System</Text>
+                    <Text style={styles.subtitle}>Inicia sesión para continuar</Text>
+                </View>
                 <AppInput
                     placeholder="Email"
                     value={email}
@@ -89,6 +89,8 @@ export default function LoginScreen() {
                     secureTextEntry
                     editable={!isLoading}
                     autoCapitalize="none"
+                    returnKeyType="done"
+                    onSubmitEditing={handleLogin}
                 />
 
                 {errorMsg && (
@@ -108,13 +110,13 @@ export default function LoginScreen() {
                         onPress={handleLogin}
                     />
                 )}
+                <View style={styles.footer}>
+                    <Text style={styles.footerText}>
+                        Pruebas demo ERP multi-tenant
+                    </Text>
+                </View>
             </View>
 
-            <View style={styles.footer}>
-                <Text style={styles.footerText}>
-                    Pruebas demo ERP multi-tenant
-                </Text>
-            </View>
         </Screen>
     );
 }
@@ -143,25 +145,28 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         textAlign: 'center',
     },
-
     form: {
+        width: '100%',
+        maxWidth: 420,
+        alignSelf: 'center',
+
         gap: Spacing.md,
         backgroundColor: Colors.surface,
         padding: Spacing.xl,
         borderRadius: 16,
         borderWidth: 1,
         borderColor: Colors.border,
+
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
         shadowRadius: 10,
         elevation: 2,
     },
-
     errorContainer: {
-        backgroundColor: '#FEF2F2',
+        backgroundColor: Colors.errorLight,
         borderWidth: 1,
-        borderColor: '#FCA5A5',
+        borderColor: Colors.errorBorder,
         borderRadius: 8,
         padding: Spacing.md,
     },

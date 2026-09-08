@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.md,
     },
     selectProductsButton: {
-        backgroundColor: '#EFF6FF',
+        backgroundColor: Colors.primaryLight,
         paddingHorizontal: Spacing.lg,
         paddingVertical: Spacing.sm,
         borderRadius: 8,
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
     quantityControls: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F1F5F9',
+        backgroundColor: Colors.muted,
         borderRadius: 6,
         paddingHorizontal: 4,
         paddingVertical: 2,
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#F8FAFC',
+        backgroundColor: Colors.background,
         borderRadius: 8,
         paddingVertical: Spacing.sm,
         gap: 6,

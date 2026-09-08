@@ -2,8 +2,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { ProductCard } from '@/components/ProductCard';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { ProductCard } from '@/components/products/ProductCard';
+import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
@@ -20,28 +20,12 @@ export default function ProductDetailScreen() {
 
     if (!product) {
         return (
-            <Screen style={styles.container}>
-                <View style={SharedStyles.header}>
-                    <Pressable
-                        onPress={() => router.back()}
-                        style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                    >
-                        <SymbolView
-                            name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                            size={24}
-                            tintColor={Colors.text}
-                        />
-                    </Pressable>
-                    <Text style={SharedStyles.headerTitle}>Producto</Text>
-                    <View style={SharedStyles.headerSpacer} />
-                </View>
-                <EmptyState
-                    title="Producto no encontrado"
-                    description="El producto que buscás no existe o fue eliminado."
-                    actionLabel="Volver a productos"
-                    onAction={() => router.back()}
-                />
-            </Screen>
+            <NotFound
+                headerTitle="Producto"
+                title="Producto no encontrado"
+                description="El producto que buscás no existe o fue eliminado."
+                actionLabel="Volver a productos"
+            />
         );
     }
 
@@ -162,7 +146,7 @@ const styles = StyleSheet.create({
     },
 
     actionButtonText: {
-        color: '#FFFFFF',
+        color: Colors.white,
         fontSize: 14,
         fontWeight: '600',
     },

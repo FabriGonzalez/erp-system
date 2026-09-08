@@ -2,33 +2,13 @@ import { StyleSheet, Text, View, Pressable } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { Order, ORDER_STATUS_LABELS, DELIVERY_TYPE_LABELS } from '@/types/order';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { Order, DELIVERY_TYPE_LABELS } from '@/types/order';
 
 type OrderCardProps = {
     order: Order;
     onPress?: () => void;
 };
-
-function getStatusBadge(status: Order['status']) {
-    switch (status) {
-        case 'DRAFT':
-            return { bg: '#F1F5F9', text: Colors.textSecondary, dot: Colors.textSecondary };
-        case 'CONFIRMED':
-            return { bg: '#EFF6FF', text: Colors.primary, dot: Colors.primary };
-        case 'IN_PREPARATION':
-            return { bg: '#FEF3C7', text: '#D97706', dot: '#F59E0B' };
-        case 'READY_TO_SHIP':
-            return { bg: '#F0FDFA', text: '#0D9488', dot: '#14B8A6' };
-        case 'SHIPPED':
-            return { bg: '#EDE9FE', text: '#7C3AED', dot: '#8B5CF6' };
-        case 'DELIVERED':
-            return { bg: '#F0FDF4', text: Colors.success, dot: Colors.success };
-        case 'CANCELLED':
-            return { bg: '#FEF2F2', text: Colors.error, dot: Colors.error };
-        default:
-            return { bg: '#F1F5F9', text: Colors.textSecondary, dot: Colors.textSecondary };
-    }
-}
 
 function formatDate(isoDate: string): string {
     const date = new Date(isoDate);
@@ -44,8 +24,6 @@ function formatDate(isoDate: string): string {
 }
 
 export function OrderCard({ order, onPress }: OrderCardProps) {
-    const statusBadge = getStatusBadge(order.status);
-
     return (
         <Pressable
             style={({ pressed }) => [styles.card, pressed && styles.pressed]}
@@ -53,12 +31,7 @@ export function OrderCard({ order, onPress }: OrderCardProps) {
         >
             <View style={styles.headerRow}>
                 <Text style={styles.orderNumber}>{order.orderNumber}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: statusBadge.bg }]}>
-                    <View style={[styles.statusDot, { backgroundColor: statusBadge.dot }]} />
-                    <Text style={[styles.statusText, { color: statusBadge.text }]}>
-                        {ORDER_STATUS_LABELS[order.status]}
-                    </Text>
-                </View>
+                <StatusBadge status={order.status} />
             </View>
 
             <View style={styles.body}>
@@ -121,23 +94,6 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: Colors.text,
     },
-    statusBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 3,
-        borderRadius: 12,
-        gap: 4,
-    },
-    statusDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-    },
-    statusText: {
-        fontSize: 11,
-        fontWeight: '600',
-    },
     body: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -151,7 +107,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     deliveryBadge: {
-        backgroundColor: '#F1F5F9',
+        backgroundColor: Colors.muted,
         paddingHorizontal: Spacing.sm,
         paddingVertical: 2,
         borderRadius: 6,
@@ -167,7 +123,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingTop: Spacing.sm,
         borderTopWidth: 1,
-        borderTopColor: '#F1F5F9',
+        borderTopColor: Colors.muted,
     },
     footerLeft: {
         gap: 2,

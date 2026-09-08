@@ -1,9 +1,6 @@
-export type Company = {
-    id: string;
-    name: string;
-};
+import { Branch } from './branch';
 
-export type Branch = {
+export type Company = {
     id: string;
     name: string;
 };

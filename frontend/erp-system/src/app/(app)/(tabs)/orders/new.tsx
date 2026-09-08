@@ -21,6 +21,7 @@ export default function NewOrderScreen() {
     const deliveryType = useOrderDraftStore((state) => state.deliveryType);
     const address = useOrderDraftStore((state) => state.address);
     const items = useOrderDraftStore((state) => state.items);
+    const amountPaid = useOrderDraftStore((state) => state.amountPaid);
     const resetDraft = useOrderDraftStore((state) => state.reset);
 
     const activeBranch = useBranchStore((state) => state.activeBranch);
@@ -58,6 +59,7 @@ export default function NewOrderScreen() {
                 branchName: activeBranch.name,
                 items,
                 total,
+                amountPaid,
             });
 
             resetDraft();

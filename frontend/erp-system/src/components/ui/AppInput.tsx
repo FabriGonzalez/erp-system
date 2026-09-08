@@ -37,5 +37,6 @@ const styles = StyleSheet.create({
 
         backgroundColor: Colors.surface,
         color: Colors.text,
+        ...({ outlineStyle: 'none' } as any),
     },
 });

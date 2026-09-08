@@ -211,7 +211,7 @@ export function ProductForm({
                     value={active}
                     onValueChange={setActive}
                     trackColor={{ false: '#CBD5E1', true: Colors.primary }}
-                    thumbColor="#FFFFFF"
+                    thumbColor={Colors.white}
                     disabled={isSubmitting}
                 />
             </View>
@@ -224,7 +224,7 @@ export function ProductForm({
                 >
                     {isSubmitting ? (
                         <View style={styles.submittingContent}>
-                            <ActivityIndicator size="small" color="#FFFFFF" />
+                            <ActivityIndicator size="small" color={Colors.white} />
                             <Text style={styles.submitButtonText}>Guardando...</Text>
                         </View>
                     ) : (
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
     },
 
     submitButtonText: {
-        color: '#FFFFFF',
+        color: Colors.white,
         fontSize: 16,
         fontWeight: '600',
     },

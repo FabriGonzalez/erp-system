@@ -1,11 +1,10 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { SharedStyles } from '@/styles/shared';
 
-type StockFilter = 'ALL' | 'IN_STOCK' | 'OUT_OF_STOCK';
-type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
+import { FilterChip } from '@/components/ui/FilterChip';
+import { StatusFilter, StockFilter } from '@/types/product';
 
 interface ProductsFilterChipsProps {
     stockFilter: StockFilter;
@@ -69,36 +68,6 @@ export function ProductsFilterChips({
     );
 }
 
-function FilterChip({
-    label,
-    selected,
-    onPress,
-}: {
-    label: string;
-    selected: boolean;
-    onPress: () => void;
-}) {
-    return (
-        <Pressable
-            style={({ pressed }) => [
-                styles.chip,
-                selected && styles.chipActive,
-                pressed && SharedStyles.pressed,
-            ]}
-            onPress={onPress}
-        >
-            <Text
-                style={[
-                    styles.chipText,
-                    selected && styles.chipTextActive,
-                ]}
-            >
-                {label}
-            </Text>
-        </Pressable>
-    );
-}
-
 const styles = StyleSheet.create({
     filterSection: {
         marginBottom: Spacing.xs,
@@ -106,11 +75,13 @@ const styles = StyleSheet.create({
 
     filterScroll: {
         paddingHorizontal: Spacing.lg,
+        paddingVertical: Spacing.xs + 2, // <--- Evita el recorte vertical de los chips
         alignItems: 'center',
     },
 
     filterGroup: {
         flexDirection: 'row',
+        alignItems: 'center',
         gap: Spacing.xs,
     },
 
@@ -119,30 +90,5 @@ const styles = StyleSheet.create({
         height: 20,
         backgroundColor: Colors.border,
         marginHorizontal: Spacing.sm,
-    },
-
-    chip: {
-        paddingHorizontal: Spacing.md,
-        paddingVertical: 6,
-        borderRadius: 20,
-        backgroundColor: Colors.surface,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-
-    chipActive: {
-        backgroundColor: '#EFF6FF',
-        borderColor: Colors.primary,
-    },
-
-    chipText: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: Colors.textSecondary,
-    },
-
-    chipTextActive: {
-        color: Colors.primary,
-        fontWeight: '600',
     },
 });
