@@ -6,11 +6,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { OrderForm } from '@/components/orders/OrderForm';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
 import { useBranchStore } from '@/stores/branch-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { useOrderStore } from '@/stores/order-store';
 import { SharedStyles } from '@/styles/shared';
+import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 
 export default function NewOrderScreen() {
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -49,6 +49,14 @@ export default function NewOrderScreen() {
                 (sum, item) => sum + item.subtotal,
                 0,
             );
+            const safeTotal = Number.isFinite(total) && total >= 0 ? total : 0;
+            const clampedAmountPaid = Number.isFinite(amountPaid)
+                ? Math.min(Math.max(0, amountPaid), safeTotal)
+                : 0;
+            const safeAmountPaid = customer.id === CUSTOMER_ANONYMOUS.id &&
+                clampedAmountPaid > 0 && clampedAmountPaid < safeTotal
+                ? safeTotal
+                : clampedAmountPaid;
 
             addOrder({
                 customerId: customer.id,
@@ -58,8 +66,8 @@ export default function NewOrderScreen() {
                 branchId: activeBranch.id,
                 branchName: activeBranch.name,
                 items,
-                total,
-                amountPaid,
+                total: safeTotal,
+                amountPaid: safeAmountPaid,
             });
 
             resetDraft();

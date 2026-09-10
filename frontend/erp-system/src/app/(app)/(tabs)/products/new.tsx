@@ -6,13 +6,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ProductForm } from '@/components/products/ProductForm';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { useAuthStore } from '@/stores/auth-store';
 import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
 import { ProductFormData } from '@/types/product';
 
 export default function NewProductScreen() {
-    const { categories, addProduct } = useProductStore();
+    const { products, categories, attributes, attributeValues, addProduct } = useProductStore();
+    const user = useAuthStore((state) => state.user);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -22,17 +23,19 @@ export default function NewProductScreen() {
         // Simulate network / create operation
         setTimeout(() => {
             const category = categories.find((c) => c.id === formData.categoryId);
-            const numPrice = parseFloat(formData.price.replace(',', '.'));
-
             addProduct({
                 name: formData.name,
-                sku: formData.sku,
-                price: numPrice,
                 categoryId: formData.categoryId,
                 categoryName: category?.name,
                 description: formData.description,
                 active: formData.active,
-                stockByBranch: {},
+                variants: formData.variants.map((variant, index) => ({
+                    id: variant.id ?? `variant-${Date.now()}-${index}`,
+                    sku: variant.sku,
+                    price: parseFloat(variant.price.replace(',', '.')),
+                    attributes: variant.attributes,
+                    stockByBranch: variant.stockByBranch,
+                })),
             });
 
             setIsSubmitting(false);
@@ -83,6 +86,10 @@ export default function NewProductScreen() {
             {/* Formulario */}
             <ProductForm
                 categories={categories}
+                attributes={attributes}
+                attributeValues={attributeValues}
+                branches={user?.branches ?? []}
+                existingProducts={products}
                 onSubmit={handleSubmit}
                 onCancel={() => router.back()}
                 isSubmitting={isSubmitting}

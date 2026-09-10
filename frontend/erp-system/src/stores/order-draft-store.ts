@@ -25,13 +25,14 @@ type OrderDraftState = {
     setAddress: (address: CustomerAddress) => void;
     setAmountPaid: (amount: number) => void;
 
-    addItem: (product: Product, maxStock: number) => void;
+    addItem: (product: Product, maxStock: number, variantId?: string) => void;
     updateItemQuantity: (
         productId: string,
+        variantId: string,
         quantity: number,
         maxStock: number,
     ) => void;
-    removeItem: (productId: string) => void;
+    removeItem: (productId: string, variantId: string) => void;
     clearCart: () => void;
     reset: () => void;
 };
@@ -56,13 +57,18 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
     },
 
     initEditOrder: (order, customer) => {
+        const total = Number.isFinite(order.total) && order.total >= 0 ? order.total : 0;
+        const amountPaid = Number.isFinite(order.amountPaid)
+            ? Math.min(Math.max(0, order.amountPaid), total)
+            : 0;
+
         set({
             orderId: order.id,
             customer,
             deliveryType: order.deliveryType,
             address: order.address,
             items: order.items,
-            amountPaid: order.amountPaid,
+            amountPaid,
         });
     },
 
@@ -89,17 +95,20 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
     },
 
     setAmountPaid: (amountPaid) => {
-        set({ amountPaid });
+        set({ amountPaid: Number.isFinite(amountPaid) ? Math.max(0, amountPaid) : 0 });
     },
 
-    addItem: (product, maxStock) => {
+    addItem: (product, maxStock, variantId) => {
         if (maxStock <= 0) {
             return;
         }
 
         const { items } = get();
+        const variant = product.variants.find((item) => item.id === variantId) ?? product.variants[0];
+        if (!variant) return;
+
         const existingItem = items.find(
-            (item) => item.productId === product.id,
+            (item) => item.productId === product.id && item.variantId === variant.id,
         );
 
         const currentQuantity = existingItem?.quantity ?? 0;
@@ -113,7 +122,7 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
         if (existingItem) {
             set({
                 items: items.map((item) =>
-                    item.productId === product.id
+                    item.productId === product.id && item.variantId === variant.id
                         ? {
                             ...item,
                             quantity: newQuantity,
@@ -129,11 +138,12 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
         const newItem: OrderItem = {
             id: `item-${Date.now()}-${product.id}`,
             productId: product.id,
+            variantId: variant.id,
             productName: product.name,
-            productSku: product.sku,
+            productSku: variant.sku,
             quantity: 1,
-            unitPrice: product.price,
-            subtotal: product.price,
+            unitPrice: variant.price,
+            subtotal: variant.price,
         };
 
         set({
@@ -141,13 +151,13 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
         });
     },
 
-    updateItemQuantity: (productId, quantity, maxStock) => {
+    updateItemQuantity: (productId, variantId, quantity, maxStock) => {
         const { items } = get();
 
         if (quantity <= 0 || maxStock <= 0) {
             set({
                 items: items.filter(
-                    (item) => item.productId !== productId,
+                    (item) => item.productId !== productId || item.variantId !== variantId,
                 ),
             });
 
@@ -158,7 +168,7 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
 
         set({
             items: items.map((item) =>
-                item.productId === productId
+                item.productId === productId && item.variantId === variantId
                     ? {
                         ...item,
                         quantity: targetQuantity,
@@ -169,12 +179,12 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
         });
     },
 
-    removeItem: (productId) => {
+    removeItem: (productId, variantId) => {
         const { items } = get();
 
         set({
             items: items.filter(
-                (item) => item.productId !== productId,
+                (item) => item.productId !== productId || item.variantId !== variantId,
             ),
         });
     },

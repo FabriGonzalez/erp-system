@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { mockOrders } from '@/data/mock-orders';
+import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import {
     DeliveryType,
     Order,
@@ -79,6 +80,22 @@ const STATUS_FLOW: OrderStatus[] = [
     'DELIVERED',
 ];
 
+function normalizeAmountPaid(amountPaid: number, total: number, customerId: string) {
+    const safeTotal = Number.isFinite(total) && total >= 0 ? total : 0;
+    const safeAmount = Number.isFinite(amountPaid) ? Math.max(0, amountPaid) : 0;
+    const clampedAmount = Math.min(safeAmount, safeTotal);
+
+    if (
+        customerId === CUSTOMER_ANONYMOUS.id &&
+        clampedAmount > 0 &&
+        clampedAmount < safeTotal
+    ) {
+        return safeTotal;
+    }
+
+    return clampedAmount;
+}
+
 export const useOrderStore = create<OrderState>((set, get) => ({
     orders: mockOrders,
 
@@ -148,6 +165,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
 
         const newOrder: Order = {
             ...orderData,
+            amountPaid: normalizeAmountPaid(orderData.amountPaid, orderData.total, orderData.customerId),
             id,
             orderNumber,
             status,
@@ -169,6 +187,11 @@ export const useOrderStore = create<OrderState>((set, get) => ({
                     ? {
                         ...order,
                         ...updates,
+                        amountPaid: normalizeAmountPaid(
+                            updates.amountPaid ?? order.amountPaid,
+                            updates.total ?? order.total,
+                            updates.customerId ?? order.customerId,
+                        ),
                         updatedAt: new Date().toISOString(),
                     }
                     : order

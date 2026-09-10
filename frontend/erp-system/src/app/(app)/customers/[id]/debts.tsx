@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useBranchStore } from '@/stores/branch-store';
 import { useOrderStore } from '@/stores/order-store';
 import { SharedStyles } from '@/styles/shared';
 import { getBalanceDue, Order } from '@/types/order';
@@ -21,6 +22,7 @@ import { formatCurrency, formatDate } from '@/utils/format';
 export default function CustomerDebtsScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const orders = useOrderStore((state) => state.orders);
+    const activeBranch = useBranchStore((state) => state.activeBranch);
 
     const pendingOrders = useMemo(
         () =>
@@ -28,9 +30,11 @@ export default function CustomerDebtsScreen() {
                 (o) =>
                     o.customerId === id &&
                     o.status !== 'CANCELLED' &&
+                    o.status !== 'DRAFT' &&
+                    (!activeBranch || o.branchId === activeBranch.id) &&
                     getBalanceDue(o) > 0,
             ),
-        [orders, id],
+        [orders, id, activeBranch],
     );
 
     const customerName =

@@ -7,14 +7,15 @@ import { ProductForm } from '@/components/products/ProductForm';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
-import { SharedStyles } from '@/styles/shared';
+import { useAuthStore } from '@/stores/auth-store';
 import { useProductStore } from '@/stores/product-store';
+import { SharedStyles } from '@/styles/shared';
 import { ProductFormData } from '@/types/product';
 
 export default function EditProductScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
-    const { products, categories, updateProduct } = useProductStore();
+    const { products, categories, attributes, attributeValues, updateProduct } = useProductStore();
+    const user = useAuthStore((state) => state.user);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -54,16 +55,19 @@ export default function EditProductScreen() {
 
         setTimeout(() => {
             const category = categories.find((c) => c.id === formData.categoryId);
-            const numPrice = parseFloat(formData.price.replace(',', '.'));
-
             updateProduct(product.id, {
                 name: formData.name,
-                sku: formData.sku,
-                price: numPrice,
                 categoryId: formData.categoryId,
                 categoryName: category?.name,
                 description: formData.description,
                 active: formData.active,
+                variants: formData.variants.map((variant, index) => ({
+                    id: variant.id ?? `variant-${Date.now()}-${index}`,
+                    sku: variant.sku,
+                    price: parseFloat(variant.price.replace(',', '.')),
+                    attributes: variant.attributes,
+                    stockByBranch: variant.stockByBranch,
+                })),
             });
 
             setIsSubmitting(false);
@@ -111,13 +115,23 @@ export default function EditProductScreen() {
             <ProductForm
                 initialValues={{
                     name: product.name,
-                    sku: product.sku,
-                    price: product.price.toString(),
                     categoryId: product.categoryId,
                     description: product.description,
                     active: product.active,
+                    variants: product.variants.map((variant) => ({
+                        id: variant.id,
+                        sku: variant.sku,
+                        price: variant.price.toString(),
+                        attributes: variant.attributes,
+                        stockByBranch: variant.stockByBranch,
+                    })),
                 }}
                 categories={categories}
+                attributes={attributes}
+                attributeValues={attributeValues}
+                branches={user?.branches ?? []}
+                existingProducts={products}
+                currentProductId={product.id}
                 onSubmit={handleSubmit}
                 onCancel={() => router.back()}
                 isSubmitting={isSubmitting}

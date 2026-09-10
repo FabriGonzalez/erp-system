@@ -1,10 +1,19 @@
+import { mockAttributeValues, mockAttributes, mockCategories, mockProducts } from '@/data/mock-products';
+import {
+    Category,
+    Product,
+    ProductAttribute,
+    ProductAttributeValue,
+    StatusFilter,
+    StockFilter,
+} from '@/types/product';
 import { create } from 'zustand';
-import { Category, Product, StatusFilter, StockFilter } from '@/types/product';
-import { mockCategories, mockProducts } from '@/data/mock-products';
 
 type ProductState = {
     products: Product[];
     categories: Category[];
+    attributes: ProductAttribute[];
+    attributeValues: ProductAttributeValue[];
     searchQuery: string;
     stockFilter: StockFilter;
     statusFilter: StatusFilter;
@@ -34,6 +43,8 @@ type ProductState = {
 export const useProductStore = create<ProductState>((set, get) => ({
     products: mockProducts,
     categories: mockCategories,
+    attributes: mockAttributes,
+    attributeValues: mockAttributeValues,
     searchQuery: '',
     stockFilter: 'ALL',
     statusFilter: 'ALL',
@@ -76,8 +87,6 @@ export const useProductStore = create<ProductState>((set, get) => ({
         const newProduct: Product = {
             ...newProductData,
             id,
-            // When created, it starts with an empty branch stock mapping or initialized to 0
-            stockByBranch: newProductData.stockByBranch ?? {},
         };
 
         set((state) => ({

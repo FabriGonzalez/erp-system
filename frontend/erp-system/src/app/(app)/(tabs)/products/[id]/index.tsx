@@ -7,14 +7,14 @@ import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { SharedStyles } from '@/styles/shared';
 import { useBranchStore } from '@/stores/branch-store';
 import { useProductStore } from '@/stores/product-store';
+import { SharedStyles } from '@/styles/shared';
 
 export default function ProductDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const activeBranch = useBranchStore((state) => state.activeBranch);
-    const { products, toggleProductActive } = useProductStore();
+    const { products, attributeValues, toggleProductActive } = useProductStore();
 
     const product = products.find((p) => p.id === id);
 
@@ -32,7 +32,7 @@ export default function ProductDetailScreen() {
     const currentProduct = product;
 
     const branchId = activeBranch?.id ?? '1';
-    const currentStock = currentProduct.stockByBranch[branchId] ?? 0;
+    const currentStock = currentProduct.variants.reduce((sum, variant) => sum + (variant.stockByBranch[branchId] ?? 0), 0);
 
     function handleEdit() {
         router.push(`/(app)/(tabs)/products/${currentProduct.id}/edit`);
@@ -72,6 +72,29 @@ export default function ProductDetailScreen() {
                     onPress={handleEdit}
                     onToggleActive={() => toggleProductActive(currentProduct.id)}
                 />
+
+                <View style={styles.variantsCard}>
+                    <Text style={styles.actionsTitle}>Variantes ({currentProduct.variants.length})</Text>
+                    {currentProduct.variants.map((variant) => (
+                        <View key={variant.id} style={styles.variantRow}>
+                            <View style={styles.variantInfo}>
+                                <Text style={styles.variantAttributes}>
+                                    {variant.attributes.length
+                                        ? variant.attributes
+                                            .map((attribute) => attributeValues.find((value) => value.id === attribute.attributeValueId)?.name)
+                                            .filter(Boolean)
+                                            .join(' / ')
+                                        : 'Variante única'}
+                                </Text>
+                                <Text style={styles.variantSku}>SKU: {variant.sku}</Text>
+                            </View>
+                            <View>
+                                <Text style={styles.variantPrice}>${variant.price.toLocaleString('es-AR')}</Text>
+                                <Text style={styles.variantSku}>Stock: {variant.stockByBranch[branchId] ?? 0}</Text>
+                            </View>
+                        </View>
+                    ))}
+                </View>
 
                 <View style={styles.actionsCard}>
                     <Text style={styles.actionsTitle}>Acciones</Text>
@@ -127,6 +150,46 @@ const styles = StyleSheet.create({
         padding: Spacing.lg,
         borderWidth: 1,
         borderColor: Colors.border,
+    },
+
+    variantsCard: {
+        backgroundColor: Colors.surface,
+        borderRadius: 14,
+        padding: Spacing.lg,
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+
+    variantRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: Spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: Colors.muted,
+    },
+
+    variantInfo: {
+        flex: 1,
+        marginRight: Spacing.md,
+    },
+
+    variantAttributes: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: Colors.text,
+    },
+
+    variantSku: {
+        fontSize: 12,
+        color: Colors.textSecondary,
+        marginTop: 2,
+    },
+
+    variantPrice: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: Colors.primary,
     },
 
     actionsTitle: {

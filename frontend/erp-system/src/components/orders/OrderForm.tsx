@@ -51,17 +51,14 @@ export function OrderForm({
 
     const [formError, setFormError] = useState<string | null>(null);
 
-    const branchId = activeBranch?.id ?? 'branch-1';
+    const branchId = activeBranch?.id ?? '1';
     const branchName = activeBranch?.name ?? 'Sucursal Central';
 
     useEffect(() => {
-        setFormError(null);
-
         if (initialOrder) {
             const currentCustomer = getCustomerById(initialOrder.customerId);
 
             if (!currentCustomer) {
-                setFormError('No se encontró el cliente del pedido.');
                 return;
             }
 
@@ -99,16 +96,17 @@ export function OrderForm({
         router.push('/orders/select-products');
     }
 
-    function handleUpdateQuantity(productId: string, newQty: number) {
+    function handleUpdateQuantity(productId: string, variantId: string, newQty: number) {
         const product = products.find(
             (item) => item.id === productId,
         );
 
-        const maxStock = product
-            ? product.stockByBranch[branchId] ?? 0
+        const variant = product?.variants.find((item) => item.id === variantId);
+        const maxStock = variant
+            ? variant.stockByBranch[branchId] ?? 0
             : 0;
 
-        updateItemQuantity(productId, newQty, maxStock);
+        updateItemQuantity(productId, variantId, newQty, maxStock);
     }
 
     function validate(): boolean {

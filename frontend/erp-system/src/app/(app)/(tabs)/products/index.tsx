@@ -10,10 +10,10 @@ import {
     View,
 } from 'react-native';
 
-import { ProductCard } from '@/components/products/ProductCard';
-import { ProductsSearchBar } from '@/components/products/ProductsSearchBar';
-import { ProductsFilterChips } from '@/components/products/ProductsFilterChips';
 import { CategoryPills } from '@/components/products/CategoryPills';
+import { ProductCard } from '@/components/products/ProductCard';
+import { ProductsFilterChips } from '@/components/products/ProductsFilterChips';
+import { ProductsSearchBar } from '@/components/products/ProductsSearchBar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -64,7 +64,7 @@ export default function ProductsScreen() {
             if (searchQuery.trim()) {
                 const query = searchQuery.toLowerCase().trim();
                 const matchesName = product.name.toLowerCase().includes(query);
-                const matchesSku = product.sku.toLowerCase().includes(query);
+                const matchesSku = product.variants.some((variant) => variant.sku.toLowerCase().includes(query));
                 if (!matchesName && !matchesSku) return false;
             }
 
@@ -75,7 +75,7 @@ export default function ProductsScreen() {
             if (statusFilter === 'ACTIVE' && !product.active) return false;
             if (statusFilter === 'INACTIVE' && product.active) return false;
 
-            const currentStock = product.stockByBranch[branchId] ?? 0;
+            const currentStock = product.variants.reduce((sum, variant) => sum + (variant.stockByBranch[branchId] ?? 0), 0);
             if (stockFilter === 'IN_STOCK' && currentStock <= 0) return false;
             if (stockFilter === 'OUT_OF_STOCK' && currentStock > 0) return false;
 
@@ -210,7 +210,7 @@ export default function ProductsScreen() {
                     }
                     renderItem={({ item }) => {
                         const branchId = activeBranch?.id ?? '1';
-                        const currentStock = item.stockByBranch[branchId] ?? 0;
+                        const currentStock = item.variants.reduce((sum, variant) => sum + (variant.stockByBranch[branchId] ?? 0), 0);
 
                         return (
                             <ProductCard

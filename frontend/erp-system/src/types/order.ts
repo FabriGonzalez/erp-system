@@ -16,6 +16,7 @@ export type DeliveryType = 'LOCAL_PICKUP' | 'SHIPPING';
 export type OrderItem = {
     id: string;
     productId: string;
+    variantId: string;
     productName: string;
     productSku: string;
     quantity: number;

@@ -71,9 +71,13 @@ export default function OrdersScreen() {
                 return false;
             }
 
+            if (activeBranch && order.branchId !== activeBranch.id) {
+                return false;
+            }
+
             return true;
         });
-    }, [orders, searchQuery, statusFilter, deliveryTypeFilter]);
+    }, [orders, searchQuery, statusFilter, deliveryTypeFilter, activeBranch]);
 
     const hasActiveFilters =
         Boolean(searchQuery.trim()) ||
@@ -86,7 +90,7 @@ export default function OrdersScreen() {
 
     function handleViewOrder(id: string) {
         router.push({
-            pathname: '/(app)/orders/[id]',
+            pathname: '/orders/[id]',
             params: { id },
         });
     }

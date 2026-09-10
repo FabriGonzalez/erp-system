@@ -49,15 +49,17 @@ export function OrderSummarySection({
         amountPaid > 0 ? String(amountPaid) : '',
     );
 
+    const effectivePaymentMode = isAnonymousCustomer ? 'TOTAL' : paymentMode;
+
     const isPickup = deliveryType === 'LOCAL_PICKUP';
 
-    const parsedAmount = Math.min(
-        Math.max(0, parseFloat(inputValue) || 0),
-        total,
-    );
+    const parsedInput = Number(inputValue);
+    const parsedAmount = Number.isFinite(parsedInput)
+        ? Math.min(Math.max(0, parsedInput), total)
+        : 0;
 
     const effectiveAmountPaid =
-        paymentMode === 'TOTAL' ? total : parsedAmount;
+        effectivePaymentMode === 'TOTAL' ? total : parsedAmount;
 
     const balanceDue = getBalanceDue({
         total,
@@ -72,13 +74,17 @@ export function OrderSummarySection({
     function handleInputChange(text: string) {
         const cleaned = text.replace(/[^0-9]/g, '');
         setInputValue(cleaned);
-        const value = Math.min(Math.max(0, parseInt(cleaned, 10) || 0), total);
+        const parsedValue = Number(cleaned);
+        const value = Number.isFinite(parsedValue)
+            ? Math.min(Math.max(0, parsedValue), Math.max(0, total))
+            : 0;
         setAmountPaid(value);
     }
 
     function handleSelectTotal() {
         setPaymentMode('TOTAL');
-        setAmountPaid(total);
+        setInputValue(String(Math.max(0, total)));
+        setAmountPaid(Math.max(0, total));
     }
 
     function handleSelectPartial() {
@@ -87,6 +93,11 @@ export function OrderSummarySection({
         }
 
         setPaymentMode('PARTIAL');
+    }
+
+    function handleSubmit() {
+        setAmountPaid(effectiveAmountPaid);
+        onSubmit();
     }
 
     const paymentStatusColor =
@@ -153,14 +164,14 @@ export function OrderSummarySection({
                     <Pressable
                         style={[
                             styles.paymentOption,
-                            paymentMode === 'TOTAL' && styles.paymentOptionActive,
+                            effectivePaymentMode === 'TOTAL' && styles.paymentOptionActive,
                         ]}
                         onPress={handleSelectTotal}
                     >
                         <Text
                             style={[
                                 styles.paymentOptionText,
-                                paymentMode === 'TOTAL' &&
+                                effectivePaymentMode === 'TOTAL' &&
                                 styles.paymentOptionTextActive,
                             ]}
                         >
@@ -171,7 +182,7 @@ export function OrderSummarySection({
                     <Pressable
                         style={[
                             styles.paymentOption,
-                            paymentMode === 'PARTIAL' &&
+                            effectivePaymentMode === 'PARTIAL' &&
                             styles.paymentOptionActive,
                             isAnonymousCustomer &&
                             styles.paymentOptionDisabled,
@@ -182,7 +193,7 @@ export function OrderSummarySection({
                         <Text
                             style={[
                                 styles.paymentOptionText,
-                                paymentMode === 'PARTIAL' &&
+                                effectivePaymentMode === 'PARTIAL' &&
                                 styles.paymentOptionTextActive,
                                 isAnonymousCustomer &&
                                 styles.paymentOptionTextDisabled,
@@ -199,7 +210,7 @@ export function OrderSummarySection({
                     </Text>
                 )}
 
-                {paymentMode === 'PARTIAL' && (
+                {effectivePaymentMode === 'PARTIAL' && (
                     <>
                         <View style={styles.inputRow}>
                             <Text style={styles.currencyPrefix}>$</Text>
@@ -246,7 +257,7 @@ export function OrderSummarySection({
                         styles.submitButton,
                         (isSubmitting || disabled) && styles.submitButtonDisabled,
                     ]}
-                    onPress={onSubmit}
+                    onPress={handleSubmit}
                     disabled={isSubmitting || disabled}
                 >
                     {isSubmitting ? (

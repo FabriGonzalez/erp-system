@@ -8,11 +8,11 @@ import { SuccessBanner } from '@/components/orders/SuccessBanner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
 import { useCustomerStore } from '@/stores/customer-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { useOrderStore } from '@/stores/order-store';
 import { SharedStyles } from '@/styles/shared';
+import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 
 export default function EditOrderScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -100,6 +100,14 @@ export default function EditOrderScreen() {
                 (sum, item) => sum + item.subtotal,
                 0,
             );
+            const safeTotal = Number.isFinite(total) && total >= 0 ? total : 0;
+            const clampedAmountPaid = Number.isFinite(amountPaid)
+                ? Math.min(Math.max(0, amountPaid), safeTotal)
+                : 0;
+            const safeAmountPaid = currentCustomer.id === CUSTOMER_ANONYMOUS.id &&
+                clampedAmountPaid > 0 && clampedAmountPaid < safeTotal
+                ? safeTotal
+                : clampedAmountPaid;
 
             updateOrder(orderId, {
                 customerId: currentCustomer.id,
@@ -107,8 +115,8 @@ export default function EditOrderScreen() {
                 deliveryType,
                 address,
                 items,
-                total,
-                amountPaid,
+                total: safeTotal,
+                amountPaid: safeAmountPaid,
             });
 
             resetDraft();

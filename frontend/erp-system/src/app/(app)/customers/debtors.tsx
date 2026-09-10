@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useBranchStore } from '@/stores/branch-store';
 import { useOrderStore } from '@/stores/order-store';
 import { SharedStyles } from '@/styles/shared';
 import { getBalanceDue } from '@/types/order';
@@ -26,12 +27,14 @@ type DebtorSummary = {
 
 export default function DebtorsScreen() {
     const orders = useOrderStore((state) => state.orders);
+    const activeBranch = useBranchStore((state) => state.activeBranch);
 
     const debtors = useMemo((): DebtorSummary[] => {
         const map = new Map<string, DebtorSummary>();
 
         for (const order of orders) {
-            if (order.status === 'CANCELLED') continue;
+            if (order.status === 'CANCELLED' || order.status === 'DRAFT') continue;
+            if (activeBranch && order.branchId !== activeBranch.id) continue;
 
             const balance = getBalanceDue(order);
             if (balance <= 0) continue;
@@ -51,7 +54,7 @@ export default function DebtorsScreen() {
         }
 
         return Array.from(map.values()).sort((a, b) => b.totalDebt - a.totalDebt);
-    }, [orders]);
+    }, [orders, activeBranch]);
 
     return (
         <Screen style={styles.screen}>

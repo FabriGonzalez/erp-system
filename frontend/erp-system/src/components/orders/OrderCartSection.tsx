@@ -1,5 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
@@ -9,8 +9,8 @@ import { OrderItem } from '@/types/order';
 type OrderCartSectionProps = {
     items: OrderItem[];
     onAddProducts: () => void;
-    onUpdateQuantity: (productId: string, newQuantity: number) => void;
-    onRemoveItem: (productId: string) => void;
+    onUpdateQuantity: (productId: string, variantId: string, newQuantity: number) => void;
+    onRemoveItem: (productId: string, variantId: string) => void;
 };
 
 export function OrderCartSection({
@@ -71,7 +71,7 @@ export function OrderCartSection({
                                 <View style={styles.quantityControls}>
                                     <Pressable
                                         style={styles.qtyBtn}
-                                        onPress={() => onUpdateQuantity(item.productId, item.quantity - 1)}
+                                        onPress={() => onUpdateQuantity(item.productId, item.variantId, item.quantity - 1)}
                                     >
                                         <SymbolView
                                             name={{ ios: 'minus', android: 'remove', web: 'remove' }}
@@ -84,7 +84,7 @@ export function OrderCartSection({
 
                                     <Pressable
                                         style={styles.qtyBtn}
-                                        onPress={() => onUpdateQuantity(item.productId, item.quantity + 1)}
+                                        onPress={() => onUpdateQuantity(item.productId, item.variantId, item.quantity + 1)}
                                     >
                                         <SymbolView
                                             name={{ ios: 'plus', android: 'add', web: 'add' }}

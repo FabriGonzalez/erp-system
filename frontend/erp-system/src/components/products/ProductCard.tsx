@@ -1,8 +1,8 @@
-import { StyleSheet, Text, View, Pressable } from 'react-native';
-import { SymbolView } from 'expo-symbols';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { Product } from '@/types/product';
+import { SymbolView } from 'expo-symbols';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 type ProductCardProps = {
     product: Product;
@@ -48,6 +48,12 @@ export function ProductCard({
     }
 
     const stockBadge = getStockBadgeStyle();
+    const firstVariant = product.variants[0];
+    const validPrices = product.variants.map((variant) => variant.price).filter(Number.isFinite);
+    const lowestPrice = validPrices.length ? Math.min(...validPrices) : 0;
+    const skuLabel = product.variants.length === 1
+        ? firstVariant?.sku ?? '-'
+        : `${product.variants.length} variantes`;
 
     return (
         <Pressable
@@ -61,7 +67,7 @@ export function ProductCard({
         >
             <View style={styles.headerRow}>
                 <View style={styles.skuCategoryContainer}>
-                    <Text style={styles.skuText}>{product.sku}</Text>
+                    <Text style={styles.skuText}>{skuLabel}</Text>
                     {product.categoryName && (
                         <View style={styles.categoryBadge}>
                             <Text style={styles.categoryBadgeText}>{product.categoryName}</Text>
@@ -115,9 +121,9 @@ export function ProductCard({
 
             <View style={styles.footerRow}>
                 <View>
-                    <Text style={styles.priceLabel}>Precio</Text>
+                    <Text style={styles.priceLabel}>{product.variants.length === 1 ? 'Precio' : 'Desde'}</Text>
                     <Text style={styles.priceValue}>
-                        ${product.price.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                        ${lowestPrice.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                     </Text>
                 </View>
 
