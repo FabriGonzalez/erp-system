@@ -25,7 +25,7 @@ export function ProductCard({
     function getStockBadgeStyle() {
         if (isOutOfStock) {
             return {
-                bg: '#FEE2E2',
+                bg: Colors.errorSoft,
                 text: Colors.error,
                 label: 'Sin stock',
                 dot: Colors.error,
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
         gap: 4,
     },
     activeBadge: {
-        backgroundColor: '#F0FDF4',
+        backgroundColor: Colors.successSoft,
     },
     inactiveBadge: {
         backgroundColor: Colors.muted,

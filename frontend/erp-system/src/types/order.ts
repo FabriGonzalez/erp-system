@@ -3,15 +3,17 @@ import { CustomerAddress } from './customer';
 export type OrderStatus =
     | 'DRAFT'
     | 'CONFIRMED'
-    | 'IN_PREPARATION'
-    | 'READY_TO_SHIP'
+    | 'TO_PREPARE'
     | 'SHIPPED'
-    | 'DELIVERED'
     | 'CANCELLED';
 
 export type PaymentStatus = 'PENDING' | 'PARTIAL' | 'PAID';
 
 export type DeliveryType = 'LOCAL_PICKUP' | 'SHIPPING';
+
+export type SalesType = 'WITH_PRODUCTS' | 'QUICK_SALE';
+
+export type OrderCreationMode = 'SALE' | 'SHIPMENT';
 
 export type OrderItem = {
     id: string;
@@ -29,6 +31,8 @@ export type Order = {
     orderNumber: string;
     customerId: string;
     customerName: string;
+    salesType: SalesType;
+    quickSaleAmount?: number;
     deliveryType: DeliveryType;
     address?: CustomerAddress;
     branchId: string;
@@ -48,10 +52,8 @@ export type OrderDeliveryFilter = DeliveryType | 'ALL';
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
     DRAFT: 'Borrador',
     CONFIRMED: 'Confirmado',
-    IN_PREPARATION: 'En preparación',
-    READY_TO_SHIP: 'Listo para enviar',
+    TO_PREPARE: 'A preparar',
     SHIPPED: 'Enviado',
-    DELIVERED: 'Entregado',
     CANCELLED: 'Cancelado',
 };
 
@@ -76,10 +78,12 @@ export const DELIVERY_TYPE_LABELS: Record<DeliveryType, string> = {
     SHIPPING: 'Envío',
 };
 
+export const SALES_TYPE_LABELS: Record<SalesType, string> = {
+    WITH_PRODUCTS: 'Con productos',
+    QUICK_SALE: 'Venta rápida',
+};
+
 export const SHIPPING_STATUS_FLOW: OrderStatus[] = [
-    'CONFIRMED',
-    'IN_PREPARATION',
-    'READY_TO_SHIP',
+    'TO_PREPARE',
     'SHIPPED',
-    'DELIVERED',
 ];

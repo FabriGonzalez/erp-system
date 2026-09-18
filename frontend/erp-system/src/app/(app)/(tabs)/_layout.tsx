@@ -27,12 +27,34 @@ export default function TabsLayout() {
             }}
         >
             <Tabs.Screen
-                name="index"
+                name="orders"
                 options={{
-                    title: 'Inicio',
+                    title: 'Ventas',
                     tabBarIcon: ({ color, size }) => (
                         <SymbolView
-                            name={{ ios: 'house.fill', android: 'home', web: 'home' }}
+                            name={{
+                                ios: 'doc.text.fill',
+                                android: 'description',
+                                web: 'description',
+                            }}
+                            size={size ?? 24}
+                            tintColor={color}
+                        />
+                    ),
+                }}
+            />
+
+            <Tabs.Screen
+                name="shipments"
+                options={{
+                    title: 'Envíos',
+                    tabBarIcon: ({ color, size }) => (
+                        <SymbolView
+                            name={{
+                                ios: 'shippingbox.fill',
+                                android: 'local_shipping',
+                                web: 'local_shipping',
+                            }}
                             size={size ?? 24}
                             tintColor={color}
                         />
@@ -46,21 +68,11 @@ export default function TabsLayout() {
                     title: 'Productos',
                     tabBarIcon: ({ color, size }) => (
                         <SymbolView
-                            name={{ ios: 'square.grid.2x2.fill', android: 'grid_view', web: 'grid_view' }}
-                            size={size ?? 24}
-                            tintColor={color}
-                        />
-                    ),
-                }}
-            />
-
-            <Tabs.Screen
-                name="orders"
-                options={{
-                    title: 'Pedidos',
-                    tabBarIcon: ({ color, size }) => (
-                        <SymbolView
-                            name={{ ios: 'doc.text.fill', android: 'description', web: 'description' }}
+                            name={{
+                                ios: 'square.grid.2x2.fill',
+                                android: 'grid_view',
+                                web: 'grid_view',
+                            }}
                             size={size ?? 24}
                             tintColor={color}
                         />
@@ -74,7 +86,11 @@ export default function TabsLayout() {
                     title: 'Más',
                     tabBarIcon: ({ color, size }) => (
                         <SymbolView
-                            name={{ ios: 'ellipsis.circle.fill', android: 'more_horiz', web: 'more_horiz' }}
+                            name={{
+                                ios: 'ellipsis.circle.fill',
+                                android: 'more_horiz',
+                                web: 'more_horiz',
+                            }}
                             size={size ?? 24}
                             tintColor={color}
                         />

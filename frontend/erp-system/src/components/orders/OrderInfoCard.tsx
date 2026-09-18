@@ -2,14 +2,16 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-
-import { formatDateTime } from '@/utils/format';
+import { useCustomerAccountStore } from '@/stores/customer-account-store';
+import { SharedStyles } from '@/styles/shared';
+import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import {
     DELIVERY_TYPE_LABELS,
     Order,
     getBalanceDue,
     getPaymentStatus,
 } from '@/types/order';
+import { formatDateTime } from '@/utils/format';
 
 interface OrderInfoCardProps {
     order: Order;
@@ -17,8 +19,12 @@ interface OrderInfoCardProps {
 
 export function OrderInfoCard({ order }: OrderInfoCardProps) {
     const isShipping = order.deliveryType === 'SHIPPING';
-    const paymentStatus = getPaymentStatus(order);
-    const balanceDue = getBalanceDue(order);
+    const allocatedPaidAmount = useCustomerAccountStore((state) => state.getOrderPaidAmount(order.id));
+    const paidAmount = order.customerId === CUSTOMER_ANONYMOUS.id
+        ? order.amountPaid
+        : allocatedPaidAmount;
+    const paymentStatus = getPaymentStatus({ total: order.total, amountPaid: paidAmount });
+    const balanceDue = getBalanceDue({ total: order.total, amountPaid: paidAmount });
 
     const paymentStatusColor =
         paymentStatus === 'PAID'
@@ -42,7 +48,7 @@ export function OrderInfoCard({ order }: OrderInfoCardProps) {
               : 'Pendiente';
 
     return (
-        <View style={styles.card}>
+        <View style={SharedStyles.card}>
             <InfoRow label="Cliente" value={order.customerName} />
 
             <View style={styles.divider} />
@@ -94,7 +100,7 @@ export function OrderInfoCard({ order }: OrderInfoCardProps) {
                     <View style={styles.amountItem}>
                         <Text style={styles.amountLabel}>Entregó</Text>
                         <Text style={[styles.amountValue, { color: Colors.success }]}>
-                            ${order.amountPaid.toLocaleString('es-AR')}
+                            ${paidAmount.toLocaleString('es-AR')}
                         </Text>
                     </View>
                     {balanceDue > 0 && (
@@ -121,14 +127,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-    card: {
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        padding: Spacing.lg,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-
     row: {
         paddingVertical: Spacing.sm,
     },

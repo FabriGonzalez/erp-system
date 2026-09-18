@@ -50,7 +50,7 @@ export const mockRecentOrders: RecentOrder[] = [
         orderNumber: 'PED-002',
         customerName: 'Carlos López',
         total: 8500,
-        status: 'IN_PREPARATION',
+        status: 'TO_PREPARE',
         date: '2026-08-31',
     },
     {

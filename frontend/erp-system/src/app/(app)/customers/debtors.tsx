@@ -13,84 +13,214 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useBranchStore } from '@/stores/branch-store';
+import { useCustomerAccountStore } from '@/stores/customer-account-store';
+import { useCustomerStore } from '@/stores/customer-store';
 import { useOrderStore } from '@/stores/order-store';
 import { SharedStyles } from '@/styles/shared';
-import { getBalanceDue } from '@/types/order';
+import { CUSTOMER_ANONYMOUS } from '@/types/customer';
+import { Order } from '@/types/order';
+import {
+    calculateCustomerCredit,
+    calculateOrderBalanceDue,
+} from '@/utils/customer-account';
+import { formatCurrency } from '@/utils/format';
 
-type DebtorSummary = {
+type CustomerAccountSummary = {
     customerId: string;
     customerName: string;
     totalDebt: number;
+    availableCredit: number;
     pendingOrdersCount: number;
+    originBranchNames: string[];
 };
 
-export default function DebtorsScreen() {
+export default function CustomerAccountsScreen() {
     const orders = useOrderStore((state) => state.orders);
-    const activeBranch = useBranchStore((state) => state.activeBranch);
+    const customers = useCustomerStore((state) => state.customers);
 
-    const debtors = useMemo((): DebtorSummary[] => {
-        const map = new Map<string, DebtorSummary>();
+    const accounts = useCustomerAccountStore(
+        (state) => state.accounts,
+    );
 
-        for (const order of orders) {
-            if (order.status === 'CANCELLED' || order.status === 'DRAFT') continue;
-            if (activeBranch && order.branchId !== activeBranch.id) continue;
+    const payments = useCustomerAccountStore(
+        (state) => state.payments,
+    );
 
-            const balance = getBalanceDue(order);
-            if (balance <= 0) continue;
+    const allocations = useCustomerAccountStore(
+        (state) => state.allocations,
+    );
 
-            const existing = map.get(order.customerId);
-            if (existing) {
-                existing.totalDebt += balance;
-                existing.pendingOrdersCount += 1;
-            } else {
-                map.set(order.customerId, {
-                    customerId: order.customerId,
-                    customerName: order.customerName,
-                    totalDebt: balance,
-                    pendingOrdersCount: 1,
+    const accountsInActivity = useMemo(
+        (): CustomerAccountSummary[] => {
+            const customerIds = new Set<string>();
+
+            // Clientes que tienen una cuenta corriente.
+            for (const account of accounts) {
+                if (account.customerId !== CUSTOMER_ANONYMOUS.id) {
+                    customerIds.add(account.customerId);
+                }
+            }
+
+            // Clientes que realizaron pagos.
+            for (const payment of payments) {
+                if (payment.customerId !== CUSTOMER_ANONYMOUS.id) {
+                    customerIds.add(payment.customerId);
+                }
+            }
+
+            // Clientes que tienen órdenes identificadas.
+            for (const order of orders) {
+                if (
+                    order.customerId === CUSTOMER_ANONYMOUS.id ||
+                    order.status === 'CANCELLED' ||
+                    order.status === 'DRAFT'
+                ) {
+                    continue;
+                }
+
+                customerIds.add(order.customerId);
+            }
+
+            const summaries: CustomerAccountSummary[] = [];
+
+            for (const customerId of customerIds) {
+                const customerOrders: Order[] = [];
+                const pendingOrders: Order[] = [];
+
+                let totalDebt = 0;
+
+                const branchNames = new Set<string>();
+
+                // Buscamos las órdenes del cliente y calculamos
+                // la deuda pendiente.
+                for (const order of orders) {
+                    if (order.customerId !== customerId) {
+                        continue;
+                    }
+
+                    if (
+                        order.status === 'CANCELLED' ||
+                        order.status === 'DRAFT'
+                    ) {
+                        continue;
+                    }
+
+                    customerOrders.push(order);
+
+                    const balance = calculateOrderBalanceDue(
+                        order,
+                        allocations,
+                    );
+
+                    if (balance <= 0) {
+                        continue;
+                    }
+
+                    pendingOrders.push(order);
+                    totalDebt += balance;
+
+                    if (order.branchName) {
+                        branchNames.add(order.branchName);
+                    }
+                }
+
+                const availableCredit = calculateCustomerCredit(
+                    customerId,
+                    payments,
+                    allocations,
+                );
+
+                const customer = customers.find(
+                    (item) => item.id === customerId,
+                );
+
+                const customerName =
+                    customer?.name ??
+                    customerOrders[0]?.customerName ??
+                    'Cliente';
+
+                summaries.push({
+                    customerId,
+                    customerName,
+                    totalDebt,
+                    availableCredit,
+                    pendingOrdersCount: pendingOrders.length,
+                    originBranchNames: Array.from(branchNames),
                 });
             }
-        }
 
-        return Array.from(map.values()).sort((a, b) => b.totalDebt - a.totalDebt);
-    }, [orders, activeBranch]);
+            // Primero los clientes con mayor actividad económica.
+            // La deuda y el crédito se mantienen separados visualmente.
+            summaries.sort((left, right) => {
+                const leftActivity =
+                    left.totalDebt + left.availableCredit;
+
+                const rightActivity =
+                    right.totalDebt + right.availableCredit;
+
+                return (
+                    rightActivity - leftActivity ||
+                    left.customerName.localeCompare(
+                        right.customerName,
+                    )
+                );
+            });
+
+            return summaries;
+        },
+        [accounts, customers, orders, payments, allocations],
+    );
 
     return (
         <Screen style={styles.screen}>
-            {/* Header */}
-            <View style={styles.topBar}>
+            <View style={[SharedStyles.topBar, SharedStyles.topBarElevated]}>
                 <Pressable
                     onPress={() => router.back()}
-                    style={({ pressed }) => [styles.backButton, pressed && SharedStyles.pressed]}
+                    style={({ pressed }) => [
+                        styles.backButton,
+                        pressed && SharedStyles.pressed,
+                    ]}
                 >
                     <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
+                        name={{
+                            ios: 'chevron.left',
+                            android: 'arrow_back',
+                            web: 'arrow_back',
+                        }}
                         size={24}
                         tintColor={Colors.text}
                     />
                 </Pressable>
 
                 <View style={styles.titleContainer}>
-                    <Text style={styles.screenTitle}>Clientes que deben</Text>
+                    <Text style={styles.screenTitle}>
+                        Cuentas corrientes
+                    </Text>
+
                     <Text style={styles.screenSubtitle}>
-                        {debtors.length}{' '}
-                        {debtors.length === 1 ? 'cliente con deuda' : 'clientes con deuda'}
+                        {accountsInActivity.length}{' '}
+                        {accountsInActivity.length === 1
+                            ? 'cliente con actividad'
+                            : 'clientes con actividad'}
                     </Text>
                 </View>
 
                 <View style={styles.headerSpacer} />
             </View>
 
-            {debtors.length === 0 ? (
+            {accountsInActivity.length === 0 ? (
                 <EmptyState
-                    title="Sin deudas pendientes"
-                    description="Todos los clientes tienen sus pedidos al día."
-                    iconName={{ ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' }}
+                    title="Sin actividad en cuentas corrientes"
+                    description="Todavía no hay deudas, saldos a favor ni pagos registrados."
+                    iconName={{
+                        ios: 'checkmark.seal.fill',
+                        android: 'verified',
+                        web: 'verified',
+                    }}
                 />
             ) : (
                 <FlatList
-                    data={debtors}
+                    data={accountsInActivity}
                     keyExtractor={(item) => item.customerId}
                     contentContainerStyle={styles.listContainer}
                     showsVerticalScrollIndicator={false}
@@ -103,13 +233,20 @@ export default function DebtorsScreen() {
                             onPress={() =>
                                 router.push({
                                     pathname: '/customers/[id]/debts',
-                                    params: { id: item.customerId },
+                                    params: {
+                                        id: item.customerId,
+                                    },
                                 })
                             }
                         >
                             <View style={styles.cardHeader}>
                                 <View style={styles.cardInfo}>
-                                    <Text style={styles.customerName}>{item.customerName}</Text>
+                                    <Text
+                                        style={styles.customerName}
+                                    >
+                                        {item.customerName}
+                                    </Text>
+
                                     <Text style={styles.ordersCount}>
                                         {item.pendingOrdersCount}{' '}
                                         {item.pendingOrdersCount === 1
@@ -117,6 +254,7 @@ export default function DebtorsScreen() {
                                             : 'pedidos pendientes'}
                                     </Text>
                                 </View>
+
                                 <SymbolView
                                     name={{
                                         ios: 'chevron.right',
@@ -124,15 +262,64 @@ export default function DebtorsScreen() {
                                         web: 'chevron_right',
                                     }}
                                     size={16}
-                                    tintColor={Colors.textSecondary}
+                                    tintColor={
+                                        Colors.textSecondary
+                                    }
                                 />
                             </View>
-                            <View style={styles.debtRow}>
-                                <Text style={styles.debtLabel}>Debe</Text>
-                                <Text style={styles.debtAmount}>
-                                    ${item.totalDebt.toLocaleString('es-AR')}
-                                </Text>
+
+                            <View style={styles.accountValues}>
+                                <View
+                                    style={[
+                                        styles.valueRow,
+                                        styles.debtRow,
+                                    ]}
+                                >
+                                    <Text
+                                        style={styles.debtLabel}
+                                    >
+                                        Deuda
+                                    </Text>
+
+                                    <Text
+                                        style={styles.debtAmount}
+                                    >
+                                        {formatCurrency(
+                                            item.totalDebt,
+                                        )}
+                                    </Text>
+                                </View>
+
+                                <View
+                                    style={[
+                                        styles.valueRow,
+                                        styles.creditRow,
+                                    ]}
+                                >
+                                    <Text
+                                        style={styles.creditLabel}
+                                    >
+                                        Saldo a favor
+                                    </Text>
+
+                                    <Text
+                                        style={styles.creditAmount}
+                                    >
+                                        {formatCurrency(
+                                            item.availableCredit,
+                                        )}
+                                    </Text>
+                                </View>
                             </View>
+
+                            {item.originBranchNames.length > 0 && (
+                                <Text style={styles.branches}>
+                                    Sucursales:{' '}
+                                    {item.originBranchNames.join(
+                                        ', ',
+                                    )}
+                                </Text>
+                            )}
                         </Pressable>
                     )}
                 />
@@ -144,17 +331,6 @@ export default function DebtorsScreen() {
 const styles = StyleSheet.create({
     screen: {
         padding: 0,
-    },
-    topBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: Spacing.lg,
-        paddingTop: Spacing.md,
-        paddingBottom: Spacing.sm,
-        backgroundColor: Colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
     },
     backButton: {
         padding: Spacing.xs,
@@ -198,20 +374,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: Spacing.sm,
     },
-    avatarCircle: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
-        backgroundColor: Colors.errorLight,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: Spacing.md,
-    },
-    avatarText: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.error,
-    },
     cardInfo: {
         flex: 1,
     },
@@ -225,14 +387,19 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         marginTop: 2,
     },
-    debtRow: {
+    accountValues: {
+        gap: Spacing.xs,
+    },
+    valueRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: Colors.errorLight,
         borderRadius: 8,
         paddingHorizontal: Spacing.md,
         paddingVertical: Spacing.sm,
+    },
+    debtRow: {
+        backgroundColor: Colors.errorLight,
     },
     debtLabel: {
         fontSize: 13,
@@ -243,5 +410,23 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '700',
         color: Colors.error,
+    },
+    creditRow: {
+        backgroundColor: Colors.successLight,
+    },
+    creditLabel: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: Colors.successDark,
+    },
+    creditAmount: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: Colors.successDark,
+    },
+    branches: {
+        marginTop: Spacing.sm,
+        fontSize: 12,
+        color: Colors.textSecondary,
     },
 });

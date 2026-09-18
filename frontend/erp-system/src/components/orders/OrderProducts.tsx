@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { SharedStyles } from '@/styles/shared';
 
 import { formatCurrency } from '@/utils/format';
 import { Order } from '@/types/order';
@@ -11,27 +12,43 @@ interface OrderProductsProps {
 }
 
 export function OrderProducts({ order }: OrderProductsProps) {
+    const isQuickSale = order.salesType === 'QUICK_SALE';
+
     return (
-        <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Productos</Text>
+        <View style={SharedStyles.card}>
+            <Text style={[SharedStyles.cardTitle, styles.sectionTitle]}>
+                {isQuickSale ? 'Venta Rápida' : 'Productos'}
+            </Text>
 
-            {order.items.map((item) => (
-                <View key={item.id} style={styles.productRow}>
+            {isQuickSale ? (
+                <View style={styles.productRow}>
                     <View style={styles.productInfo}>
-                        <Text style={styles.productName} numberOfLines={1}>
-                            {item.productName}
-                        </Text>
-
-                        <Text style={styles.productDetail}>
-                            {item.quantity} × {formatCurrency(item.unitPrice)}
-                        </Text>
+                        <Text style={styles.productName}>Importe total manual</Text>
+                        <Text style={styles.productDetail}>Sin detalle de productos</Text>
                     </View>
-
                     <Text style={styles.productSubtotal}>
-                        {formatCurrency(item.subtotal)}
+                        {formatCurrency(order.total)}
                     </Text>
                 </View>
-            ))}
+            ) : (
+                order.items.map((item) => (
+                    <View key={item.id} style={styles.productRow}>
+                        <View style={styles.productInfo}>
+                            <Text style={styles.productName} numberOfLines={1}>
+                                {item.productName}
+                            </Text>
+
+                            <Text style={styles.productDetail}>
+                                {item.quantity} × {formatCurrency(item.unitPrice)}
+                            </Text>
+                        </View>
+
+                        <Text style={styles.productSubtotal}>
+                            {formatCurrency(item.subtotal)}
+                        </Text>
+                    </View>
+                ))
+            )}
 
             <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>Total</Text>
@@ -44,18 +61,7 @@ export function OrderProducts({ order }: OrderProductsProps) {
 }
 
 const styles = StyleSheet.create({
-    card: {
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        padding: Spacing.lg,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-
     sectionTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
         marginBottom: Spacing.md,
     },
 

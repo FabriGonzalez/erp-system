@@ -25,11 +25,11 @@ export function OrderHeader({ order }: OrderHeaderProps) {
     };
 
     return (
-        <View style={styles.header}>
+        <View style={SharedStyles.header}>
             <Pressable
                 onPress={handleBack}
                 style={({ pressed }) => [
-                    styles.backButton,
+                    SharedStyles.backButton,
                         pressed && SharedStyles.pressed,
                 ]}
             >
@@ -44,7 +44,7 @@ export function OrderHeader({ order }: OrderHeaderProps) {
                 />
             </Pressable>
 
-            <Text style={styles.headerTitle}>{order.orderNumber}</Text>
+            <Text style={SharedStyles.headerTitle}>{order.orderNumber}</Text>
 
             <View
                 style={[
@@ -70,28 +70,6 @@ export function OrderHeader({ order }: OrderHeaderProps) {
 }
 
 const styles = StyleSheet.create({
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.md,
-        backgroundColor: Colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
-    },
-
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
-    },
-
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-
     statusBadge: {
         paddingHorizontal: Spacing.sm + 2,
         paddingVertical: 4,

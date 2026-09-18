@@ -8,13 +8,15 @@ import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useBranchStore } from '@/stores/branch-store';
+import { useProductAttributeStore } from '@/stores/product-attribute-store';
 import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
 
 export default function ProductDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const activeBranch = useBranchStore((state) => state.activeBranch);
-    const { products, attributeValues, toggleProductActive } = useProductStore();
+    const { products, toggleProductActive } = useProductStore();
+    const attributeValues = useProductAttributeStore((state) => state.attributeValues);
 
     const product = products.find((p) => p.id === id);
 
@@ -123,7 +125,6 @@ export default function ProductDetailScreen() {
 const styles = StyleSheet.create({
     container: {
         padding: 0,
-        backgroundColor: Colors.background,
     },
 
     editButton: {

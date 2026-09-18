@@ -56,8 +56,8 @@ export default function MoreScreen() {
                         onPress={() => router.push('/customers' as any)}
                     />
                     <MenuListItem
-                        title="Clientes que deben"
-                        subtitle="Pedidos con saldo pendiente"
+                        title="Cuentas corrientes"
+                        subtitle="Deudas, saldos a favor y pagos de clientes"
                         iconName={{ ios: 'exclamationmark.circle.fill', android: 'warning', web: 'warning' }}
                         onPress={() => router.push('/customers/debtors')}
                     />
@@ -76,11 +76,34 @@ export default function MoreScreen() {
                     />
                 </View>
 
+                <Text style={styles.sectionTitle}>Operaciones</Text>
+                <View style={styles.section}>
+                    <MenuListItem
+                        title="Operaciones"
+                        subtitle="Consultar ventas y envíos en una sola lista"
+                        iconName={{ ios: 'list.bullet.rectangle', android: 'view_list', web: 'view_list' }}
+                        onPress={() => router.push('/operations' as any)}
+                    />
+                    <MenuListItem
+                        title="Analytics"
+                        subtitle="Próximamente"
+                        iconName={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
+                        onPress={() => { }}
+                        showChevron={false}
+                    />
+                </View>
+
                 {/* Sección Administración (sólo Admin) */}
                 {isAdmin && (
                     <>
                         <Text style={styles.sectionTitle}>Administración</Text>
                         <View style={styles.section}>
+                            <MenuListItem
+                                title="Atributos de productos"
+                                subtitle="Administrar atributos y valores del catálogo"
+                                iconName={{ ios: 'tag.fill', android: 'label', web: 'label' }}
+                                onPress={() => router.push('/attributes' as any)}
+                            />
                             <MenuListItem
                                 title="Usuarios"
                                 subtitle="Administrar empleados y permisos"

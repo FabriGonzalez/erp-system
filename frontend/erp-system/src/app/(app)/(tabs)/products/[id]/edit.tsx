@@ -14,7 +14,7 @@ import { ProductFormData } from '@/types/product';
 
 export default function EditProductScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
-    const { products, categories, attributes, attributeValues, updateProduct } = useProductStore();
+    const { products, categories, updateProduct } = useProductStore();
     const user = useAuthStore((state) => state.user);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -127,8 +127,6 @@ export default function EditProductScreen() {
                     })),
                 }}
                 categories={categories}
-                attributes={attributes}
-                attributeValues={attributeValues}
                 branches={user?.branches ?? []}
                 existingProducts={products}
                 currentProductId={product.id}
@@ -144,6 +142,5 @@ export default function EditProductScreen() {
 const styles = StyleSheet.create({
     container: {
         padding: 0,
-        backgroundColor: Colors.background,
     },
 });

@@ -1,5 +1,10 @@
+import { ProductAttributeFormModal } from '@/components/attributes/ProductAttributeFormModal';
+import { ProductAttributeValueFormModal } from '@/components/attributes/ProductAttributeValueFormModal';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useBranchStore } from '@/stores/branch-store';
+import { SharedStyles } from '@/styles/shared';
+import { useProductAttributeStore } from '@/stores/product-attribute-store';
 import { Branch } from '@/types/branch';
 import {
     Category,
@@ -18,9 +23,9 @@ import {
     StyleSheet,
     Switch,
     Text,
-    TextInput,
-    View,
+    View
 } from 'react-native';
+import { AppInput } from '../ui/AppInput';
 import { CategoryModal } from './CategoryModal';
 
 type DraftVariant = ProductFormData['variants'][number];
@@ -28,8 +33,8 @@ type DraftVariant = ProductFormData['variants'][number];
 type ProductFormProps = {
     initialValues?: Partial<ProductFormData>;
     categories: Category[];
-    attributes: ProductAttribute[];
-    attributeValues: ProductAttributeValue[];
+    attributes?: ProductAttribute[];
+    attributeValues?: ProductAttributeValue[];
     branches: Branch[];
     existingProducts: Product[];
     currentProductId?: string;
@@ -80,43 +85,89 @@ function generateCombinations(
     existingProducts: Product[],
     currentProductId?: string,
 ): DraftVariant[] {
-    const groups = Object.entries(selectedValues).filter(([, values]) => values.length > 0);
-    if (!groups.length) return currentVariants;
+    const groups = Object.entries(selectedValues).filter(
+        ([, values]) => values.length > 0,
+    );
+
+    if (!groups.length) {
+        return currentVariants;
+    }
 
     const combinations = groups.reduce<ProductVariantAttribute[][]>(
-        (result, [attributeId, valueIds]) => result.flatMap((partial) =>
-            valueIds.map((attributeValueId) => [...partial, { attributeId, attributeValueId }])
-        ),
+        (result, [attributeId, valueIds]) =>
+            result.flatMap((partial) =>
+                valueIds.map((attributeValueId) => [
+                    ...partial,
+                    {
+                        attributeId,
+                        attributeValueId,
+                    },
+                ]),
+            ),
         [[]],
     );
 
-    const currentByKey = new Map(currentVariants.map((variant) => [combinationKey(variant.attributes), variant]));
-    const usedSkus = new Set(existingProducts
-        .filter((product) => product.id !== currentProductId)
-        .flatMap((product) => product.variants.map((variant) => variant.sku.toUpperCase())));
-    currentVariants.forEach((variant) => {
-        if (variant.sku.trim()) usedSkus.add(variant.sku.trim().toUpperCase());
-    });
+    const currentByKey = new Map(
+        currentVariants.map((variant) => [
+            combinationKey(variant.attributes),
+            variant,
+        ]),
+    );
 
-    return combinations.map((attributes, index) => {
-        const existing = currentByKey.get(combinationKey(attributes));
-        if (existing) return existing;
-        const generatedSku = uniqueSku(buildSku(productName, attributes, attributeValues), usedSkus);
-        return {
+    const usedSkus = new Set(
+        existingProducts
+            .filter((product) => product.id !== currentProductId)
+            .flatMap((product) =>
+                product.variants.map((variant) =>
+                    variant.sku.toUpperCase(),
+                ),
+            ),
+    );
+
+    for (const variant of currentVariants) {
+        if (variant.sku.trim()) {
+            usedSkus.add(variant.sku.trim().toUpperCase());
+        }
+    }
+
+    const result = [...currentVariants];
+
+    for (let index = 0; index < combinations.length; index++) {
+        const attributes = combinations[index];
+        const key = combinationKey(attributes);
+
+        const existing = currentByKey.get(key);
+
+        if (existing) {
+            continue;
+        }
+
+        const generatedSku = uniqueSku(
+            buildSku(
+                productName,
+                attributes,
+                attributeValues,
+            ),
+            usedSkus,
+        );
+
+        result.push({
             id: `variant-${Date.now()}-${index}`,
             sku: generatedSku,
             price: basePrice,
             attributes,
             stockByBranch: {},
-        };
-    });
+        });
+    }
+
+    return result;
 }
 
 export function ProductForm({
     initialValues,
     categories,
-    attributes,
-    attributeValues,
+    attributes: propsAttributes,
+    attributeValues: propsAttributeValues,
     branches,
     existingProducts,
     currentProductId,
@@ -125,6 +176,12 @@ export function ProductForm({
     isSubmitting = false,
     submitLabel = 'Guardar Producto',
 }: ProductFormProps) {
+    const storeAttributes = useProductAttributeStore((state) => state.attributes);
+    const storeAttributeValues = useProductAttributeStore((state) => state.attributeValues);
+
+    const attributes = propsAttributes ?? storeAttributes;
+    const attributeValues = propsAttributeValues ?? storeAttributeValues;
+
     const [name, setName] = useState(initialValues?.name ?? '');
     const [categoryId, setCategoryId] = useState(initialValues?.categoryId ?? '');
     const [description, setDescription] = useState(initialValues?.description ?? '');
@@ -141,7 +198,10 @@ export function ProductForm({
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+    const [isCreateAttrModalVisible, setIsCreateAttrModalVisible] = useState(false);
+    const [createValueAttrId, setCreateValueAttrId] = useState<string | null>(null);
 
+    const activeBranch = useBranchStore((state) => state.activeBranch);
     const selectedCategory = categories.find((category) => category.id === categoryId);
 
     function updateName(value: string) {
@@ -233,15 +293,29 @@ export function ProductForm({
     }
 
     return (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={SharedStyles.listContent} keyboardShouldPersistTaps="handled">
             <View style={styles.formGroup}>
-                <Text style={styles.label}>Nombre del producto <Text style={styles.required}>*</Text></Text>
-                <TextInput style={[styles.input, errors.name && styles.inputError]} placeholder="Ej. Coca Cola 1.5L" placeholderTextColor={Colors.textSecondary} value={name} onChangeText={updateName} editable={!isSubmitting} />
-                {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
+                <Text style={SharedStyles.sectionTitle}>
+                    Nombre del producto{' '}
+                    <Text style={styles.required}>*</Text>
+                </Text>
+
+                <AppInput
+                    style={errors.name ? styles.inputError : undefined}
+                    value={name}
+                    onChangeText={updateName}
+                    editable={!isSubmitting}
+                />
+
+                {errors.name ? (
+                    <Text style={styles.errorText}>
+                        {errors.name}
+                    </Text>
+                ) : null}
             </View>
 
             <View style={styles.formGroup}>
-                <Text style={styles.label}>Categoría <Text style={styles.required}>*</Text></Text>
+                <Text style={SharedStyles.sectionTitle}>Categoría <Text style={styles.required}>*</Text></Text>
                 <Pressable style={[styles.selectButton, errors.categoryId && styles.inputError]} onPress={() => !isSubmitting && setCategoryModalVisible(true)}>
                     <Text style={[styles.selectButtonText, !selectedCategory && styles.placeholderText]}>{selectedCategory ? selectedCategory.name : 'Seleccionar categoría'}</Text>
                     <SymbolView name={{ ios: 'chevron.down', android: 'arrow_drop_down', web: 'arrow_drop_down' }} size={20} tintColor={Colors.textSecondary} />
@@ -251,51 +325,321 @@ export function ProductForm({
 
             <View style={styles.modeRow}>
                 <View style={styles.switchLabelContainer}><Text style={styles.switchTitle}>Producto con variantes</Text><Text style={styles.switchSubtitle}>Activá esta opción para combinar atributos como talle y color</Text></View>
-                <Switch value={variantMode} onValueChange={(value) => { setVariantMode(value); if (!value) { setSelectedValues({}); setVariants((current) => [{ ...(current[0] ?? { id: 'variant-new', sku: '', price: basePrice, stockByBranch: {} }), attributes: [] }]); } }} disabled={isSubmitting} trackColor={{ false: '#CBD5E1', true: Colors.primary }} thumbColor={Colors.white} />
+                <Switch value={variantMode} onValueChange={(value) => { setVariantMode(value); if (!value) { setSelectedValues({}); setVariants((current) => [{ ...(current[0] ?? { id: 'variant-new', sku: '', price: basePrice, stockByBranch: {} }), attributes: [] }]); } }} disabled={isSubmitting} trackColor={{ false: Colors.track, true: Colors.primary }} thumbColor={Colors.white} />
             </View>
 
-            {variantMode && <View style={styles.formGroup}>
-                <Text style={styles.sectionTitle}>Atributos</Text>
-                {attributes.filter((attribute) => attribute.active).map((attribute) => (
-                    <View key={attribute.id} style={styles.attributeGroup}>
-                        <Text style={styles.attributeTitle}>{attribute.name}</Text>
-                        <View style={styles.chipsRow}>{attributeValues.filter((value) => value.attributeId === attribute.id && value.active).map((value) => {
-                            const selected = (selectedValues[attribute.id] ?? []).includes(value.id);
-                            return <Pressable key={value.id} style={[styles.chip, selected && styles.chipSelected]} onPress={() => toggleValue(attribute.id, value.id)}><Text style={[styles.chipText, selected && styles.chipTextSelected]}>{value.name}</Text></Pressable>;
-                        })}</View>
+            {variantMode && (
+                <View style={styles.formGroup}>
+                    <View style={styles.sectionHeaderRow}>
+                        <Text style={[SharedStyles.cardTitle, styles.sectionTitle]}>Atributos para variantes</Text>
+                        <Pressable
+                            style={styles.addInlineButton}
+                            onPress={() => setIsCreateAttrModalVisible(true)}
+                            disabled={isSubmitting}
+                        >
+                            <Text style={styles.addInlineButtonText}>+ Agregar atributo</Text>
+                        </Pressable>
+                    </View>
+
+                    {attributes
+                        .filter((attribute) => attribute.active)
+                        .map((attribute) => {
+                            const activeValues = attributeValues.filter(
+                                (value) => value.attributeId === attribute.id && value.active,
+                            );
+
+                            return (
+                                <View key={attribute.id} style={styles.attributeGroup}>
+                                    <View style={styles.attributeHeaderRow}>
+                                        <Text style={styles.attributeTitle}>{attribute.name}</Text>
+                                        <Pressable
+                                            style={styles.addInlineValueButton}
+                                            onPress={() => setCreateValueAttrId(attribute.id)}
+                                            disabled={isSubmitting}
+                                        >
+                                            <Text style={styles.addInlineValueText}>+ Agregar valor</Text>
+                                        </Pressable>
+                                    </View>
+
+                                    <View style={styles.chipsRow}>
+                                        {activeValues.map((value) => {
+                                            const selected = (selectedValues[attribute.id] ?? []).includes(value.id);
+                                            return (
+                                                <Pressable
+                                                    key={value.id}
+                                                    style={[styles.chip, selected && styles.chipSelected]}
+                                                    onPress={() => toggleValue(attribute.id, value.id)}
+                                                >
+                                                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                                                        {value.name}
+                                                    </Text>
+                                                </Pressable>
+                                            );
+                                        })}
+                                    </View>
+                                </View>
+                            );
+                        })}
+
+                    <Pressable
+                        style={styles.secondaryButton}
+                        onPress={handleGenerate}
+                        disabled={isSubmitting}
+                    >
+                        <Text style={styles.secondaryButtonText}>Generar variantes</Text>
+                    </Pressable>
+                </View>
+            )}
+
+            <View style={styles.formGroup}>
+                <Text style={SharedStyles.sectionTitle}>Precio base <Text style={styles.required}>*</Text></Text>
+                <AppInput
+                    style={styles.input}
+                    value={basePrice}
+                    onChangeText={updateBasePrice}
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                    editable={!isSubmitting}
+                />
+            </View>
+            <Text style={styles.smallLabel}>
+                Stock {activeBranch ? `— ${activeBranch.name}` : ''}
+            </Text>
+
+            <View style={styles.formGroup}>
+                <Text style={[SharedStyles.cardTitle, styles.sectionTitle]}>{variantMode ? `Variantes (${variants.length})` : 'Datos del producto'}</Text>
+                {variants.map((variant, index) => (
+                    <View
+                        key={variant.id ?? index}
+                        style={styles.variantCard}
+                    >
+                        {variantMode && (
+                            <Text style={styles.variantTitle}>
+                                {variant.attributes
+                                    .map(
+                                        (attribute) =>
+                                            attributeValues.find(
+                                                (value) =>
+                                                    value.id ===
+                                                    attribute.attributeValueId,
+                                            )?.name,
+                                    )
+                                    .filter(Boolean)
+                                    .join(' / ') || 'Variante manual'}
+                            </Text>
+                        )}
+
+                        <View style={styles.row}>
+                            <View style={styles.flex1}>
+                                <Text style={styles.smallLabel}>
+                                    SKU *
+                                </Text>
+
+                                <AppInput
+                                    style={styles.input}
+                                    value={variant.sku}
+                                    onChangeText={(value) =>
+                                        updateVariant(
+                                            index,
+                                            'sku',
+                                            value,
+                                        )
+                                    }
+                                    autoCapitalize="characters"
+                                    placeholder="Ej. SKU-PA-RO-44"
+                                    editable={!isSubmitting}
+                                />
+                            </View>
+
+                            <View style={styles.flex1}>
+                                <Text style={styles.smallLabel}>
+                                    Precio *
+                                </Text>
+
+                                <AppInput
+                                    style={styles.input}
+                                    value={variant.price}
+                                    onChangeText={(value) =>
+                                        updateVariant(
+                                            index,
+                                            'price',
+                                            value,
+                                        )
+                                    }
+                                    keyboardType="decimal-pad"
+                                    placeholder="0.00"
+                                    editable={!isSubmitting}
+                                />
+                            </View>
+                        </View>
+
+                        <Text style={styles.smallLabel}>
+                            Stock
+                        </Text>
+
+                        {activeBranch ? (
+                            <View style={styles.stockRow}>
+                                <Text style={styles.stockBranchName}>
+                                    {activeBranch.name}
+                                </Text>
+
+                                <AppInput
+                                    style={styles.stockInput}
+                                    value={String(
+                                        variant.stockByBranch[activeBranch.id] ?? 0,
+                                    )}
+                                    onChangeText={(value) =>
+                                        updateVariantStock(
+                                            index,
+                                            activeBranch.id,
+                                            value,
+                                        )
+                                    }
+                                    keyboardType="number-pad"
+                                    editable={!isSubmitting}
+                                />
+                            </View>
+                        ) : (
+                            <Text style={styles.errorText}>
+                                Seleccioná una sucursal para cargar el
+                                stock.
+                            </Text>
+                        )}
+
+                        {variantMode && (
+                            <Pressable
+                                onPress={() =>
+                                    setVariants((current) =>
+                                        current.filter(
+                                            (_, variantIndex) =>
+                                                variantIndex !== index,
+                                        ),
+                                    )
+                                }
+                                disabled={isSubmitting}
+                            >
+                                <Text style={styles.removeText}>
+                                    Eliminar variante
+                                </Text>
+                            </Pressable>
+                        )}
                     </View>
                 ))}
-                <Pressable style={styles.secondaryButton} onPress={handleGenerate} disabled={isSubmitting}><Text style={styles.secondaryButtonText}>Generar variantes</Text></Pressable>
-            </View>}
-
-            <View style={styles.formGroup}>
-                <Text style={styles.label}>Precio base <Text style={styles.required}>*</Text></Text>
-                <TextInput style={styles.input} value={basePrice} onChangeText={updateBasePrice} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={Colors.textSecondary} editable={!isSubmitting} />
-            </View>
-
-            <View style={styles.formGroup}>
-                <Text style={styles.sectionTitle}>{variantMode ? `Variantes (${variants.length})` : 'Datos del producto'}</Text>
-                {variants.map((variant, index) => <View key={variant.id ?? index} style={styles.variantCard}>
-                    {variantMode && <Text style={styles.variantTitle}>{variant.attributes.map((attribute) => attributeValues.find((value) => value.id === attribute.attributeValueId)?.name).filter(Boolean).join(' / ') || 'Variante manual'}</Text>}
-                    <View style={styles.row}><View style={styles.flex1}><Text style={styles.smallLabel}>SKU *</Text><TextInput style={styles.input} value={variant.sku} onChangeText={(value) => updateVariant(index, 'sku', value)} autoCapitalize="characters" placeholder="Ej. SKU-PA-RO-44" placeholderTextColor={Colors.textSecondary} editable={!isSubmitting} /></View><View style={styles.flex1}><Text style={styles.smallLabel}>Precio *</Text><TextInput style={styles.input} value={variant.price} onChangeText={(value) => updateVariant(index, 'price', value)} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={Colors.textSecondary} editable={!isSubmitting} /></View></View>
-                    <Text style={styles.smallLabel}>Stock por sucursal</Text>
-                    {branches.map((branch) => <View key={branch.id} style={styles.stockRow}><Text style={styles.stockBranchName}>{branch.name}</Text><TextInput style={styles.stockInput} value={String(variant.stockByBranch[branch.id] ?? 0)} onChangeText={(value) => updateVariantStock(index, branch.id, value)} keyboardType="number-pad" editable={!isSubmitting} /></View>)}
-                    {variantMode && <Pressable onPress={() => setVariants((current) => current.filter((_, variantIndex) => variantIndex !== index))} disabled={isSubmitting}><Text style={styles.removeText}>Eliminar variante</Text></Pressable>}
-                </View>)}
                 {errors.variants ? <Text style={styles.errorText}>{errors.variants}</Text> : null}
             </View>
+            <View style={styles.switchRow}>
+                <View style={styles.switchLabelContainer}>
+                    <Text style={styles.switchTitle}>
+                        Producto activo
+                    </Text>
 
-            <View style={styles.formGroup}><Text style={styles.label}>Descripción (Opcional)</Text><TextInput style={[styles.input, styles.textArea]} placeholder="Detalles sobre presentación, ingredientes o especificaciones..." placeholderTextColor={Colors.textSecondary} value={description} onChangeText={setDescription} multiline numberOfLines={3} textAlignVertical="top" editable={!isSubmitting} /></View>
-            <View style={styles.switchRow}><View style={styles.switchLabelContainer}><Text style={styles.switchTitle}>Estado del Producto</Text><Text style={styles.switchSubtitle}>{active ? 'El producto estará visible y disponible para operaciones' : 'El producto estará desactivado para nuevos pedidos'}</Text></View><Switch value={active} onValueChange={setActive} trackColor={{ false: '#CBD5E1', true: Colors.primary }} thumbColor={Colors.white} disabled={isSubmitting} /></View>
-            <View style={styles.actionsContainer}><Pressable style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]} onPress={handleSubmit} disabled={isSubmitting}>{isSubmitting ? <View style={styles.submittingContent}><ActivityIndicator size="small" color={Colors.white} /><Text style={styles.submitButtonText}>Guardando...</Text></View> : <Text style={styles.submitButtonText}>{submitLabel}</Text>}</Pressable><Pressable style={styles.cancelButton} onPress={onCancel} disabled={isSubmitting}><Text style={styles.cancelButtonText}>Cancelar</Text></Pressable></View>
-            <CategoryModal visible={categoryModalVisible} categories={categories} selectedCategoryId={categoryId} onSelect={(id) => { setCategoryId(id); setErrors((current) => ({ ...current, categoryId: '' })); }} onClose={() => setCategoryModalVisible(false)} />
+                    <Text style={styles.switchSubtitle}>
+                        {active
+                            ? 'El producto estará visible y disponible para operaciones'
+                            : 'El producto estará desactivado para nuevos pedidos'}
+                    </Text>
+                </View>
+
+                <Switch
+                    value={active}
+                    onValueChange={setActive}
+                    trackColor={{
+                        false: Colors.track,
+                        true: Colors.primary,
+                    }}
+                    thumbColor={Colors.white}
+                    disabled={isSubmitting}
+                />
+            </View>
+
+            <View style={styles.actionsContainer}>
+                <Pressable
+                    style={[SharedStyles.buttonSubmit, isSubmitting && styles.submitButtonDisabled]}
+                    onPress={handleSubmit}
+                    disabled={isSubmitting}
+                >
+                    {isSubmitting ? (
+                        <View style={styles.submittingContent}>
+                            <ActivityIndicator
+                                size="small"
+                                color={Colors.white}
+                            />
+
+                            <Text style={SharedStyles.buttonSubmitText}>
+                                Guardando...
+                            </Text>
+                        </View>
+                    ) : (
+                        <Text style={SharedStyles.buttonSubmitText}>
+                            {submitLabel}
+                        </Text>
+                    )}
+                </Pressable>
+
+                <Pressable
+                    style={SharedStyles.buttonCancel}
+                    onPress={onCancel}
+                    disabled={isSubmitting}
+                >
+                    <Text style={SharedStyles.buttonCancelText}>
+                        Cancelar
+                    </Text>
+                </Pressable>
+            </View>
+
+            <CategoryModal
+                visible={categoryModalVisible}
+                categories={categories}
+                selectedCategoryId={categoryId}
+                onSelect={(id) => {
+                    setCategoryId(id);
+
+                    setErrors((current) => ({
+                        ...current,
+                        categoryId: '',
+                    }));
+                }}
+                onClose={() => setCategoryModalVisible(false)}
+            />
+
+            <ProductAttributeFormModal
+                visible={isCreateAttrModalVisible}
+                onClose={() => setIsCreateAttrModalVisible(false)}
+            />
+
+            <ProductAttributeValueFormModal
+                visible={Boolean(createValueAttrId)}
+                attributeId={createValueAttrId ?? ''}
+                attributeName={attributes.find((a) => a.id === createValueAttrId)?.name}
+                onClose={() => setCreateValueAttrId(null)}
+                onSuccess={(newVal) => {
+                    if (createValueAttrId) {
+                        setSelectedValues((current) => {
+                            const values = current[createValueAttrId] ?? [];
+                            if (!values.includes(newVal.id)) {
+                                return {
+                                    ...current,
+                                    [createValueAttrId]: [...values, newVal.id],
+                                };
+                            }
+                            return current;
+                        });
+                    }
+                }}
+            />
         </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
+    sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.sm },
+    addInlineButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 6 },
+    addInlineButtonText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
+    attributeHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.xs },
+    addInlineValueButton: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 2, paddingHorizontal: 4 },
+    addInlineValueText: { fontSize: 12, fontWeight: '600', color: Colors.primary },
     stockRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.xs },
     stockBranchName: { flex: 1, fontSize: 13, color: Colors.text },
     stockInput: { width: 90, height: 40, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: Spacing.sm, fontSize: 14, backgroundColor: Colors.surface, color: Colors.text, textAlign: 'right' },
-    scrollContainer: { padding: Spacing.lg, paddingBottom: Spacing.xxl * 2 }, formGroup: { marginBottom: Spacing.lg }, row: { flexDirection: 'row', gap: Spacing.md }, flex1: { flex: 1 }, label: { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: Spacing.xs + 2 }, required: { color: Colors.error }, smallLabel: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary, marginBottom: 4 }, sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm }, input: { height: 48, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: Spacing.md, fontSize: 15, backgroundColor: Colors.surface, color: Colors.text }, inputError: { borderColor: Colors.error, backgroundColor: '#FFF5F5' }, errorText: { fontSize: 12, color: Colors.error, marginTop: 4, fontWeight: '500' }, textArea: { height: 85, paddingTop: Spacing.md }, selectButton: { height: 48, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: Spacing.md, backgroundColor: Colors.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, selectButtonText: { fontSize: 15, color: Colors.text }, placeholderText: { color: Colors.textSecondary }, modeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: Spacing.lg }, switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: Spacing.xl }, switchLabelContainer: { flex: 1, marginRight: Spacing.md }, switchTitle: { fontSize: 15, fontWeight: '600', color: Colors.text }, switchSubtitle: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 }, attributeGroup: { marginBottom: Spacing.md }, attributeTitle: { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: Spacing.xs }, chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs }, chip: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, backgroundColor: Colors.surface }, chipSelected: { backgroundColor: Colors.primaryLight, borderColor: Colors.primary }, chipText: { color: Colors.textSecondary, fontSize: 13 }, chipTextSelected: { color: Colors.primary, fontWeight: '600' }, secondaryButton: { borderWidth: 1, borderColor: Colors.primary, borderRadius: 10, height: 44, alignItems: 'center', justifyContent: 'center', marginTop: Spacing.sm }, secondaryButtonText: { color: Colors.primary, fontWeight: '600' }, variantCard: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, padding: Spacing.md, marginBottom: Spacing.sm }, variantTitle: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm }, removeText: { color: Colors.error, fontSize: 12, fontWeight: '600', marginTop: Spacing.sm }, addButton: { paddingVertical: Spacing.sm }, addButtonText: { color: Colors.primary, fontWeight: '600' }, actionsContainer: { gap: Spacing.sm, marginTop: Spacing.sm }, submitButton: { backgroundColor: Colors.primary, height: 50, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, submitButtonDisabled: { opacity: 0.7 }, submittingContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }, submitButtonText: { color: Colors.white, fontSize: 16, fontWeight: '600' }, cancelButton: { height: 48, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, cancelButtonText: { color: Colors.textSecondary, fontSize: 15, fontWeight: '500' },
+    formGroup: { marginBottom: Spacing.lg }, row: { flexDirection: 'row', gap: Spacing.md }, flex1: { flex: 1 }, required: { color: Colors.error }, smallLabel: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary, marginBottom: 4 }, sectionTitle: { marginBottom: Spacing.sm }, input: { height: 48, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: Spacing.md, fontSize: 15, backgroundColor: Colors.surface, color: Colors.text }, inputError: { borderColor: Colors.error, backgroundColor: Colors.errorInput }, errorText: { fontSize: 12, color: Colors.error, marginTop: 4, fontWeight: '500' }, textArea: { height: 85, paddingTop: Spacing.md }, selectButton: { height: 48, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: Spacing.md, backgroundColor: Colors.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, selectButtonText: { fontSize: 15, color: Colors.text }, placeholderText: { color: Colors.textSecondary }, modeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: Spacing.lg }, switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: Spacing.xl }, switchLabelContainer: { flex: 1, marginRight: Spacing.md }, switchTitle: { fontSize: 15, fontWeight: '600', color: Colors.text }, switchSubtitle: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 }, attributeGroup: { marginBottom: Spacing.md }, attributeTitle: { fontSize: 14, fontWeight: '600', color: Colors.text }, chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs }, chip: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, backgroundColor: Colors.surface }, chipSelected: { backgroundColor: Colors.primaryLight, borderColor: Colors.primary }, chipText: { color: Colors.textSecondary, fontSize: 13 }, chipTextSelected: { color: Colors.primary, fontWeight: '600' }, secondaryButton: { borderWidth: 1, borderColor: Colors.primary, borderRadius: 10, height: 44, alignItems: 'center', justifyContent: 'center', marginTop: Spacing.sm }, secondaryButtonText: { color: Colors.primary, fontWeight: '600' }, variantCard: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, padding: Spacing.md, marginBottom: Spacing.sm }, variantTitle: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm }, removeText: { color: Colors.error, fontSize: 12, fontWeight: '600', marginTop: Spacing.sm }, actionsContainer: { gap: Spacing.sm, marginTop: Spacing.sm }, submitButtonDisabled: { opacity: 0.7 }, submittingContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
 });

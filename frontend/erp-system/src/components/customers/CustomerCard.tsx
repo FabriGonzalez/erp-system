@@ -18,7 +18,7 @@ export function CustomerCard({ customer, onPress }: CustomerCardProps) {
 
     return (
         <Pressable
-            style={({ pressed }) => [styles.card, pressed && SharedStyles.pressed]}
+            style={({ pressed }) => [SharedStyles.rowCard, styles.card, pressed && SharedStyles.pressed]}
             onPress={onPress}
         >
             <Avatar
@@ -66,13 +66,6 @@ export function CustomerCard({ customer, onPress }: CustomerCardProps) {
 
 const styles = StyleSheet.create({
     card: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.surface,
-        borderRadius: 12,
-        padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
         marginBottom: Spacing.sm,
     },
     avatar: {

@@ -48,7 +48,9 @@ export function OrderCard({ order, onPress }: OrderCardProps) {
             <View style={styles.footerRow}>
                 <View style={styles.footerLeft}>
                     <Text style={styles.itemsCount}>
-                        {order.items.length} {order.items.length === 1 ? 'producto' : 'productos'}
+                        {order.salesType === 'QUICK_SALE'
+                            ? 'Venta rápida'
+                            : `${order.items.length} ${order.items.length === 1 ? 'producto' : 'productos'}`}
                     </Text>
                     <Text style={styles.total}>${order.total.toLocaleString('es-AR')}</Text>
                 </View>

@@ -2,7 +2,6 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { SharedStyles } from '@/styles/shared';
 import { Category } from '@/types/product';
 
 interface CategoryPillsProps {

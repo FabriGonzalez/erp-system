@@ -40,6 +40,79 @@ export const SharedStyles = StyleSheet.create({
         marginBottom: Spacing.xs + 2,
     },
 
+    cardTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: Colors.text,
+    },
+
+    rowCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.surface,
+        borderRadius: 12,
+        padding: Spacing.md,
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+
+    topBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: Spacing.lg,
+        paddingTop: Spacing.md,
+        paddingBottom: Spacing.sm,
+    },
+
+    topBarElevated: {
+        backgroundColor: Colors.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.border,
+    },
+
+    screenTitle: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: Colors.text,
+    },
+
+    screenSubtitle: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: Colors.textSecondary,
+        marginTop: 2,
+    },
+
+    listContent: {
+        padding: Spacing.lg,
+        paddingBottom: Spacing.xxl * 2,
+    },
+
+    listEmpty: {
+        flexGrow: 1,
+        justifyContent: 'center',
+    },
+
+    content: {
+        flex: 1,
+        paddingHorizontal: Spacing.lg,
+        paddingTop: Spacing.lg,
+    },
+
+    filterListContent: {
+        paddingHorizontal: Spacing.lg,
+        paddingVertical: Spacing.xs + 2,
+        alignItems: 'center',
+    },
+
+    filterDivider: {
+        width: 1,
+        height: 20,
+        backgroundColor: Colors.border,
+        marginHorizontal: Spacing.sm,
+    },
+
     successBanner: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -208,5 +281,59 @@ export const SharedStyles = StyleSheet.create({
         color: Colors.error,
         fontSize: 14,
         fontWeight: '600',
+    },
+
+    addButton: {
+        minHeight: 52,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.primary,
+        paddingHorizontal: Spacing.lg,
+        paddingVertical: Spacing.sm,
+        borderRadius: 10,
+        gap: 8,
+    },
+
+    addIconContainer: {
+        width: 24,
+        height: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 5,
+    },
+
+
+    addButtonText: {
+        color: Colors.white,
+        fontSize: 16,
+        fontWeight: '700',
+    },
+
+    buttonSubmit: {
+        height: 50,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.primary,
+    },
+
+    buttonSubmitText: {
+        color: Colors.white,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+
+    buttonCancel: {
+        height: 48,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    buttonCancelText: {
+        color: Colors.textSecondary,
+        fontSize: 15,
+        fontWeight: '500',
     },
 });

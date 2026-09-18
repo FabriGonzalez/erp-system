@@ -1,9 +1,7 @@
-import { mockAttributeValues, mockAttributes, mockCategories, mockProducts } from '@/data/mock-products';
+import { mockCategories, mockProducts } from '@/data/mock-products';
 import {
     Category,
     Product,
-    ProductAttribute,
-    ProductAttributeValue,
     StatusFilter,
     StockFilter,
 } from '@/types/product';
@@ -12,8 +10,6 @@ import { create } from 'zustand';
 type ProductState = {
     products: Product[];
     categories: Category[];
-    attributes: ProductAttribute[];
-    attributeValues: ProductAttributeValue[];
     searchQuery: string;
     stockFilter: StockFilter;
     statusFilter: StatusFilter;
@@ -40,11 +36,9 @@ type ProductState = {
     toggleProductActive: (id: string) => void;
 };
 
-export const useProductStore = create<ProductState>((set, get) => ({
+export const useProductStore = create<ProductState>((set) => ({
     products: mockProducts,
     categories: mockCategories,
-    attributes: mockAttributes,
-    attributeValues: mockAttributeValues,
     searchQuery: '',
     stockFilter: 'ALL',
     statusFilter: 'ALL',
@@ -112,3 +106,4 @@ export const useProductStore = create<ProductState>((set, get) => ({
         }));
     },
 }));
+

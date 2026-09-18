@@ -24,7 +24,7 @@ export default function RootLayout() {
 
         if (user && inAuthGroup) {
             router.replace({
-                pathname: '/(app)/(tabs)',
+                pathname: '/(app)/(tabs)/orders',
             });
         }
     }, [user, segments]);

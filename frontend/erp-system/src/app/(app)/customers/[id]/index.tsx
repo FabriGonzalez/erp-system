@@ -53,11 +53,11 @@ export default function CustomerDetailScreen() {
 
     return (
         <Screen style={styles.screen}>
-            <View style={styles.header}>
+            <View style={[SharedStyles.header, styles.header]}>
                 <Pressable
                     onPress={() => router.back()}
                     style={({ pressed }) => [
-                        styles.backButton,
+                        SharedStyles.backButton,
                         pressed && SharedStyles.pressed,
                     ]}
                 >
@@ -76,12 +76,12 @@ export default function CustomerDetailScreen() {
                     Detalle del cliente
                 </Text>
 
-                <View style={styles.headerSpacer} />
+                <View style={SharedStyles.headerSpacer} />
             </View>
 
             <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.content}
+                contentContainerStyle={SharedStyles.listContent}
             >
                 <View style={styles.customerCard}>
                     <Avatar
@@ -245,18 +245,7 @@ const styles = StyleSheet.create({
         padding: 0,
     },
     header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
         paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.md,
-        backgroundColor: Colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
-    },
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
     },
     headerTitle: {
         flex: 1,
@@ -264,13 +253,6 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '700',
         color: Colors.text,
-    },
-    headerSpacer: {
-        width: 32,
-    },
-    content: {
-        padding: Spacing.lg,
-        paddingBottom: Spacing.xxl * 2,
     },
     customerCard: {
         alignItems: 'center',

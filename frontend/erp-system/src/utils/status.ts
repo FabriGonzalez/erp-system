@@ -21,18 +21,11 @@ export function getStatusBadgeColor(status: OrderStatus): {
                 dot: Colors.primary,
             };
 
-        case 'IN_PREPARATION':
+        case 'TO_PREPARE':
             return {
                 bg: Colors.warningLight,
                 text: Colors.warningDark,
                 dot: Colors.warning,
-            };
-
-        case 'READY_TO_SHIP':
-            return {
-                bg: '#F0FDFA',
-                text: '#0D9488',
-                dot: '#14B8A6',
             };
 
         case 'SHIPPED':
@@ -40,13 +33,6 @@ export function getStatusBadgeColor(status: OrderStatus): {
                 bg: '#EDE9FE',
                 text: '#7C3AED',
                 dot: '#8B5CF6',
-            };
-
-        case 'DELIVERED':
-            return {
-                bg: '#F0FDF4',
-                text: Colors.success,
-                dot: Colors.success,
             };
 
         case 'CANCELLED':

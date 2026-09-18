@@ -12,7 +12,7 @@ import { SharedStyles } from '@/styles/shared';
 import { ProductFormData } from '@/types/product';
 
 export default function NewProductScreen() {
-    const { products, categories, attributes, attributeValues, addProduct } = useProductStore();
+    const { products, categories, addProduct } = useProductStore();
     const user = useAuthStore((state) => state.user);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -86,8 +86,6 @@ export default function NewProductScreen() {
             {/* Formulario */}
             <ProductForm
                 categories={categories}
-                attributes={attributes}
-                attributeValues={attributeValues}
                 branches={user?.branches ?? []}
                 existingProducts={products}
                 onSubmit={handleSubmit}
@@ -102,6 +100,5 @@ export default function NewProductScreen() {
 const styles = StyleSheet.create({
     container: {
         padding: 0,
-        backgroundColor: Colors.background,
     },
 });

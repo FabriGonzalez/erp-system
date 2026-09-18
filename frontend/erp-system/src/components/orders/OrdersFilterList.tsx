@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { SharedStyles } from '@/styles/shared';
 
 import { FilterChip } from '@/components/ui/FilterChip';
 
@@ -19,10 +19,8 @@ const STATUS_FILTERS: {
         { label: 'Todos', value: 'ALL' },
         { label: ORDER_STATUS_LABELS.DRAFT, value: 'DRAFT' },
         { label: ORDER_STATUS_LABELS.CONFIRMED, value: 'CONFIRMED' },
-        { label: ORDER_STATUS_LABELS.IN_PREPARATION, value: 'IN_PREPARATION' },
-        { label: ORDER_STATUS_LABELS.READY_TO_SHIP, value: 'READY_TO_SHIP' },
+        { label: ORDER_STATUS_LABELS.TO_PREPARE, value: 'TO_PREPARE' },
         { label: ORDER_STATUS_LABELS.SHIPPED, value: 'SHIPPED' },
-        { label: ORDER_STATUS_LABELS.DELIVERED, value: 'DELIVERED' },
         { label: ORDER_STATUS_LABELS.CANCELLED, value: 'CANCELLED' },
     ];
 
@@ -37,9 +35,9 @@ const DELIVERY_FILTERS: {
 
 interface OrdersFilterListProps {
     statusFilter: OrderStatusFilter;
-    deliveryTypeFilter: OrderDeliveryFilter;
+    deliveryTypeFilter?: OrderDeliveryFilter;
     onStatusChange: (value: OrderStatusFilter) => void;
-    onDeliveryChange: (value: OrderDeliveryFilter) => void;
+    onDeliveryChange?: (value: OrderDeliveryFilter) => void;
 }
 
 export function OrdersFilterList({
@@ -53,7 +51,7 @@ export function OrdersFilterList({
             <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.filtersContent}
+                contentContainerStyle={SharedStyles.filterListContent}
             >
                 <View style={styles.filterGroup}>
                     {STATUS_FILTERS.map((item) => (
@@ -66,18 +64,22 @@ export function OrdersFilterList({
                     ))}
                 </View>
 
-                <View style={styles.filterDivider} />
+                {deliveryTypeFilter !== undefined && onDeliveryChange && (
+                    <>
+                        <View style={SharedStyles.filterDivider} />
 
-                <View style={styles.filterGroup}>
-                    {DELIVERY_FILTERS.map((item) => (
-                        <FilterChip
-                            key={item.value}
-                            label={item.label}
-                            selected={deliveryTypeFilter === item.value}
-                            onPress={() => onDeliveryChange(item.value)}
-                        />
-                    ))}
-                </View>
+                        <View style={styles.filterGroup}>
+                            {DELIVERY_FILTERS.map((item) => (
+                                <FilterChip
+                                    key={item.value}
+                                    label={item.label}
+                                    selected={deliveryTypeFilter === item.value}
+                                    onPress={() => onDeliveryChange(item.value)}
+                                />
+                            ))}
+                        </View>
+                    </>
+                )}
             </ScrollView>
         </View>
     );
@@ -88,22 +90,9 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.xs,
     },
 
-    filtersContent: {
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.xs + 2,
-        alignItems: 'center',
-    },
-
     filterGroup: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.xs,
-    },
-
-    filterDivider: {
-        width: 1,
-        height: 20,
-        backgroundColor: Colors.border,
-        marginHorizontal: Spacing.sm,
     },
 });

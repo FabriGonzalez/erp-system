@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
+import { SharedStyles } from '@/styles/shared';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import { DeliveryType, getBalanceDue, getPaymentStatus } from '@/types/order';
 import { AppInput } from '../ui/AppInput';
@@ -124,7 +125,7 @@ export function OrderSummarySection({
     return (
         <View style={styles.container}>
             <View style={styles.summaryCard}>
-                <Text style={styles.summaryTitle}>Resumen del pedido</Text>
+                <Text style={[SharedStyles.cardTitle, styles.summaryTitle]}>Resumen del pedido</Text>
 
                 <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Sucursal:</Text>
@@ -254,7 +255,7 @@ export function OrderSummarySection({
             <View style={styles.actionsContainer}>
                 <Pressable
                     style={[
-                        styles.submitButton,
+                        SharedStyles.buttonSubmit,
                         (isSubmitting || disabled) && styles.submitButtonDisabled,
                     ]}
                     onPress={handleSubmit}
@@ -263,19 +264,19 @@ export function OrderSummarySection({
                     {isSubmitting ? (
                         <View style={styles.submittingContent}>
                             <ActivityIndicator size="small" color={Colors.white} />
-                            <Text style={styles.submitButtonText}>Procesando...</Text>
+                            <Text style={SharedStyles.buttonSubmitText}>Procesando...</Text>
                         </View>
                     ) : (
-                        <Text style={styles.submitButtonText}>{submitLabel}</Text>
+                        <Text style={SharedStyles.buttonSubmitText}>{submitLabel}</Text>
                     )}
                 </Pressable>
 
                 <Pressable
-                    style={styles.cancelButton}
+                    style={SharedStyles.buttonCancel}
                     onPress={onCancel}
                     disabled={isSubmitting}
                 >
-                    <Text style={styles.cancelButtonText}>Cancelar</Text>
+                    <Text style={SharedStyles.buttonCancelText}>Cancelar</Text>
                 </Pressable>
             </View>
         </View>
@@ -296,9 +297,6 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.lg,
     },
     summaryTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
         marginBottom: Spacing.md,
     },
     summaryRow: {
@@ -337,29 +335,11 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: Colors.primary,
     },
-    entregaHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: Spacing.xs,
-        marginBottom: Spacing.xs,
-    },
     entregaTitle: {
         fontSize: 14,
         fontWeight: '600',
         color: Colors.text,
         marginBottom: Spacing.md,
-    },
-    payTotalBtn: {
-        backgroundColor: Colors.primaryLight,
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 4,
-        borderRadius: 6,
-    },
-    payTotalBtnText: {
-        color: Colors.primary,
-        fontSize: 12,
-        fontWeight: '600',
     },
     inputRow: {
         flexDirection: 'row',
@@ -411,13 +391,6 @@ const styles = StyleSheet.create({
     actionsContainer: {
         gap: Spacing.sm,
     },
-    submitButton: {
-        backgroundColor: Colors.primary,
-        height: 50,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
     submitButtonDisabled: {
         opacity: 0.5,
     },
@@ -425,23 +398,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.sm,
-    },
-    submitButtonText: {
-        color: Colors.white,
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    cancelButton: {
-        height: 48,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'transparent',
-    },
-    cancelButtonText: {
-        color: Colors.textSecondary,
-        fontSize: 15,
-        fontWeight: '500',
     },
 
     paymentOptions: {

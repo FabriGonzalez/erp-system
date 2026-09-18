@@ -1,5 +1,6 @@
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { SharedStyles } from '@/styles/shared';
 import { Order, SHIPPING_STATUS_FLOW } from '@/types/order';
 import { SymbolView } from 'expo-symbols';
 import { StyleSheet, Text, View } from 'react-native';
@@ -50,7 +51,7 @@ export function OrderTimeline({ order }: OrderTimelineProps) {
 
     const steps = order.deliveryType === 'LOCAL_PICKUP'
         ? ['Pedido creado', 'Confirmado']
-        : ['Confirmado', 'En preparación', 'Listo para enviar', 'Enviado', 'Entregado'];
+        : ['Borrador', 'A preparar', 'Enviado'];
 
     const statusSteps: Order['status'][] =
         order.deliveryType === 'LOCAL_PICKUP'
@@ -58,8 +59,8 @@ export function OrderTimeline({ order }: OrderTimelineProps) {
             : ['DRAFT', ...SHIPPING_STATUS_FLOW];
 
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Estado del pedido</Text>
+        <View style={SharedStyles.card}>
+            <Text style={[SharedStyles.cardTitle, styles.title]}>Estado del pedido</Text>
 
             {isCancelled && (
                 <View style={styles.cancelledBanner}>
@@ -78,15 +79,15 @@ export function OrderTimeline({ order }: OrderTimelineProps) {
                 const isCurrent = current === statusKey;
                 const isLast = index === steps.length - 1;
 
-                let circleBg = '#E2E8F0';
-                let circleBorder = '#CBD5E1';
+                let circleBg = Colors.border;
+                let circleBorder = Colors.track;
                 let labelColor = Colors.textSecondary;
-                let lineColor = '#E2E8F0';
+                let lineColor = Colors.border;
 
                 if (isCancelled) {
-                    circleBg = '#F1F5F9';
-                    circleBorder = '#E2E8F0';
-                    labelColor = '#CBD5E1';
+                    circleBg = Colors.muted;
+                    circleBorder = Colors.border;
+                    labelColor = Colors.track;
                 } else if (isCompleted) {
                     circleBg = Colors.success;
                     circleBorder = Colors.success;
@@ -149,30 +150,20 @@ export function OrderTimeline({ order }: OrderTimelineProps) {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        padding: Spacing.lg,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
     title: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
         marginBottom: Spacing.lg,
     },
     cancelledBanner: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FEF2F2',
+        backgroundColor: Colors.errorLight,
         padding: Spacing.md,
         borderRadius: 10,
         gap: Spacing.sm,
         marginBottom: Spacing.lg,
     },
     cancelledText: {
-        color: '#991B1B',
+        color: Colors.errorDark,
         fontSize: 14,
         fontWeight: '600',
     },

@@ -7,10 +7,11 @@ import { SharedStyles } from '@/styles/shared';
 
 interface OrdersErrorStateProps {
     errorMessage?: string | null;
+    title?: string;
     onRetry: () => void;
 }
 
-export function OrdersErrorState({ errorMessage, onRetry }: OrdersErrorStateProps) {
+export function OrdersErrorState({ errorMessage, title, onRetry }: OrdersErrorStateProps) {
     return (
         <View style={SharedStyles.errorContainer}>
             <View style={styles.errorIcon}>
@@ -27,7 +28,7 @@ export function OrdersErrorState({ errorMessage, onRetry }: OrdersErrorStateProp
 
             <View style={styles.errorContent}>
                 <Text style={SharedStyles.errorTitle}>
-                    No pudimos cargar los pedidos
+                    {title ?? 'No pudimos cargar los pedidos'}
                 </Text>
 
                 {errorMessage && (

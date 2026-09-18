@@ -24,7 +24,7 @@ export function OrderCartSection({
     return (
         <View style={styles.container}>
             <View style={styles.headerRow}>
-                <Text style={styles.sectionTitle}>Productos en el pedido ({items.length})</Text>
+                <Text style={[SharedStyles.sectionTitle, { marginBottom: 0 }]}>Productos en el pedido ({items.length})</Text>
                 <Pressable onPress={onAddProducts} style={styles.addBtnHeader}>
                     <SymbolView
                         name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }}
@@ -134,11 +134,6 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: Spacing.xs + 2,
-    },
-    sectionTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.text,
     },
     addBtnHeader: {
         flexDirection: 'row',

@@ -57,7 +57,7 @@ export default function CustomersScreen() {
     return (
         <Screen style={styles.screen}>
             {/* Header / Top Bar */}
-            <View style={styles.topBar}>
+            <View style={[SharedStyles.topBar, SharedStyles.topBarElevated]}>
                 <Pressable
                     onPress={() => router.back()}
                     style={({ pressed }) => [styles.backButton, pressed && SharedStyles.pressed]}
@@ -163,17 +163,6 @@ export default function CustomersScreen() {
 const styles = StyleSheet.create({
     screen: {
         padding: 0,
-    },
-    topBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: Spacing.lg,
-        paddingTop: Spacing.md,
-        paddingBottom: Spacing.sm,
-        backgroundColor: Colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
     },
     backButton: {
         padding: Spacing.xs,

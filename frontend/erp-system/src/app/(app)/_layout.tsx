@@ -2,7 +2,7 @@ import { Stack } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AppHeader } from '@/components/app/AppHeader';
+import { AppHeader } from '@/components/ui/AppHeader';
 import { Colors } from '@/constants/colors';
 
 export default function AppLayout() {

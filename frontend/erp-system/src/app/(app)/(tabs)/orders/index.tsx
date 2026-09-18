@@ -1,275 +1,167 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useMemo } from 'react';
-import {
-    FlatList,
-    Pressable,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { OrderCard } from '@/components/orders/OrderCard';
-import { OrdersErrorState } from '@/components/orders/OrdersErrorState';
-import { OrdersFilterList } from '@/components/orders/OrdersFilterList';
-import { OrdersSearchBar } from '@/components/orders/OrdersSearchBar';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 
-import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
-import { useOrderStore } from '@/stores/order-store';
-
-
-export default function OrdersScreen() {
-    const user = useAuthStore((state) => state.user);
-
-    const activeBranch = useBranchStore((state) => state.activeBranch);
-
-    const orders = useOrderStore((state) => state.orders);
-    const searchQuery = useOrderStore((state) => state.searchQuery);
-    const statusFilter = useOrderStore((state) => state.statusFilter);
-    const deliveryTypeFilter = useOrderStore((state) => state.deliveryTypeFilter);
-
-    const isLoading = useOrderStore((state) => state.isLoading);
-    const isError = useOrderStore((state) => state.isError);
-    const errorMessage = useOrderStore((state) => state.errorMessage);
-
-    const setSearchQuery = useOrderStore((state) => state.setSearchQuery);
-    const setStatusFilter = useOrderStore((state) => state.setStatusFilter);
-    const setDeliveryTypeFilter = useOrderStore((state) => state.setDeliveryTypeFilter);
-    const resetFilters = useOrderStore((state) => state.resetFilters);
-    const reloadOrders = useOrderStore((state) => state.reloadOrders);
-
-    const canCreate =
-        user?.role === 'ADMINISTRATOR' ||
-        Boolean(user?.permissions?.includes('ORDERS_CREATE'));
-
-    const filteredOrders = useMemo(() => {
-        const normalizedQuery = searchQuery.trim().toLowerCase();
-
-        return orders.filter((order) => {
-            if (normalizedQuery) {
-                const matchesOrderNumber = order.orderNumber.toLowerCase().includes(normalizedQuery);
-                const matchesCustomer = order.customerName.toLowerCase().includes(normalizedQuery);
-
-                if (!matchesOrderNumber && !matchesCustomer) {
-                    return false;
-                }
-            }
-
-            if (statusFilter !== 'ALL' && order.status !== statusFilter) {
-                return false;
-            }
-
-            if (deliveryTypeFilter !== 'ALL' && order.deliveryType !== deliveryTypeFilter) {
-                return false;
-            }
-
-            if (activeBranch && order.branchId !== activeBranch.id) {
-                return false;
-            }
-
-            return true;
-        });
-    }, [orders, searchQuery, statusFilter, deliveryTypeFilter, activeBranch]);
-
-    const hasActiveFilters =
-        Boolean(searchQuery.trim()) ||
-        statusFilter !== 'ALL' ||
-        deliveryTypeFilter !== 'ALL';
-
-    function handleCreateOrder() {
-        router.push({ pathname: '/orders/new' });
-    }
-
-    function handleViewOrder(id: string) {
-        router.push({
-            pathname: '/orders/[id]',
-            params: { id },
-        });
-    }
-
-    function handleClearFilters() {
-        resetFilters();
-    }
-
-    function handleRetry() {
-        reloadOrders();
-    }
-
+export default function SalesScreen() {
     return (
-        <Screen>
-            <View style={styles.header}>
-                <View style={styles.headerTextContainer}>
-                    <Text style={styles.title}>Pedidos</Text>
-
-                    <Text style={styles.subtitle}>
-                        {activeBranch
-                            ? `Sucursal: ${activeBranch.name}`
-                            : 'Todos los pedidos'}
+        <Screen style={styles.screen}>
+            <View style={SharedStyles.topBar}>
+                <View>
+                    <Text style={SharedStyles.screenTitle}>Vender</Text>
+                    <Text style={SharedStyles.screenSubtitle}>
+                        Iniciá una operación de venta
                     </Text>
                 </View>
-
-                {canCreate && (
-                    <Pressable
-                        onPress={handleCreateOrder}
-                        style={({ pressed }) => [
-                            styles.addButton,
-                            pressed && SharedStyles.pressed,
-                        ]}
-                    >
-                        <SymbolView
-                            name={{
-                                ios: 'plus',
-                                android: 'add',
-                                web: 'add',
-                            }}
-                            size={18}
-                            tintColor={Colors.white}
-                        />
-
-                        <Text style={styles.addButtonText}>Nuevo</Text>
-                    </Pressable>
-                )}
             </View>
 
-            <OrdersSearchBar
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-            />
+            <View style={styles.content}>
+                <Text style={styles.sectionTitle}>Nueva venta</Text>
 
-            <OrdersFilterList
-                statusFilter={statusFilter}
-                deliveryTypeFilter={deliveryTypeFilter}
-                onStatusChange={setStatusFilter}
-                onDeliveryChange={setDeliveryTypeFilter}
-            />
-
-            {isError && (
-                <OrdersErrorState
-                    errorMessage={errorMessage}
-                    onRetry={handleRetry}
-                />
-            )}
-
-            {isLoading ? (
-                <LoadingState label="Cargando pedidos..." />
-            ) : (
-                <FlatList
-                    data={filteredOrders}
-                    keyExtractor={(item) => item.id}
-                    renderItem={({ item }) => (
-                        <OrderCard
-                            order={item}
-                            onPress={() => handleViewOrder(item.id)}
-                        />
-                    )}
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={[
-                        styles.listContent,
-                        filteredOrders.length === 0 && styles.emptyListContent,
+                <Pressable
+                    onPress={() =>
+                        router.push({
+                            pathname: '/orders/new',
+                            params: { salesType: 'WITH_PRODUCTS' },
+                        })
+                    }
+                    style={({ pressed }) => [
+                        styles.action,
+                        pressed && SharedStyles.pressed,
                     ]}
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={isLoading}
-                            onRefresh={reloadOrders}
+                >
+                    <View style={styles.actionIcon}>
+                        <SymbolView
+                            name={{
+                                ios: 'cart',
+                                android: 'shopping_cart',
+                                web: 'shopping_cart',
+                            }}
+                            size={22}
                             tintColor={Colors.primary}
                         />
-                    }
-                    ListEmptyComponent={
-                        <EmptyState
-                            title={
-                                hasActiveFilters
-                                    ? 'No encontramos pedidos'
-                                    : 'No hay pedidos'
-                            }
-                            description={
-                                hasActiveFilters
-                                    ? 'Probá cambiar o limpiar los filtros para ver otros pedidos.'
-                                    : canCreate
-                                        ? 'Todavía no hay pedidos registrados. Creá el primero para comenzar.'
-                                        : 'Todavía no hay pedidos registrados.'
-                            }
-                            actionLabel={
-                                hasActiveFilters
-                                    ? 'Limpiar filtros'
-                                    : canCreate
-                                        ? 'Crear pedido'
-                                        : undefined
-                            }
-                            onAction={
-                                hasActiveFilters
-                                    ? handleClearFilters
-                                    : canCreate
-                                        ? handleCreateOrder
-                                        : undefined
-                            }
+                    </View>
+
+                    <View style={styles.actionContent}>
+                        <Text style={styles.actionTitle}>Nueva venta</Text>
+                        <Text style={styles.actionSubtitle}>
+                            Cargar productos, cliente y pago
+                        </Text>
+                    </View>
+
+                    <SymbolView
+                        name={{
+                            ios: 'chevron.right',
+                            android: 'arrow_forward',
+                            web: 'arrow_forward',
+                        }}
+                        size={20}
+                        tintColor={Colors.textSecondary}
+                    />
+                </Pressable>
+
+                <Pressable
+                    onPress={() =>
+                        router.push({
+                            pathname: '/orders/new',
+                            params: { salesType: 'QUICK_SALE' },
+                        })
+                    }                    
+                    style={({ pressed }) => [
+                        styles.action,
+                        pressed && SharedStyles.pressed,
+                    ]}
+                >
+                    <View style={styles.actionIcon}>
+                        <SymbolView
+                            name={{
+                                ios: 'bolt',
+                                android: 'bolt',
+                                web: 'bolt',
+                            }}
+                            size={22}
+                            tintColor={Colors.primary}
                         />
-                    }
-                />
-            )}
+                    </View>
+
+                    <View style={styles.actionContent}>
+                        <Text style={styles.actionTitle}>Venta rápida</Text>
+                        <Text style={styles.actionSubtitle}>
+                            Registrar una venta por importe
+                        </Text>
+                    </View>
+
+                    <SymbolView
+                        name={{
+                            ios: 'chevron.right',
+                            android: 'arrow_forward',
+                            web: 'arrow_forward',
+                        }}
+                        size={20}
+                        tintColor={Colors.textSecondary}
+                    />
+                </Pressable>
+            </View>
         </Screen>
     );
 }
+
 const styles = StyleSheet.create({
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: Spacing.lg,
-        paddingTop: Spacing.md,
-        paddingBottom: Spacing.sm,
+    screen: {
+        padding: 0,
     },
 
-    headerTextContainer: {
+    content: {
         flex: 1,
+        paddingHorizontal: Spacing.lg,
+        paddingTop: Spacing.lg,
+        gap: Spacing.sm,
+    },
+
+    sectionTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: Colors.textSecondary,
+        marginBottom: Spacing.xs,
+    },
+
+    action: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.surface,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: 10,
+        padding: Spacing.md,
+    },
+
+    actionIcon: {
+        width: 42,
+        height: 42,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 8,
+        backgroundColor: Colors.background,
         marginRight: Spacing.md,
     },
 
-    title: {
-        fontSize: 24,
+    actionContent: {
+        flex: 1,
+    },
+
+    actionTitle: {
+        fontSize: 16,
         fontWeight: '700',
         color: Colors.text,
     },
 
-    subtitle: {
+    actionSubtitle: {
         fontSize: 13,
-        fontWeight: '500',
         color: Colors.textSecondary,
         marginTop: 2,
-    },
-
-    addButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.primary,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
-        borderRadius: 8,
-        gap: 6,
-    },
-
-    addButtonText: {
-        color: Colors.white,
-        fontSize: 14,
-        fontWeight: '600',
-    },
-
-    listContent: {
-        paddingHorizontal: Spacing.lg,
-        paddingTop: Spacing.md,
-        paddingBottom: Spacing.md,
-        gap: Spacing.sm,
-    },
-
-    emptyListContent: {
-        flexGrow: 1,
-        justifyContent: 'center',
     },
 });

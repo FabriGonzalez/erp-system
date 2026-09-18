@@ -5,19 +5,26 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { OrderAddressSection } from './OrderAddressSection';
 import { OrderCartSection } from './OrderCartSection';
 import { OrderCustomerSection } from './OrderCustomerSection';
-import { OrderDeliverySection } from './OrderDeliverySection';
+import { OrderSalesTypeSection } from './OrderSalesTypeSection';
 import { OrderSummarySection } from './OrderSummarySection';
 
+import { AppInput } from '@/components/ui/AppInput';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useBranchStore } from '@/stores/branch-store';
+import { useCustomerAccountStore } from '@/stores/customer-account-store';
 import { useCustomerStore } from '@/stores/customer-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { useProductStore } from '@/stores/product-store';
-import { Order } from '@/types/order';
+import { SharedStyles } from '@/styles/shared';
+import { CUSTOMER_ANONYMOUS } from '@/types/customer';
+import { Order, OrderCreationMode } from '@/types/order';
+import { calculateCustomerCredit } from '@/utils/customer-account';
 
 type OrderFormProps = {
+    mode?: OrderCreationMode;
     initialOrder?: Order;
+    initialSalesType?: 'WITH_PRODUCTS' | 'QUICK_SALE';
     onSubmitOrder: () => void;
     onCancel: () => void;
     isSubmitting?: boolean;
@@ -25,13 +32,17 @@ type OrderFormProps = {
 };
 
 export function OrderForm({
+    mode,
     initialOrder,
+    initialSalesType,
     onSubmitOrder,
     onCancel,
     isSubmitting = false,
     submitLabel = 'Crear Pedido',
 }: OrderFormProps) {
     const activeBranch = useBranchStore((state) => state.activeBranch);
+    const payments = useCustomerAccountStore((state) => state.payments);
+    const allocations = useCustomerAccountStore((state) => state.allocations);
     const products = useProductStore((state) => state.products);
     const getCustomerById = useCustomerStore(
         (state) => state.getCustomerById,
@@ -39,17 +50,24 @@ export function OrderForm({
 
     const {
         customer,
-        deliveryType,
+        salesType,
+        quickSaleAmount,
         address,
         items,
         initNewOrder,
         initEditOrder,
-        setDeliveryType,
+        setSalesType,
+        setQuickSaleAmount,
         updateItemQuantity,
         removeItem,
     } = useOrderDraftStore();
 
+    const creationMode = mode ?? (initialOrder?.deliveryType === 'SHIPPING' ? 'SHIPMENT' : 'SALE');
+
     const [formError, setFormError] = useState<string | null>(null);
+    const [quickSaleInput, setQuickSaleInput] = useState(
+        quickSaleAmount > 0 ? String(quickSaleAmount) : '',
+    );
 
     const branchId = activeBranch?.id ?? '1';
     const branchName = activeBranch?.name ?? 'Sucursal Central';
@@ -66,34 +84,65 @@ export function OrderForm({
             return;
         }
 
-        initNewOrder();
-    }, [initialOrder, getCustomerById, initEditOrder, initNewOrder]);
+        initNewOrder(creationMode);
 
-    const isShipping = deliveryType === 'SHIPPING';
+        if (creationMode === 'SALE' && initialSalesType) {
+            setSalesType(initialSalesType);
+        }
+    }, [initialOrder,getCustomerById,initEditOrder,initNewOrder,creationMode,initialSalesType,setSalesType,]);
+
+    function handleQuickSaleInputChange(text: string) {
+        const cleaned = text.replace(/[^0-9]/g, '');
+        setQuickSaleInput(cleaned);
+        const parsed = Number(cleaned);
+        setQuickSaleAmount(Number.isFinite(parsed) ? Math.max(0, parsed) : 0);
+    }
+
+    const isShipment = creationMode === 'SHIPMENT';
+    const effectiveDeliveryType = isShipment ? 'SHIPPING' : 'LOCAL_PICKUP';
+    const effectiveSalesType = isShipment ? 'WITH_PRODUCTS' : salesType;
+    const isShipping = effectiveDeliveryType === 'SHIPPING';
     const hasAddresses = customer.addresses.length > 0;
     const isShippingBlocked = isShipping && !hasAddresses;
 
-    const totalAmount = items.reduce(
+    const itemsTotal = items.reduce(
         (sum, item) => sum + item.subtotal,
         0,
     );
 
+    const totalAmount = effectiveSalesType === 'QUICK_SALE' ? quickSaleAmount : itemsTotal;
+
+    const customerCredit = customer.id === CUSTOMER_ANONYMOUS.id
+        ? 0
+        : calculateCustomerCredit(customer.id, payments, allocations);
+
     function handleSelectCustomer() {
-        router.push('/orders/select-customer');
+        const requireRegisteredCustomer = isShipment || effectiveSalesType === 'QUICK_SALE';
+        const customerRoute = isShipment
+            ? '/shipments/select-customer'
+            : '/orders/select-customer';
+        router.push({
+            pathname: customerRoute,
+            params: requireRegisteredCustomer ? { allowAnonymous: 'false' } : undefined,
+        });
     }
 
     function handleSelectAddress() {
-        router.push('/orders/select-address');
+        router.push(isShipment ? '/shipments/select-address' : '/orders/select-address');
     }
 
     function handleAddCustomerAddress() {
+        const addressRoute = isShipment
+            ? '/shipments/add-address'
+            : '/orders/add-address';
         router.push({
-            pathname: '/orders/add-address',
+            pathname: addressRoute,
             params: { id: customer.id },
         });
     }
+
     function handleAddProducts() {
-        router.push('/orders/select-products');
+        router.push(isShipment ? '/shipments/select-products' : '/orders/select-products');
     }
 
     function handleUpdateQuantity(productId: string, variantId: string, newQty: number) {
@@ -112,10 +161,22 @@ export function OrderForm({
     function validate(): boolean {
         setFormError(null);
 
-        if (items.length === 0) {
+        if (effectiveSalesType === 'WITH_PRODUCTS' && items.length === 0) {
             setFormError(
                 'Debes agregar al menos un producto al pedido.',
             );
+            return false;
+        }
+
+        if (effectiveSalesType === 'QUICK_SALE' && quickSaleAmount <= 0) {
+            setFormError(
+                'Debes ingresar un importe válido para la venta rápida.',
+            );
+            return false;
+        }
+
+        if ((isShipment || effectiveSalesType === 'QUICK_SALE') && customer.id === CUSTOMER_ANONYMOUS.id) {
+            setFormError('Debes seleccionar un cliente registrado.');
             return false;
         }
 
@@ -146,10 +207,15 @@ export function OrderForm({
         onSubmitOrder();
     }
 
+    const isFormInvalid =
+        isShippingBlocked ||
+        (effectiveSalesType === 'WITH_PRODUCTS' ? items.length === 0 : quickSaleAmount <= 0) ||
+        ((isShipment || effectiveSalesType === 'QUICK_SALE') && customer.id === CUSTOMER_ANONYMOUS.id);
+
     return (
         <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContainer}
+            contentContainerStyle={SharedStyles.listContent}
             keyboardShouldPersistTaps="handled"
         >
             {formError ? (
@@ -162,13 +228,8 @@ export function OrderForm({
 
             <OrderCustomerSection
                 customer={customer}
+                customerCredit={customerCredit}
                 onSelectCustomer={handleSelectCustomer}
-            />
-
-            <OrderDeliverySection
-                deliveryType={deliveryType}
-                onChangeDeliveryType={setDeliveryType}
-                disabled={isSubmitting}
             />
 
             {isShipping && (
@@ -180,35 +241,59 @@ export function OrderForm({
                 />
             )}
 
-            <OrderCartSection
-                items={items}
-                onAddProducts={handleAddProducts}
-                onUpdateQuantity={handleUpdateQuantity}
-                onRemoveItem={removeItem}
-            />
+            {!isShipment && !initialSalesType && (
+    <OrderSalesTypeSection
+        salesType={salesType}
+        onChangeSalesType={setSalesType}
+        disabled={isSubmitting}
+    />
+)}
+
+            {effectiveSalesType === 'WITH_PRODUCTS' ? (
+                <OrderCartSection
+                    items={items}
+                    onAddProducts={handleAddProducts}
+                    onUpdateQuantity={handleUpdateQuantity}
+                    onRemoveItem={removeItem}
+                />
+            ) : (
+                <View style={styles.quickSaleCard}>
+                    <Text style={SharedStyles.sectionTitle}>Venta Rápida</Text>
+                    <Text style={[SharedStyles.sectionTitle, { marginBottom: Spacing.xs }]}>
+                        Importe total de la venta <Text style={styles.required}>*</Text>
+                    </Text>
+                    <View style={styles.currencyInputRow}>
+                        <Text style={styles.currencyPrefix}>$</Text>
+                        <AppInput
+                            style={styles.amountInput}
+                            value={quickSaleInput}
+                            onChangeText={handleQuickSaleInputChange}
+                            keyboardType="numeric"
+                            placeholder="0.00"
+                            editable={!isSubmitting}
+                        />
+                    </View>
+                </View>
+            )}
 
             <OrderSummarySection
                 total={totalAmount}
-                itemsCount={items.length}
-                deliveryType={deliveryType}
+                itemsCount={effectiveSalesType === 'WITH_PRODUCTS' ? items.length : 0}
+                deliveryType={effectiveDeliveryType}
                 branchName={branchName}
                 isSubmitting={isSubmitting}
                 submitLabel={submitLabel}
                 onSubmit={handleSubmit}
                 onCancel={onCancel}
-                disabled={isShippingBlocked || items.length === 0}
+                disabled={isFormInvalid}
             />
         </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
-    scrollContainer: {
-        padding: Spacing.lg,
-        paddingBottom: Spacing.xxl * 2,
-    },
     errorBox: {
-        backgroundColor: '#FEE2E2',
+        backgroundColor: Colors.errorSoft,
         borderRadius: 10,
         padding: Spacing.md,
         borderWidth: 1,
@@ -219,5 +304,40 @@ const styles = StyleSheet.create({
         color: Colors.error,
         fontSize: 14,
         fontWeight: '600',
+    },
+    quickSaleCard: {
+        backgroundColor: Colors.surface,
+        borderRadius: 12,
+        padding: Spacing.lg,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        marginBottom: Spacing.lg,
+    },
+    required: {
+        color: Colors.error,
+    },
+    currencyInputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.surface,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        paddingHorizontal: Spacing.md,
+    },
+    currencyPrefix: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: Colors.text,
+        marginRight: Spacing.xs,
+    },
+    amountInput: {
+        flex: 1,
+        fontSize: 20,
+        fontWeight: '700',
+        color: Colors.text,
+        borderWidth: 0,
+        backgroundColor: 'transparent',
+        paddingHorizontal: 0,
     },
 });

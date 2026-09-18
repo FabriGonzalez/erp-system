@@ -7,6 +7,7 @@ import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
+import { SharedStyles } from '@/styles/shared';
 import { Branch } from '@/types/branch';
 
 export default function ActiveBranchScreen() {
@@ -23,10 +24,10 @@ export default function ActiveBranchScreen() {
     return (
         <Screen style={styles.container}>
             {/* Header local con botón Back */}
-            <View style={styles.header}>
+            <View style={SharedStyles.header}>
                 <Pressable
                     onPress={() => router.back()}
-                    style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+                    style={({ pressed }) => [SharedStyles.backButton, pressed && styles.pressed]}
                 >
                     <SymbolView
                         name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
@@ -34,8 +35,8 @@ export default function ActiveBranchScreen() {
                         tintColor={Colors.text}
                     />
                 </Pressable>
-                <Text style={styles.headerTitle}>Seleccionar Sucursal</Text>
-                <View style={styles.headerSpacer} />
+                <Text style={SharedStyles.headerTitle}>Seleccionar Sucursal</Text>
+                <View style={SharedStyles.headerSpacer} />
             </View>
 
             <Text style={styles.description}>
@@ -87,28 +88,6 @@ export default function ActiveBranchScreen() {
 const styles = StyleSheet.create({
     container: {
         padding: 0,
-        backgroundColor: Colors.background,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.md,
-        backgroundColor: Colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
-    },
-    backButton: {
-        padding: Spacing.xs,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    headerSpacer: {
-        width: 32, // Para balancear el botón back
     },
     description: {
         fontSize: 14,

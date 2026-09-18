@@ -106,11 +106,11 @@ export function AddCustomerAddressForm({
 
     return (
         <Screen style={styles.screen}>
-            <View style={styles.header}>
+            <View style={[SharedStyles.header, styles.header]}>
                 <Pressable
                     onPress={handleCancel}
                     style={({ pressed }) => [
-                        styles.backButton,
+                        SharedStyles.backButton,
                         pressed && SharedStyles.pressed,
                     ]}
                 >
@@ -126,7 +126,7 @@ export function AddCustomerAddressForm({
                 </Pressable>
 
                 <View style={styles.headerText}>
-                    <Text style={styles.headerTitle}>
+                    <Text style={SharedStyles.headerTitle}>
                         Agregar dirección
                     </Text>
 
@@ -135,16 +135,16 @@ export function AddCustomerAddressForm({
                     </Text>
                 </View>
 
-                <View style={styles.headerSpacer} />
+                <View style={SharedStyles.headerSpacer} />
             </View>
 
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.content}
+                contentContainerStyle={SharedStyles.listContent}
             >
-                <View style={styles.formCard}>
-                    <Text style={styles.sectionTitle}>
+                <View style={SharedStyles.card}>
+                    <Text style={[SharedStyles.cardTitle, styles.sectionTitle]}>
                         Datos de la dirección
                     </Text>
 
@@ -270,50 +270,18 @@ const styles = StyleSheet.create({
         padding: 0,
     },
     header: {
-        flexDirection: 'row',
-        alignItems: 'center',
         paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.md,
-        backgroundColor: Colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
-    },
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
     },
     headerText: {
         flex: 1,
         marginLeft: Spacing.sm,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.text,
     },
     headerSubtitle: {
         fontSize: 12,
         color: Colors.textSecondary,
         marginTop: 2,
     },
-    headerSpacer: {
-        width: 32,
-    },
-    content: {
-        padding: Spacing.lg,
-        paddingBottom: Spacing.xxl * 2,
-    },
-    formCard: {
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        padding: Spacing.lg,
-    },
     sectionTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
         marginBottom: Spacing.lg,
     },
     field: {

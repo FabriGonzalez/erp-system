@@ -140,11 +140,11 @@ export function CustomerForm({
 
     return (
         <Screen style={styles.screen}>
-            <View style={styles.header}>
+            <View style={SharedStyles.header}>
                 <Pressable
                     onPress={handleCancel}
                     style={({ pressed }) => [
-                        styles.backButton,
+                        SharedStyles.backButton,
                         pressed && SharedStyles.pressed,
                     ]}
                     disabled={isSubmitting}
@@ -160,9 +160,9 @@ export function CustomerForm({
                     />
                 </Pressable>
 
-                <Text style={styles.headerTitle}>Nuevo Cliente</Text>
+                <Text style={SharedStyles.headerTitle}>Nuevo Cliente</Text>
 
-                <View style={styles.headerSpacer} />
+                <View style={SharedStyles.headerSpacer} />
             </View>
 
             <ScrollView
@@ -171,7 +171,7 @@ export function CustomerForm({
                 keyboardShouldPersistTaps="handled"
             >
                 <View style={styles.formGroup}>
-                    <Text style={styles.label}>
+                    <Text style={SharedStyles.sectionTitle}>
                         Nombre completo{' '}
                         <Text style={styles.required}>*</Text>
                     </Text>
@@ -199,7 +199,7 @@ export function CustomerForm({
                 </View>
 
                 <View style={styles.formGroup}>
-                    <Text style={styles.label}>Email</Text>
+                    <Text style={SharedStyles.sectionTitle}>Email</Text>
 
                     <AppInput
                         placeholder="maria@email.com"
@@ -211,7 +211,7 @@ export function CustomerForm({
                 </View>
 
                 <View style={styles.formGroup}>
-                    <Text style={styles.label}>Teléfono</Text>
+                    <Text style={SharedStyles.sectionTitle}>Teléfono</Text>
 
                     <AppInput
                         placeholder="11 1234-5678"
@@ -222,7 +222,7 @@ export function CustomerForm({
                 </View>
 
                 <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>
+                    <Text style={SharedStyles.cardTitle}>
                         Direcciones ({addresses.length})
                     </Text>
                 </View>
@@ -425,7 +425,7 @@ export function CustomerForm({
                 <View style={styles.actionsContainer}>
                     <Pressable
                         style={[
-                            styles.submitButton,
+                            SharedStyles.buttonSubmit,
                             isSubmitting &&
                             styles.submitButtonDisabled,
                         ]}
@@ -439,23 +439,23 @@ export function CustomerForm({
                                     color={Colors.white}
                                 />
 
-                                <Text style={styles.submitButtonText}>
+                                <Text style={SharedStyles.buttonSubmitText}>
                                     Guardando...
                                 </Text>
                             </View>
                         ) : (
-                            <Text style={styles.submitButtonText}>
+                            <Text style={SharedStyles.buttonSubmitText}>
                                 Guardar cliente
                             </Text>
                         )}
                     </Pressable>
 
                     <Pressable
-                        style={styles.cancelButton}
+                        style={SharedStyles.buttonCancel}
                         onPress={handleCancel}
                         disabled={isSubmitting}
                     >
-                        <Text style={styles.cancelButtonText}>
+                        <Text style={SharedStyles.buttonCancelText}>
                             Cancelar
                         </Text>
                     </Pressable>
@@ -468,29 +468,6 @@ export function CustomerForm({
 const styles = StyleSheet.create({
     screen: {
         padding: 0,
-        backgroundColor: Colors.background,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.md,
-        backgroundColor: Colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
-    },
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    headerSpacer: {
-        width: 32,
     },
     scrollContainer: {
         padding: Spacing.lg,
@@ -498,12 +475,6 @@ const styles = StyleSheet.create({
     },
     formGroup: {
         marginBottom: Spacing.lg,
-    },
-    label: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.text,
-        marginBottom: Spacing.xs + 2,
     },
     subLabel: {
         fontSize: 13,
@@ -523,11 +494,6 @@ const styles = StyleSheet.create({
     sectionHeader: {
         marginTop: Spacing.md,
         marginBottom: Spacing.sm,
-    },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
     },
     addressCard: {
         backgroundColor: Colors.surface,
@@ -640,13 +606,6 @@ const styles = StyleSheet.create({
         gap: Spacing.sm,
         marginTop: Spacing.md,
     },
-    submitButton: {
-        backgroundColor: Colors.primary,
-        height: 50,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
     submitButtonDisabled: {
         opacity: 0.7,
     },
@@ -654,22 +613,5 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.sm,
-    },
-    submitButtonText: {
-        color: Colors.white,
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    cancelButton: {
-        height: 48,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'transparent',
-    },
-    cancelButtonText: {
-        color: Colors.textSecondary,
-        fontSize: 15,
-        fontWeight: '500',
     },
 });

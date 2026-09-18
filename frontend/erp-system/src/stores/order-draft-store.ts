@@ -1,26 +1,37 @@
 import { create } from 'zustand';
 
+import { useCustomerAccountStore } from '@/stores/customer-account-store';
 import {
     CUSTOMER_ANONYMOUS,
     Customer,
     CustomerAddress,
 } from '@/types/customer';
-import { DeliveryType, Order, OrderItem } from '@/types/order';
+import {
+    DeliveryType,
+    Order,
+    OrderCreationMode,
+    OrderItem,
+    SalesType,
+} from '@/types/order';
 import { Product } from '@/types/product';
 
 type OrderDraftState = {
     orderId: string | null;
     customer: Customer;
+    salesType: SalesType;
+    quickSaleAmount: number;
     deliveryType: DeliveryType;
     address: CustomerAddress | undefined;
     items: OrderItem[];
     amountPaid: number;
 
-    initNewOrder: () => void;
+    initNewOrder: (mode?: OrderCreationMode) => void;
     initEditOrder: (order: Order, customer: Customer) => void;
 
     setCustomer: (customer: Customer) => void;
     updateCustomer: (customer: Customer) => void;
+    setSalesType: (salesType: SalesType) => void;
+    setQuickSaleAmount: (amount: number) => void;
     setDeliveryType: (deliveryType: DeliveryType) => void;
     setAddress: (address: CustomerAddress) => void;
     setAmountPaid: (amount: number) => void;
@@ -40,16 +51,20 @@ type OrderDraftState = {
 export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
     orderId: null,
     customer: CUSTOMER_ANONYMOUS,
+    salesType: 'WITH_PRODUCTS',
+    quickSaleAmount: 0,
     deliveryType: 'LOCAL_PICKUP',
     address: undefined,
     items: [],
     amountPaid: 0,
 
-    initNewOrder: () => {
+    initNewOrder: (mode = 'SALE') => {
         set({
             orderId: null,
             customer: CUSTOMER_ANONYMOUS,
-            deliveryType: 'LOCAL_PICKUP',
+            salesType: 'WITH_PRODUCTS',
+            quickSaleAmount: 0,
+            deliveryType: mode === 'SHIPMENT' ? 'SHIPPING' : 'LOCAL_PICKUP',
             address: undefined,
             items: [],
             amountPaid: 0,
@@ -57,14 +72,31 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
     },
 
     initEditOrder: (order, customer) => {
-        const total = Number.isFinite(order.total) && order.total >= 0 ? order.total : 0;
-        const amountPaid = Number.isFinite(order.amountPaid)
-            ? Math.min(Math.max(0, order.amountPaid), total)
-            : 0;
+        const isAnonymous = customer.id === CUSTOMER_ANONYMOUS.id;
+
+        let amountPaid = 0;
+
+        if (isAnonymous) {
+            amountPaid = Number.isFinite(order.amountPaid)
+                ? Math.max(0, order.amountPaid)
+                : 0;
+        } else {
+            amountPaid = useCustomerAccountStore
+                .getState()
+                .getOrderPaidAmount(order.id);
+        }
+
+        const initialSalesType = order.salesType;
+
+        const initialQuickSaleAmount =
+            order.quickSaleAmount ??
+            (initialSalesType === 'QUICK_SALE' ? order.total : 0);
 
         set({
             orderId: order.id,
             customer,
+            salesType: initialSalesType,
+            quickSaleAmount: initialQuickSaleAmount,
             deliveryType: order.deliveryType,
             address: order.address,
             items: order.items,
@@ -81,6 +113,14 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
 
     updateCustomer: (customer) => {
         set({ customer });
+    },
+
+    setSalesType: (salesType) => {
+        set({ salesType });
+    },
+
+    setQuickSaleAmount: (amount) => {
+        set({ quickSaleAmount: Number.isFinite(amount) ? Math.max(0, amount) : 0 });
     },
 
     setDeliveryType: (deliveryType) => {
@@ -197,6 +237,8 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
         set({
             orderId: null,
             customer: CUSTOMER_ANONYMOUS,
+            salesType: 'WITH_PRODUCTS',
+            quickSaleAmount: 0,
             deliveryType: 'LOCAL_PICKUP',
             address: undefined,
             items: [],

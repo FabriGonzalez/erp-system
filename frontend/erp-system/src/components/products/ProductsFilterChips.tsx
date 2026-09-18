@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { SharedStyles } from '@/styles/shared';
 
 import { FilterChip } from '@/components/ui/FilterChip';
 import { StatusFilter, StockFilter } from '@/types/product';
@@ -24,7 +24,7 @@ export function ProductsFilterChips({
             <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.filterScroll}
+                contentContainerStyle={SharedStyles.filterListContent}
             >
                 <View style={styles.filterGroup}>
                     <FilterChip
@@ -44,7 +44,7 @@ export function ProductsFilterChips({
                     />
                 </View>
 
-                <View style={styles.filterDivider} />
+                <View style={SharedStyles.filterDivider} />
 
                 <View style={styles.filterGroup}>
                     <FilterChip
@@ -73,22 +73,9 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.xs,
     },
 
-    filterScroll: {
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.xs + 2, // <--- Evita el recorte vertical de los chips
-        alignItems: 'center',
-    },
-
     filterGroup: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.xs,
-    },
-
-    filterDivider: {
-        width: 1,
-        height: 20,
-        backgroundColor: Colors.border,
-        marginHorizontal: Spacing.sm,
     },
 });

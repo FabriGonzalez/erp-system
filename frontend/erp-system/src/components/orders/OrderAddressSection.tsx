@@ -189,11 +189,11 @@ const styles = StyleSheet.create({
     warningTitle: {
         fontSize: 14,
         fontWeight: '700',
-        color: '#92400E',
+        color: Colors.warningText,
     },
     warningDescription: {
         fontSize: 13,
-        color: '#B45309',
+        color: Colors.warningTextSecondary,
         lineHeight: 18,
         marginBottom: Spacing.sm,
     },

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { mockOrders } from '@/data/mock-orders';
+import { useCustomerAccountStore } from '@/stores/customer-account-store';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import {
     DeliveryType,
@@ -14,6 +15,8 @@ type OrderUpdate = Pick<
     Order,
     | 'customerId'
     | 'customerName'
+    | 'salesType'
+    | 'quickSaleAmount'
     | 'deliveryType'
     | 'address'
     | 'items'
@@ -30,10 +33,18 @@ type OrderState = {
     isError: boolean;
     errorMessage: string | null;
 
+    // Shipments tab independent filters
+    shipmentsSearchQuery: string;
+    shipmentsStatusFilter: OrderStatusFilter;
+
     setSearchQuery: (query: string) => void;
     setStatusFilter: (filter: OrderStatusFilter) => void;
     setDeliveryTypeFilter: (filter: OrderDeliveryFilter) => void;
     resetFilters: () => void;
+
+    setShipmentsSearchQuery: (query: string) => void;
+    setShipmentsStatusFilter: (filter: OrderStatusFilter) => void;
+    resetShipmentsFilters: () => void;
 
     setLoading: (loading: boolean) => void;
     setError: (error: boolean, message?: string | null) => void;
@@ -73,11 +84,8 @@ function generateOrderNumber(orders: Order[]): string {
 }
 
 const STATUS_FLOW: OrderStatus[] = [
-    'CONFIRMED',
-    'IN_PREPARATION',
-    'READY_TO_SHIP',
+    'TO_PREPARE',
     'SHIPPED',
-    'DELIVERED',
 ];
 
 function normalizeAmountPaid(amountPaid: number, total: number, customerId: string) {
@@ -103,6 +111,9 @@ export const useOrderStore = create<OrderState>((set, get) => ({
     statusFilter: 'ALL',
     deliveryTypeFilter: 'ALL',
 
+    shipmentsSearchQuery: '',
+    shipmentsStatusFilter: 'ALL',
+
     isLoading: false,
     isError: false,
     errorMessage: null,
@@ -126,6 +137,21 @@ export const useOrderStore = create<OrderState>((set, get) => ({
             deliveryTypeFilter: 'ALL',
             isError: false,
             errorMessage: null,
+        });
+    },
+
+    setShipmentsSearchQuery: (shipmentsSearchQuery) => {
+        set({ shipmentsSearchQuery });
+    },
+
+    setShipmentsStatusFilter: (shipmentsStatusFilter) => {
+        set({ shipmentsStatusFilter });
+    },
+
+    resetShipmentsFilters: () => {
+        set({
+            shipmentsSearchQuery: '',
+            shipmentsStatusFilter: 'ALL',
         });
     },
 
@@ -182,20 +208,49 @@ export const useOrderStore = create<OrderState>((set, get) => ({
 
     updateOrder: (id, updates) => {
         set((state) => ({
-            orders: state.orders.map((order) =>
-                order.id === id
-                    ? {
-                        ...order,
-                        ...updates,
-                        amountPaid: normalizeAmountPaid(
-                            updates.amountPaid ?? order.amountPaid,
-                            updates.total ?? order.total,
-                            updates.customerId ?? order.customerId,
-                        ),
-                        updatedAt: new Date().toISOString(),
+            orders: state.orders.map((order) => {
+                if (order.id !== id) {
+                    return order;
+                }
+
+                const updated = {
+                    ...order,
+                    ...updates,
+                    updatedAt: new Date().toISOString(),
+                };
+
+                const customerId = updated.customerId;
+                const safeTotal = Number.isFinite(updated.total) && updated.total >= 0 ? updated.total : 0;
+
+                let finalAmountPaid = order.amountPaid;
+
+                if (customerId === CUSTOMER_ANONYMOUS.id) {
+                    if (typeof updates.amountPaid === 'number') {
+                        finalAmountPaid = normalizeAmountPaid(
+                            updates.amountPaid,
+                            safeTotal,
+                            customerId,
+                        );
+                    } else {
+                        finalAmountPaid = normalizeAmountPaid(
+                            order.amountPaid,
+                            safeTotal,
+                            customerId,
+                        );
                     }
-                    : order
-            ),
+                } else {
+                    const allocatedPaid =
+                        useCustomerAccountStore.getState().getOrderPaidAmount(id);
+
+                    finalAmountPaid = Math.min(allocatedPaid, safeTotal);
+                }
+
+                return {
+                    ...updated,
+                    total: safeTotal,
+                    amountPaid: finalAmountPaid,
+                };
+            }),
         }));
     },
 
@@ -215,7 +270,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
                 order.id === id
                     ? {
                         ...order,
-                        status: 'CONFIRMED',
+                        status: order.deliveryType === 'SHIPPING' ? 'TO_PREPARE' : 'CONFIRMED',
                         updatedAt: new Date().toISOString(),
                     }
                     : order
@@ -234,7 +289,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
 
         if (
             order.status === 'CANCELLED' ||
-            order.status === 'DELIVERED'
+            order.status === 'SHIPPED'
         ) {
             return false;
         }

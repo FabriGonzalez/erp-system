@@ -99,28 +99,36 @@ export default function ProductsScreen() {
 
     return (
         <Screen style={styles.screen}>
-            <View style={styles.topBar}>
+            <View style={SharedStyles.topBar}>
                 <View>
-                    <Text style={styles.screenTitle}>Productos</Text>
-                    <Text style={styles.screenSubtitle}>
+                    <Text style={SharedStyles.screenTitle}>Productos</Text>
+                    <Text style={SharedStyles.screenSubtitle}>
                         {activeBranch ? `Stock: ${activeBranch.name}` : 'Catálogo general'}
                     </Text>
                 </View>
 
                 {canCreate && (
                     <Pressable
+                        onPress={handleCreateProduct}
+                        accessibilityRole="button"
+                        accessibilityLabel="Crear nuevo procuto"
+                        hitSlop={6}
                         style={({ pressed }) => [
-                            styles.createButton,
+                            SharedStyles.addButton,
                             pressed && SharedStyles.pressed,
                         ]}
-                        onPress={handleCreateProduct}
                     >
-                        <SymbolView
-                            name={{ ios: 'plus', android: 'add', web: 'add' }}
-                            size={18}
-                            tintColor={Colors.white}
-                        />
-                        <Text style={styles.createButtonText}>Nuevo</Text>
+                        <View style={SharedStyles.addIconContainer}>
+                            <SymbolView name={{
+                                ios: 'plus',
+                                android: 'add',
+                                web: 'add',
+                            }}
+                                size={24}
+                                tintColor={Colors.white}
+                            />
+                        </View>
+                        <Text style={SharedStyles.addButtonText}>Nuevo producto</Text>
                     </Pressable>
                 )}
             </View>
@@ -231,44 +239,6 @@ export default function ProductsScreen() {
 const styles = StyleSheet.create({
     screen: {
         padding: 0,
-    },
-
-    topBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: Spacing.lg,
-        paddingTop: Spacing.md,
-        paddingBottom: Spacing.sm,
-    },
-
-    screenTitle: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-
-    screenSubtitle: {
-        fontSize: 13,
-        fontWeight: '500',
-        color: Colors.textSecondary,
-        marginTop: 2,
-    },
-
-    createButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.primary,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
-        borderRadius: 8,
-        gap: 6,
-    },
-
-    createButtonText: {
-        color: Colors.white,
-        fontSize: 14,
-        fontWeight: '600',
     },
 
     resultsBar: {
