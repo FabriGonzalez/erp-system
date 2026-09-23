@@ -6,6 +6,8 @@ public record StockResponse(
         Long id,
         Long productId,
         String productName,
+        Long productVariantId,
+        String productVariantSku,
         Long branchId,
         String branchName,
         Integer quantity,

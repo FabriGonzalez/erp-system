@@ -11,11 +11,11 @@ public interface StockService {
 
     StockResponse findById(Long id);
 
-    StockResponse findByProductIdAndBranchId(Long productId, Long branchId);
+    StockResponse findByProductVariantIdAndBranchId(Long productVariantId, Long branchId);
 
     List<StockResponse> findByBranchId(Long branchId);
 
-    List<StockResponse> findByProductId(Long productId);
+    List<StockResponse> findByProductVariantId(Long productVariantId);
 
     StockResponse adjustStock(StockAdjustRequest request);
 }

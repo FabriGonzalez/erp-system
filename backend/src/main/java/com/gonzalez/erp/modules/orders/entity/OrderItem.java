@@ -1,7 +1,7 @@
 package com.gonzalez.erp.modules.orders.entity;
 
 import com.gonzalez.erp.common.entity.BaseEntity;
-import com.gonzalez.erp.modules.products.entity.Product;
+import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
@@ -15,8 +15,8 @@ import java.math.BigDecimal;
         name = "order_items",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_order_item_product",
-                        columnNames = {"order_id", "product_id"}
+                        name = "uk_order_item_variant",
+                        columnNames = {"order_id", "product_variant_id"}
                 )
         }
 )
@@ -32,8 +32,8 @@ public class OrderItem extends BaseEntity {
     private Order order;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "product_id", nullable = false)
-    private Product product;
+    @JoinColumn(name = "product_variant_id", nullable = false)
+    private ProductVariant productVariant;
 
     @Min(value = 1, message = "Order quantity must be at least 1")
     @Column(nullable = false)

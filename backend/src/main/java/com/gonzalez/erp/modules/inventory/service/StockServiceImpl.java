@@ -15,7 +15,8 @@ import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
 import com.gonzalez.erp.modules.inventory.mapper.StockMapper;
 import com.gonzalez.erp.modules.inventory.repository.StockMovementRepository;
 import com.gonzalez.erp.modules.inventory.repository.StockRepository;
-import com.gonzalez.erp.modules.products.repository.ProductRepository;
+import com.gonzalez.erp.modules.products.entity.ProductVariant;
+import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -32,7 +33,7 @@ public class StockServiceImpl implements StockService {
 
     private final StockRepository stockRepository;
     private final StockMovementRepository stockMovementRepository;
-    private final ProductRepository productRepository;
+    private final ProductVariantRepository productVariantRepository;
     private final BranchRepository branchRepository;
     private final CompanyRepository companyRepository;
 
@@ -54,14 +55,14 @@ public class StockServiceImpl implements StockService {
     }
 
     @Override
-    public StockResponse findByProductIdAndBranchId(Long productId, Long branchId) {
-        validateProductBelongsToCurrentCompany(productId);
+    public StockResponse findByProductVariantIdAndBranchId(Long productVariantId, Long branchId) {
+        validateProductVariantBelongsToCurrentCompany(productVariantId);
         validateBranchBelongsToCurrentCompany(branchId);
 
-        Stock stock = stockRepository.findByProductIdAndBranchId(productId, branchId)
+        Stock stock = stockRepository.findByProductVariantIdAndBranchId(productVariantId, branchId)
                 .filter(s -> belongsToCurrentCompany(s))
                 .orElseThrow(() ->
-                        new StockNotFoundException(productId.toString(), branchId));
+                        new StockNotFoundException(productVariantId.toString(), branchId));
 
         return StockMapper.toResponse(stock);
     }
@@ -77,10 +78,10 @@ public class StockServiceImpl implements StockService {
     }
 
     @Override
-    public List<StockResponse> findByProductId(Long productId) {
-        validateProductBelongsToCurrentCompany(productId);
+    public List<StockResponse> findByProductVariantId(Long productVariantId) {
+        validateProductVariantBelongsToCurrentCompany(productVariantId);
 
-        return stockRepository.findByProductId(productId).stream()
+        return stockRepository.findByProductVariantId(productVariantId).stream()
                 .filter(this::belongsToCurrentCompany)
                 .map(StockMapper::toResponse)
                 .toList();
@@ -92,8 +93,8 @@ public class StockServiceImpl implements StockService {
         checkAdminRole();
 
         Stock stock = stockRepository
-                .findByProductIdAndBranchId(
-                        request.productId(),
+                .findByProductVariantIdAndBranchId(
+                        request.productVariantId(),
                         request.branchId()
                 )
                 .orElseGet(() -> createStock(request));
@@ -156,13 +157,13 @@ public class StockServiceImpl implements StockService {
     private Stock createStock(StockAdjustRequest request) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
-        validateProductBelongsToCurrentCompany(request.productId());
+        validateProductVariantBelongsToCurrentCompany(request.productVariantId());
         validateBranchBelongsToCurrentCompany(request.branchId());
 
         Company company = companyRepository.getReferenceById(companyId);
 
         Stock stock = Stock.builder()
-                .product(productRepository.getReferenceById(request.productId()))
+                .productVariant(productVariantRepository.getReferenceById(request.productVariantId()))
                 .branch(branchRepository.getReferenceById(request.branchId()))
                 .quantity(0)
                 .company(company)
@@ -178,15 +179,15 @@ public class StockServiceImpl implements StockService {
                 && companyId.equals(stock.getCompany().getId());
     }
 
-    private void validateProductBelongsToCurrentCompany(Long productId) {
+    private void validateProductVariantBelongsToCurrentCompany(Long variantId) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
-        productRepository.findById(productId)
-                .filter(product -> product.getCompany() != null
-                        && companyId.equals(product.getCompany().getId()))
+        productVariantRepository.findById(variantId)
+                .filter(variant -> variant.getCompany() != null
+                        && companyId.equals(variant.getCompany().getId()))
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
-                                "Product not found with id: " + productId));
+                                "Product variant not found with id: " + variantId));
     }
 
     private void validateBranchBelongsToCurrentCompany(Long branchId) {

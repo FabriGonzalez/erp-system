@@ -1,20 +1,16 @@
 package com.gonzalez.erp.modules.products.dto.response;
 
-import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 public record ProductResponse(
         Long id,
-        String sku,
         String name,
-        String color,
-        String talle,
         String description,
-        BigDecimal price,
         Long categoryId,
         String categoryName,
-        Long companyId,
         boolean active,
+        List<ProductVariantResponse> variants,
         Instant createdAt,
         Instant updatedAt
 ) {}

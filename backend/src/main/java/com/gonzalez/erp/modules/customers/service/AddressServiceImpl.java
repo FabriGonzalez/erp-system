@@ -116,9 +116,15 @@ public class AddressServiceImpl implements AddressService {
     @Override
     @Transactional
     public AddressResponse activate(Long customerId, Long addressId) {
-        findCustomerOrThrow(customerId);
+        Customer customer = findCustomerOrThrow(customerId);
         Address address = findAddressOrThrow(customerId, addressId);
+
         address.activate();
+
+        if (address.isMainAddress()) {
+            makeMain(customer, address);
+        }
+
         return AddressMapper.toResponse(address);
     }
 

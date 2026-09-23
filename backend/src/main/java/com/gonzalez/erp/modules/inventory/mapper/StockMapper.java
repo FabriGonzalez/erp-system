@@ -10,8 +10,10 @@ public final class StockMapper {
     public static StockResponse toResponse(Stock stock) {
         return new StockResponse(
                 stock.getId(),
-                stock.getProduct().getId(),
-                stock.getProduct().getName(),
+                stock.getProductVariant().getProduct().getId(),
+                stock.getProductVariant().getProduct().getName(),
+                stock.getProductVariant().getId(),
+                stock.getProductVariant().getSku(),
                 stock.getBranch().getId(),
                 stock.getBranch().getName(),
                 stock.getQuantity(),

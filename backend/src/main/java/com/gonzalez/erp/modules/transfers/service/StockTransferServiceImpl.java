@@ -13,7 +13,8 @@ import com.gonzalez.erp.modules.inventory.exception.InsufficientStockException;
 import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
 import com.gonzalez.erp.modules.inventory.repository.StockMovementRepository;
 import com.gonzalez.erp.modules.inventory.repository.StockRepository;
-import com.gonzalez.erp.modules.products.repository.ProductRepository;
+import com.gonzalez.erp.modules.products.entity.ProductVariant;
+import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
 import com.gonzalez.erp.modules.transfers.dto.request.StockTransferItemRequest;
 import com.gonzalez.erp.modules.transfers.dto.request.StockTransferRequest;
 import com.gonzalez.erp.modules.transfers.dto.response.StockTransferResponse;
@@ -45,7 +46,7 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final StockRepository stockRepository;
     private final StockMovementRepository stockMovementRepository;
     private final BranchRepository branchRepository;
-    private final ProductRepository productRepository;
+    private final ProductVariantRepository productVariantRepository;
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
 
@@ -78,11 +79,11 @@ public class StockTransferServiceImpl implements StockTransferService {
                     "Origin and destination branches must be different");
         }
 
-        Set<Long> seenProducts = new HashSet<>();
+        Set<Long> seenVariants = new HashSet<>();
         for (StockTransferItemRequest item : request.items()) {
-            if (!seenProducts.add(item.productId())) {
+            if (!seenVariants.add(item.productVariantId())) {
                 throw new InvalidStockTransferException(
-                        "Duplicate product in transfer items: " + item.productId());
+                        "Duplicate variant in transfer items: " + item.productVariantId());
             }
         }
 
@@ -101,7 +102,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         for (StockTransferItemRequest itemRequest : request.items()) {
             StockTransferItem item = StockTransferItem.builder()
                     .transfer(transfer)
-                    .product(productRepository.getReferenceById(itemRequest.productId()))
+                    .productVariant(productVariantRepository.getReferenceById(itemRequest.productVariantId()))
                     .quantity(itemRequest.quantity())
                     .build();
             transfer.getItems().add(item);
@@ -119,13 +120,13 @@ public class StockTransferServiceImpl implements StockTransferService {
         checkStatus(transfer, StockTransferStatus.DRAFT, "confirmed");
 
         for (StockTransferItem item : transfer.getItems()) {
-            Long productId = item.getProduct().getId();
+            Long variantId = item.getProductVariant().getId();
             Long originBranchId = transfer.getOriginBranch().getId();
             Long destinationBranchId = transfer.getDestinationBranch().getId();
 
             Stock originStock = stockRepository
-                    .findByProductIdAndBranchId(productId, originBranchId)
-                    .orElseThrow(() -> new StockNotFoundException(productId.toString(), originBranchId));
+                    .findByProductVariantIdAndBranchId(variantId, originBranchId)
+                    .orElseThrow(() -> new StockNotFoundException(variantId.toString(), originBranchId));
 
             if (originStock.getQuantity() < item.getQuantity()) {
                 throw new InsufficientStockException(
@@ -137,8 +138,8 @@ public class StockTransferServiceImpl implements StockTransferService {
             stockRepository.save(originStock);
 
             Stock destinationStock = stockRepository
-                    .findByProductIdAndBranchId(productId, destinationBranchId)
-                    .orElseGet(() -> createStock(productId, destinationBranchId));
+                    .findByProductVariantIdAndBranchId(variantId, destinationBranchId)
+                    .orElseGet(() -> createStock(variantId, destinationBranchId));
 
             int destinationPrevious = destinationStock.getQuantity();
             destinationStock.setQuantity(destinationPrevious + item.getQuantity());
@@ -210,12 +211,12 @@ public class StockTransferServiceImpl implements StockTransferService {
         return userDetails.getUserId();
     }
 
-    private Stock createStock(Long productId, Long branchId) {
+    private Stock createStock(Long variantId, Long branchId) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
         Company company = companyRepository.getReferenceById(companyId);
 
         Stock stock = Stock.builder()
-                .product(productRepository.getReferenceById(productId))
+                .productVariant(productVariantRepository.getReferenceById(variantId))
                 .branch(branchRepository.getReferenceById(branchId))
                 .quantity(0)
                 .company(company)

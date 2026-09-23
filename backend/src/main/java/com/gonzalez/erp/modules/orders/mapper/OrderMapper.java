@@ -5,6 +5,9 @@ import com.gonzalez.erp.modules.orders.dto.response.OrderItemResponse;
 import com.gonzalez.erp.modules.orders.dto.response.OrderResponse;
 import com.gonzalez.erp.modules.orders.entity.Order;
 import com.gonzalez.erp.modules.orders.entity.OrderItem;
+import com.gonzalez.erp.modules.orders.entity.PaymentStatus;
+
+import java.math.BigDecimal;
 
 public final class OrderMapper {
 
@@ -12,17 +15,33 @@ public final class OrderMapper {
 
     public static OrderResponse toResponse(Order order) {
         Customer customer = order.getCustomer();
+        BigDecimal total = order.getTotal();
+        BigDecimal amountPaid = order.getAmountPaid();
+        PaymentStatus paymentStatus = computePaymentStatus(total, amountPaid);
+        BigDecimal balance = total.subtract(amountPaid);
+
         return new OrderResponse(
                 order.getId(),
+                order.getOrderNumber(),
                 order.getBranch().getId(),
                 order.getBranch().getName(),
                 customer != null ? customer.getId() : null,
                 customer != null ? customerName(customer) : null,
                 order.getCreatedBy().getId(),
                 order.getCreatedBy().getUsername(),
+                order.getSalesType(),
+                order.getQuickSaleAmount(),
+                order.getDeliveryType(),
                 order.getStatus(),
+                total,
+                amountPaid,
+                paymentStatus,
+                balance,
                 order.getConfirmedAt(),
+                order.getPreparedAt(),
+                order.getShippedAt(),
                 order.getCancelledAt(),
+                order.getReturnedAt(),
                 order.getItems().stream()
                         .map(OrderMapper::toItemResponse)
                         .toList(),
@@ -43,10 +62,25 @@ public final class OrderMapper {
     private static OrderItemResponse toItemResponse(OrderItem item) {
         return new OrderItemResponse(
                 item.getId(),
-                item.getProduct().getId(),
-                item.getProduct().getName(),
+                item.getProductVariant().getProduct().getId(),
+                item.getProductVariant().getProduct().getName(),
+                item.getProductVariant().getId(),
+                item.getProductVariant().getSku(),
                 item.getQuantity(),
                 item.getUnitPrice()
         );
+    }
+
+    private static PaymentStatus computePaymentStatus(BigDecimal total, BigDecimal amountPaid) {
+        if (total == null || total.compareTo(BigDecimal.ZERO) == 0) {
+            return PaymentStatus.PENDING;
+        }
+        if (amountPaid == null || amountPaid.compareTo(BigDecimal.ZERO) <= 0) {
+            return PaymentStatus.PENDING;
+        }
+        if (amountPaid.compareTo(total) >= 0) {
+            return PaymentStatus.PAID;
+        }
+        return PaymentStatus.PARTIAL;
     }
 }

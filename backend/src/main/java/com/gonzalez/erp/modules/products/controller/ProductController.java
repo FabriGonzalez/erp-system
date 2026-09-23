@@ -44,11 +44,11 @@ public class ProductController {
     }
 
     @PostMapping
-    @Operation(summary = "Crear producto", description = "Crea un nuevo producto con SKU único por empresa, nombre, color, talle, descripción opcional y categoría.")
+    @Operation(summary = "Crear producto", description = "Crea un nuevo producto con variantes. Cada variante debe tener un SKU único por empresa y al menos un valor de atributo.")
     @ApiResponse(responseCode = "201", description = "Producto creado exitosamente")
-    @ApiResponse(responseCode = "404", description = "Categoría no encontrada",
+    @ApiResponse(responseCode = "404", description = "Categoría, atributo o valor de atributo no encontrado",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    @ApiResponse(responseCode = "409", description = "Ya existe un producto con ese SKU o la categoría está desactivada",
+    @ApiResponse(responseCode = "409", description = "SKU duplicado en variantes o la categoría está desactivada",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<ProductResponse> create(@Valid @RequestBody ProductRequest request) {
         ProductResponse response = productService.create(request);
@@ -56,11 +56,11 @@ public class ProductController {
     }
 
     @PatchMapping("/{id}")
-    @Operation(summary = "Actualizar producto", description = "Actualiza el nombre, color, talle, descripción y/o categoría de un producto existente. El SKU no es modificable.")
+    @Operation(summary = "Actualizar producto", description = "Actualiza el nombre, descripción, categoría y variantes de un producto existente.")
     @ApiResponse(responseCode = "200", description = "Producto actualizado exitosamente")
-    @ApiResponse(responseCode = "404", description = "Producto o categoría no encontrado",
+    @ApiResponse(responseCode = "404", description = "Producto, categoría, atributo o valor de atributo no encontrado",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    @ApiResponse(responseCode = "409", description = "La categoría está desactivada",
+    @ApiResponse(responseCode = "409", description = "SKU duplicado en variantes o la categoría está desactivada",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<ProductResponse> update(
             @Parameter(description = "ID del producto a actualizar")

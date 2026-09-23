@@ -43,12 +43,12 @@ public class StockController {
         return ResponseEntity.ok(stockService.findById(id));
     }
 
-    @GetMapping("/product/{productId}")
-    @Operation(summary = "Obtener stock por producto", description = "Busca el stock de un producto en todas las sucursales.")
-    public ResponseEntity<List<StockResponse>> findByProductId(
-            @Parameter(description = "ID del producto")
-            @PathVariable Long productId) {
-        return ResponseEntity.ok(stockService.findByProductId(productId));
+    @GetMapping("/variant/{productVariantId}")
+    @Operation(summary = "Obtener stock por variante", description = "Busca el stock de una variante de producto en todas las sucursales.")
+    public ResponseEntity<List<StockResponse>> findByProductVariantId(
+            @Parameter(description = "ID de la variante de producto")
+            @PathVariable Long productVariantId) {
+        return ResponseEntity.ok(stockService.findByProductVariantId(productVariantId));
     }
 
     @GetMapping("/branch/{branchId}")

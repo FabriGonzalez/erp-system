@@ -3,7 +3,7 @@ package com.gonzalez.erp.modules.inventory.entity;
 import com.gonzalez.erp.common.entity.BaseEntity;
 import com.gonzalez.erp.modules.branches.entity.Branch;
 import com.gonzalez.erp.modules.companies.entity.Company;
-import com.gonzalez.erp.modules.products.entity.Product;
+import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -12,8 +12,8 @@ import lombok.*;
         name = "stocks",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_stock_product_branch",
-                        columnNames = {"product_id", "branch_id"}
+                        name = "uk_stock_variant_branch",
+                        columnNames = {"product_variant_id", "branch_id"}
                 )
         }
 )
@@ -25,8 +25,8 @@ import lombok.*;
 public class Stock extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "product_id", nullable = false)
-    private Product product;
+    @JoinColumn(name = "product_variant_id", nullable = false)
+    private ProductVariant productVariant;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "branch_id", nullable = false)

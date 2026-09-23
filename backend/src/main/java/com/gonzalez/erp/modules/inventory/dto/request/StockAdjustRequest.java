@@ -4,8 +4,8 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
 public record StockAdjustRequest(
-        @NotNull(message = "productId is required")
-        Long productId,
+        @NotNull(message = "productVariantId is required")
+        Long productVariantId,
 
         @NotNull(message = "branchId is required")
         Long branchId,

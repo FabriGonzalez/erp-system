@@ -1,7 +1,7 @@
 package com.gonzalez.erp.modules.transfers.entity;
 
 import com.gonzalez.erp.common.entity.BaseEntity;
-import com.gonzalez.erp.modules.products.entity.Product;
+import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
 import lombok.*;
@@ -11,8 +11,8 @@ import lombok.*;
         name = "stock_transfer_items",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_transfer_item_product",
-                        columnNames = {"transfer_id", "product_id"}
+                        name = "uk_transfer_item_variant",
+                        columnNames = {"transfer_id", "product_variant_id"}
                 )
         }
 )
@@ -28,8 +28,8 @@ public class StockTransferItem extends BaseEntity {
     private StockTransfer transfer;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "product_id", nullable = false)
-    private Product product;
+    @JoinColumn(name = "product_variant_id", nullable = false)
+    private ProductVariant productVariant;
 
     @Min(value = 1, message = "Transfer quantity must be at least 1")
     @Column(nullable = false)

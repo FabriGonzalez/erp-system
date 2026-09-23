@@ -1,13 +1,15 @@
 package com.gonzalez.erp.config;
 
-import com.gonzalez.erp.config.security.CustomUserDetailsService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.config.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -17,10 +19,13 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.time.Instant;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -28,7 +33,7 @@ import java.time.Instant;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
-    private final CustomUserDetailsService userDetailsService;
+    private final ObjectMapper objectMapper;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -43,46 +48,49 @@ public class SecurityConfig {
     }
 
     @Bean
-    public DaoAuthenticationProvider authenticationProvider(
-            PasswordEncoder passwordEncoder
-    ) {
-        DaoAuthenticationProvider provider =
-                new DaoAuthenticationProvider(userDetailsService);
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOriginPatterns(List.of("*"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
+        configuration.setAllowCredentials(true);
 
-        provider.setPasswordEncoder(passwordEncoder);
-
-        return provider;
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 
     @Bean
     public AuthenticationEntryPoint authenticationEntryPoint() {
         return (request, response, authException) -> {
-            response.setContentType("application/json");
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.setStatus(HttpStatus.UNAUTHORIZED.value());
-            response.getWriter().write(
-                    """
-                    {"status":401,"error":"Unauthorized","message":"%s","timestamp":"%s","path":"%s"}
-                    """.formatted(
-                            authException.getMessage(),
-                            Instant.now(),
-                            request.getRequestURI())
+
+            ErrorResponse error = ErrorResponse.of(
+                    HttpStatus.UNAUTHORIZED.value(),
+                    "Unauthorized",
+                    authException.getMessage(),
+                    request.getRequestURI()
             );
+
+            response.getWriter().write(objectMapper.writeValueAsString(error));
         };
     }
 
     @Bean
     public AccessDeniedHandler accessDeniedHandler() {
         return (request, response, accessDeniedException) -> {
-            response.setContentType("application/json");
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.setStatus(HttpStatus.FORBIDDEN.value());
-            response.getWriter().write(
-                    """
-                    {"status":403,"error":"Forbidden","message":"%s","timestamp":"%s","path":"%s"}
-                    """.formatted(
-                            accessDeniedException.getMessage(),
-                            Instant.now(),
-                            request.getRequestURI())
+
+            ErrorResponse error = ErrorResponse.of(
+                    HttpStatus.FORBIDDEN.value(),
+                    "Forbidden",
+                    accessDeniedException.getMessage(),
+                    request.getRequestURI()
             );
+
+            response.getWriter().write(objectMapper.writeValueAsString(error));
         };
     }
 
@@ -91,8 +99,8 @@ public class SecurityConfig {
             HttpSecurity http
     ) throws Exception {
         return http
+                .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
-                .authenticationProvider(authenticationProvider(passwordEncoder()))
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex
@@ -103,10 +111,11 @@ public class SecurityConfig {
                                 "/api/v1/auth/login",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
-                                "/v3/api-docs/**"
+                                "/v3/api-docs/**",
+                                "/error"
                         ).permitAll()
                         .requestMatchers("/api/v1/provisioning/**")
-                            .hasRole("PLATFORM_ADMIN")
+                        .hasRole("PLATFORM_ADMIN")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(
