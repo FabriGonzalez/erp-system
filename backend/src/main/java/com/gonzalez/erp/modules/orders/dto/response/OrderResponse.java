@@ -30,7 +30,6 @@ public record OrderResponse(
         Instant preparedAt,
         Instant shippedAt,
         Instant cancelledAt,
-        Instant returnedAt,
         List<OrderItemResponse> items,
         Instant createdAt,
         Instant updatedAt

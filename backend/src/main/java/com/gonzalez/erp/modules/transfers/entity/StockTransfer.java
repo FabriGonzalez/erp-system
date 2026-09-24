@@ -3,7 +3,6 @@ package com.gonzalez.erp.modules.transfers.entity;
 import com.gonzalez.erp.common.entity.BaseEntity;
 import com.gonzalez.erp.modules.branches.entity.Branch;
 import com.gonzalez.erp.modules.companies.entity.Company;
-import com.gonzalez.erp.modules.transfers.exception.InvalidStockTransferException;
 import com.gonzalez.erp.modules.users.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -32,7 +31,7 @@ public class StockTransfer extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default
-    private StockTransferStatus status = StockTransferStatus.DRAFT;
+    private StockTransferStatus status = StockTransferStatus.CONFIRMED;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "created_by", nullable = false)
@@ -49,33 +48,13 @@ public class StockTransfer extends BaseEntity {
     @Builder.Default
     private List<StockTransferItem> items = new ArrayList<>();
 
-    public void confirm() {
-        if (!isDraft()) {
-            throw new InvalidStockTransferException(
-                    "Only draft transfers can be confirmed");
-        }
-
-        this.status = StockTransferStatus.CONFIRMED;
-        this.confirmedAt = Instant.now();
-    }
-
     public void cancel() {
-        if (!isDraft()) {
-            throw new InvalidStockTransferException(
-                    "Only draft transfers can be cancelled");
-        }
-
-        this.confirmedAt = null;
         this.status = StockTransferStatus.CANCELLED;
     }
 
     public void addItem(StockTransferItem item) {
         item.setTransfer(this);
         this.items.add(item);
-    }
-
-    public boolean isDraft() {
-        return status == StockTransferStatus.DRAFT;
     }
 
     public boolean isConfirmed() {

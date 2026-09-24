@@ -5,7 +5,13 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "stock_movements")
+@Table(
+    name = "stock_movements",
+    indexes = {
+        @Index(name = "idx_stock_movements_stock_created", columnList = "stock_id, created_at"),
+        @Index(name = "idx_stock_movements_type", columnList = "type")
+    }
+)
 @Getter
 @Setter
 @NoArgsConstructor

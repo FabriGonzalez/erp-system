@@ -28,9 +28,9 @@ public class ShipmentServiceImpl implements ShipmentService {
     public ShipmentResponse create(Long orderId, ShipmentRequest request) {
         Order order = findOrderOrThrow(orderId);
 
-        if (!order.isDraft()) {
+        if (!order.isToPrepare()) {
             throw new InvalidShipmentException(
-                    "Shipment can only be created for draft orders");
+                    "Shipment can only be created for orders in TO_PREPARE");
         }
 
         if (shipmentRepository.existsByOrderId(orderId)) {
@@ -72,9 +72,9 @@ public class ShipmentServiceImpl implements ShipmentService {
     public ShipmentResponse update(Long orderId, ShipmentRequest request) {
         Order order = findOrderOrThrow(orderId);
 
-        if (!order.isDraft()) {
+        if (!order.isToPrepare()) {
             throw new InvalidShipmentException(
-                    "Shipment can only be updated while the order is in DRAFT");
+                    "Shipment can only be updated while the order is in TO_PREPARE");
         }
 
         Shipment shipment = shipmentRepository.findByOrderId(orderId)

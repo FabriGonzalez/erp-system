@@ -19,13 +19,7 @@ public interface OrderService {
 
     OrderResponse update(Long id, OrderUpdateRequest request);
 
-    OrderResponse confirm(Long id);
-
-    OrderResponse prepare(Long id);
-
     OrderResponse ship(Long id);
 
     OrderResponse cancel(Long id);
-
-    OrderResponse returnOrder(Long id);
 }

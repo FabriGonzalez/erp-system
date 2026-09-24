@@ -14,6 +14,7 @@ import com.gonzalez.erp.modules.orders.exception.InsufficientStockForEditExcepti
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderStatusTransitionException;
 import com.gonzalez.erp.modules.orders.exception.QuickSaleValidationException;
+import com.gonzalez.erp.modules.payments.exception.InvalidPaymentException;
 import com.gonzalez.erp.modules.products.exception.ProductAttributeNameAlreadyExistsException;
 import com.gonzalez.erp.modules.products.exception.ProductAttributeValueAlreadyExistsException;
 import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveException;
@@ -29,6 +30,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -37,6 +39,19 @@ import java.util.List;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+        @ExceptionHandler(AccessDeniedException.class)
+        public ResponseEntity<ErrorResponse> handleAccessDenied(
+                        AccessDeniedException ex, HttpServletRequest request) {
+                return ResponseEntity
+                                .status(HttpStatus.FORBIDDEN)
+                                .body(ErrorResponse.of(
+                                                HttpStatus.FORBIDDEN.value(),
+                                                HttpStatus.FORBIDDEN.getReasonPhrase(),
+                                                ex.getMessage(),
+                                                request.getRequestURI()
+                                ));
+        }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleResourceNotFound(
@@ -160,7 +175,8 @@ public class GlobalExceptionHandler {
             InvalidOrderException.class,
             InvalidOrderStatusTransitionException.class,
             QuickSaleValidationException.class,
-            InsufficientStockForEditException.class
+            InsufficientStockForEditException.class,
+            InvalidPaymentException.class
     })
     public ResponseEntity<ErrorResponse> handleInvalidOrder(
             RuntimeException ex, HttpServletRequest request) {

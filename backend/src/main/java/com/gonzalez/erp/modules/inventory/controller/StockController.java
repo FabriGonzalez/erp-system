@@ -60,11 +60,13 @@ public class StockController {
     }
 
     @PatchMapping("/adjust")
-    @Operation(summary = "Ajustar stock", description = "Realiza un ajuste manual de stock. Solo administradores.")
+    @Operation(summary = "Ajustar stock", description = "Ajusta la cantidad final del stock. quantity en el movimiento es el delta firmado (newQuantity - previousQuantity); requiere AJUSTAR_STOCK.")
     @ApiResponse(responseCode = "200", description = "Stock ajustado exitosamente")
     @ApiResponse(responseCode = "400", description = "Cantidad negativa o validación inválida",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @ApiResponse(responseCode = "404", description = "Stock no encontrado",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+        @ApiResponse(responseCode = "403", description = "Sin permiso AJUSTAR_STOCK",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @ApiResponse(
             responseCode = "409",

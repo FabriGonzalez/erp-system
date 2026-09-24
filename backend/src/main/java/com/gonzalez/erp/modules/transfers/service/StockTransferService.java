@@ -8,13 +8,11 @@ import java.util.List;
 
 public interface StockTransferService {
 
-    List<StockTransferResponse> findAll(StockTransferStatus status);
+    List<StockTransferResponse> findAll();
 
     StockTransferResponse findById(Long id);
 
     StockTransferResponse create(StockTransferRequest request);
-
-    StockTransferResponse confirm(Long id);
 
     StockTransferResponse cancel(Long id);
 }

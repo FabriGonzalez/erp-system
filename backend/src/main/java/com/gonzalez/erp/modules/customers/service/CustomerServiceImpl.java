@@ -25,6 +25,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     private final CustomerRepository customerRepository;
     private final CompanyRepository companyRepository;
+    private final CustomerAccountService customerAccountService;
 
     @Override
     public List<CustomerResponse> findAll(Boolean active, String search) {
@@ -71,7 +72,10 @@ public class CustomerServiceImpl implements CustomerService {
                 .company(company)
                 .build();
 
-        return CustomerMapper.toResponse(customerRepository.save(customer));
+        Customer savedCustomer = customerRepository.save(customer);
+        customerAccountService.createAccount(savedCustomer);
+
+        return CustomerMapper.toResponse(savedCustomer);
     }
 
     @Override

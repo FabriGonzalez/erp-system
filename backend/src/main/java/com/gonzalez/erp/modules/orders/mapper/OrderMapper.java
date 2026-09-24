@@ -41,7 +41,6 @@ public final class OrderMapper {
                 order.getPreparedAt(),
                 order.getShippedAt(),
                 order.getCancelledAt(),
-                order.getReturnedAt(),
                 order.getItems().stream()
                         .map(OrderMapper::toItemResponse)
                         .toList(),

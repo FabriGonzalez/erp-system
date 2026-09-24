@@ -15,6 +15,11 @@ import lombok.*;
                         name = "uk_stock_variant_branch",
                         columnNames = {"product_variant_id", "branch_id"}
                 )
+        },
+        indexes = {
+                @Index(name = "idx_stocks_company", columnList = "company_id"),
+                @Index(name = "idx_stocks_company_variant", columnList = "company_id, product_variant_id"),
+                @Index(name = "idx_stocks_company_branch", columnList = "company_id, branch_id")
         }
 )
 @Getter

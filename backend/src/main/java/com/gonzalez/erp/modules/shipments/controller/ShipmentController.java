@@ -56,11 +56,11 @@ public class ShipmentController {
     @PatchMapping
     @Operation(
             summary = "Actualizar envío de una orden",
-            description = "Actualiza la dirección de envío mientras la orden se encuentra en estado DRAFT"
+            description = "Actualiza la dirección de envío mientras la orden se encuentra en estado TO_PREPARE"
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Envío actualizado exitosamente"),
-            @ApiResponse(responseCode = "400", description = "La orden no está en estado DRAFT"),
+            @ApiResponse(responseCode = "400", description = "La orden no está en estado TO_PREPARE"),
             @ApiResponse(responseCode = "404", description = "Orden o envío no encontrado")
     })
     public ResponseEntity<ShipmentResponse> update(

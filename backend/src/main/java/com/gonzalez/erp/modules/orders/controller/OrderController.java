@@ -36,7 +36,7 @@ public class OrderController {
     @GetMapping
     @Operation(summary = "Listar órdenes", description = "Obtiene las órdenes de venta de la empresa y sucursales del usuario. Opcionalmente filtrar por estado, sucursal, tipo de venta o tipo de entrega.")
     public ResponseEntity<List<OrderResponse>> findAll(
-            @Parameter(description = "Filtrar por estado: DRAFT, CONFIRMED, TO_PREPARE, SHIPPED, CANCELLED o RETURNED. Si no se envía, retorna todas.")
+            @Parameter(description = "Filtrar por estado: CONFIRMED, TO_PREPARE, SHIPPED o CANCELLED. Si no se envía, retorna todas.")
             @RequestParam(required = false) OrderStatus status,
             @Parameter(description = "Filtrar por sucursal")
             @RequestParam(required = false) Long branchId,
@@ -58,9 +58,9 @@ public class OrderController {
     }
 
     @PostMapping
-    @Operation(summary = "Crear orden", description = "Crea una orden en estado DRAFT. El precio unitario se toma de la variante de producto al momento de la creación. QUICK_SALE requiere cliente registrado y no tiene ítems.")
+    @Operation(summary = "Crear orden", description = "Crea una orden en estado CONFIRMED (LOCAL_PICKUP) o TO_PREPARE (SHIPPING) aplicando el descuento de stock atómicamente si es WITH_PRODUCTS. QUICK_SALE requiere cliente registrado y no tiene ítems.")
     @ApiResponse(responseCode = "201", description = "Orden creada exitosamente")
-    @ApiResponse(responseCode = "400", description = "Validación inválida (venta rápida, variantes duplicadas, etc.)",
+    @ApiResponse(responseCode = "400", description = "Validación inválida (venta rápida, variantes duplicadas, stock insuficiente, etc.)",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @ApiResponse(responseCode = "404", description = "Sucursal, cliente o variante de producto no encontrado",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -72,7 +72,7 @@ public class OrderController {
     }
 
     @PatchMapping("/{id}")
-    @Operation(summary = "Editar orden", description = "Edita una orden en DRAFT (sin tocar stock) o en TO_PREPARE (ajustando stock de forma atómica).")
+    @Operation(summary = "Editar orden", description = "Edita una orden en TO_PREPARE (ajustando stock de forma atómica).")
     @ApiResponse(responseCode = "200", description = "Orden editada exitosamente")
     @ApiResponse(responseCode = "400", description = "Estado no editable o stock insuficiente",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -82,32 +82,6 @@ public class OrderController {
             @Parameter(description = "Datos de la orden")
             @Valid @RequestBody OrderUpdateRequest request) {
         return ResponseEntity.ok(orderService.update(id, request));
-    }
-
-    @PatchMapping("/{id}/confirm")
-    @Operation(summary = "Confirmar orden", description = "Confirma una orden LOCAL_PICKUP en estado DRAFT, valida y descuenta el stock de la sucursal y crea los movimientos SALE asociados.")
-    @ApiResponse(responseCode = "200", description = "Orden confirmada exitosamente")
-    @ApiResponse(responseCode = "400", description = "Estado o tipo de entrega inválido, o stock insuficiente",
-            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Orden o stock no encontrado",
-            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    public ResponseEntity<OrderResponse> confirm(
-            @Parameter(description = "ID de la orden a confirmar")
-            @PathVariable Long id) {
-        return ResponseEntity.ok(orderService.confirm(id));
-    }
-
-    @PatchMapping("/{id}/prepare")
-    @Operation(summary = "Preparar orden", description = "Prepara una orden SHIPPING en estado DRAFT: valida y descuenta el stock de la sucursal, crea los movimientos SALE asociados y pasa la orden a TO_PREPARE.")
-    @ApiResponse(responseCode = "200", description = "Orden preparada exitosamente")
-    @ApiResponse(responseCode = "400", description = "Estado o tipo de entrega inválido, o stock insuficiente",
-            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Orden o stock no encontrado",
-            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    public ResponseEntity<OrderResponse> prepare(
-            @Parameter(description = "ID de la orden a preparar")
-            @PathVariable Long id) {
-        return ResponseEntity.ok(orderService.prepare(id));
     }
 
     @PatchMapping("/{id}/ship")
@@ -124,7 +98,7 @@ public class OrderController {
     }
 
     @PatchMapping("/{id}/cancel")
-    @Operation(summary = "Cancelar orden", description = "Cancela una orden. Si estaba CONFIRMED o TO_PREPARE, devuelve el stock y crea movimientos RETURN asociados. SHIPPED y RETURNED no pueden cancelarse.")
+    @Operation(summary = "Cancelar orden", description = "Cancela una orden CONFIRMED o TO_PREPARE, devuelve el stock de forma atómica y crea movimientos RETURN asociados. SHIPPED no puede cancelarse.")
     @ApiResponse(responseCode = "200", description = "Orden cancelada exitosamente")
     @ApiResponse(responseCode = "400", description = "Estado inválido",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -134,18 +108,5 @@ public class OrderController {
             @Parameter(description = "ID de la orden a cancelar")
             @PathVariable Long id) {
         return ResponseEntity.ok(orderService.cancel(id));
-    }
-
-    @PatchMapping("/{id}/return")
-    @Operation(summary = "Devolver orden", description = "Devuelve una orden CONFIRMED o SHIPPED: devuelve el stock de todos los ítems, crea movimientos RETURN y la pasa a RETURNED. Devolución total.")
-    @ApiResponse(responseCode = "200", description = "Orden devuelta exitosamente")
-    @ApiResponse(responseCode = "400", description = "Estado inválido",
-            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    @ApiResponse(responseCode = "404", description = "Orden o stock no encontrado",
-            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    public ResponseEntity<OrderResponse> returnOrder(
-            @Parameter(description = "ID de la orden a devolver")
-            @PathVariable Long id) {
-        return ResponseEntity.ok(orderService.returnOrder(id));
     }
 }

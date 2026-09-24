@@ -52,8 +52,7 @@ public class Order extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    @Builder.Default
-    private OrderStatus status = OrderStatus.DRAFT;
+    private OrderStatus status;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "sales_type", nullable = false, length = 20)
@@ -86,40 +85,9 @@ public class Order extends BaseEntity {
     @Column(name = "cancelled_at")
     private Instant cancelledAt;
 
-    @Column(name = "returned_at")
-    private Instant returnedAt;
-
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
-
-    public void confirm() {
-        if (!isDraft()) {
-            throw new InvalidOrderException(
-                    "Only draft orders can be confirmed. Current status: " + status);
-        }
-        if (deliveryType != DeliveryType.LOCAL_PICKUP) {
-            throw new InvalidOrderException(
-                    "Only LOCAL_PICKUP orders can be confirmed. Use prepare() for SHIPPING orders.");
-        }
-
-        this.status = OrderStatus.CONFIRMED;
-        this.confirmedAt = Instant.now();
-    }
-
-    public void prepare() {
-        if (!isDraft()) {
-            throw new InvalidOrderException(
-                    "Only draft orders can be prepared. Current status: " + status);
-        }
-        if (deliveryType != DeliveryType.SHIPPING) {
-            throw new InvalidOrderException(
-                    "Only SHIPPING orders can be prepared. Use confirm() for LOCAL_PICKUP orders.");
-        }
-
-        this.status = OrderStatus.TO_PREPARE;
-        this.preparedAt = Instant.now();
-    }
 
     public void ship() {
         if (status != OrderStatus.TO_PREPARE) {
@@ -141,23 +109,13 @@ public class Order extends BaseEntity {
                     "Order is already cancelled");
         }
 
-        if (status == OrderStatus.SHIPPED || status == OrderStatus.RETURNED) {
+        if (status != OrderStatus.CONFIRMED && status != OrderStatus.TO_PREPARE) {
             throw new InvalidOrderException(
                     "Cannot cancel order in status: " + status);
         }
 
         this.status = OrderStatus.CANCELLED;
         this.cancelledAt = Instant.now();
-    }
-
-    public void returnOrder() {
-        if (status != OrderStatus.CONFIRMED && status != OrderStatus.SHIPPED) {
-            throw new InvalidOrderException(
-                    "Only CONFIRMED or SHIPPED orders can be returned. Current status: " + status);
-        }
-
-        this.status = OrderStatus.RETURNED;
-        this.returnedAt = Instant.now();
     }
 
     public void addItem(OrderItem item) {
@@ -189,10 +147,6 @@ public class Order extends BaseEntity {
         }
     }
 
-    public boolean isDraft() {
-        return status == OrderStatus.DRAFT;
-    }
-
     public boolean isConfirmed() {
         return status == OrderStatus.CONFIRMED;
     }
@@ -209,20 +163,8 @@ public class Order extends BaseEntity {
         return status == OrderStatus.CANCELLED;
     }
 
-    public boolean isReturned() {
-        return status == OrderStatus.RETURNED;
-    }
-
     public boolean isEditable() {
-        return status == OrderStatus.DRAFT || status == OrderStatus.TO_PREPARE;
-    }
-
-    public boolean canConfirm() {
-        return isDraft() && deliveryType == DeliveryType.LOCAL_PICKUP;
-    }
-
-    public boolean canPrepare() {
-        return isDraft() && deliveryType == DeliveryType.SHIPPING;
+        return status == OrderStatus.TO_PREPARE;
     }
 
     public boolean canShip() {
@@ -230,11 +172,7 @@ public class Order extends BaseEntity {
     }
 
     public boolean canCancel() {
-        return isDraft() || isConfirmed() || isToPrepare();
-    }
-
-    public boolean canReturn() {
-        return isConfirmed() || isShipped();
+        return isConfirmed() || isToPrepare();
     }
 
     public boolean requiresStockValidation() {

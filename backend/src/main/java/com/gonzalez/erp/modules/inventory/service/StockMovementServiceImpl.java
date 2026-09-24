@@ -24,11 +24,7 @@ public class StockMovementServiceImpl implements StockMovementService {
     public List<StockMovementResponse> findAll() {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
-        return stockMovementRepository.findAll().stream()
-                .filter(movement ->
-                        movement.getStock() != null
-                                && movement.getStock().getCompany() != null
-                                && companyId.equals(movement.getStock().getCompany().getId()))
+        return stockMovementRepository.findAllByCompanyId(companyId).stream()
                 .map(StockMovementMapper::toResponse)
                 .toList();
     }
@@ -43,11 +39,7 @@ public class StockMovementServiceImpl implements StockMovementService {
     public List<StockMovementResponse> findByStockId(Long stockId) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
-        return stockMovementRepository.findByStockIdOrderByCreatedAtDesc(stockId).stream()
-                .filter(movement ->
-                        movement.getStock() != null
-                                && movement.getStock().getCompany() != null
-                                && companyId.equals(movement.getStock().getCompany().getId()))
+        return stockMovementRepository.findByStockIdAndCompanyId(stockId, companyId).stream()
                 .map(StockMovementMapper::toResponse)
                 .toList();
     }
@@ -56,11 +48,7 @@ public class StockMovementServiceImpl implements StockMovementService {
     public List<StockMovementResponse> findByType(StockMovementType type) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
-        return stockMovementRepository.findByType(type).stream()
-                .filter(movement ->
-                        movement.getStock() != null
-                                && movement.getStock().getCompany() != null
-                                && companyId.equals(movement.getStock().getCompany().getId()))
+        return stockMovementRepository.findByTypeAndCompanyId(type, companyId).stream()
                 .map(StockMovementMapper::toResponse)
                 .toList();
     }
@@ -68,11 +56,7 @@ public class StockMovementServiceImpl implements StockMovementService {
     private StockMovement findMovementOrThrow(Long id) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
-        return stockMovementRepository.findById(id)
-                .filter(movement ->
-                        movement.getStock() != null
-                                && movement.getStock().getCompany() != null
-                                && companyId.equals(movement.getStock().getCompany().getId()))
+        return stockMovementRepository.findByIdAndCompanyId(id, companyId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Stock movement not found with id: " + id));
     }
