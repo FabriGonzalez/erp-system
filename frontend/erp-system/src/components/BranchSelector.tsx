@@ -1,16 +1,33 @@
+import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useBranchStore } from '@/stores/branch-store';
+import { SharedStyles } from '@/styles/shared';
 
-export function BranchSelector() {
+type BranchSelectorProps = {
+    onPress?: () => void;
+};
+
+export function BranchSelector({ onPress }: BranchSelectorProps) {
     const activeBranch = useBranchStore(
         (state) => state.activeBranch
     );
 
+    function handlePress() {
+        if (onPress) {
+            onPress();
+        } else {
+            router.push('/settings/active-branch');
+        }
+    }
+
     return (
-        <Pressable style={styles.container}>
+        <Pressable
+            style={({ pressed }) => [styles.container, pressed && SharedStyles.pressed]}
+            onPress={handlePress}
+        >
             <View>
                 <Text style={styles.label}>
                     Sucursal activa
@@ -27,6 +44,7 @@ export function BranchSelector() {
         </Pressable>
     );
 }
+
 
 const styles = StyleSheet.create({
     container: {

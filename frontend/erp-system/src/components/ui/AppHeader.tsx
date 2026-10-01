@@ -1,10 +1,12 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
+import { SharedStyles } from '@/styles/shared';
 import { getInitials } from '@/utils/format';
 
 export function AppHeader() {
@@ -16,17 +18,18 @@ export function AppHeader() {
 
     return (
         <View style={styles.container}>
-            <View>
+            <Pressable
+                onPress={() => router.push('/settings/active-branch')}
+                style={({ pressed }) => pressed && SharedStyles.pressed}
+            >
                 <Text style={styles.company}>
                     {user?.company.name ?? 'ERP System'}
                 </Text>
 
-                {activeBranch && (
-                    <Text style={styles.branch}>
-                        📍 {activeBranch.name}
-                    </Text>
-                )}
-            </View>
+                <Text style={styles.branch}>
+                    📍 {activeBranch ? activeBranch.name : 'Seleccionar sucursal'}
+                </Text>
+            </Pressable>
 
             <Avatar
                 initials={user?.name ? getInitials(user.name) : 'U'}
@@ -40,6 +43,7 @@ export function AppHeader() {
         </View>
     );
 }
+
 
 const styles = StyleSheet.create({
     container: {

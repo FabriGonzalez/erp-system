@@ -19,7 +19,7 @@ export default function MoreScreen() {
         router.replace('/(auth)/login');
     }
 
-    const isAdmin = user?.role === 'ADMINISTRATOR';
+    const isAdmin = user?.role === 'Administrador';
 
     return (
         <Screen style={styles.screen}>
@@ -115,8 +115,9 @@ export default function MoreScreen() {
                                 title="Sucursales"
                                 subtitle="Configurar locales y almacenes"
                                 iconName={{ ios: 'building.2.fill', android: 'store', web: 'store' }}
-                                onPress={() => { }}
-                                showChevron={false}
+                                onPress={() => {
+                                    router.push({ pathname: '/branches' });
+                                }}
                             />
                         </View>
                     </>

@@ -29,7 +29,7 @@ export function SelectCustomerScreen({ flow }: SelectCustomerScreenProps) {
     const currentCustomer = useOrderDraftStore((state) => state.customer);
     const newCustomerRoute = flow === 'shipments'
         ? '/shipments/new-customers'
-        : '/orders/new-customers';
+        : '/orders/new-customer';
 
     const filteredCustomers = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();

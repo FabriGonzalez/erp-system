@@ -4,10 +4,10 @@ import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
-import { mockEmployee, mockUser } from '@/data/mock-user';
+import { login as loginService } from '@/services/auth-service';
 import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
 import { router } from 'expo-router';
+import Head from 'expo-router/head';
 import { useState } from 'react';
 import {
     ActivityIndicator,
@@ -16,108 +16,129 @@ import {
     View,
 } from 'react-native';
 
+
 export default function LoginScreen() {
-    const [email, setEmail] = useState('');
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     const login = useAuthStore((state) => state.login);
-    const setActiveBranch = useBranchStore(
-        (state) => state.setActiveBranch
-    );
 
-    function handleLogin() {
+    async function handleLogin() {
         setErrorMsg(null);
 
-        // Validaciones básicas
-        if (!email.trim() || !password.trim()) {
+        if (!username.trim() || !password.trim()) {
             setErrorMsg('Por favor completa todos los campos.');
             return;
         }
 
         setIsLoading(true);
 
-        // Simulamos respuesta del servidor en 1 segundo
-        setTimeout(() => {
-            const normalizedEmail = email.trim().toLowerCase();
+        try {
+            const response = await loginService(username.trim(), password);
 
-            if (normalizedEmail === 'admin@elyuyei.com' && password === 'admin') {
-                login(mockUser);
-                setActiveBranch(mockUser.branches[0]);
-                setIsLoading(false);
-                router.replace('/(app)/(tabs)');
-            } else if (normalizedEmail === 'juan@elyuyei.com' && password === 'employee') {
-                login(mockEmployee);
-                setActiveBranch(mockEmployee.branches[0]);
-                setIsLoading(false);
-                router.replace('/(app)/(tabs)');
+            console.log('LOGIN RESPONSE OK');
+
+            await login(response);
+
+            console.log('AUTH STORE UPDATED');
+
+            router.replace({
+                pathname: '/(app)/(tabs)/orders',
+            });
+
+            console.log('ROUTER REPLACE CALLED');
+        } catch (error: unknown) {
+            if (
+                error instanceof TypeError &&
+                error.message === 'Network request failed'
+            ) {
+                setErrorMsg(
+                    'Error de red. Verificá tu conexión e intentá de nuevo.'
+                );
+            } else if (error instanceof Error) {
+                setErrorMsg(error.message);
             } else {
-                setIsLoading(false);
-                setErrorMsg('Credenciales inválidas. Usa:\n• admin@elyuyei.com / admin\n• juan@elyuyei.com / employee');
+                setErrorMsg('Ocurrió un error inesperado.');
             }
-        }, 1000);
+        } finally {
+            setIsLoading(false);
+        }
     }
 
     return (
-        <Screen style={styles.container}>
+        <>
+            <Head>
+                <title>ERP System - Iniciar sesión</title>
+            </Head>
 
-            <View style={styles.form}>
-                <View style={styles.header}>
-                    <Text style={styles.title}>ERP System</Text>
-                    <Text style={styles.subtitle}>Inicia sesión para continuar</Text>
-                </View>
-                <AppInput
-                    placeholder="Email"
-                    value={email}
-                    onChangeText={(text) => {
-                        setEmail(text);
-                        setErrorMsg(null);
-                    }}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    editable={!isLoading}
-                />
 
-                <AppInput
-                    placeholder="Contraseña"
-                    value={password}
-                    onChangeText={(text) => {
-                        setPassword(text);
-                        setErrorMsg(null);
-                    }}
-                    secureTextEntry
-                    editable={!isLoading}
-                    autoCapitalize="none"
-                    returnKeyType="done"
-                    onSubmitEditing={handleLogin}
-                />
-
-                {errorMsg && (
-                    <View style={styles.errorContainer}>
-                        <Text style={styles.errorText}>{errorMsg}</Text>
+            <Screen style={styles.container}>
+                <View style={styles.form}>
+                    <View style={styles.header}>
+                        <Text style={styles.title}>ERP System</Text>
+                        <Text style={styles.subtitle}>
+                            Inicia sesión para continuar
+                        </Text>
                     </View>
-                )}
 
-                {isLoading ? (
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="small" color={Colors.primary} />
-                        <Text style={styles.loadingText}>Iniciando sesión...</Text>
-                    </View>
-                ) : (
-                    <AppButton
-                        title="Ingresar"
-                        onPress={handleLogin}
+                    <AppInput
+                        placeholder="Usuario"
+                        value={username}
+                        onChangeText={(text) => {
+                            setUsername(text);
+                            setErrorMsg(null);
+                        }}
+                        autoCapitalize="none"
+                        editable={!isLoading}
                     />
-                )}
-                <View style={styles.footer}>
-                    <Text style={styles.footerText}>
-                        Pruebas demo ERP multi-tenant
-                    </Text>
-                </View>
-            </View>
 
-        </Screen>
+                    <AppInput
+                        placeholder="Contraseña"
+                        value={password}
+                        onChangeText={(text) => {
+                            setPassword(text);
+                            setErrorMsg(null);
+                        }}
+                        secureTextEntry
+                        editable={!isLoading}
+                        autoCapitalize="none"
+                        returnKeyType="done"
+                        onSubmitEditing={handleLogin}
+                    />
+
+                    {errorMsg && (
+                        <View style={styles.errorContainer}>
+                            <Text style={styles.errorText}>{errorMsg}</Text>
+                        </View>
+                    )}
+
+                    {isLoading ? (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator
+                                size="small"
+                                color={Colors.primary}
+                            />
+                            <Text style={styles.loadingText}>
+                                Iniciando sesión...
+                            </Text>
+                        </View>
+                    ) : (
+                        <AppButton
+                            title="Ingresar"
+                            onPress={handleLogin}
+                        />
+                    )}
+
+                    <View style={styles.footer}>
+                        <Text style={styles.footerText}>
+                            Pruebas demo ERP multi-tenant
+                        </Text>
+                    </View>
+                </View>
+            </Screen>
+        </>
     );
 }
 
@@ -145,24 +166,24 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         textAlign: 'center',
     },
+
     form: {
         width: '100%',
         maxWidth: 420,
         alignSelf: 'center',
-
         gap: Spacing.md,
         backgroundColor: Colors.surface,
         padding: Spacing.xl,
         borderRadius: 16,
         borderWidth: 1,
         borderColor: Colors.border,
-
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
         shadowRadius: 10,
         elevation: 2,
     },
+
     errorContainer: {
         backgroundColor: Colors.errorLight,
         borderWidth: 1,

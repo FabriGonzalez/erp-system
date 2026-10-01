@@ -5,7 +5,7 @@ export type Company = {
     name: string;
 };
 
-export type Role = 'ADMINISTRATOR' | 'EMPLOYEE';
+export type Role = 'ADMINISTRATOR' | 'EMPLOYEE' | 'Administrador' | 'Empleado';
 
 export type Permission =
     | 'PRODUCTS_CREATE'
@@ -35,4 +35,18 @@ export type User = {
     company: Company;
     branches: Branch[];
     permissions: Permission[];
+};
+
+export type LoginResponse = {
+    token: string;
+    type: string;
+    id: number;
+    username: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    roleName: string;
+    permissions: string[];
+    companyId: number;
+    companyName: string;
 };
