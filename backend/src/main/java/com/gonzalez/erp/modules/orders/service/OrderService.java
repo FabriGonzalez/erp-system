@@ -1,5 +1,6 @@
 package com.gonzalez.erp.modules.orders.service;
 
+import com.gonzalez.erp.modules.orders.dto.request.OrderCancelRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderUpdateRequest;
 import com.gonzalez.erp.modules.orders.dto.response.OrderResponse;
@@ -21,5 +22,5 @@ public interface OrderService {
 
     OrderResponse ship(Long id);
 
-    OrderResponse cancel(Long id);
+    OrderResponse cancel(Long id, OrderCancelRequest request);
 }

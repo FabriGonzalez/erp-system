@@ -20,7 +20,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Product extends BaseEntity {
+public class    Product extends BaseEntity {
 
     @NotBlank(message = "Product name is required")
     @Size(max = 100, message = "Product name must not exceed 100 characters")

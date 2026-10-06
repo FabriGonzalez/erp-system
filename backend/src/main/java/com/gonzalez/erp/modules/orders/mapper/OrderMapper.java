@@ -13,12 +13,13 @@ public final class OrderMapper {
 
     private OrderMapper() {}
 
-    public static OrderResponse toResponse(Order order) {
+    public static OrderResponse toResponse(
+            Order order,
+            BigDecimal amountPaid,
+            PaymentStatus paymentStatus,
+            BigDecimal balance
+    ) {
         Customer customer = order.getCustomer();
-        BigDecimal total = order.getTotal();
-        BigDecimal amountPaid = order.getAmountPaid();
-        PaymentStatus paymentStatus = computePaymentStatus(total, amountPaid);
-        BigDecimal balance = total.subtract(amountPaid);
 
         return new OrderResponse(
                 order.getId(),
@@ -33,7 +34,7 @@ public final class OrderMapper {
                 order.getQuickSaleAmount(),
                 order.getDeliveryType(),
                 order.getStatus(),
-                total,
+                order.getTotal(),
                 amountPaid,
                 paymentStatus,
                 balance,
@@ -49,12 +50,38 @@ public final class OrderMapper {
         );
     }
 
+    public static PaymentStatus computePaymentStatus(
+            BigDecimal total,
+            BigDecimal amountPaid
+    ) {
+        if (total == null || total.compareTo(BigDecimal.ZERO) == 0) {
+            return PaymentStatus.PENDING;
+        }
+
+        if (amountPaid == null || amountPaid.compareTo(BigDecimal.ZERO) <= 0) {
+            return PaymentStatus.PENDING;
+        }
+
+        if (amountPaid.compareTo(total) >= 0) {
+            return PaymentStatus.PAID;
+        }
+
+        return PaymentStatus.PARTIAL;
+    }
+
     private static String customerName(Customer customer) {
-        String firstName = customer.getFirstName() == null ? "" : customer.getFirstName().trim();
-        String lastName = customer.getLastName() == null ? "" : customer.getLastName().trim();
+        String firstName = customer.getFirstName() == null
+                ? ""
+                : customer.getFirstName().trim();
+
+        String lastName = customer.getLastName() == null
+                ? ""
+                : customer.getLastName().trim();
+
         if (firstName.isEmpty() && lastName.isEmpty()) {
             return null;
         }
+
         return (firstName + " " + lastName).trim();
     }
 
@@ -68,18 +95,5 @@ public final class OrderMapper {
                 item.getQuantity(),
                 item.getUnitPrice()
         );
-    }
-
-    private static PaymentStatus computePaymentStatus(BigDecimal total, BigDecimal amountPaid) {
-        if (total == null || total.compareTo(BigDecimal.ZERO) == 0) {
-            return PaymentStatus.PENDING;
-        }
-        if (amountPaid == null || amountPaid.compareTo(BigDecimal.ZERO) <= 0) {
-            return PaymentStatus.PENDING;
-        }
-        if (amountPaid.compareTo(total) >= 0) {
-            return PaymentStatus.PAID;
-        }
-        return PaymentStatus.PARTIAL;
     }
 }

@@ -52,7 +52,13 @@ public final class PaymentMapper {
                 customerName,
                 payment.getAmount(),
                 payment.getMethod(),
+                payment.getStatus(),
+                payment.getCreatedBy() != null ? payment.getCreatedBy().getId() : null,
+                payment.getCreatedBy() != null ? payment.getCreatedBy().getUsername() : null,
                 payment.getCreatedAt(),
+                payment.getCancelledAt(),
+                payment.getCancelledBy() != null ? payment.getCancelledBy().getId() : null,
+                payment.getCancelledBy() != null ? payment.getCancelledBy().getUsername() : null,
                 allocations
         );
     }

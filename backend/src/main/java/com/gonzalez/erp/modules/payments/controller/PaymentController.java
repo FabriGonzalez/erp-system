@@ -19,7 +19,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(
         name = "Payments",
-        description = "Operaciones de registro y consulta de pagos y asignación de pagos a órdenes"
+        description = "Operaciones de registro, cancelación y consulta de pagos"
 )
 public class PaymentController {
 
@@ -30,6 +30,13 @@ public class PaymentController {
     public ResponseEntity<PaymentResponse> createPayment(@Valid @RequestBody PaymentRequest request) {
         PaymentResponse response = paymentService.createPayment(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PatchMapping("/{id}/cancel")
+    @Operation(summary = "Cancelar un pago", description = "Cancela un pago activo, elimina sus asignaciones y revierte su efecto contable en la cuenta corriente del cliente.")
+    public ResponseEntity<PaymentResponse> cancelPayment(@PathVariable Long id) {
+        PaymentResponse response = paymentService.cancelPayment(id);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{id}")

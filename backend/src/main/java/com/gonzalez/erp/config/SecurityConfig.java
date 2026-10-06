@@ -1,6 +1,6 @@
 package com.gonzalez.erp.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.config.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +33,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
     @Bean
     public PasswordEncoder passwordEncoder() {

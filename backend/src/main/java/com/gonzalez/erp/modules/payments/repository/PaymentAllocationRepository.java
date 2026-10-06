@@ -14,6 +14,10 @@ public interface PaymentAllocationRepository extends JpaRepository<PaymentAlloca
 
     List<PaymentAllocation> findByOrderId(Long orderId);
 
+    void deleteByPaymentId(Long paymentId);
+
+    void deleteByOrderId(Long orderId);
+
     @Query("SELECT COALESCE(SUM(pa.amount), 0) FROM PaymentAllocation pa WHERE pa.order.id = :orderId")
     BigDecimal sumAmountByOrderId(@Param("orderId") Long orderId);
 }

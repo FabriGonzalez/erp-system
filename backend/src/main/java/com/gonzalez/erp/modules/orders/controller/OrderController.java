@@ -4,6 +4,7 @@ import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.modules.orders.dto.request.OrderRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderUpdateRequest;
 import com.gonzalez.erp.modules.orders.dto.response.OrderResponse;
+import com.gonzalez.erp.modules.orders.dto.request.OrderCancelRequest;
 import com.gonzalez.erp.modules.orders.entity.DeliveryType;
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 import com.gonzalez.erp.modules.orders.entity.SalesType;
@@ -97,8 +98,9 @@ public class OrderController {
         return ResponseEntity.ok(orderService.ship(id));
     }
 
+
     @PatchMapping("/{id}/cancel")
-    @Operation(summary = "Cancelar orden", description = "Cancela una orden CONFIRMED o TO_PREPARE, devuelve el stock de forma atómica y crea movimientos RETURN asociados. SHIPPED no puede cancelarse.")
+    @Operation(summary = "Cancelar orden", description = "Cancela una orden CONFIRMED o TO_PREPARE, revierte stock y movimientos contables, permitiendo optar por crédito o reembolso.")
     @ApiResponse(responseCode = "200", description = "Orden cancelada exitosamente")
     @ApiResponse(responseCode = "400", description = "Estado inválido",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -106,7 +108,8 @@ public class OrderController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<OrderResponse> cancel(
             @Parameter(description = "ID de la orden a cancelar")
-            @PathVariable Long id) {
-        return ResponseEntity.ok(orderService.cancel(id));
+            @PathVariable Long id,
+            @RequestBody(required = false) OrderCancelRequest request) {
+        return ResponseEntity.ok(orderService.cancel(id, request));
     }
 }

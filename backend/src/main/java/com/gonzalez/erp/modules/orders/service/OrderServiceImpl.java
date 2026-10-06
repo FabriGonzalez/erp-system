@@ -18,6 +18,9 @@ import com.gonzalez.erp.modules.inventory.repository.StockRepository;
 import com.gonzalez.erp.modules.orders.dto.request.OrderItemRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderUpdateRequest;
+import com.gonzalez.erp.modules.orders.dto.request.OrderCancelRequest;
+import com.gonzalez.erp.modules.orders.dto.request.RefundAction;
+import com.gonzalez.erp.modules.payments.repository.PaymentAllocationRepository;
 import com.gonzalez.erp.modules.orders.dto.response.OrderResponse;
 import com.gonzalez.erp.modules.orders.entity.DeliveryType;
 import com.gonzalez.erp.modules.orders.entity.Order;
@@ -36,10 +39,12 @@ import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
 import com.gonzalez.erp.modules.users.repository.UserBranchRepository;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
+import com.gonzalez.erp.modules.orders.entity.PaymentStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -66,6 +71,7 @@ public class OrderServiceImpl implements OrderService {
     private final ProductVariantRepository productVariantRepository;
     private final CustomerRepository customerRepository;
     private final CustomerAccountService customerAccountService;
+    private final PaymentAllocationRepository paymentAllocationRepository;
     private final UserRepository userRepository;
     private final UserBranchRepository userBranchRepository;
     private final CompanyRepository companyRepository;
@@ -82,13 +88,13 @@ public class OrderServiceImpl implements OrderService {
         return orderRepository.search(companyId, status, salesType, deliveryType, branchId).stream()
                 .filter(order -> order.getBranch() != null
                         && accessibleBranchIds.contains(order.getBranch().getId()))
-                .map(OrderMapper::toResponse)
+                .map(this::toOrderResponse)
                 .toList();
     }
 
     @Override
     public OrderResponse findById(Long id) {
-        return OrderMapper.toResponse(findOrderAndValidateAccess(id));
+        return toOrderResponse(findOrderAndValidateAccess(id));
     }
 
     @Override
@@ -181,7 +187,7 @@ public class OrderServiceImpl implements OrderService {
                 );
             }
 
-            return OrderMapper.toResponse(saved);
+            return toOrderResponse(saved);
         } else {
             order.recalculateTotal();
             Order saved = orderRepository.saveAndFlush(order);
@@ -197,7 +203,7 @@ public class OrderServiceImpl implements OrderService {
                 );
             }
 
-            return OrderMapper.toResponse(saved);
+            return toOrderResponse(saved);
         }
     }
 
@@ -231,12 +237,26 @@ public class OrderServiceImpl implements OrderService {
                     "Delivery type cannot be changed for TO_PREPARE orders");
         }
 
+        if (request.customerId() != null) {
+            Long currentCustomerId = order.getCustomer() != null
+                    ? order.getCustomer().getId()
+                    : null;
+
+            if (!request.customerId().equals(currentCustomerId)) {
+                throw new InvalidOrderException(
+                        "Customer cannot be changed for an existing order");
+            }
+        }
+
+        BigDecimal oldTotal = order.getTotal() != null ? order.getTotal() : BigDecimal.ZERO;
+
         Long customerId = request.customerId() != null
                 ? request.customerId()
                 : (order.getCustomer() != null ? order.getCustomer().getId() : null);
 
         Customer customer = resolveCustomerOrNull(customerId, companyId);
 
+        Order saved;
         if (order.getSalesType() == SalesType.QUICK_SALE) {
             if (customer == null) {
                 throw new QuickSaleValidationException("QUICK_SALE requires a registered customer");
@@ -250,13 +270,11 @@ public class OrderServiceImpl implements OrderService {
                 throw new QuickSaleValidationException("QUICK_SALE cannot have items");
             }
 
-            order.setCustomer(customer);
             order.setQuickSaleAmount(quickSaleAmount);
             order.getItems().clear();
             order.recalculateTotal();
 
-            Order saved = orderRepository.save(order);
-            return OrderMapper.toResponse(saved);
+            saved = orderRepository.save(order);
         } else {
             List<OrderItemRequest> newItems = request.items() != null ? request.items() : List.of();
             if (newItems.isEmpty()) {
@@ -329,46 +347,59 @@ public class OrderServiceImpl implements OrderService {
                 }
             }
 
-            order.setCustomer(customer);
             order.updateItems(builtNewItems);
             order.recalculateTotal();
 
-            Order saved = orderRepository.save(order);
-            return OrderMapper.toResponse(saved);
+            saved = orderRepository.save(order);
         }
+
+        BigDecimal newTotal = saved.getTotal() != null ? saved.getTotal() : BigDecimal.ZERO;
+        BigDecimal deltaTotal = newTotal.subtract(oldTotal);
+
+        if (deltaTotal.compareTo(BigDecimal.ZERO) != 0 && saved.getCustomer() != null) {
+            customerAccountService.applyTransaction(
+                    saved.getCustomer().getId(),
+                    companyId,
+                    deltaTotal,
+                    TransactionType.ORDER_CHARGE,
+                    saved.getBranch(),
+                    "Ajuste por edición de pedido #" + saved.getOrderNumber()
+            );
+        }
+
+        return toOrderResponse(saved);
     }
 
-@Override
-@Transactional
-public OrderResponse ship(Long id) {
-    Long companyId = SecurityUtils.requireCurrentCompanyId();
-    Long userId = SecurityUtils.getCurrentUserId();
+    @Override
+    @Transactional
+    public OrderResponse ship(Long id) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+        Long userId = SecurityUtils.getCurrentUserId();
 
-    Order order = orderRepository.findByIdAndCompanyIdForUpdate(id, companyId)
-            .filter(o -> o.getBranch() != null
-                    && isUserAssignedToBranch(userId, o.getBranch().getId()))
-            .orElseThrow(() -> new ResourceNotFoundException(
-                    "Order not found with id: " + id));
+        Order order = orderRepository.findByIdAndCompanyIdForUpdate(id, companyId)
+                .filter(o -> o.getBranch() != null
+                        && isUserAssignedToBranch(userId, o.getBranch().getId()))
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Order not found with id: " + id));
 
-    if (!order.canShip()) {
-        throw new InvalidOrderStatusTransitionException(
-                "Only SHIPPING orders in TO_PREPARE can be shipped. Current status: "
-                        + order.getStatus()
-                        + ", deliveryType: "
-                        + order.getDeliveryType());
+        if (!order.canShip()) {
+            throw new InvalidOrderStatusTransitionException(
+                    "Only SHIPPING orders in TO_PREPARE can be shipped. Current status: "
+                            + order.getStatus()
+                            + ", deliveryType: "
+                            + order.getDeliveryType());
+        }
+
+        order.ship();
+        orderRepository.save(order);
+
+        return toOrderResponse(order);
     }
-
-    order.ship();
-    orderRepository.save(order);
-
-    return OrderMapper.toResponse(order);
-}
-
 
 
     @Override
     @Transactional
-    public OrderResponse cancel(Long id) {
+    public OrderResponse cancel(Long id, OrderCancelRequest request) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
         Long userId = SecurityUtils.getCurrentUserId();
 
@@ -423,9 +454,39 @@ public OrderResponse ship(Long id) {
             }
         }
 
+        if (order.getCustomer() != null) {
+            BigDecimal activeAllocated = paymentAllocationRepository.sumAmountByOrderId(order.getId());
+
+            paymentAllocationRepository.deleteByOrderId(order.getId());
+
+            customerAccountService.applyTransaction(
+                    order.getCustomer().getId(),
+                    companyId,
+                    order.getTotal().negate(),
+                    TransactionType.ORDER_CHARGE,
+                    order.getBranch(),
+                    "Reversión por cancelación de pedido #" + order.getOrderNumber()
+            );
+
+            RefundAction refundAction = (request != null && request.refundAction() != null)
+                    ? request.refundAction()
+                    : RefundAction.KEEP_AS_CREDIT;
+
+            if (refundAction == RefundAction.REFUND_MONEY && activeAllocated.compareTo(BigDecimal.ZERO) > 0) {
+                customerAccountService.applyTransaction(
+                        order.getCustomer().getId(),
+                        companyId,
+                        activeAllocated,
+                        TransactionType.REFUND,
+                        order.getBranch(),
+                        "Devolución por cancelación de pedido #" + order.getOrderNumber()
+                );
+            }
+        }
+
         order.cancel();
         orderRepository.save(order);
-        return OrderMapper.toResponse(order);
+        return toOrderResponse(order);
     }
 
     private Order findOrderAndValidateAccess(Long id) {
@@ -436,6 +497,33 @@ public OrderResponse ship(Long id) {
                 .filter(order -> order.getBranch() != null
                         && isUserAssignedToBranch(userId, order.getBranch().getId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
+    }
+
+    private OrderResponse toOrderResponse(Order order) {
+        BigDecimal total = order.getTotal() != null
+                ? order.getTotal()
+                : BigDecimal.ZERO;
+
+        BigDecimal amountPaid = paymentAllocationRepository
+                .sumAmountByOrderId(order.getId());
+
+        if (amountPaid == null) {
+            amountPaid = BigDecimal.ZERO;
+        }
+
+        BigDecimal balance = total.subtract(amountPaid);
+
+        PaymentStatus paymentStatus = OrderMapper.computePaymentStatus(
+                total,
+                amountPaid
+        );
+
+        return OrderMapper.toResponse(
+                order,
+                amountPaid,
+                paymentStatus,
+                balance
+        );
     }
 
     private void validateBranchAccess(Long branchId) {

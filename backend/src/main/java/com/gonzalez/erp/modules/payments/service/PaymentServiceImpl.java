@@ -1,7 +1,6 @@
 package com.gonzalez.erp.modules.payments.service;
 
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
-import org.springframework.security.access.AccessDeniedException;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.branches.entity.Branch;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
@@ -15,16 +14,21 @@ import com.gonzalez.erp.modules.payments.dto.request.PaymentRequest;
 import com.gonzalez.erp.modules.payments.dto.response.PaymentResponse;
 import com.gonzalez.erp.modules.payments.entity.Payment;
 import com.gonzalez.erp.modules.payments.entity.PaymentAllocation;
+import com.gonzalez.erp.modules.payments.entity.PaymentStatus;
 import com.gonzalez.erp.modules.payments.exception.InvalidPaymentException;
 import com.gonzalez.erp.modules.payments.mapper.PaymentMapper;
 import com.gonzalez.erp.modules.payments.repository.PaymentAllocationRepository;
-import com.gonzalez.erp.modules.users.repository.UserBranchRepository;
 import com.gonzalez.erp.modules.payments.repository.PaymentRepository;
+import com.gonzalez.erp.modules.users.entity.User;
+import com.gonzalez.erp.modules.users.repository.UserBranchRepository;
+import com.gonzalez.erp.modules.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -38,6 +42,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final CustomerRepository customerRepository;
     private final BranchRepository branchRepository;
     private final UserBranchRepository userBranchRepository;
+    private final UserRepository userRepository;
     private final CustomerAccountService customerAccountService;
 
     @Override
@@ -67,12 +72,16 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Customer not found with id: " + request.customerId() + " in current company"));
 
+        User currentUser = userRepository.getReferenceById(userId);
+
         Payment payment = Payment.builder()
                 .company(customer.getCompany())
                 .branch(branch)
                 .customer(customer)
                 .amount(request.amount())
                 .method(request.method())
+                .status(PaymentStatus.ACTIVE)
+                .createdBy(currentUser)
                 .build();
 
         payment = paymentRepository.save(payment);
@@ -117,6 +126,44 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         return PaymentMapper.toResponse(payment);
+    }
+
+    @Override
+    @Transactional
+    public PaymentResponse cancelPayment(Long id) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+        Long userId = SecurityUtils.getCurrentUserId();
+
+        Payment payment = paymentRepository.findByIdAndCompanyIdForUpdate(id, companyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + id));
+
+        User currentUser = userRepository.getReferenceById(userId);
+
+        if (!userBranchRepository.existsByUserIdAndBranchId(userId, payment.getBranch().getId())) {
+            throw new AccessDeniedException(
+                    "User is not assigned to branch: " + payment.getBranch().getId());
+        }
+
+        if (payment.getStatus() == PaymentStatus.CANCELLED) {
+            throw new InvalidPaymentException("Payment is already cancelled");
+        }
+
+        paymentAllocationRepository.deleteByPaymentId(payment.getId());
+        payment.getAllocations().clear();
+
+        customerAccountService.applyTransaction(
+                payment.getCustomer().getId(),
+                companyId,
+                payment.getAmount(),
+                TransactionType.PAYMENT,
+                payment.getBranch(),
+                "Cancelación de pago #" + payment.getId()
+        );
+
+        payment.cancel(currentUser);
+
+        Payment saved = paymentRepository.save(payment);
+        return PaymentMapper.toResponse(saved);
     }
 
     @Override
