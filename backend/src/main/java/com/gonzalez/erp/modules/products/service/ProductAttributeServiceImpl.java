@@ -48,6 +48,14 @@ public class ProductAttributeServiceImpl implements ProductAttributeService {
     }
 
     @Override
+    public List<ProductAttributeValueResponse> findValues(Long attributeId) {
+        findAttributeOrThrow(attributeId);
+        return attributeValueRepository.findByAttributeId(attributeId).stream()
+                .map(this::toValueResponse)
+                .toList();
+    }
+
+    @Override
     @Transactional
     public ProductAttributeResponse create(ProductAttributeRequest request) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();

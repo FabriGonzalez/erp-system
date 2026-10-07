@@ -80,6 +80,15 @@ public class ProductAttributeController {
         return ResponseEntity.ok(attributeService.activate(id));
     }
 
+    @GetMapping("/{id}/values")
+    @Operation(summary = "Listar valores del atributo",
+            description = "Obtiene todos los valores pertenecientes a un atributo existente.")
+    public ResponseEntity<List<ProductAttributeValueResponse>> findValues(
+            @Parameter(description = "ID del atributo")
+            @PathVariable Long id) {
+        return ResponseEntity.ok(attributeService.findValues(id));
+    }
+
     @PostMapping("/{id}/values")
     @Operation(summary = "Agregar valor al atributo", description = "Agrega un valor a un atributo existente. El valor debe ser único dentro del atributo.")
     @ApiResponse(responseCode = "201", description = "Valor agregado exitosamente")

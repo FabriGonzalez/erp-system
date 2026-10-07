@@ -13,6 +13,8 @@ public interface ProductAttributeService {
 
     ProductAttributeResponse findById(Long id);
 
+    List<ProductAttributeValueResponse> findValues(Long attributeId);
+
     ProductAttributeResponse create(ProductAttributeRequest request);
 
     ProductAttributeResponse update(Long id, ProductAttributeRequest request);

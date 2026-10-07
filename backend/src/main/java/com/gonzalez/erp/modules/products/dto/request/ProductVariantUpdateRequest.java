@@ -9,7 +9,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.List;
 
-public record ProductVariantRequest(
+public record ProductVariantUpdateRequest(
         @NotBlank(message = "SKU is required")
         @Size(max = 50, message = "SKU must not exceed 50 characters")
         String sku,
@@ -22,5 +22,6 @@ public record ProductVariantRequest(
         @Size(min = 1, message = "At least one attribute value is required")
         List<Long> attributeValueIds,
 
-        List<@Valid InitialStockRequest> initialStock
+        @Valid
+        List<ProductVariantStockRequest> stock
 ) {}

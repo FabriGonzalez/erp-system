@@ -17,5 +17,7 @@ public interface StockService {
 
     List<StockResponse> findByProductVariantId(Long productVariantId);
 
+    void createInitialStock(Long productVariantId, Long branchId, Integer quantity);
+
     StockResponse adjustStock(StockAdjustRequest request);
 }

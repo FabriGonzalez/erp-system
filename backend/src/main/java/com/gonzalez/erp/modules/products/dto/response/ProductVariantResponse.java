@@ -10,6 +10,7 @@ public record ProductVariantResponse(
         BigDecimal price,
         boolean active,
         List<ProductAttributeValueResponse> attributes,
+        List<ProductVariantStockResponse> stock,
         Instant createdAt,
         Instant updatedAt
 ) {}

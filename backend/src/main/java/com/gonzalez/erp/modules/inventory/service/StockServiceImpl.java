@@ -8,6 +8,7 @@ import com.gonzalez.erp.modules.inventory.dto.response.StockResponse;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
 import com.gonzalez.erp.modules.inventory.entity.StockMovement;
 import com.gonzalez.erp.modules.inventory.entity.StockMovementType;
+import com.gonzalez.erp.modules.inventory.exception.StockAlreadyExistsException;
 import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
 import com.gonzalez.erp.modules.inventory.mapper.StockMapper;
 import com.gonzalez.erp.modules.inventory.repository.StockMovementRepository;
@@ -77,6 +78,41 @@ public class StockServiceImpl implements StockService {
                         productVariantId, SecurityUtils.requireCurrentCompanyId()).stream()
                 .map(StockMapper::toResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    public void createInitialStock(Long productVariantId, Long branchId, Integer quantity) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+
+        validateProductVariantBelongsToCurrentCompany(productVariantId);
+        validateBranchBelongsToCurrentCompany(branchId);
+
+        int inserted = stockRepository.insertIfAbsent(
+                productVariantId,
+                branchId,
+                companyId
+        );
+
+        if (inserted == 0) {
+            throw new StockAlreadyExistsException(
+                    productVariantId.toString(),
+                    branchId
+            );
+        }
+
+        Stock stock = stockRepository.findByProductVariantIdAndBranchIdForUpdate(
+                        productVariantId,
+                        branchId,
+                        companyId
+                )
+                .orElseThrow(() -> new StockNotFoundException(
+                        productVariantId.toString(),
+                        branchId
+                ));
+
+        stock.setQuantity(quantity);
+        stockRepository.save(stock);
     }
 
     @Override

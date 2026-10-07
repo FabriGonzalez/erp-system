@@ -2,8 +2,10 @@ package com.gonzalez.erp.modules.products.mapper;
 
 import com.gonzalez.erp.modules.products.dto.response.ProductAttributeValueResponse;
 import com.gonzalez.erp.modules.products.dto.response.ProductVariantResponse;
+import com.gonzalez.erp.modules.products.dto.response.ProductVariantStockResponse;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.entity.ProductVariantAttribute;
+import com.gonzalez.erp.modules.inventory.entity.Stock;
 
 import java.util.List;
 
@@ -12,6 +14,13 @@ public final class ProductVariantMapper {
     private ProductVariantMapper() {}
 
     public static ProductVariantResponse toResponse(ProductVariant variant) {
+        return toResponse(variant, List.of());
+    }
+
+    public static ProductVariantResponse toResponse(
+            ProductVariant variant,
+            List<Stock> stocks
+    ) {
         List<ProductVariantAttribute> attrs = variant.getAttributes() != null
                 ? variant.getAttributes()
                 : List.of();
@@ -34,6 +43,12 @@ public final class ProductVariantMapper {
                 variant.getPrice(),
                 variant.isActive(),
                 attributeValues,
+                stocks.stream()
+                        .map(stock -> new ProductVariantStockResponse(
+                                stock.getBranch().getId(),
+                                stock.getQuantity()
+                        ))
+                        .toList(),
                 variant.getCreatedAt(),
                 variant.getUpdatedAt()
         );

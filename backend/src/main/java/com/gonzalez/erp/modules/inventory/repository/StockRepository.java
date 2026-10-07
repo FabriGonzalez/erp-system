@@ -71,6 +71,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
         @Modifying
         @Query(value = """
             INSERT INTO stocks (
+                id,
                 product_variant_id,
                 branch_id,
                 company_id,
@@ -79,6 +80,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                 updated_at
             )
             VALUES (
+                nextval('stocks_seq'),
                 :variantId,
                 :branchId,
                 :companyId,

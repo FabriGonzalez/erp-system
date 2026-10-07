@@ -20,5 +20,5 @@ public record ProductUpdateRequest(
         Long categoryId,
 
         @NotEmpty(message = "At least one variant is required")
-        List<@Valid ProductVariantRequest> variants
+        List<@Valid ProductVariantUpdateRequest> variants
 ) {}

@@ -4,11 +4,19 @@ import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.categories.entity.Category;
 import com.gonzalez.erp.modules.categories.repository.CategoryRepository;
+import com.gonzalez.erp.modules.branches.entity.Branch;
+import com.gonzalez.erp.modules.branches.repository.BranchRepository;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
+import com.gonzalez.erp.modules.inventory.entity.Stock;
+import com.gonzalez.erp.modules.inventory.repository.StockRepository;
+import com.gonzalez.erp.modules.inventory.service.StockService;
+import com.gonzalez.erp.modules.products.dto.request.InitialStockRequest;
 import com.gonzalez.erp.modules.products.dto.request.ProductRequest;
 import com.gonzalez.erp.modules.products.dto.request.ProductUpdateRequest;
 import com.gonzalez.erp.modules.products.dto.request.ProductVariantRequest;
+import com.gonzalez.erp.modules.products.dto.request.ProductVariantStockRequest;
+import com.gonzalez.erp.modules.products.dto.request.ProductVariantUpdateRequest;
 import com.gonzalez.erp.modules.products.dto.response.ProductResponse;
 import com.gonzalez.erp.modules.products.dto.response.ProductVariantResponse;
 import com.gonzalez.erp.modules.products.entity.Product;
@@ -38,7 +46,10 @@ public class ProductServiceImpl implements ProductService {
     private final ProductVariantRepository variantRepository;
     private final ProductAttributeValueRepository attributeValueRepository;
     private final CategoryRepository categoryRepository;
+    private final BranchRepository branchRepository;
     private final CompanyRepository companyRepository;
+    private final StockRepository stockRepository;
+    private final StockService stockService;
 
     @Override
     public List<ProductResponse> findAll(Boolean active) {
@@ -231,6 +242,8 @@ public class ProductServiceImpl implements ProductService {
                     vr.attributeValueIds()
             );
 
+            createInitialStock(savedVariant, vr.initialStock());
+
             responses.add(
                     ProductVariantMapper.toResponse(savedVariant)
             );
@@ -239,13 +252,40 @@ public class ProductServiceImpl implements ProductService {
         return responses;
     }
 
+    private void createInitialStock(
+            ProductVariant variant,
+            List<InitialStockRequest> initialStock
+    ) {
+        if (initialStock == null || initialStock.isEmpty()) {
+            return;
+        }
+
+        Set<Long> branchIds = new HashSet<>();
+        for (InitialStockRequest stockRequest : initialStock) {
+            if (!branchIds.add(stockRequest.branchId())) {
+                throw new IllegalArgumentException(
+                        "Initial stock contains duplicate branch id: "
+                                + stockRequest.branchId()
+                );
+            }
+        }
+
+        for (InitialStockRequest stockRequest : initialStock) {
+            stockService.createInitialStock(
+                    variant.getId(),
+                    stockRequest.branchId(),
+                    stockRequest.quantity()
+            );
+        }
+    }
+
     private List<ProductVariantResponse> updateVariants(
             Product product,
-            List<ProductVariantRequest> variantRequests,
+            List<ProductVariantUpdateRequest> variantRequests,
             Long companyId
     ) {
         Set<String> incomingSkus = variantRequests.stream()
-                .map(ProductVariantRequest::sku)
+                .map(ProductVariantUpdateRequest::sku)
                 .collect(Collectors.toSet());
 
         List<ProductVariant> existingVariants =
@@ -259,7 +299,7 @@ public class ProductServiceImpl implements ProductService {
 
         Set<String> seenSkus = new HashSet<>();
 
-        for (ProductVariantRequest vr : variantRequests) {
+        for (ProductVariantUpdateRequest vr : variantRequests) {
             Optional<ProductVariant> existingForSku =
                     existingVariants.stream()
                             .filter(v -> v.getSku().equals(vr.sku()))
@@ -289,7 +329,7 @@ public class ProductServiceImpl implements ProductService {
 
         List<ProductVariantResponse> responses = new ArrayList<>();
 
-        for (ProductVariantRequest vr : variantRequests) {
+        for (ProductVariantUpdateRequest vr : variantRequests) {
             Optional<ProductVariant> existingOpt =
                     existingVariants.stream()
                             .filter(v -> v.getSku().equals(vr.sku()))
@@ -328,9 +368,19 @@ public class ProductServiceImpl implements ProductService {
                     vr.attributeValueIds()
             );
 
-            responses.add(
-                    ProductVariantMapper.toResponse(savedVariant)
+            updateVariantStock(
+                    savedVariant,
+                    vr.stock(),
+                    companyId
             );
+
+            responses.add(ProductVariantMapper.toResponse(
+                    savedVariant,
+                    stockRepository.findByProductVariantIdAndCompanyId(
+                            savedVariant.getId(),
+                            companyId
+                    )
+            ));
         }
 
         return responses;
@@ -351,6 +401,53 @@ public class ProductServiceImpl implements ProductService {
                             .build();
 
             variant.getAttributes().add(pva);
+        }
+    }
+
+    private void updateVariantStock(
+            ProductVariant variant,
+            List<ProductVariantStockRequest> stockRequests,
+            Long companyId
+    ) {
+        if (stockRequests == null || stockRequests.isEmpty()) {
+            return;
+        }
+
+        Set<Long> branchIds = new HashSet<>();
+        for (ProductVariantStockRequest request : stockRequests) {
+            if (!branchIds.add(request.branchId())) {
+                throw new IllegalArgumentException(
+                        "Stock contains duplicate branch id: " + request.branchId()
+                );
+            }
+
+            Branch branch = branchRepository
+                    .findByIdAndCompanyId(request.branchId(), companyId)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Branch not found with id: " + request.branchId()
+                    ));
+
+            stockRepository.insertIfAbsent(
+                    variant.getId(),
+                    branch.getId(),
+                    companyId
+            );
+
+            Stock stock = stockRepository
+                    .findByProductVariantIdAndBranchIdForUpdate(
+                            variant.getId(),
+                            branch.getId(),
+                            companyId
+                    )
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Stock not found for product variant: "
+                                    + variant.getId()
+                                    + " and branch id: "
+                                    + branch.getId()
+                    ));
+
+            stock.setQuantity(request.quantity());
+            stockRepository.save(stock);
         }
     }
 

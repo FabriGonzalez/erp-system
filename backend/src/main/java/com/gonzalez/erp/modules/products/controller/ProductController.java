@@ -44,7 +44,7 @@ public class ProductController {
     }
 
     @PostMapping
-    @Operation(summary = "Crear producto", description = "Crea un nuevo producto con variantes. Cada variante debe tener un SKU único por empresa y al menos un valor de atributo.")
+    @Operation(summary = "Crear producto", description = "Crea un nuevo producto con variantes y, opcionalmente, stock inicial por sucursal. Cada variante debe tener un SKU único por empresa y al menos un valor de atributo.")
     @ApiResponse(responseCode = "201", description = "Producto creado exitosamente")
     @ApiResponse(responseCode = "404", description = "Categoría, atributo o valor de atributo no encontrado",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
