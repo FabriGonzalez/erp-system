@@ -6,6 +6,7 @@ import {
     ProductAttributeValueRequest,
     ProductAttributeValueResponse,
 } from '@/types/product-attribute';
+import { apiFetch } from '@/services/api-client';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
@@ -25,7 +26,6 @@ async function responseData<T>(response: Response, fallback: string): Promise<T>
         } catch {
             // Some backend errors do not include a JSON body.
         }
-        if (response.status === 401) throw new Error('Sesión expirada.');
         if (response.status === 404) throw new Error(message || 'Recurso no encontrado.');
         if (response.status === 409) throw new Error(message || 'El recurso ya existe.');
         if (response.status >= 500) {
@@ -59,7 +59,7 @@ function normalizeValue(data: ProductAttributeValueResponse): ProductAttributeVa
 }
 
 export async function getAllAttributes(token: string): Promise<ProductAttribute[]> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/product-attributes`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/product-attributes`, {
         headers: headers(token),
     });
     const data = await responseData<ProductAttributeResponse[]>(
@@ -70,7 +70,7 @@ export async function getAllAttributes(token: string): Promise<ProductAttribute[
 }
 
 export async function getAttributeById(id: string, token: string): Promise<ProductAttribute> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/product-attributes/${id}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/product-attributes/${id}`, {
         headers: headers(token),
     });
     return normalizeAttribute(await responseData<ProductAttributeResponse>(
@@ -83,7 +83,7 @@ export async function getAttributeValues(
     attributeId: string,
     token: string
 ): Promise<ProductAttributeValue[]> {
-    const response = await fetch(
+    const response = await apiFetch(
         `${API_BASE_URL}/api/v1/product-attributes/${attributeId}/values`,
         { headers: headers(token) }
     );
@@ -100,7 +100,7 @@ async function mutateAttribute(
     token: string,
     body?: ProductAttributeRequest
 ): Promise<ProductAttribute> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/product-attributes${path}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/product-attributes${path}`, {
         method,
         headers: headers(token),
         body: body ? JSON.stringify({ name: body.name.trim() }) : undefined,
@@ -133,7 +133,7 @@ async function mutateValue(
     token: string,
     data?: ProductAttributeValueRequest
 ): Promise<ProductAttributeValue> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/product-attributes${path}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/product-attributes${path}`, {
         method,
         headers: headers(token),
         body: data ? JSON.stringify({ value: data.value.trim() }) : undefined,

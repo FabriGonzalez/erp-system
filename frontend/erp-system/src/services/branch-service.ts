@@ -1,4 +1,5 @@
 import { Branch, BranchRequest } from '@/types/branch';
+import { apiFetch } from '@/services/api-client';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
@@ -37,10 +38,6 @@ async function handleResponse<T>(response: Response, defaultErrorMessage: string
             // El backend puede no devolver JSON.
         }
 
-        if (response.status === 401) {
-            throw new Error('Sesión expirada.');
-        }
-
         if (response.status === 404) {
             throw new Error(errorMessage || 'Sucursal no encontrada.');
         }
@@ -73,7 +70,7 @@ export async function getUserBranches(
     userId: string,
     token: string
 ): Promise<Branch[]> {
-    const response = await fetch(
+    const response = await apiFetch(
         `${API_BASE_URL}/api/v1/users/${userId}/branches`,
         {
             method: 'GET',
@@ -105,7 +102,7 @@ export async function getAllBranches(
         url.searchParams.append('active', String(active));
     }
 
-    const response = await fetch(url.toString(), {
+    const response = await apiFetch(url.toString(), {
         method: 'GET',
         headers: {
             Authorization: `Bearer ${token}`,
@@ -129,7 +126,7 @@ export async function getBranchById(
     id: string,
     token: string
 ): Promise<Branch> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/branches/${id}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/branches/${id}`, {
         method: 'GET',
         headers: {
             Authorization: `Bearer ${token}`,
@@ -153,7 +150,7 @@ export async function createBranch(
     data: BranchRequest,
     token: string
 ): Promise<Branch> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/branches`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/branches`, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${token}`,
@@ -183,7 +180,7 @@ export async function updateBranch(
     data: BranchRequest,
     token: string
 ): Promise<Branch> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/branches/${id}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/branches/${id}`, {
         method: 'PATCH',
         headers: {
             Authorization: `Bearer ${token}`,
@@ -212,7 +209,7 @@ export async function activateBranch(
     id: string,
     token: string
 ): Promise<Branch> {
-    const response = await fetch(
+    const response = await apiFetch(
         `${API_BASE_URL}/api/v1/branches/${id}/activate`,
         {
             method: 'PATCH',
@@ -239,7 +236,7 @@ export async function deactivateBranch(
     id: string,
     token: string
 ): Promise<Branch> {
-    const response = await fetch(
+    const response = await apiFetch(
         `${API_BASE_URL}/api/v1/branches/${id}/deactivate`,
         {
             method: 'PATCH',
@@ -266,8 +263,8 @@ export async function assignUserToBranch(
     userId: string,
     branchId: string,
     token: string
-): Promise<void> {
-    const response = await fetch(
+): Promise<BackendUserResponse | null> {
+    const response = await apiFetch(
         `${API_BASE_URL}/api/v1/users/${userId}/branches/${branchId}`,
         {
             method: 'POST',
@@ -278,10 +275,15 @@ export async function assignUserToBranch(
         }
     );
 
-    await handleResponse<void>(
+    if (response.status === 201 || response.status === 204) {
+        return null;
+    }
+
+    const result = await handleResponse<BackendUserResponse | null>(
         response,
         'No se pudo asignar el usuario a la sucursal.'
     );
+    return result ?? null;
 }
 
 /**
@@ -292,8 +294,8 @@ export async function removeUserFromBranch(
     userId: string,
     branchId: string,
     token: string
-): Promise<void> {
-    const response = await fetch(
+): Promise<BackendUserResponse | null> {
+    const response = await apiFetch(
         `${API_BASE_URL}/api/v1/users/${userId}/branches/${branchId}`,
         {
             method: 'DELETE',
@@ -304,10 +306,15 @@ export async function removeUserFromBranch(
         }
     );
 
-    await handleResponse<void>(
+    if (response.status === 201 || response.status === 204) {
+        return null;
+    }
+
+    const result = await handleResponse<BackendUserResponse | null>(
         response,
         'No se pudo remover la asignación del usuario a la sucursal.'
     );
+    return result ?? null;
 }
 
 export type BackendUserResponse = {
@@ -331,7 +338,7 @@ export async function getBranchUsers(
     branchId: string,
     token: string
 ): Promise<BackendUserResponse[]> {
-    const response = await fetch(
+    const response = await apiFetch(
         `${API_BASE_URL}/api/v1/branches/${branchId}/users`,
         {
             method: 'GET',
@@ -355,7 +362,7 @@ export async function getBranchUsers(
 export async function getCompanyUsers(
     token: string
 ): Promise<BackendUserResponse[]> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/users`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/users`, {
         method: 'GET',
         headers: {
             Authorization: `Bearer ${token}`,
@@ -368,5 +375,3 @@ export async function getCompanyUsers(
         'No se pudieron obtener los usuarios de la empresa.'
     );
 }
-
-

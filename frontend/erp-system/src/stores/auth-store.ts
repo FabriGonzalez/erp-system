@@ -15,9 +15,12 @@ type AuthState = {
     user: User | null;
     token: string | null;
     isHydrated: boolean;
+    sessionExpired: boolean;
+    isLoggingOut: boolean;
 
     login: (response: LoginResponse) => Promise<void>;
     hydrate: () => Promise<void>;
+    expireSession: () => Promise<void>;
     logout: () => Promise<void>;
 };
 
@@ -25,6 +28,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     user: null,
     token: null,
     isHydrated: false,
+    sessionExpired: false,
+    isLoggingOut: false,
 
     login: async (response) => {
         const user: User = {
@@ -45,6 +50,11 @@ export const useAuthStore = create<AuthState>((set) => ({
             user,
         };
 
+        useBranchStore.getState().setSessionContext({
+            userId: user.id,
+            companyId: user.company.id,
+        });
+
         await AsyncStorage.setItem(
             AUTH_STORAGE_KEY,
             JSON.stringify(session)
@@ -54,6 +64,8 @@ export const useAuthStore = create<AuthState>((set) => ({
             user,
             token: response.token,
             isHydrated: true,
+            sessionExpired: false,
+            isLoggingOut: false,
         });
     },
 
@@ -76,10 +88,17 @@ export const useAuthStore = create<AuthState>((set) => ({
                 return;
             }
 
+            useBranchStore.getState().setSessionContext({
+                userId: session.user.id,
+                companyId: session.user.company.id,
+            });
+
             set({
                 token: session.token,
                 user: session.user,
                 isHydrated: true,
+                sessionExpired: false,
+                isLoggingOut: false,
             });
         } catch {
             await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
@@ -88,17 +107,38 @@ export const useAuthStore = create<AuthState>((set) => ({
                 user: null,
                 token: null,
                 isHydrated: true,
+                sessionExpired: false,
+                isLoggingOut: false,
             });
         }
     },
 
+    expireSession: async () => {
+        const state = useAuthStore.getState();
+        if (state.sessionExpired || state.isLoggingOut || !state.token) {
+            return;
+        }
+
+        set({
+            user: null,
+            token: null,
+            sessionExpired: true,
+        });
+
+        await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+        await useBranchStore.getState().clearActiveBranch();
+    },
+
     logout: async () => {
+        set({ isLoggingOut: true });
         await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
         await useBranchStore.getState().clearActiveBranch();
 
         set({
             user: null,
             token: null,
+            sessionExpired: false,
+            isLoggingOut: false,
         });
     },
 }));

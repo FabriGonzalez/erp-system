@@ -1,4 +1,5 @@
 import { Category, CategoryRequest } from '@/types/category';
+import { apiFetch } from '@/services/api-client';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
@@ -38,10 +39,6 @@ async function handleResponse<T>(
             // El backend puede no devolver JSON.
         }
 
-        if (response.status === 401) {
-            throw new Error('Sesión expirada.');
-        }
-
         if (response.status === 404) {
             throw new Error(errorMessage || 'Categoría no encontrada.');
         }
@@ -78,7 +75,7 @@ function authHeaders(token: string): HeadersInit {
  * Endpoint: GET /api/v1/categories
  */
 export async function getAllCategories(token: string): Promise<Category[]> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/categories`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/categories`, {
         method: 'GET',
         headers: authHeaders(token),
     });
@@ -99,7 +96,7 @@ export async function getCategoryById(
     id: string,
     token: string
 ): Promise<Category> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/categories/${id}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/categories/${id}`, {
         method: 'GET',
         headers: authHeaders(token),
     });
@@ -120,7 +117,7 @@ export async function createCategory(
     data: CategoryRequest,
     token: string
 ): Promise<Category> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/categories`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/categories`, {
         method: 'POST',
         headers: authHeaders(token),
         body: JSON.stringify({
@@ -146,7 +143,7 @@ export async function updateCategory(
     data: CategoryRequest,
     token: string
 ): Promise<Category> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/categories/${id}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/categories/${id}`, {
         method: 'PATCH',
         headers: authHeaders(token),
         body: JSON.stringify({
@@ -171,7 +168,7 @@ export async function activateCategory(
     id: string,
     token: string
 ): Promise<Category> {
-    const response = await fetch(
+    const response = await apiFetch(
         `${API_BASE_URL}/api/v1/categories/${id}/activate`,
         {
             method: 'PATCH',
@@ -195,7 +192,7 @@ export async function deactivateCategory(
     id: string,
     token: string
 ): Promise<Category> {
-    const response = await fetch(
+    const response = await apiFetch(
         `${API_BASE_URL}/api/v1/categories/${id}/deactivate`,
         {
             method: 'PATCH',

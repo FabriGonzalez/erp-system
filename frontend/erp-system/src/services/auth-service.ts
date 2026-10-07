@@ -1,4 +1,5 @@
 import { LoginResponse } from '@/types/auth';
+import { apiFetch } from '@/services/api-client';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
@@ -8,13 +9,13 @@ const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
  * Throws an Error with a user-facing message on failure.
  */
 export async function login(username: string, password: string): Promise<LoginResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/auth/login`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({ username, password }),
-    });
+    }, { ignoreUnauthorized: true });
 
     if (!response.ok) {
         let errorMessage: string;

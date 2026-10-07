@@ -14,8 +14,8 @@ export default function MoreScreen() {
     const { user, logout } = useAuthStore();
     const { activeBranch } = useBranchStore();
 
-    function handleLogout() {
-        logout();
+    async function handleLogout() {
+        await logout();
         router.replace('/(auth)/login');
     }
 

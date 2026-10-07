@@ -27,7 +27,11 @@ import { Stock } from '@/types/stock';
 
 export default function InventoryScreen() {
     const token = useAuthStore((state) => state.token);
-    const { availableBranches, fetchUserBranches } = useBranchStore();
+    const {
+        availableBranches,
+        fetchUserBranches,
+        hasFetchedUserBranches,
+    } = useBranchStore();
     const { products, fetchProducts } = useProductStore();
     const { stocks, isLoading, error, fetchStocks, fetchStocksByBranch } = useStockStore();
     const user = useAuthStore((state) => state.user);
@@ -39,8 +43,17 @@ export default function InventoryScreen() {
         if (!token) return;
         void fetchStocks(token);
         void fetchProducts(token);
-        if (user) void fetchUserBranches(user.id, token);
-    }, [fetchProducts, fetchStocks, fetchUserBranches, token, user]);
+        if (user && !hasFetchedUserBranches) {
+            void fetchUserBranches(user.id, token);
+        }
+    }, [
+        fetchProducts,
+        fetchStocks,
+        fetchUserBranches,
+        hasFetchedUserBranches,
+        token,
+        user,
+    ]);
 
     async function selectBranch(branchId: string | null) {
         setSelectedBranchId(branchId);

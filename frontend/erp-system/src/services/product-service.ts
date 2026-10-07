@@ -5,6 +5,7 @@ import {
     ProductVariant,
     ProductUpdateRequest,
 } from '@/types/product';
+import { apiFetch } from '@/services/api-client';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
@@ -20,10 +21,6 @@ async function handleResponse<T>(
             errorMessage = errorPayload?.message ?? '';
         } catch {
             // El backend puede no devolver JSON.
-        }
-
-        if (response.status === 401) {
-            throw new Error('Sesión expirada.');
         }
 
         if (response.status === 404) {
@@ -91,7 +88,7 @@ function normalizeProduct(data: ProductResponse): Product {
 }
 
 export async function getAllProducts(token: string): Promise<Product[]> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/products`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/products`, {
         method: 'GET',
         headers: authHeaders(token),
     });
@@ -108,7 +105,7 @@ export async function getProductById(
     id: string,
     token: string
 ): Promise<Product> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/products/${id}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/products/${id}`, {
         method: 'GET',
         headers: authHeaders(token),
     });
@@ -125,7 +122,7 @@ export async function createProduct(
     data: ProductRequest,
     token: string
 ): Promise<Product> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/products`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/products`, {
         method: 'POST',
         headers: authHeaders(token),
         body: JSON.stringify({
@@ -156,7 +153,7 @@ export async function updateProduct(
     data: ProductUpdateRequest,
     token: string
 ): Promise<Product> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/products/${id}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/products/${id}`, {
         method: 'PATCH',
         headers: authHeaders(token),
         body: JSON.stringify({
@@ -184,7 +181,7 @@ export async function activateProduct(
     id: string,
     token: string
 ): Promise<Product> {
-    const response = await fetch(
+    const response = await apiFetch(
         `${API_BASE_URL}/api/v1/products/${id}/activate`,
         {
             method: 'PATCH',
@@ -204,7 +201,7 @@ export async function deactivateProduct(
     id: string,
     token: string
 ): Promise<Product> {
-    const response = await fetch(
+    const response = await apiFetch(
         `${API_BASE_URL}/api/v1/products/${id}/deactivate`,
         {
             method: 'PATCH',

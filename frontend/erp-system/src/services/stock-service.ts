@@ -1,4 +1,5 @@
 import { Stock, StockAdjustRequest, StockResponse } from '@/types/stock';
+import { apiFetch } from '@/services/api-client';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
@@ -18,7 +19,6 @@ async function handleResponse<T>(response: Response, fallback: string): Promise<
         } catch {
             // Some backend errors do not include a JSON body.
         }
-        if (response.status === 401) throw new Error('Sesión expirada.');
         if (response.status === 403) {
             throw new Error(message || 'No tenés permiso para ajustar el stock.');
         }
@@ -48,7 +48,7 @@ function normalizeStock(data: StockResponse): Stock {
 }
 
 async function getStocks(path: string, token: string): Promise<Stock[]> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/inventory/stocks${path}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/inventory/stocks${path}`, {
         headers: authHeaders(token),
     });
     const data = await handleResponse<StockResponse[]>(
@@ -63,7 +63,7 @@ export function getAllStocks(token: string) {
 }
 
 export async function getStockById(id: string, token: string): Promise<Stock> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/inventory/stocks/${id}`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/inventory/stocks/${id}`, {
         headers: authHeaders(token),
     });
     return normalizeStock(await handleResponse<StockResponse>(
@@ -84,7 +84,7 @@ export async function adjustStock(
     data: StockAdjustRequest,
     token: string
 ): Promise<Stock> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/inventory/stocks/adjust`, {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/inventory/stocks/adjust`, {
         method: 'PATCH',
         headers: authHeaders(token),
         body: JSON.stringify(data),

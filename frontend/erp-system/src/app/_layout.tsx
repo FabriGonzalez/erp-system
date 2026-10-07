@@ -4,10 +4,12 @@ import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
 import { useAuthStore } from '@/stores/auth-store';
+import { SessionExpiredOverlay } from '@/components/SessionExpiredOverlay';
 import { StatusBar } from 'expo-status-bar';
 
 export default function RootLayout() {
   const user = useAuthStore((state) => state.user);
+  const sessionExpired = useAuthStore((state) => state.sessionExpired);
   const hydrate = useAuthStore((state) => state.hydrate);
   const isHydrated = useAuthStore((state) => state.isHydrated);
 
@@ -31,15 +33,15 @@ export default function RootLayout() {
 
     const inAuthGroup = segments[0] === '(auth)';
 
-    if (!user && !inAuthGroup) {
+    if (!user && !inAuthGroup && !sessionExpired) {
       router.replace('/(auth)/login');
       return;
     }
 
-    if (user && inAuthGroup) {
+    if (user && inAuthGroup && !sessionExpired) {
       router.replace('/(app)/(tabs)/shipments');
     }
-  }, [user, isHydrated, segments, router]);
+  }, [user, isHydrated, segments, router, sessionExpired]);
 
   if (!isHydrated) {
     return null;
@@ -53,6 +55,7 @@ export default function RootLayout() {
       <StatusBar style="dark" />
 
       <Slot />
+      <SessionExpiredOverlay key={sessionExpired ? 'expired' : 'active'} />
     </>
   );
 }

@@ -1,5 +1,5 @@
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -24,7 +24,6 @@ import {
 } from '@/services/branch-service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
-import { SharedStyles } from '@/styles/shared';
 import { Branch } from '@/types/branch';
 import { getInitials } from '@/utils/format';
 
@@ -46,33 +45,42 @@ export function BranchUsersAssignmentModal({
     const [assignedUserIds, setAssignedUserIds] = useState<Set<string>>(new Set());
     const [isLoading, setIsLoading] = useState(false);
     const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
+    const loadRequestId = useRef(0);
+    const branchId = branch?.id;
 
-    useEffect(() => {
-        if (visible && branch && token) {
-            loadData();
-        }
-    }, [visible, branch, token]);
-
-    async function loadData() {
-        if (!branch || !token) return;
+    const loadData = useCallback(async () => {
+        if (!branchId || !token) return;
+        const requestId = ++loadRequestId.current;
         setIsLoading(true);
         try {
             const [companyUsers, branchUsers] = await Promise.all([
                 getCompanyUsers(token),
-                getBranchUsers(branch.id, token),
+                getBranchUsers(branchId, token),
             ]);
 
-            setUsers(companyUsers);
-            setAssignedUserIds(new Set(branchUsers.map((u) => String(u.id))));
+            if (requestId === loadRequestId.current) {
+                setUsers(companyUsers);
+                setAssignedUserIds(new Set(branchUsers.map((u) => String(u.id))));
+            }
         } catch (err: any) {
             Alert.alert(
                 'Error',
                 err?.message || 'No se pudieron cargar los usuarios de la sucursal.'
             );
         } finally {
-            setIsLoading(false);
+            if (requestId === loadRequestId.current) {
+                setIsLoading(false);
+            }
         }
-    }
+    }, [branchId, token]);
+
+    useEffect(() => {
+        if (visible) {
+            // Loading the modal data synchronizes the local view with the backend.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            void loadData();
+        }
+    }, [loadData, visible]);
 
     async function handleToggleUser(targetUser: BackendUserResponse) {
         if (!branch || !token) return;
