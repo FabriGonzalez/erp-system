@@ -1,51 +1,68 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ProductForm } from '@/components/products/ProductForm';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/auth-store';
+import { useCategoryStore } from '@/stores/category-store';
 import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
 import { ProductFormData } from '@/types/product';
 
 export default function NewProductScreen() {
-    const { products, categories, addProduct } = useProductStore();
+    const { products, createProduct } = useProductStore();
+    const { categories, fetchCategories } = useCategoryStore();
     const user = useAuthStore((state) => state.user);
+    const token = useAuthStore((state) => state.token);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    function handleSubmit(formData: ProductFormData) {
+    useEffect(() => {
+        if (token) {
+            fetchCategories(token).catch(() => {});
+        }
+    }, [fetchCategories, token]);
+
+    async function handleSubmit(formData: ProductFormData) {
+        if (!token) return;
         setIsSubmitting(true);
-
-        // Simulate network / create operation
-        setTimeout(() => {
-            const category = categories.find((c) => c.id === formData.categoryId);
-            addProduct({
-                name: formData.name,
-                categoryId: formData.categoryId,
-                categoryName: category?.name,
-                description: formData.description,
-                active: formData.active,
-                variants: formData.variants.map((variant, index) => ({
-                    id: variant.id ?? `variant-${Date.now()}-${index}`,
-                    sku: variant.sku,
-                    price: parseFloat(variant.price.replace(',', '.')),
-                    attributes: variant.attributes,
-                    stockByBranch: variant.stockByBranch,
-                })),
-            });
-
-            setIsSubmitting(false);
+        setErrorMessage(null);
+        try {
+            await createProduct(toProductRequest(formData), token);
             setSuccessMessage('¡Producto creado exitosamente!');
+            router.back();
+        } catch (error: unknown) {
+            setErrorMessage(
+                error instanceof Error ? error.message : 'No se pudo crear el producto.'
+            );
+        } finally {
+            setIsSubmitting(false);
+        }
+    }
 
-            // Return to products list after brief feedback
-            setTimeout(() => {
-                router.back();
-            }, 600);
-        }, 500);
+    function toProductRequest(formData: ProductFormData) {
+        return {
+            name: formData.name,
+            description: formData.description || null,
+            categoryId: Number(formData.categoryId),
+            variants: formData.variants.map((variant) => ({
+                sku: variant.sku,
+                price: Number(variant.price.replace(',', '.')),
+                attributeValueIds: variant.attributes.map((attribute) =>
+                    Number(attribute.attributeValueId)
+                ),
+                initialStock: Object.entries(variant.stockByBranch).map(
+                    ([branchId, quantity]) => ({
+                        branchId: Number(branchId),
+                        quantity: Number(quantity),
+                    })
+                ),
+            })),
+        };
     }
 
     return (
@@ -82,6 +99,11 @@ export default function NewProductScreen() {
                     <Text style={SharedStyles.successText}>{successMessage}</Text>
                 </View>
             )}
+            {errorMessage && (
+                <View style={styles.errorBanner}>
+                    <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+            )}
 
             {/* Formulario */}
             <ProductForm
@@ -100,5 +122,13 @@ export default function NewProductScreen() {
 const styles = StyleSheet.create({
     container: {
         padding: 0,
+    },
+    errorBanner: {
+        backgroundColor: Colors.errorLight,
+        padding: 12,
+    },
+    errorText: {
+        color: Colors.error,
+        textAlign: 'center',
     },
 });

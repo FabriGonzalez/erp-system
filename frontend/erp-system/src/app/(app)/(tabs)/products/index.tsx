@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
     FlatList,
     Pressable,
@@ -24,15 +24,17 @@ import { SharedStyles } from '@/styles/shared';
 
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
+import { useCategoryStore } from '@/stores/category-store';
 import { useProductStore } from '@/stores/product-store';
 
 export default function ProductsScreen() {
     const user = useAuthStore((state) => state.user);
+    const token = useAuthStore((state) => state.token);
     const activeBranch = useBranchStore((state) => state.activeBranch);
+    const { categories, fetchCategories } = useCategoryStore();
 
     const {
         products,
-        categories,
         searchQuery,
         stockFilter,
         statusFilter,
@@ -45,16 +47,28 @@ export default function ProductsScreen() {
         setStatusFilter,
         setSelectedCategory,
         resetFilters,
-        reloadProducts,
-        toggleProductActive,
+        fetchProducts,
     } = useProductStore();
 
+    useEffect(() => {
+        if (token) {
+            fetchProducts(token).catch(() => {});
+            fetchCategories(token).catch(() => {});
+        }
+    }, [fetchCategories, fetchProducts, token]);
+
+    function handleRefresh() {
+        if (token) {
+            fetchProducts(token).catch(() => {});
+        }
+    }
+
     const canCreate =
-        user?.role === 'ADMINISTRATOR' ||
+        user?.role === 'Administrador' ||
         Boolean(user?.permissions?.includes('PRODUCTS_CREATE'));
 
     const canEdit =
-        user?.role === 'ADMINISTRATOR' ||
+        user?.role === 'Administrador' ||
         Boolean(user?.permissions?.includes('PRODUCTS_UPDATE'));
 
     const filteredProducts = useMemo(() => {
@@ -111,7 +125,7 @@ export default function ProductsScreen() {
                     <Pressable
                         onPress={handleCreateProduct}
                         accessibilityRole="button"
-                        accessibilityLabel="Crear nuevo procuto"
+                        accessibilityLabel="Crear producto"
                         hitSlop={6}
                         style={({ pressed }) => [
                             SharedStyles.addButton,
@@ -128,7 +142,7 @@ export default function ProductsScreen() {
                                 tintColor={Colors.white}
                             />
                         </View>
-                        <Text style={SharedStyles.addButtonText}>Nuevo producto</Text>
+                        <Text style={SharedStyles.addButtonText}>Crear producto</Text>
                     </Pressable>
                 )}
             </View>
@@ -170,7 +184,7 @@ export default function ProductsScreen() {
             {!isLoading && isError && (
                 <ErrorState
                     message={errorMessage}
-                    onRetry={reloadProducts}
+                    onRetry={handleRefresh}
                 />
             )}
 
@@ -183,7 +197,7 @@ export default function ProductsScreen() {
                     refreshControl={
                         <RefreshControl
                             refreshing={isLoading}
-                            onRefresh={reloadProducts}
+                            onRefresh={handleRefresh}
                             tintColor={Colors.primary}
                         />
                     }
@@ -226,7 +240,6 @@ export default function ProductsScreen() {
                                 stock={currentStock}
                                 canEdit={canEdit}
                                 onPress={() => handleEditProduct(item.id)}
-                                onToggleActive={() => toggleProductActive(item.id)}
                             />
                         );
                     }}

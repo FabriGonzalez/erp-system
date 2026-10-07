@@ -1,5 +1,7 @@
+import Head from 'expo-router/head';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 
 import { useAuthStore } from '@/stores/auth-store';
 import { StatusBar } from 'expo-status-bar';
@@ -15,6 +17,12 @@ export default function RootLayout() {
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      document.title = 'ERP System';
+    }
+  }, [segments]);
 
   useEffect(() => {
     if (!isHydrated) {
@@ -39,6 +47,9 @@ export default function RootLayout() {
 
   return (
     <>
+      <Head>
+        <title>ERP System</title>
+      </Head>
       <StatusBar style="dark" />
 
       <Slot />

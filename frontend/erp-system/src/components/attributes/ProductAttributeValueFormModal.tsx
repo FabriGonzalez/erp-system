@@ -7,6 +7,7 @@ import { AppInput } from '@/components/ui/AppInput';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useProductAttributeStore } from '@/stores/product-attribute-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { ProductAttributeValue } from '@/types/product';
 
 type ProductAttributeValueFormModalProps = {
@@ -30,11 +31,16 @@ export function ProductAttributeValueFormModal({
 }: ProductAttributeValueFormModalProps) {
     const [name, setName] = useState(initialName);
     const [error, setError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const { addAttributeValue, updateAttributeValue, getAttributeValueById } = useProductAttributeStore();
+    const createAttributeValue = useProductAttributeStore((state) => state.createAttributeValue);
+    const updateAttributeValue = useProductAttributeStore((state) => state.updateAttributeValue);
+    const token = useAuthStore((state) => state.token);
 
     useEffect(() => {
         if (visible) {
+            // Reset form state when opening a different value.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setName(initialName);
             setError(null);
         }
@@ -42,24 +48,30 @@ export function ProductAttributeValueFormModal({
 
     const isEditing = Boolean(valueId);
 
-    function handleSubmit() {
+    async function handleSubmit() {
         setError(null);
+        if (!token) {
+            setError('No hay una sesión activa.');
+            return;
+        }
+        if (!name.trim()) {
+            setError('El nombre del valor es obligatorio.');
+            return;
+        }
+        setIsSubmitting(true);
         try {
             if (isEditing && valueId) {
-                updateAttributeValue(valueId, name);
-                const updated = getAttributeValueById(valueId);
-                if (updated && onSuccess) {
-                    onSuccess(updated);
-                }
+                const updated = await updateAttributeValue(valueId, { value: name }, token);
+                onSuccess?.(updated);
             } else {
-                const created = addAttributeValue(attributeId, name);
-                if (onSuccess) {
-                    onSuccess(created);
-                }
+                const created = await createAttributeValue(attributeId, { value: name }, token);
+                onSuccess?.(created);
             }
             onClose();
-        } catch (err: any) {
-            setError(err.message || 'Error al guardar el valor.');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error al guardar el valor.');
+        } finally {
+            setIsSubmitting(false);
         }
     }
 
@@ -118,6 +130,7 @@ export function ProductAttributeValueFormModal({
                             <AppButton
                                 title={isEditing ? 'Guardar' : 'Crear Valor'}
                                 onPress={handleSubmit}
+                                disabled={isSubmitting}
                                 style={styles.submitButton}
                             />
                         </View>

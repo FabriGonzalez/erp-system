@@ -1,26 +1,51 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ProductForm } from '@/components/products/ProductForm';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/auth-store';
+import { useCategoryStore } from '@/stores/category-store';
 import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
 import { ProductFormData } from '@/types/product';
 
 export default function EditProductScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
-    const { products, categories, updateProduct } = useProductStore();
+    const {
+        products,
+        errorMessage,
+        isError,
+        isLoading,
+        fetchProductById,
+        updateProductFromApi,
+    } = useProductStore();
+    const { categories, fetchCategories } = useCategoryStore();
     const user = useAuthStore((state) => state.user);
+    const token = useAuthStore((state) => state.token);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [submissionError, setSubmissionError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (token) {
+            fetchCategories(token).catch(() => {});
+            if (!products.some((item) => item.id === id)) {
+                fetchProductById(id, token).catch(() => {});
+            }
+        }
+    }, [fetchCategories, fetchProductById, id, products, token]);
 
     const product = products.find((p) => p.id === id);
+
+    if (isLoading && !product) {
+        return <LoadingState />;
+    }
 
     if (!product) {
         return (
@@ -49,34 +74,42 @@ export default function EditProductScreen() {
         );
     }
 
-    function handleSubmit(formData: ProductFormData) {
+    async function handleSubmit(formData: ProductFormData) {
         if (!product) return;
+        if (!token) return;
         setIsSubmitting(true);
-
-        setTimeout(() => {
-            const category = categories.find((c) => c.id === formData.categoryId);
-            updateProduct(product.id, {
+        setSubmissionError(null);
+        try {
+            const productRequest = {
                 name: formData.name,
-                categoryId: formData.categoryId,
-                categoryName: category?.name,
-                description: formData.description,
-                active: formData.active,
-                variants: formData.variants.map((variant, index) => ({
-                    id: variant.id ?? `variant-${Date.now()}-${index}`,
+                categoryId: Number(formData.categoryId),
+                description: formData.description || null,
+                variants: formData.variants.map((variant) => ({
                     sku: variant.sku,
-                    price: parseFloat(variant.price.replace(',', '.')),
-                    attributes: variant.attributes,
-                    stockByBranch: variant.stockByBranch,
+                    price: Number(variant.price.replace(',', '.')),
+                    attributeValueIds: variant.attributes.map((attribute) =>
+                        Number(attribute.attributeValueId)
+                    ),
+                    stock: Object.entries(variant.stockByBranch).map(
+                        ([branchId, quantity]) => ({
+                            branchId: Number(branchId),
+                            quantity: Number(quantity),
+                        })
+                    ),
                 })),
-            });
+            };
 
-            setIsSubmitting(false);
+            await updateProductFromApi(product.id, productRequest, token);
+
             setSuccessMessage('¡Cambios guardados con éxito!');
-
-            setTimeout(() => {
-                router.back();
-            }, 600);
-        }, 500);
+            router.back();
+        } catch (error: unknown) {
+            setSubmissionError(
+                error instanceof Error ? error.message : 'No se pudo actualizar el producto.'
+            );
+        } finally {
+            setIsSubmitting(false);
+        }
     }
 
     return (
@@ -111,6 +144,13 @@ export default function EditProductScreen() {
                     <Text style={SharedStyles.successText}>{successMessage}</Text>
                 </View>
             )}
+            {(submissionError || (isError && errorMessage)) && (
+                <View style={styles.errorBanner}>
+                    <Text style={styles.errorText}>
+                        {submissionError || errorMessage}
+                    </Text>
+                </View>
+            )}
 
             <ProductForm
                 initialValues={{
@@ -142,5 +182,13 @@ export default function EditProductScreen() {
 const styles = StyleSheet.create({
     container: {
         padding: 0,
+    },
+    errorBanner: {
+        backgroundColor: Colors.errorLight,
+        padding: 12,
+    },
+    errorText: {
+        color: Colors.error,
+        textAlign: 'center',
     },
 });

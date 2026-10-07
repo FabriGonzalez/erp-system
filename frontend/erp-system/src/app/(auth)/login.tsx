@@ -7,7 +7,6 @@ import { Typography } from '@/constants/typography';
 import { login as loginService } from '@/services/auth-service';
 import { useAuthStore } from '@/stores/auth-store';
 import { router } from 'expo-router';
-import Head from 'expo-router/head';
 import { useState } from 'react';
 import {
     ActivityIndicator,
@@ -69,11 +68,6 @@ export default function LoginScreen() {
 
     return (
         <>
-            <Head>
-                <title>ERP System - Iniciar sesión</title>
-            </Head>
-
-
             <Screen style={styles.container}>
                 <View style={styles.form}>
                     <View style={styles.header}>

@@ -1,8 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     FlatList,
+    ActivityIndicator,
     Pressable,
     StyleSheet,
     Switch,
@@ -14,11 +15,13 @@ import { ProductAttributeFormModal } from '@/components/attributes/ProductAttrib
 import { ProductAttributeValueFormModal } from '@/components/attributes/ProductAttributeValueFormModal';
 import { AppButton } from '@/components/ui/AppButton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useProductAttributeStore } from '@/stores/product-attribute-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
 import { ProductAttributeValue } from '@/types/product';
 
@@ -28,9 +31,21 @@ export default function AttributeDetailScreen() {
     const {
         getAttributeById,
         getAttributeValuesByAttributeId,
-        toggleAttributeActive,
-        toggleAttributeValueActive,
+        fetchAttributeById,
+        activateAttribute,
+        deactivateAttribute,
+        activateAttributeValue,
+        deactivateAttributeValue,
+        isLoading,
+        error,
     } = useProductAttributeStore();
+    const token = useAuthStore((state) => state.token);
+
+    useEffect(() => {
+        if (id && token) {
+            void fetchAttributeById(id, token);
+        }
+    }, [id, token, fetchAttributeById]);
 
     const attribute = getAttributeById(id ?? '');
     const values = attribute ? getAttributeValuesByAttributeId(attribute.id) : [];
@@ -38,6 +53,23 @@ export default function AttributeDetailScreen() {
     const [isAttributeModalVisible, setIsAttributeModalVisible] = useState(false);
     const [isValueModalVisible, setIsValueModalVisible] = useState(false);
     const [editingValue, setEditingValue] = useState<ProductAttributeValue | null>(null);
+
+    if (isLoading && !attribute) {
+        return <LoadingState />;
+    }
+
+    if (!attribute && error) {
+        return (
+            <Screen style={styles.container}>
+                <EmptyState
+                    title="No se pudo cargar el atributo"
+                    description={error}
+                    actionLabel="Reintentar"
+                    onAction={() => id && token && void fetchAttributeById(id, token)}
+                />
+            </Screen>
+        );
+    }
 
     if (!attribute) {
         return (
@@ -95,7 +127,12 @@ export default function AttributeDetailScreen() {
                     <View style={styles.switchContainer}>
                         <Switch
                             value={item.active}
-                            onValueChange={() => toggleAttributeValueActive(item.id)}
+                            onValueChange={() => {
+                                if (!token) return;
+                                void (item.active
+                                    ? deactivateAttributeValue(item.id, token)
+                                    : activateAttributeValue(item.id, token));
+                            }}
                             trackColor={{ false: Colors.track, true: Colors.primary }}
                             thumbColor={Colors.white}
                         />
@@ -162,7 +199,12 @@ export default function AttributeDetailScreen() {
                         </Text>
                         <Switch
                             value={attribute.active}
-                            onValueChange={() => toggleAttributeActive(attribute.id)}
+                            onValueChange={() => {
+                                if (!token) return;
+                                void (attribute.active
+                                    ? deactivateAttribute(attribute.id, token)
+                                    : activateAttribute(attribute.id, token));
+                            }}
                             trackColor={{ false: Colors.track, true: Colors.primary }}
                             thumbColor={Colors.white}
                         />
@@ -180,9 +222,19 @@ export default function AttributeDetailScreen() {
                 />
             </View>
 
-            {/* Values List */}
+            {isLoading ? (
+                <ActivityIndicator color={Colors.primary} style={styles.loader} />
+            ) : error ? (
+                <EmptyState
+                    title="No se pudo cargar el atributo"
+                    description={error}
+                    actionLabel="Reintentar"
+                    onAction={() => id && token && void fetchAttributeById(id, token)}
+                />
+            ) : null}
+
             <FlatList
-                data={values}
+                data={isLoading || error ? [] : values}
                 keyExtractor={(item) => item.id}
                 renderItem={renderValueItem}
                 contentContainerStyle={styles.listContainer}
@@ -223,6 +275,9 @@ export default function AttributeDetailScreen() {
 const styles = StyleSheet.create({
     container: {
         padding: 0,
+    },
+    loader: {
+        marginVertical: Spacing.xl,
     },
     attributeHeaderCard: {
         backgroundColor: Colors.surface,

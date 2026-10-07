@@ -50,6 +50,12 @@ export default function MoreScreen() {
                 <Text style={styles.sectionTitle}>General</Text>
                 <View style={styles.section}>
                     <MenuListItem
+                        title="Inventario"
+                        subtitle="Consultar y ajustar stock por sucursal"
+                        iconName={{ ios: 'shippingbox.fill', android: 'inventory_2', web: 'inventory_2' }}
+                        onPress={() => router.push('/inventory' as any)}
+                    />
+                    <MenuListItem
                         title="Clientes"
                         subtitle="Gestión de clientes y direcciones"
                         iconName={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
@@ -117,6 +123,14 @@ export default function MoreScreen() {
                                 iconName={{ ios: 'building.2.fill', android: 'store', web: 'store' }}
                                 onPress={() => {
                                     router.push({ pathname: '/branches' });
+                                }}
+                            />
+                            <MenuListItem
+                                title="Categorías"
+                                subtitle="Organizar categorías del catálogo"
+                                iconName={{ ios: 'folder.fill', android: 'folder', web: 'folder' }}
+                                onPress={() => {
+                                    router.push('/categories' as any);
                                 }}
                             />
                         </View>

@@ -1,3 +1,5 @@
+import type { ProductAttributeValueResponse } from '@/types/product-attribute';
+
 export type Category = {
     id: string;
     name: string;
@@ -5,22 +7,74 @@ export type Category = {
     active: boolean;
 };
 
-export type ProductAttribute = {
-    id: string;
-    name: string;
-    active: boolean;
+export type ProductVariantUpdateRequest = {
+    sku: string;
+    price: number;
+    attributeValueIds: number[];
+    stock: ProductInitialStockRequest[];
 };
 
-export type ProductAttributeValue = {
-    id: string;
-    attributeId: string;
-    name: string;
-    active: boolean;
-};
+export type {
+    ProductAttribute,
+    ProductAttributeRequest,
+    ProductAttributeResponse,
+    ProductAttributeValue,
+    ProductAttributeValueRequest,
+    ProductAttributeValueResponse,
+} from '@/types/product-attribute';
 
 export type ProductVariantAttribute = {
     attributeId: string;
     attributeValueId: string;
+};
+
+export type ProductUpdateRequest = {
+    name: string;
+    description?: string | null;
+    categoryId: number;
+    variants: ProductVariantUpdateRequest[];
+};
+
+export type ProductInitialStockRequest = {
+    branchId: number;
+    quantity: number;
+};
+
+export type ProductVariantRequest = {
+    sku: string;
+    price: number;
+    attributeValueIds: number[];
+    initialStock?: ProductInitialStockRequest[];
+};
+
+export type ProductRequest = {
+    name: string;
+    description?: string | null;
+    categoryId: number;
+    variants: ProductVariantRequest[];
+};
+
+export type ProductVariantResponse = {
+    id: number | string;
+    sku: string;
+    price: number;
+    active: boolean;
+    attributes: ProductAttributeValueResponse[];
+    stock?: ProductInitialStockRequest[];
+    createdAt?: string | null;
+    updatedAt?: string | null;
+};
+
+export type ProductResponse = {
+    id: number | string;
+    name: string;
+    description?: string | null;
+    categoryId: number | string;
+    categoryName?: string | null;
+    active: boolean;
+    variants: ProductVariantResponse[];
+    createdAt?: string | null;
+    updatedAt?: string | null;
 };
 
 export type ProductVariant = {
@@ -29,6 +83,9 @@ export type ProductVariant = {
     price: number;
     attributes: ProductVariantAttribute[];
     stockByBranch: Record<string, number>;
+    active?: boolean;
+    createdAt?: string | null;
+    updatedAt?: string | null;
 };
 
 export type Product = {
@@ -39,6 +96,8 @@ export type Product = {
     description?: string;
     active: boolean;
     variants: ProductVariant[];
+    createdAt?: string | null;
+    updatedAt?: string | null;
 };
 
 export type ProductFormData = {

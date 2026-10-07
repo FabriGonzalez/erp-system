@@ -50,7 +50,7 @@ export default function ShipmentDetailScreen() {
 
     const shipment = order;
 
-    const canUpdate = user?.role === 'ADMINISTRATOR' || Boolean(user?.permissions?.includes('ORDERS_UPDATE'));
+    const canUpdate = user?.role === 'Administrador' || Boolean(user?.permissions?.includes('ORDERS_UPDATE'));
     const isDraft = order.status === 'DRAFT';
     const isCancelled = order.status === 'CANCELLED';
     const isDelivered = order.status === 'SHIPPED';

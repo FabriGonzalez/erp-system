@@ -1,13 +1,17 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ProductCard } from '@/components/products/ProductCard';
 import { NotFound } from '@/components/ui/NotFound';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useBranchStore } from '@/stores/branch-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { useProductAttributeStore } from '@/stores/product-attribute-store';
 import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
@@ -15,10 +19,43 @@ import { SharedStyles } from '@/styles/shared';
 export default function ProductDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const activeBranch = useBranchStore((state) => state.activeBranch);
-    const { products, toggleProductActive } = useProductStore();
+    const token = useAuthStore((state) => state.token);
+    const {
+        products,
+        isLoading,
+        isError,
+        errorMessage,
+        fetchProductById,
+        activateProduct,
+        deactivateProduct,
+    } = useProductStore();
     const attributeValues = useProductAttributeStore((state) => state.attributeValues);
+    const [isToggling, setIsToggling] = useState(false);
 
     const product = products.find((p) => p.id === id);
+
+    useEffect(() => {
+        if (token && !product) {
+            fetchProductById(id, token).catch(() => {});
+        }
+    }, [fetchProductById, id, product, token]);
+
+    if (isLoading && !product) {
+        return <LoadingState />;
+    }
+
+    if (isError && !product) {
+        return (
+            <ErrorState
+                message={errorMessage}
+                onRetry={() => {
+                    if (token) {
+                        fetchProductById(id, token).catch(() => {});
+                    }
+                }}
+            />
+        );
+    }
 
     if (!product) {
         return (
@@ -38,6 +75,25 @@ export default function ProductDetailScreen() {
 
     function handleEdit() {
         router.push(`/(app)/(tabs)/products/${currentProduct.id}/edit`);
+    }
+
+    async function handleToggleActive() {
+        if (!token || isToggling) return;
+        setIsToggling(true);
+        try {
+            if (currentProduct.active) {
+                await deactivateProduct(currentProduct.id, token);
+            } else {
+                await activateProduct(currentProduct.id, token);
+            }
+        } catch (error: unknown) {
+            Alert.alert(
+                'Error',
+                error instanceof Error ? error.message : 'No se pudo cambiar el estado del producto.'
+            );
+        } finally {
+            setIsToggling(false);
+        }
     }
 
     return (
@@ -72,7 +128,7 @@ export default function ProductDetailScreen() {
                     stock={currentStock}
                     canEdit
                     onPress={handleEdit}
-                    onToggleActive={() => toggleProductActive(currentProduct.id)}
+                    onToggleActive={handleToggleActive}
                 />
 
                 <View style={styles.variantsCard}>
@@ -83,7 +139,7 @@ export default function ProductDetailScreen() {
                                 <Text style={styles.variantAttributes}>
                                     {variant.attributes.length
                                         ? variant.attributes
-                                            .map((attribute) => attributeValues.find((value) => value.id === attribute.attributeValueId)?.name)
+                                            .map((attribute) => attributeValues.find((value) => value.id === attribute.attributeValueId)?.name ?? attribute.attributeValueId)
                                             .filter(Boolean)
                                             .join(' / ')
                                         : 'Variante única'}
@@ -110,10 +166,11 @@ export default function ProductDetailScreen() {
 
                     <Pressable
                         style={({ pressed }) => [styles.actionButtonSecondary, pressed && SharedStyles.pressed]}
-                        onPress={() => toggleProductActive(currentProduct.id)}
+                        onPress={handleToggleActive}
+                        disabled={isToggling}
                     >
                         <Text style={styles.actionButtonSecondaryText}>
-                            {currentProduct.active ? 'Desactivar' : 'Activar'}
+                            {isToggling ? 'Guardando...' : currentProduct.active ? 'Desactivar' : 'Activar'}
                         </Text>
                     </Pressable>
                 </View>

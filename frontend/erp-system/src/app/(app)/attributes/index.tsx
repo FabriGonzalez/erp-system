@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     FlatList,
+    ActivityIndicator,
     Pressable,
     StyleSheet,
     Switch,
@@ -17,6 +18,7 @@ import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useProductAttributeStore } from '@/stores/product-attribute-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
 import { ProductAttribute } from '@/types/product';
 
@@ -24,11 +26,35 @@ export default function AttributesListScreen() {
     const {
         attributes,
         attributeValues,
-        toggleAttributeActive,
+        fetchAttributes,
+        activateAttribute,
+        deactivateAttribute,
+        isLoading,
+        error,
     } = useProductAttributeStore();
+    const token = useAuthStore((state) => state.token);
 
     const [isFormModalVisible, setIsFormModalVisible] = useState(false);
     const [editingAttribute, setEditingAttribute] = useState<ProductAttribute | null>(null);
+
+    useEffect(() => {
+        if (token) {
+            void fetchAttributes(token);
+        }
+    }, [token, fetchAttributes]);
+
+    async function handleToggle(attribute: ProductAttribute) {
+        if (!token) return;
+        try {
+            if (attribute.active) {
+                await deactivateAttribute(attribute.id, token);
+            } else {
+                await activateAttribute(attribute.id, token);
+            }
+        } catch {
+            // The store exposes the request error to the screen.
+        }
+    }
 
     function handleOpenCreate() {
         setEditingAttribute(null);
@@ -104,7 +130,7 @@ export default function AttributesListScreen() {
                     <View style={styles.switchContainer}>
                         <Switch
                             value={item.active}
-                            onValueChange={() => toggleAttributeActive(item.id)}
+                            onValueChange={() => void handleToggle(item)}
                             trackColor={{ false: Colors.track, true: Colors.primary }}
                             thumbColor={Colors.white}
                         />
@@ -167,9 +193,19 @@ export default function AttributesListScreen() {
                 />
             </View>
 
-            {/* List */}
+            {isLoading ? (
+                <ActivityIndicator color={Colors.primary} style={styles.loader} />
+            ) : error ? (
+                <EmptyState
+                    title="No se pudieron cargar los atributos"
+                    description={error}
+                    actionLabel="Reintentar"
+                    onAction={() => token && void fetchAttributes(token)}
+                />
+            ) : null}
+
             <FlatList
-                data={attributes}
+                data={isLoading || error ? [] : attributes}
                 keyExtractor={(item) => item.id}
                 renderItem={renderItem}
                 contentContainerStyle={styles.listContainer}
@@ -200,6 +236,9 @@ export default function AttributesListScreen() {
 const styles = StyleSheet.create({
     container: {
         padding: 0,
+    },
+    loader: {
+        marginVertical: Spacing.xl,
     },
     topBanner: {
         paddingHorizontal: Spacing.lg,

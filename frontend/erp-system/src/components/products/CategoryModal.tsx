@@ -3,7 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { Category } from '@/types/product';
+import { Category } from '@/types/category';
 
 interface CategoryModalProps {
     visible: boolean;

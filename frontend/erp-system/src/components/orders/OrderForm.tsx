@@ -215,7 +215,7 @@ export function OrderForm({
     return (
         <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={SharedStyles.listContent}
+            contentContainerStyle={styles.scrollContainer}
             keyboardShouldPersistTaps="handled"
         >
             {formError ? (
@@ -242,12 +242,12 @@ export function OrderForm({
             )}
 
             {!isShipment && !initialSalesType && (
-    <OrderSalesTypeSection
-        salesType={salesType}
-        onChangeSalesType={setSalesType}
-        disabled={isSubmitting}
-    />
-)}
+                <OrderSalesTypeSection
+                    salesType={salesType}
+                    onChangeSalesType={setSalesType}
+                    disabled={isSubmitting}
+                />
+            )}
 
             {effectiveSalesType === 'WITH_PRODUCTS' ? (
                 <OrderCartSection
@@ -259,7 +259,7 @@ export function OrderForm({
             ) : (
                 <View style={styles.quickSaleCard}>
                     <Text style={SharedStyles.sectionTitle}>Venta Rápida</Text>
-                    <Text style={[SharedStyles.sectionTitle, { marginBottom: Spacing.xs }]}>
+                    <Text style={styles.inputLabel}>
                         Importe total de la venta <Text style={styles.required}>*</Text>
                     </Text>
                     <View style={styles.currencyInputRow}>
@@ -292,8 +292,12 @@ export function OrderForm({
 }
 
 const styles = StyleSheet.create({
+    scrollContainer: {
+        padding: Spacing.lg,
+        paddingBottom: Spacing.xxl * 2,
+    },
     errorBox: {
-        backgroundColor: Colors.errorSoft,
+        backgroundColor: '#FEE2E2',
         borderRadius: 10,
         padding: Spacing.md,
         borderWidth: 1,
@@ -312,6 +316,12 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.border,
         marginBottom: Spacing.lg,
+    },
+    inputLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: Colors.text,
+        marginBottom: Spacing.xs,
     },
     required: {
         color: Colors.error,

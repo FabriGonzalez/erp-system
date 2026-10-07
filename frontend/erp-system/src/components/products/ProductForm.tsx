@@ -5,9 +5,10 @@ import { Spacing } from '@/constants/spacing';
 import { useBranchStore } from '@/stores/branch-store';
 import { SharedStyles } from '@/styles/shared';
 import { useProductAttributeStore } from '@/stores/product-attribute-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { Branch } from '@/types/branch';
+import { Category } from '@/types/category';
 import {
-    Category,
     Product,
     ProductAttribute,
     ProductAttributeValue,
@@ -15,7 +16,7 @@ import {
     ProductVariantAttribute,
 } from '@/types/product';
 import { SymbolView } from 'expo-symbols';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Pressable,
@@ -74,6 +75,10 @@ function uniqueSku(baseSku: string, usedSkus: Set<string>) {
     }
     usedSkus.add(candidate);
     return candidate;
+}
+
+function isManualPlaceholder(variant: DraftVariant) {
+    return variant.id === 'variant-new' && variant.attributes.length === 0;
 }
 
 function generateCombinations(
@@ -178,9 +183,16 @@ export function ProductForm({
 }: ProductFormProps) {
     const storeAttributes = useProductAttributeStore((state) => state.attributes);
     const storeAttributeValues = useProductAttributeStore((state) => state.attributeValues);
-
+    const fetchAttributes = useProductAttributeStore((state) => state.fetchAttributes);
+    const token = useAuthStore((state) => state.token);
     const attributes = propsAttributes ?? storeAttributes;
     const attributeValues = propsAttributeValues ?? storeAttributeValues;
+
+    useEffect(() => {
+        if (token && storeAttributes.length === 0) {
+            void fetchAttributes(token);
+        }
+    }, [fetchAttributes, storeAttributes.length, token]);
 
     const [name, setName] = useState(initialValues?.name ?? '');
     const [categoryId, setCategoryId] = useState(initialValues?.categoryId ?? '');
@@ -262,15 +274,19 @@ export function ProductForm({
             const price = Number(normalizedPrice);
             if (!sku) nextErrors.variants = 'Todas las variantes deben tener SKU';
             if (sku && (skuSet.has(sku) || existingSkus.has(sku))) nextErrors.variants = 'Los SKU deben ser únicos dentro de la empresa';
-            if (!variant.price.trim() || !/^\d+(\.\d+)?$/.test(normalizedPrice) || !Number.isFinite(price) || price <= 0) nextErrors.variants = 'Todas las variantes deben tener un precio válido';
+            if (!variant.price.trim() || !/^\d+(\.\d+)?$/.test(normalizedPrice) || !Number.isFinite(price) || price < 0) nextErrors.variants = 'Todas las variantes deben tener un precio válido';
             Object.values(variant.stockByBranch).forEach((stock) => {
                 if (!Number.isInteger(stock) || stock < 0) nextErrors.variants = 'El stock debe ser un número entero no negativo';
             });
             const attributeIds = variant.attributes.map((attribute) => attribute.attributeId);
+            if (!variant.attributes.length) nextErrors.variants = 'Cada variante debe tener al menos un valor de atributo';
             if (new Set(attributeIds).size !== attributeIds.length) nextErrors.variants = 'Una variante no puede tener dos valores del mismo atributo';
             variant.attributes.forEach((attribute) => {
                 const value = attributeValues.find((item) => item.id === attribute.attributeValueId);
                 if (!value || value.attributeId !== attribute.attributeId) nextErrors.variants = 'Hay valores de atributos inválidos';
+                if (!Number.isInteger(Number(attribute.attributeValueId))) {
+                    nextErrors.variants = 'Los valores de atributos deben provenir del backend';
+                }
             });
             if (sku) skuSet.add(sku);
         });
@@ -315,6 +331,19 @@ export function ProductForm({
             </View>
 
             <View style={styles.formGroup}>
+                <Text style={SharedStyles.sectionTitle}>Descripción</Text>
+                <AppInput
+                    value={description}
+                    onChangeText={setDescription}
+                    editable={!isSubmitting}
+                    maxLength={500}
+                    multiline
+                    numberOfLines={3}
+                    style={styles.textArea}
+                />
+            </View>
+
+            <View style={styles.formGroup}>
                 <Text style={SharedStyles.sectionTitle}>Categoría <Text style={styles.required}>*</Text></Text>
                 <Pressable style={[styles.selectButton, errors.categoryId && styles.inputError]} onPress={() => !isSubmitting && setCategoryModalVisible(true)}>
                     <Text style={[styles.selectButtonText, !selectedCategory && styles.placeholderText]}>{selectedCategory ? selectedCategory.name : 'Seleccionar categoría'}</Text>
@@ -325,7 +354,29 @@ export function ProductForm({
 
             <View style={styles.modeRow}>
                 <View style={styles.switchLabelContainer}><Text style={styles.switchTitle}>Producto con variantes</Text><Text style={styles.switchSubtitle}>Activá esta opción para combinar atributos como talle y color</Text></View>
-                <Switch value={variantMode} onValueChange={(value) => { setVariantMode(value); if (!value) { setSelectedValues({}); setVariants((current) => [{ ...(current[0] ?? { id: 'variant-new', sku: '', price: basePrice, stockByBranch: {} }), attributes: [] }]); } }} disabled={isSubmitting} trackColor={{ false: Colors.track, true: Colors.primary }} thumbColor={Colors.white} />
+                <Switch
+                    value={variantMode}
+                    onValueChange={(value) => {
+                        setVariantMode(value);
+                        if (value) {
+                            setVariants((current) => current.filter((variant) => !isManualPlaceholder(variant)));
+                        } else {
+                            setSelectedValues({});
+                            setVariants((current) => [{
+                                ...(current.find((variant) => isManualPlaceholder(variant)) ?? {
+                                    id: 'variant-new',
+                                    sku: '',
+                                    price: basePrice,
+                                    stockByBranch: {},
+                                }),
+                                attributes: [],
+                            }]);
+                        }
+                    }}
+                    disabled={isSubmitting}
+                    trackColor={{ false: Colors.track, true: Colors.primary }}
+                    thumbColor={Colors.white}
+                />
             </View>
 
             {variantMode && (

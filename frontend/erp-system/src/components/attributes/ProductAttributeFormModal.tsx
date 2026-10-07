@@ -1,11 +1,12 @@
+import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SymbolView } from 'expo-symbols';
 
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useAuthStore } from '@/stores/auth-store';
 import { useProductAttributeStore } from '@/stores/product-attribute-store';
 import { ProductAttribute } from '@/types/product';
 
@@ -26,11 +27,16 @@ export function ProductAttributeFormModal({
 }: ProductAttributeFormModalProps) {
     const [name, setName] = useState(initialName);
     const [error, setError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const { addAttribute, updateAttribute, getAttributeById } = useProductAttributeStore();
+    const createAttribute = useProductAttributeStore((state) => state.createAttribute);
+    const updateAttribute = useProductAttributeStore((state) => state.updateAttribute);
+    const token = useAuthStore((state) => state.token);
 
     useEffect(() => {
         if (visible) {
+            // Reset form state when opening a different attribute.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setName(initialName);
             setError(null);
         }
@@ -38,24 +44,30 @@ export function ProductAttributeFormModal({
 
     const isEditing = Boolean(attributeId);
 
-    function handleSubmit() {
+    async function handleSubmit() {
         setError(null);
+        if (!token) {
+            setError('No hay una sesión activa.');
+            return;
+        }
+        if (!name.trim()) {
+            setError('El nombre del atributo es obligatorio.');
+            return;
+        }
+        setIsSubmitting(true);
         try {
             if (isEditing && attributeId) {
-                updateAttribute(attributeId, name);
-                const updated = getAttributeById(attributeId);
-                if (updated && onSuccess) {
-                    onSuccess(updated);
-                }
+                const updated = await updateAttribute(attributeId, { name }, token);
+                onSuccess?.(updated);
             } else {
-                const created = addAttribute(name);
-                if (onSuccess) {
-                    onSuccess(created);
-                }
+                const created = await createAttribute({ name }, token);
+                onSuccess?.(created);
             }
             onClose();
-        } catch (err: any) {
-            setError(err.message || 'Error al guardar el atributo.');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error al guardar el atributo.');
+        } finally {
+            setIsSubmitting(false);
         }
     }
 
@@ -106,6 +118,7 @@ export function ProductAttributeFormModal({
                             <AppButton
                                 title={isEditing ? 'Guardar' : 'Crear Atributo'}
                                 onPress={handleSubmit}
+                                disabled={isSubmitting}
                                 style={styles.submitButton}
                             />
                         </View>
