@@ -1,9 +1,10 @@
     import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     FlatList,
     Pressable,
+    RefreshControl,
     StyleSheet,
     Text,
     View,
@@ -13,9 +14,12 @@ import { CartSummaryBar } from '@/components/products/CartSummaryBar';
 import { ProductSelectionCard } from '@/components/products/ProductSelectionCard';
 import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { useProductAttributeStore } from '@/stores/product-attribute-store';
@@ -24,10 +28,38 @@ import { SharedStyles } from '@/styles/shared';
 import { Product } from '@/types/product';
 
     export default function SelectProductsScreen() {
+        const token = useAuthStore((state) => state.token);
         const activeBranch = useBranchStore((state) => state.activeBranch);
-        const { products, searchQuery, setSearchQuery } = useProductStore();
+        const {
+            products,
+            searchQuery,
+            setSearchQuery,
+            fetchProducts,
+            isLoading,
+            isError,
+            errorMessage,
+        } = useProductStore();
         const attributes = useProductAttributeStore((state) => state.attributes);
         const attributeValues = useProductAttributeStore((state) => state.attributeValues);
+        const fetchAttributes = useProductAttributeStore((state) => state.fetchAttributes);
+        const hasAttributes = attributes.length > 0;
+
+        // El catálogo no puede depender de que otra pantalla haya cargado los
+        // productos: se piden al abrir para tener también el stock actualizado.
+        const loadProducts = useCallback(() => {
+            if (!token) return;
+            fetchProducts(token).catch(() => {});
+        }, [token, fetchProducts]);
+
+        useEffect(() => {
+            loadProducts();
+        }, [loadProducts]);
+
+        useEffect(() => {
+            if (token && !hasAttributes) {
+                fetchAttributes(token).catch(() => {});
+            }
+        }, [token, hasAttributes, fetchAttributes]);
 
         const items = useOrderDraftStore((state) => state.items);
         const addItem = useOrderDraftStore((state) => state.addItem);
@@ -35,10 +67,12 @@ import { Product } from '@/types/product';
         const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
         const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
 
-        const branchId = activeBranch?.id ?? '1';
+        const branchId = activeBranch?.id ?? '';
 
         const filteredProducts = useMemo(() => {
             const query = searchQuery.trim().toLowerCase();
+
+            if (!branchId) return [];
 
             return products.filter((product) => {
                 if (!product.active) return false;
@@ -102,7 +136,7 @@ import { Product } from '@/types/product';
                     <View style={styles.titleBox}>
                         <Text style={styles.headerTitle}>Catálogo de Productos</Text>
                         <Text style={styles.headerSubtitle}>
-                            Sucursal: {activeBranch?.name ?? 'Sucursal Central'}
+                            Sucursal: {activeBranch?.name ?? 'Sin sucursal activa'}
                         </Text>
                     </View>
 
@@ -118,16 +152,32 @@ import { Product } from '@/types/product';
                     />
                 </View>
 
+                {isLoading && products.length === 0 ? (
+                    <LoadingState label="Cargando productos..." />
+                ) : isError && products.length === 0 ? (
+                    <ErrorState
+                        message={errorMessage ?? 'No se pudieron cargar los productos.'}
+                        onRetry={loadProducts}
+                    />
+                ) : (
                 <FlatList
                     data={filteredProducts}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContainer}
                     showsVerticalScrollIndicator={false}
+                    refreshControl={<RefreshControl refreshing={isLoading} onRefresh={loadProducts} />}
                     ListEmptyComponent={
-                        <EmptyState
-                            title="No se encontraron productos"
-                            description="Intenta buscar por otro nombre o SKU."
-                        />
+                        !branchId ? (
+                            <EmptyState
+                                title="Sin sucursal activa"
+                                description="Seleccioná una sucursal para ver su stock disponible."
+                            />
+                        ) : (
+                            <EmptyState
+                                title="No se encontraron productos"
+                                description="No hay productos con stock en esta sucursal para esa búsqueda."
+                            />
+                        )
                     }
                     renderItem={({ item: product }) => {
                         const selectedVariant = getSelectedVariant(product);
@@ -187,6 +237,7 @@ import { Product } from '@/types/product';
                         );
                     }}
                 />
+                )}
 
                 <CartSummaryBar
                     itemsCount={cartItemsCount}

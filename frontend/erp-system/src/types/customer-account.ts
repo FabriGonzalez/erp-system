@@ -26,3 +26,38 @@ export type CustomerAccountSnapshot = {
     payments: CustomerPayment[];
     allocations: PaymentAllocation[];
 };
+
+// Estado de cuenta calculado por el backend (GET /customers/{id}/account).
+export type CustomerAccountSummaryResponse = {
+    customerId: number | string;
+    balance: number | string;
+    debt: number | string;
+    credit: number | string;
+    pendingOrders: number;
+};
+
+export type CustomerAccountSummary = {
+    customerId: string;
+    balance: number;
+    debt: number;
+    credit: number;
+    pendingOrders: number;
+};
+
+export type CustomerDebtorResponse = {
+    customerId: number | string;
+    customerName: string;
+    debt: number | string;
+    credit: number | string;
+    pendingOrders: number;
+    oldestPendingOrderAt: string | null;
+};
+
+export type CustomerDebtor = {
+    customerId: string;
+    customerName: string;
+    debt: number;
+    credit: number;
+    pendingOrders: number;
+    oldestPendingOrderAt: string | null;
+};

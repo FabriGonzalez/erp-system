@@ -6,16 +6,23 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { OrderForm } from '@/components/orders/OrderForm';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
+import { Spacing } from '@/constants/spacing';
+import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
-import { useCustomerAccountStore } from '@/stores/customer-account-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { useOrderStore } from '@/stores/order-store';
 import { SharedStyles } from '@/styles/shared';
-import { CUSTOMER_ANONYMOUS } from '@/types/customer';
+import {
+    toBackendCustomerId,
+    toOrderItemRequests,
+    toOrderPaymentOptions,
+} from '@/utils/order-request';
 
 export default function NewOrderScreen() {
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const addOrder = useOrderStore((state) => state.addOrder);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const createOrder = useOrderStore((state) => state.createOrder);
+    const token = useAuthStore((state) => state.token);
     const { salesType: salesTypeParam } = useLocalSearchParams<{
         salesType?: string;
     }>();
@@ -26,80 +33,57 @@ export default function NewOrderScreen() {
     const quickSaleAmount = useOrderDraftStore((state) => state.quickSaleAmount);
     const customer = useOrderDraftStore((state) => state.customer);
     const items = useOrderDraftStore((state) => state.items);
-    const amountPaid = useOrderDraftStore((state) => state.amountPaid);
     const resetDraft = useOrderDraftStore((state) => state.reset);
 
     const activeBranch = useBranchStore((state) => state.activeBranch);
 
-    function handleSubmitOrder() {
+    async function handleSubmitOrder() {
+        if (!token || isSubmitting) {
+            return;
+        }
+
         if (!activeBranch) {
-            console.error('No hay una sucursal activa seleccionada.');
+            setErrorMessage('No hay una sucursal activa seleccionada.');
             return;
         }
 
         if (salesType === 'WITH_PRODUCTS' && items.length === 0) {
-            console.error('El pedido debe tener al menos un producto.');
+            setErrorMessage('El pedido debe tener al menos un producto.');
             return;
         }
 
         if (salesType === 'QUICK_SALE' && quickSaleAmount <= 0) {
-            console.error('Debes ingresar un importe válido para la venta rápida.');
+            setErrorMessage('Debes ingresar un importe válido para la venta rápida.');
             return;
         }
 
         setIsSubmitting(true);
+        setErrorMessage(null);
 
         try {
             const isQuickSale = salesType === 'QUICK_SALE';
-            const orderItems = isQuickSale ? [] : items;
-            const rawTotal = isQuickSale
-                ? quickSaleAmount
-                : items.reduce((sum, item) => sum + item.subtotal, 0);
+            // El resumen guarda el importe cobrado justo antes de enviar.
+            const draft = useOrderDraftStore.getState();
 
-            const safeTotal = Number.isFinite(rawTotal) && rawTotal >= 0 ? rawTotal : 0;
-            const clampedAmountPaid = Number.isFinite(amountPaid)
-                ? Math.min(Math.max(0, amountPaid), safeTotal)
-                : 0;
-            const safeAmountPaid = customer.id === CUSTOMER_ANONYMOUS.id &&
-                clampedAmountPaid > 0 && clampedAmountPaid < safeTotal
-                ? safeTotal
-                : clampedAmountPaid;
-
-            const orderId = addOrder({
-                customerId: customer.id,
-                customerName: customer.name,
-                salesType,
-                quickSaleAmount: isQuickSale ? quickSaleAmount : undefined,
-                deliveryType: 'LOCAL_PICKUP',
-                address: undefined,
-                branchId: activeBranch.id,
-                branchName: activeBranch.name,
-                items: orderItems,
-                total: safeTotal,
-                amountPaid: 0,
-            });
-
-            const createdOrder = useOrderStore.getState().orders.find((order) => order.id === orderId);
-            if (createdOrder && customer.id !== CUSTOMER_ANONYMOUS.id) {
-                useCustomerAccountStore.getState().applyAvailableCreditToOrder(customer.id, createdOrder);
-                if (safeAmountPaid > 0) {
-                    useCustomerAccountStore.getState().recordInitialOrderPayment(
-                        customer.id,
-                        createdOrder,
-                        safeAmountPaid,
-                        activeBranch.id,
-                    );
-                }
-            }
-
-            if (createdOrder && customer.id === CUSTOMER_ANONYMOUS.id && safeAmountPaid > 0) {
-                useOrderStore.getState().updateOrder(orderId, { amountPaid: safeAmountPaid });
-            }
+            await createOrder(
+                {
+                    branchId: Number(activeBranch.id),
+                    customerId: toBackendCustomerId(customer),
+                    salesType,
+                    quickSaleAmount: isQuickSale ? quickSaleAmount : undefined,
+                    deliveryType: 'LOCAL_PICKUP',
+                    items: isQuickSale ? undefined : toOrderItemRequests(items),
+                    ...toOrderPaymentOptions(draft),
+                },
+                token,
+            );
 
             resetDraft();
             router.back();
         } catch (error) {
-            console.error('Error al crear el pedido:', error);
+            setErrorMessage(
+                error instanceof Error ? error.message : 'No se pudo crear el pedido.',
+            );
         } finally {
             setIsSubmitting(false);
         }
@@ -141,6 +125,8 @@ export default function NewOrderScreen() {
                 <View style={SharedStyles.headerSpacer} />
             </View>
 
+            {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
+
             <OrderForm
                 mode="SALE"
                 initialSalesType={salesType}
@@ -156,5 +142,11 @@ export default function NewOrderScreen() {
 const styles = StyleSheet.create({
     container: {
         padding: 0,
+    },
+    errorText: {
+        color: Colors.error,
+        fontSize: 13,
+        paddingHorizontal: Spacing.lg,
+        paddingVertical: Spacing.sm,
     },
 });

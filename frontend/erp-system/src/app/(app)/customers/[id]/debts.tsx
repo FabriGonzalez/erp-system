@@ -51,7 +51,6 @@ export default function CustomerDebtsScreen() {
                 (order) =>
                     order.customerId === id &&
                     order.status !== 'CANCELLED' &&
-                    order.status !== 'DRAFT' &&
                     calculateOrderBalanceDue(
                         order,
                         allocations,

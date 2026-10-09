@@ -72,8 +72,7 @@ export default function CustomerAccountsScreen() {
             for (const order of orders) {
                 if (
                     order.customerId === CUSTOMER_ANONYMOUS.id ||
-                    order.status === 'CANCELLED' ||
-                    order.status === 'DRAFT'
+                    order.status === 'CANCELLED'
                 ) {
                     continue;
                 }
@@ -99,8 +98,7 @@ export default function CustomerAccountsScreen() {
                     }
 
                     if (
-                        order.status === 'CANCELLED' ||
-                        order.status === 'DRAFT'
+                        order.status === 'CANCELLED'
                     ) {
                         continue;
                     }

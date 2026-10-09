@@ -10,23 +10,31 @@ import { OrderProducts } from '@/components/orders/OrderProducts';
 import { OrderTimeline } from '@/components/orders/OrderTimeline';
 import { SuccessBanner } from '@/components/orders/SuccessBanner';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useOrderActions } from '@/hooks/use-order-actions';
+import { useOrderDetail } from '@/hooks/use-order-detail';
 import { useAuthStore } from '@/stores/auth-store';
-import { useOrderStore } from '@/stores/order-store';
 import { SharedStyles } from '@/styles/shared';
-import { SHIPPING_STATUS_FLOW } from '@/types/order';
 
 export default function ShipmentDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const user = useAuthStore((state) => state.user);
-    const orders = useOrderStore((state) => state.orders);
-    const confirmOrder = useOrderStore((state) => state.confirmOrder);
-    const cancelOrder = useOrderStore((state) => state.cancelOrder);
-    const advanceOrderStatus = useOrderStore((state) => state.advanceOrderStatus);
+    const { order: loadedOrder, isLoading, loadError } = useOrderDetail(id);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
-    const order = orders.find((item) => item.id === id && item.deliveryType === 'SHIPPING');
+    const order = loadedOrder?.deliveryType === 'SHIPPING' ? loadedOrder : undefined;
+
+    function showSuccess(message: string) {
+        setSuccessMessage(message);
+        setTimeout(() => setSuccessMessage(null), 2000);
+    }
+
+    const { isBusy, errorMessage, handleCancel, handleDispatch } = useOrderActions(
+        showSuccess,
+        { cancel: 'Envío cancelado', dispatch: 'Envío despachado correctamente' },
+    );
 
     if (!order) {
         return (
@@ -38,12 +46,16 @@ export default function ShipmentDetailScreen() {
                     <Text style={SharedStyles.headerTitle}>Envío</Text>
                     <View style={SharedStyles.headerSpacer} />
                 </View>
-                <EmptyState
-                    title="Envío no encontrado"
-                    description="El envío no existe o no pertenece a este módulo."
-                    actionLabel="Volver a envíos"
-                    onAction={() => router.back()}
-                />
+                {isLoading ? (
+                    <LoadingState />
+                ) : (
+                    <EmptyState
+                        title="Envío no encontrado"
+                        description={loadError ?? 'El envío no existe o no pertenece a este módulo.'}
+                        actionLabel="Volver a envíos"
+                        onAction={() => router.back()}
+                    />
+                )}
             </Screen>
         );
     }
@@ -51,17 +63,10 @@ export default function ShipmentDetailScreen() {
     const shipment = order;
 
     const canUpdate = user?.role === 'Administrador' || Boolean(user?.permissions?.includes('ORDERS_UPDATE'));
-    const isDraft = order.status === 'DRAFT';
-    const isCancelled = order.status === 'CANCELLED';
-    const isDelivered = order.status === 'SHIPPED';
-    const canEdit = !['SHIPPED', 'TO_PREPARE','CANCELLED'].includes(order.status);
-    const statusIndex = SHIPPING_STATUS_FLOW.indexOf(order.status);
-    const canAdvance = !isDraft && !isCancelled && !isDelivered && statusIndex >= 0 && statusIndex < SHIPPING_STATUS_FLOW.length - 1;
-
-    function showSuccess(message: string) {
-        setSuccessMessage(message);
-        setTimeout(() => setSuccessMessage(null), 2000);
-    }
+    const isToPrepare = order.status === 'TO_PREPARE';
+    const canCancel = order.status === 'CONFIRMED' || isToPrepare;
+    const canDispatch = isToPrepare;
+    const canEdit = isToPrepare;
 
     return (
         <Screen style={styles.screen}>
@@ -72,15 +77,16 @@ export default function ShipmentDetailScreen() {
                 <OrderProducts order={order} />
                 <OrderTimeline order={order} />
             </ScrollView>
-            {canUpdate && !isCancelled && !isDelivered && (
+            {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
+            {canUpdate && (canCancel || canDispatch || canEdit) && (
                 <OrderActions
-                    isDraft={isDraft}
                     canEdit={canEdit}
-                    canAdvance={canAdvance}
+                    canDispatch={canDispatch}
+                    canCancel={canCancel}
+                    isBusy={isBusy}
                     onEdit={() => router.push(`/shipments/${shipment.id}/edit`)}
-                    onConfirm={() => confirmOrder(shipment.id) && showSuccess('Envío confirmado correctamente')}
-                    onAdvance={() => advanceOrderStatus(shipment.id) && showSuccess('Estado del envío actualizado')}
-                    onCancel={() => cancelOrder(shipment.id) && showSuccess('Envío cancelado')}
+                    onDispatch={() => void handleDispatch(shipment)}
+                    onCancel={() => void handleCancel(shipment)}
                 />
             )}
         </Screen>
@@ -90,4 +96,5 @@ export default function ShipmentDetailScreen() {
 const styles = StyleSheet.create({
     screen: { padding: 0 },
     scrollContent: { padding: Spacing.lg, paddingBottom: Spacing.xxl * 2, gap: Spacing.md },
+    errorText: { color: Colors.error, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, fontSize: 13 },
 });

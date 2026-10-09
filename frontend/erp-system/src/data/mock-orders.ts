@@ -55,7 +55,7 @@ export const mockOrders: Order[] = [
         ],
         total: 110000,
         amountPaid: 0,
-        status: 'DRAFT',
+        status: 'TO_PREPARE',
         createdAt: '2026-09-01T16:00:00',
         updatedAt: '2026-09-01T16:00:00',
     },

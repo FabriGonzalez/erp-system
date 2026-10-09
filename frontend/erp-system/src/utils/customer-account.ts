@@ -89,7 +89,7 @@ export function allocatePaymentFifo(
             continue;
         }
 
-        if (order.status === 'DRAFT' || order.status === 'CANCELLED') {
+        if (order.status === 'CANCELLED') {
             continue;
         }
 

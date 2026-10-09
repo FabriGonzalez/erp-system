@@ -17,7 +17,6 @@ const STATUS_FILTERS: {
     value: OrderStatusFilter;
 }[] = [
         { label: 'Todos', value: 'ALL' },
-        { label: ORDER_STATUS_LABELS.DRAFT, value: 'DRAFT' },
         { label: ORDER_STATUS_LABELS.CONFIRMED, value: 'CONFIRMED' },
         { label: ORDER_STATUS_LABELS.TO_PREPARE, value: 'TO_PREPARE' },
         { label: ORDER_STATUS_LABELS.SHIPPED, value: 'SHIPPED' },

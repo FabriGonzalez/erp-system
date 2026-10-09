@@ -28,10 +28,7 @@ function getCompletedAndCurrent(
         };
     }
 
-    const shippingFlow: Order['status'][] = [
-        'DRAFT',
-        ...SHIPPING_STATUS_FLOW,
-    ];
+    const shippingFlow: Order['status'][] = SHIPPING_STATUS_FLOW;
 
     const currentIdx = shippingFlow.indexOf(order.status);
 
@@ -51,12 +48,12 @@ export function OrderTimeline({ order }: OrderTimelineProps) {
 
     const steps = order.deliveryType === 'LOCAL_PICKUP'
         ? ['Pedido creado', 'Confirmado']
-        : ['Borrador', 'A preparar', 'Enviado'];
+        : ['A preparar', 'Enviado'];
 
     const statusSteps: Order['status'][] =
         order.deliveryType === 'LOCAL_PICKUP'
             ? ['CONFIRMED', 'CONFIRMED']
-            : ['DRAFT', ...SHIPPING_STATUS_FLOW];
+            : SHIPPING_STATUS_FLOW;
 
     return (
         <View style={SharedStyles.card}>

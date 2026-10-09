@@ -7,13 +7,6 @@ export function getStatusBadgeColor(status: OrderStatus): {
     dot: string;
 } {
     switch (status) {
-        case 'DRAFT':
-            return {
-                bg: Colors.muted,
-                text: Colors.textSecondary,
-                dot: Colors.textSecondary,
-            };
-
         case 'CONFIRMED':
             return {
                 bg: Colors.primaryLight,

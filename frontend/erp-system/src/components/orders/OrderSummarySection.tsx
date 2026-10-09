@@ -13,11 +13,21 @@ import { Spacing } from '@/constants/spacing';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
-import { DeliveryType, getBalanceDue, getPaymentStatus } from '@/types/order';
+import {
+    DeliveryType,
+    PAYMENT_METHOD_LABELS,
+    PaymentMethod,
+} from '@/types/order';
 import { AppInput } from '../ui/AppInput';
+
+const PAYMENT_METHODS = Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[];
 
 type OrderSummarySectionProps = {
     total: number;
+    // Saldo a favor del cliente que se aplicará a esta orden.
+    creditApplied?: number;
+    // En edición no se registran pagos.
+    showPayment?: boolean;
     itemsCount: number;
     deliveryType: DeliveryType;
     branchName: string;
@@ -30,6 +40,8 @@ type OrderSummarySectionProps = {
 
 export function OrderSummarySection({
     total,
+    creditApplied = 0,
+    showPayment = true,
     deliveryType,
     branchName,
     isSubmitting,
@@ -38,54 +50,42 @@ export function OrderSummarySection({
     onCancel,
     disabled = false,
 }: OrderSummarySectionProps) {
-    const amountPaid = useOrderDraftStore((state) => state.amountPaid);
     const setAmountPaid = useOrderDraftStore((state) => state.setAmountPaid);
+    const paymentMethod = useOrderDraftStore((state) => state.paymentMethod);
+    const setPaymentMethod = useOrderDraftStore((state) => state.setPaymentMethod);
     const [paymentMode, setPaymentMode] = useState<'TOTAL' | 'PARTIAL'>('TOTAL');
 
     const customer = useOrderDraftStore((state) => state.customer);
 
     const isAnonymousCustomer = customer.id === CUSTOMER_ANONYMOUS.id;
 
-    const [inputValue, setInputValue] = useState(
-        amountPaid > 0 ? String(amountPaid) : '',
-    );
+    const [inputValue, setInputValue] = useState('');
 
+    // Las ventas sin cliente se cobran completas al crearse.
     const effectivePaymentMode = isAnonymousCustomer ? 'TOTAL' : paymentMode;
 
     const isPickup = deliveryType === 'LOCAL_PICKUP';
 
+    const safeTotal = Math.max(0, total);
+    const safeCreditApplied = isAnonymousCustomer
+        ? 0
+        : Math.min(Math.max(0, creditApplied), safeTotal);
+    const amountToCharge = safeTotal - safeCreditApplied;
+
     const parsedInput = Number(inputValue);
     const parsedAmount = Number.isFinite(parsedInput)
-        ? Math.min(Math.max(0, parsedInput), total)
+        ? Math.min(Math.max(0, parsedInput), amountToCharge)
         : 0;
 
     const effectiveAmountPaid =
-        effectivePaymentMode === 'TOTAL' ? total : parsedAmount;
-
-    const balanceDue = getBalanceDue({
-        total,
-        amountPaid: effectiveAmountPaid,
-    });
-
-    const paymentStatus = getPaymentStatus({
-        total,
-        amountPaid: effectiveAmountPaid,
-    });
+        effectivePaymentMode === 'TOTAL' ? amountToCharge : parsedAmount;
 
     function handleInputChange(text: string) {
-        const cleaned = text.replace(/[^0-9]/g, '');
-        setInputValue(cleaned);
-        const parsedValue = Number(cleaned);
-        const value = Number.isFinite(parsedValue)
-            ? Math.min(Math.max(0, parsedValue), Math.max(0, total))
-            : 0;
-        setAmountPaid(value);
+        setInputValue(text.replace(/[^0-9]/g, ''));
     }
 
     function handleSelectTotal() {
         setPaymentMode('TOTAL');
-        setInputValue(String(Math.max(0, total)));
-        setAmountPaid(Math.max(0, total));
     }
 
     function handleSelectPartial() {
@@ -97,30 +97,10 @@ export function OrderSummarySection({
     }
 
     function handleSubmit() {
-        setAmountPaid(effectiveAmountPaid);
+        // La pantalla lee el importe del store en el momento del envío.
+        setAmountPaid(showPayment ? effectiveAmountPaid : 0);
         onSubmit();
     }
-
-    const paymentStatusColor =
-        paymentStatus === 'PAID'
-            ? Colors.success
-            : paymentStatus === 'PARTIAL'
-                ? Colors.warning
-                : Colors.error;
-
-    const paymentStatusBg =
-        paymentStatus === 'PAID'
-            ? Colors.successLight
-            : paymentStatus === 'PARTIAL'
-                ? Colors.warningLight
-                : Colors.errorLight;
-
-    const paymentStatusLabel =
-        paymentStatus === 'PAID'
-            ? 'Pagado'
-            : paymentStatus === 'PARTIAL'
-                ? 'Pago parcial'
-                : 'Pendiente';
 
     return (
         <View style={styles.container}>
@@ -142,8 +122,7 @@ export function OrderSummarySection({
                 <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Estado inicial:</Text>
                     <StatusBadge
-                        status={isPickup ? 'CONFIRMED' : 'DRAFT'}
-                        label={isPickup ? 'CONFIRMED' : 'DRAFT'}
+                        status={isPickup ? 'CONFIRMED' : 'TO_PREPARE'}
                         showDot={false}
                     />
                 </View>
@@ -153,101 +132,122 @@ export function OrderSummarySection({
                 <View style={styles.totalRow}>
                     <Text style={styles.totalLabel}>Total final:</Text>
                     <Text style={styles.totalValue}>
-                        ${total.toLocaleString('es-AR')}
+                        ${safeTotal.toLocaleString('es-AR')}
                     </Text>
                 </View>
 
-                <View style={styles.divider} />
-
-                <Text style={styles.entregaTitle}>Pagó</Text>
-
-                <View style={styles.paymentOptions}>
-                    <Pressable
-                        style={[
-                            styles.paymentOption,
-                            effectivePaymentMode === 'TOTAL' && styles.paymentOptionActive,
-                        ]}
-                        onPress={handleSelectTotal}
-                    >
-                        <Text
-                            style={[
-                                styles.paymentOptionText,
-                                effectivePaymentMode === 'TOTAL' &&
-                                styles.paymentOptionTextActive,
-                            ]}
-                        >
-                            Total
-                        </Text>
-                    </Pressable>
-
-                    <Pressable
-                        style={[
-                            styles.paymentOption,
-                            effectivePaymentMode === 'PARTIAL' &&
-                            styles.paymentOptionActive,
-                            isAnonymousCustomer &&
-                            styles.paymentOptionDisabled,
-                        ]}
-                        onPress={handleSelectPartial}
-                        disabled={isAnonymousCustomer}
-                    >
-                        <Text
-                            style={[
-                                styles.paymentOptionText,
-                                effectivePaymentMode === 'PARTIAL' &&
-                                styles.paymentOptionTextActive,
-                                isAnonymousCustomer &&
-                                styles.paymentOptionTextDisabled,
-                            ]}
-                        >
-                            Parcial
-                        </Text>
-                    </Pressable>
-                </View>
-
-                {isAnonymousCustomer && (
-                    <Text style={styles.paymentRestriction}>
-                        El pago parcial requiere un cliente identificado.
-                    </Text>
+                {showPayment && safeCreditApplied > 0 && (
+                    <>
+                        <View style={[styles.summaryRow, styles.creditRow]}>
+                            <Text style={styles.summaryLabel}>Saldo a favor aplicado:</Text>
+                            <Text style={styles.creditValue}>
+                                -${safeCreditApplied.toLocaleString('es-AR')}
+                            </Text>
+                        </View>
+                        <View style={styles.summaryRow}>
+                            <Text style={styles.summaryLabel}>A cobrar:</Text>
+                            <Text style={styles.summaryValue}>
+                                ${amountToCharge.toLocaleString('es-AR')}
+                            </Text>
+                        </View>
+                    </>
                 )}
 
-                {effectivePaymentMode === 'PARTIAL' && (
+                {showPayment && (
                     <>
-                        <View style={styles.inputRow}>
-                            <Text style={styles.currencyPrefix}>$</Text>
-                            <AppInput
-                                style={styles.amountInput}
-                                value={inputValue}
-                                onChangeText={handleInputChange}
-                                keyboardType="numeric"
-                                placeholder="0"
-                                maxLength={12}
-                            />
-                        </View>
+                        <View style={styles.divider} />
 
-                        <View style={styles.balanceRow}>
-                            <View
+                        <Text style={styles.entregaTitle}>Pagó</Text>
+
+                        <View style={styles.paymentOptions}>
+                            <Pressable
                                 style={[
-                                    styles.statusPill,
-                                    { backgroundColor: paymentStatusBg },
+                                    styles.paymentOption,
+                                    effectivePaymentMode === 'TOTAL' && styles.paymentOptionActive,
                                 ]}
+                                onPress={handleSelectTotal}
                             >
                                 <Text
                                     style={[
-                                        styles.statusPillText,
-                                        { color: paymentStatusColor },
+                                        styles.paymentOptionText,
+                                        effectivePaymentMode === 'TOTAL' &&
+                                        styles.paymentOptionTextActive,
                                     ]}
                                 >
-                                    {paymentStatusLabel}
+                                    Total
                                 </Text>
-                            </View>
+                            </Pressable>
 
-                            {balanceDue > 0 && (
-                                <Text style={styles.balanceText}>
-                                    Debe: ${balanceDue.toLocaleString('es-AR')}
+                            <Pressable
+                                style={[
+                                    styles.paymentOption,
+                                    effectivePaymentMode === 'PARTIAL' &&
+                                    styles.paymentOptionActive,
+                                    isAnonymousCustomer &&
+                                    styles.paymentOptionDisabled,
+                                ]}
+                                onPress={handleSelectPartial}
+                                disabled={isAnonymousCustomer}
+                            >
+                                <Text
+                                    style={[
+                                        styles.paymentOptionText,
+                                        effectivePaymentMode === 'PARTIAL' &&
+                                        styles.paymentOptionTextActive,
+                                        isAnonymousCustomer &&
+                                        styles.paymentOptionTextDisabled,
+                                    ]}
+                                >
+                                    Parcial
                                 </Text>
-                            )}
+                            </Pressable>
                         </View>
+
+                        {isAnonymousCustomer && (
+                            <Text style={styles.paymentRestriction}>
+                                El pago parcial requiere un cliente identificado.
+                            </Text>
+                        )}
+
+                        {effectivePaymentMode === 'PARTIAL' && (
+                            <View style={styles.inputRow}>
+                                <Text style={styles.currencyPrefix}>$</Text>
+                                <AppInput
+                                    style={styles.amountInput}
+                                    value={inputValue}
+                                    onChangeText={handleInputChange}
+                                    keyboardType="numeric"
+                                    placeholder="0"
+                                    maxLength={12}
+                                />
+                            </View>
+                        )}
+
+                        {!isAnonymousCustomer && effectiveAmountPaid > 0 && (
+                            <View style={styles.methodOptions}>
+                                {PAYMENT_METHODS.map((method) => (
+                                    <Pressable
+                                        key={method}
+                                        style={[
+                                            styles.methodOption,
+                                            paymentMethod === method && styles.paymentOptionActive,
+                                        ]}
+                                        onPress={() => setPaymentMethod(method)}
+                                        accessibilityRole="button"
+                                        accessibilityState={{ selected: paymentMethod === method }}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.methodOptionText,
+                                                paymentMethod === method && styles.paymentOptionTextActive,
+                                            ]}
+                                        >
+                                            {PAYMENT_METHOD_LABELS[method]}
+                                        </Text>
+                                    </Pressable>
+                                ))}
+                            </View>
+                        )}
                     </>
                 )}
             </View>
@@ -335,6 +335,14 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: Colors.primary,
     },
+    creditRow: {
+        marginTop: Spacing.sm,
+    },
+    creditValue: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: Colors.successDark,
+    },
     entregaTitle: {
         fontSize: 14,
         fontWeight: '600',
@@ -368,25 +376,24 @@ const styles = StyleSheet.create({
         backgroundColor: 'transparent',
         paddingHorizontal: 0,
     },
-    balanceRow: {
+    methodOptions: {
         flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginTop: 2,
+        flexWrap: 'wrap',
+        gap: Spacing.xs,
+        marginBottom: Spacing.md,
     },
-    statusPill: {
+    methodOption: {
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: 8,
+        paddingVertical: Spacing.xs,
         paddingHorizontal: Spacing.sm,
-        paddingVertical: 3,
-        borderRadius: 20,
+        backgroundColor: Colors.surface,
     },
-    statusPillText: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    balanceText: {
+    methodOptionText: {
         fontSize: 13,
         fontWeight: '600',
-        color: Colors.error,
+        color: Colors.textSecondary,
     },
     actionsContainer: {
         gap: Spacing.sm,

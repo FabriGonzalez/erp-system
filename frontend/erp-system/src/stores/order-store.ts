@@ -1,35 +1,43 @@
 import { create } from 'zustand';
 
-import { mockOrders } from '@/data/mock-orders';
-import { useCustomerAccountStore } from '@/stores/customer-account-store';
-import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import {
-    DeliveryType,
+    cancelOrder as cancelOrderRequest,
+    createOrder as createOrderRequest,
+    dispatchOrder as dispatchOrderRequest,
+    getOrderById,
+    getOrders,
+    updateOrder as updateOrderRequest,
+} from '@/services/order-service';
+import { useAuthStore } from '@/stores/auth-store';
+import {
     Order,
     OrderDeliveryFilter,
-    OrderStatus,
+    OrderListParams,
+    OrderRequest,
     OrderStatusFilter,
+    OrderUpdateRequest,
+    RefundAction,
 } from '@/types/order';
 
-type OrderUpdate = Pick<
-    Order,
-    | 'customerId'
-    | 'customerName'
-    | 'salesType'
-    | 'quickSaleAmount'
-    | 'deliveryType'
-    | 'address'
-    | 'items'
-    | 'total'
-    | 'amountPaid'
->;
+const DEFAULT_PAGE_SIZE = 20;
+
+type FetchOrdersOptions = {
+    append?: boolean;
+};
 
 type OrderState = {
     orders: Order[];
+    page: number;
+    totalPages: number;
+    totalElements: number;
+    hasMore: boolean;
+    listParams: OrderListParams;
+
     searchQuery: string;
     statusFilter: OrderStatusFilter;
     deliveryTypeFilter: OrderDeliveryFilter;
     isLoading: boolean;
+    isLoadingMore: boolean;
     isError: boolean;
     errorMessage: string | null;
 
@@ -46,66 +54,46 @@ type OrderState = {
     setShipmentsStatusFilter: (filter: OrderStatusFilter) => void;
     resetShipmentsFilters: () => void;
 
-    setLoading: (loading: boolean) => void;
-    setError: (error: boolean, message?: string | null) => void;
-    reloadOrders: () => void;
-
-    addOrder: (
-        orderData: Omit<
-            Order,
-            'id' | 'orderNumber' | 'status' | 'createdAt' | 'updatedAt'
-        >
-    ) => string;
-
-    updateOrder: (id: string, updates: Partial<OrderUpdate>) => void;
-
-    confirmOrder: (id: string) => boolean;
-    cancelOrder: (id: string) => boolean;
-    advanceOrderStatus: (id: string) => boolean;
+    fetchOrders: (
+        params: Omit<OrderListParams, 'page'>,
+        token: string,
+        options?: FetchOrdersOptions
+    ) => Promise<void>;
+    fetchOrderById: (id: string, token: string) => Promise<Order>;
+    createOrder: (data: OrderRequest, token: string) => Promise<Order>;
+    updateOrder: (
+        id: string,
+        data: OrderUpdateRequest,
+        token: string
+    ) => Promise<Order>;
+    cancelOrder: (
+        id: string,
+        token: string,
+        refundAction?: RefundAction
+    ) => Promise<Order>;
+    dispatchOrder: (id: string, token: string) => Promise<Order>;
 };
 
-function getInitialStatus(deliveryType: DeliveryType): OrderStatus {
-    return deliveryType === 'LOCAL_PICKUP'
-        ? 'CONFIRMED'
-        : 'DRAFT';
+function getErrorMessage(error: unknown, fallback: string): string {
+    return error instanceof Error ? error.message : fallback;
 }
 
-function generateOrderNumber(orders: Order[]): string {
-    const maxNum = orders.reduce((max, order) => {
-        const num = parseInt(
-            order.orderNumber.replace('PED-', ''),
-            10
-        );
-
-        return num > max ? num : max;
-    }, 0);
-
-    return `PED-${String(maxNum + 1).padStart(3, '0')}`;
+function upsertOrder(orders: Order[], updated: Order): Order[] {
+    return orders.some((order) => order.id === updated.id)
+        ? orders.map((order) => (order.id === updated.id ? updated : order))
+        : [updated, ...orders];
 }
 
-const STATUS_FLOW: OrderStatus[] = [
-    'TO_PREPARE',
-    'SHIPPED',
-];
-
-function normalizeAmountPaid(amountPaid: number, total: number, customerId: string) {
-    const safeTotal = Number.isFinite(total) && total >= 0 ? total : 0;
-    const safeAmount = Number.isFinite(amountPaid) ? Math.max(0, amountPaid) : 0;
-    const clampedAmount = Math.min(safeAmount, safeTotal);
-
-    if (
-        customerId === CUSTOMER_ANONYMOUS.id &&
-        clampedAmount > 0 &&
-        clampedAmount < safeTotal
-    ) {
-        return safeTotal;
-    }
-
-    return clampedAmount;
-}
+// Identifica la última carga de listado; las respuestas anteriores se descartan.
+let latestListRequestId = 0;
 
 export const useOrderStore = create<OrderState>((set, get) => ({
-    orders: mockOrders,
+    orders: [],
+    page: 0,
+    totalPages: 0,
+    totalElements: 0,
+    hasMore: false,
+    listParams: {},
 
     searchQuery: '',
     statusFilter: 'ALL',
@@ -115,6 +103,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
     shipmentsStatusFilter: 'ALL',
 
     isLoading: false,
+    isLoadingMore: false,
     isError: false,
     errorMessage: null,
 
@@ -155,194 +144,122 @@ export const useOrderStore = create<OrderState>((set, get) => ({
         });
     },
 
-    setLoading: (isLoading) => {
-        set({ isLoading });
-    },
+    fetchOrders: async (params, token, options) => {
+        const append = options?.append ?? false;
 
-    setError: (isError, errorMessage = null) => {
-        set({
-            isError,
-            errorMessage,
-        });
-    },
+        if (append && (!get().hasMore || get().isLoadingMore)) {
+            return;
+        }
 
-    reloadOrders: () => {
-        set({
-            isLoading: true,
-            isError: false,
-            errorMessage: null,
-        });
-
-        setTimeout(() => {
-            set({
-                isLoading: false,
-            });
-        }, 600);
-    },
-
-    addOrder: (orderData) => {
-        const { orders } = get();
-
-        const now = new Date().toISOString();
-        const id = `ord-${Date.now()}`;
-        const orderNumber = generateOrderNumber(orders);
-
-        const status = getInitialStatus(orderData.deliveryType);
-
-        const newOrder: Order = {
-            ...orderData,
-            amountPaid: normalizeAmountPaid(orderData.amountPaid, orderData.total, orderData.customerId),
-            id,
-            orderNumber,
-            status,
-            createdAt: now,
-            updatedAt: now,
+        const requestId = ++latestListRequestId;
+        const page = append ? get().page + 1 : 0;
+        const requestParams: OrderListParams = {
+            size: DEFAULT_PAGE_SIZE,
+            sort: 'createdAt,desc',
+            ...params,
+            page,
         };
 
-        set((state) => ({
-            orders: [newOrder, ...state.orders],
-        }));
-
-        return id;
-    },
-
-    updateOrder: (id, updates) => {
-        set((state) => ({
-            orders: state.orders.map((order) => {
-                if (order.id !== id) {
-                    return order;
+        set(
+            append
+                ? { isLoadingMore: true, isError: false, errorMessage: null }
+                : {
+                    isLoading: true,
+                    isLoadingMore: false,
+                    isError: false,
+                    errorMessage: null,
+                    listParams: params,
                 }
+        );
 
-                const updated = {
-                    ...order,
-                    ...updates,
-                    updatedAt: new Date().toISOString(),
-                };
+        try {
+            const result = await getOrders(requestParams, token);
 
-                const customerId = updated.customerId;
-                const safeTotal = Number.isFinite(updated.total) && updated.total >= 0 ? updated.total : 0;
+            if (
+                requestId !== latestListRequestId ||
+                useAuthStore.getState().token !== token
+            ) {
+                return;
+            }
 
-                let finalAmountPaid = order.amountPaid;
+            set((state) => ({
+                orders: append
+                    ? [
+                        ...state.orders,
+                        ...result.content.filter(
+                            (order) =>
+                                !state.orders.some((item) => item.id === order.id)
+                        ),
+                    ]
+                    : result.content,
+                page: result.page,
+                totalPages: result.totalPages,
+                totalElements: result.totalElements,
+                hasMore: result.page + 1 < result.totalPages,
+                isLoading: false,
+                isLoadingMore: false,
+            }));
+        } catch (error) {
+            if (requestId !== latestListRequestId) {
+                return;
+            }
 
-                if (customerId === CUSTOMER_ANONYMOUS.id) {
-                    if (typeof updates.amountPaid === 'number') {
-                        finalAmountPaid = normalizeAmountPaid(
-                            updates.amountPaid,
-                            safeTotal,
-                            customerId,
-                        );
-                    } else {
-                        finalAmountPaid = normalizeAmountPaid(
-                            order.amountPaid,
-                            safeTotal,
-                            customerId,
-                        );
-                    }
-                } else {
-                    const allocatedPaid =
-                        useCustomerAccountStore.getState().getOrderPaidAmount(id);
+            set({
+                isLoading: false,
+                isLoadingMore: false,
+                isError: true,
+                errorMessage: getErrorMessage(
+                    error,
+                    'No se pudieron cargar las órdenes.'
+                ),
+            });
 
-                    finalAmountPaid = Math.min(allocatedPaid, safeTotal);
-                }
-
-                return {
-                    ...updated,
-                    total: safeTotal,
-                    amountPaid: finalAmountPaid,
-                };
-            }),
-        }));
+            throw error;
+        }
     },
 
-    confirmOrder: (id) => {
-        const order = get().orders.find((order) => order.id === id);
+    fetchOrderById: async (id, token) => {
+        const order = await getOrderById(id, token);
 
-        if (!order) {
-            return false;
+        if (useAuthStore.getState().token === token) {
+            set((state) => ({ orders: upsertOrder(state.orders, order) }));
         }
 
-        if (order.status !== 'DRAFT') {
-            return false;
-        }
-
-        set((state) => ({
-            orders: state.orders.map((order) =>
-                order.id === id
-                    ? {
-                        ...order,
-                        status: order.deliveryType === 'SHIPPING' ? 'TO_PREPARE' : 'CONFIRMED',
-                        updatedAt: new Date().toISOString(),
-                    }
-                    : order
-            ),
-        }));
-
-        return true;
+        return order;
     },
 
-    cancelOrder: (id) => {
-        const order = get().orders.find((order) => order.id === id);
-
-        if (!order) {
-            return false;
-        }
-
-        if (
-            order.status === 'CANCELLED' ||
-            order.status === 'SHIPPED'
-        ) {
-            return false;
-        }
+    createOrder: async (data, token) => {
+        const order = await createOrderRequest(data, token);
 
         set((state) => ({
-            orders: state.orders.map((order) =>
-                order.id === id
-                    ? {
-                        ...order,
-                        status: 'CANCELLED',
-                        updatedAt: new Date().toISOString(),
-                    }
-                    : order
-            ),
+            orders: upsertOrder(state.orders, order),
+            totalElements: state.totalElements + 1,
         }));
 
-        return true;
+        return order;
     },
 
-    advanceOrderStatus: (id) => {
-        const order = get().orders.find((order) => order.id === id);
+    updateOrder: async (id, data, token) => {
+        const order = await updateOrderRequest(id, data, token);
 
-        if (!order) {
-            return false;
-        }
+        set((state) => ({ orders: upsertOrder(state.orders, order) }));
 
-        if (order.deliveryType !== 'SHIPPING') {
-            return false;
-        }
+        return order;
+    },
 
-        const currentIndex = STATUS_FLOW.indexOf(order.status);
+    cancelOrder: async (id, token, refundAction) => {
+        const order = await cancelOrderRequest(id, token, refundAction);
 
-        if (
-            currentIndex === -1 ||
-            currentIndex >= STATUS_FLOW.length - 1
-        ) {
-            return false;
-        }
+        set((state) => ({ orders: upsertOrder(state.orders, order) }));
 
-        const nextStatus = STATUS_FLOW[currentIndex + 1];
+        return order;
+    },
 
-        set((state) => ({
-            orders: state.orders.map((order) =>
-                order.id === id
-                    ? {
-                        ...order,
-                        status: nextStatus,
-                        updatedAt: new Date().toISOString(),
-                    }
-                    : order
-            ),
-        }));
+    dispatchOrder: async (id, token) => {
+        const order = await dispatchOrderRequest(id, token);
 
-        return true;
+        set((state) => ({ orders: upsertOrder(state.orders, order) }));
+
+        return order;
     },
 }));
