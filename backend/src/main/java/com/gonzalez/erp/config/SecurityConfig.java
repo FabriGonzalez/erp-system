@@ -6,6 +6,8 @@ import com.gonzalez.erp.config.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -96,8 +98,10 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(
-            HttpSecurity http
+            HttpSecurity http,
+            Environment environment
     ) throws Exception {
+        boolean dev = environment.acceptsProfiles(Profiles.of("dev"));
         return http
                 .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
@@ -106,18 +110,19 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(authenticationEntryPoint())
                         .accessDeniedHandler(accessDeniedHandler()))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                "/api/v1/auth/login",
+                .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers("/api/v1/auth/login", "/error").permitAll();
+                    if (dev) {
+                        auth.requestMatchers(
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
-                                "/v3/api-docs/**",
-                                "/error"
-                        ).permitAll()
-                        .requestMatchers("/api/v1/provisioning/**")
-                        .hasRole("PLATFORM_ADMIN")
-                        .anyRequest().authenticated()
-                )
+                                "/v3/api-docs/**"
+                        ).permitAll();
+                    }
+                    auth.requestMatchers("/api/v1/provisioning/**")
+                            .hasRole("PLATFORM_ADMIN")
+                            .anyRequest().authenticated();
+                })
                 .addFilterBefore(
                         jwtAuthFilter,
                         UsernamePasswordAuthenticationFilter.class

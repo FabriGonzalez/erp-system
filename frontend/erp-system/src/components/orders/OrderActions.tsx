@@ -5,49 +5,43 @@ import { Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 
 interface OrderActionsProps {
-    isDraft: boolean;
     canEdit: boolean;
-    canAdvance: boolean;
+    canDispatch: boolean;
+    canCancel: boolean;
+    isBusy?: boolean;
     onEdit: () => void;
-    onConfirm: () => void;
-    onAdvance: () => void;
+    onDispatch: () => void;
     onCancel: () => void;
 }
 
 export function OrderActions({
-    isDraft,
     canEdit,
-    canAdvance,
+    canDispatch,
+    canCancel,
+    isBusy = false,
     onEdit,
-    onConfirm,
-    onAdvance,
+    onDispatch,
     onCancel,
 }: OrderActionsProps) {
     return (
         <View style={styles.container}>
             {canEdit && (
-                <Pressable style={SharedStyles.buttonSecondary} onPress={onEdit}>
+                <Pressable style={SharedStyles.buttonSecondary} onPress={onEdit} disabled={isBusy}>
                     <Text style={SharedStyles.buttonSecondaryText}>Editar</Text>
                 </Pressable>
             )}
 
-            {isDraft && (
-                <>
-                    <Pressable style={SharedStyles.buttonPrimary} onPress={onConfirm}>
-                        <Text style={SharedStyles.buttonPrimaryText}>Confirmar</Text>
-                    </Pressable>
-                </>
-            )}
-
-            {canAdvance && (
-                <Pressable style={SharedStyles.buttonPrimary} onPress={onAdvance}>
-                    <Text style={SharedStyles.buttonPrimaryText}>Avanzar estado</Text>
+            {canDispatch && (
+                <Pressable style={SharedStyles.buttonPrimary} onPress={onDispatch} disabled={isBusy}>
+                    <Text style={SharedStyles.buttonPrimaryText}>Despachar</Text>
                 </Pressable>
             )}
 
-            <Pressable style={SharedStyles.buttonDanger} onPress={onCancel}>
-                <Text style={SharedStyles.buttonDangerText}>Cancelar pedido</Text>
-            </Pressable>
+            {canCancel && (
+                <Pressable style={SharedStyles.buttonDanger} onPress={onCancel} disabled={isBusy}>
+                    <Text style={SharedStyles.buttonDangerText}>Cancelar pedido</Text>
+                </Pressable>
+            )}
         </View>
     );
 }

@@ -1,7 +1,6 @@
 import { CustomerAddress } from './customer';
 
 export type OrderStatus =
-    | 'DRAFT'
     | 'CONFIRMED'
     | 'TO_PREPARE'
     | 'SHIPPED'
@@ -45,12 +44,105 @@ export type Order = {
     updatedAt: string;
 };
 
+export type RefundAction = 'KEEP_AS_CREDIT' | 'REFUND_MONEY';
+
+export type OrderItemRequest = {
+    productVariantId: number;
+    quantity: number;
+};
+
+export type PaymentMethod = 'CASH' | 'TRANSFER' | 'DEBIT_CARD' | 'CREDIT_CARD';
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+    CASH: 'Efectivo',
+    TRANSFER: 'Transferencia',
+    DEBIT_CARD: 'Débito',
+    CREDIT_CARD: 'Crédito',
+};
+
+export type InitialPaymentRequest = {
+    amount: number;
+    method: PaymentMethod;
+};
+
+export type OrderRequest = {
+    branchId: number;
+    customerId?: number;
+    salesType: SalesType;
+    quickSaleAmount?: number;
+    deliveryType: DeliveryType;
+    items?: OrderItemRequest[];
+    // Solo con cliente: aplica su saldo a favor a esta orden.
+    applyCredit?: boolean;
+    // Solo con cliente: pago cobrado ahora, asignado a esta orden.
+    initialPayment?: InitialPaymentRequest;
+};
+
+export type OrderUpdateRequest = {
+    quickSaleAmount?: number;
+    items?: OrderItemRequest[];
+};
+
+export type OrderCancelRequest = {
+    refundAction?: RefundAction;
+};
+
+export type OrderItemResponse = {
+    id: number | string;
+    productId: number | string;
+    productName: string;
+    productVariantId: number | string;
+    productVariantSku: string;
+    quantity: number;
+    unitPrice: number | string;
+};
+
+export type OrderResponse = {
+    id: number | string;
+    orderNumber: string;
+    branchId: number | string;
+    branchName: string;
+    customerId?: number | string | null;
+    customerName?: string | null;
+    salesType: SalesType;
+    quickSaleAmount?: number | string | null;
+    deliveryType: DeliveryType;
+    status: OrderStatus;
+    total: number | string;
+    amountPaid?: number | string | null;
+    paymentStatus?: PaymentStatus;
+    balance?: number | string | null;
+    createdAt: string;
+    updatedAt: string;
+    items?: OrderItemResponse[] | null;
+};
+
+export type PageResponse<T> = {
+    content: T[];
+    page: number;
+    size: number;
+    totalElements: number;
+    totalPages: number;
+};
+
+export type OrderListParams = {
+    page?: number;
+    size?: number;
+    sort?: string;
+    q?: string;
+    status?: OrderStatus;
+    branchId?: string;
+    salesType?: SalesType;
+    deliveryType?: DeliveryType;
+    customerId?: string;
+    paymentStatus?: PaymentStatus;
+};
+
 export type OrderStatusFilter = OrderStatus | 'ALL';
 
 export type OrderDeliveryFilter = DeliveryType | 'ALL';
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-    DRAFT: 'Borrador',
     CONFIRMED: 'Confirmado',
     TO_PREPARE: 'A preparar',
     SHIPPED: 'Enviado',

@@ -6,64 +6,69 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { OrderForm } from '@/components/orders/OrderForm';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
+import { Spacing } from '@/constants/spacing';
+import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
-import { useCustomerAccountStore } from '@/stores/customer-account-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { useOrderStore } from '@/stores/order-store';
 import { SharedStyles } from '@/styles/shared';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
+import {
+    toBackendCustomerId,
+    toOrderItemRequests,
+    toOrderPaymentOptions,
+} from '@/utils/order-request';
 
 export default function NewShipmentScreen() {
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const addOrder = useOrderStore((state) => state.addOrder);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const createOrder = useOrderStore((state) => state.createOrder);
+    const token = useAuthStore((state) => state.token);
     const customer = useOrderDraftStore((state) => state.customer);
     const address = useOrderDraftStore((state) => state.address);
     const items = useOrderDraftStore((state) => state.items);
-    const amountPaid = useOrderDraftStore((state) => state.amountPaid);
     const resetDraft = useOrderDraftStore((state) => state.reset);
     const activeBranch = useBranchStore((state) => state.activeBranch);
 
-    function handleSubmitOrder() {
-        if (!activeBranch || customer.id === CUSTOMER_ANONYMOUS.id || !address || items.length === 0) {
+    async function handleSubmitOrder() {
+        if (
+            !token ||
+            isSubmitting ||
+            !activeBranch ||
+            customer.id === CUSTOMER_ANONYMOUS.id ||
+            !address ||
+            items.length === 0
+        ) {
             return;
         }
 
         setIsSubmitting(true);
+        setErrorMessage(null);
 
         try {
-            const total = items.reduce((sum, item) => sum + item.subtotal, 0);
-            const safeAmountPaid = Number.isFinite(amountPaid)
-                ? Math.min(Math.max(0, amountPaid), total)
-                : 0;
+            // El resumen guarda el importe cobrado justo antes de enviar.
+            const draft = useOrderDraftStore.getState();
 
-            const orderId = addOrder({
-                customerId: customer.id,
-                customerName: customer.name,
-                salesType: 'WITH_PRODUCTS',
-                deliveryType: 'SHIPPING',
-                address,
-                branchId: activeBranch.id,
-                branchName: activeBranch.name,
-                items,
-                total,
-                amountPaid: 0,
-            });
-
-            const createdOrder = useOrderStore.getState().orders.find((order) => order.id === orderId);
-            if (createdOrder) {
-                useCustomerAccountStore.getState().applyAvailableCreditToOrder(customer.id, createdOrder);
-                if (safeAmountPaid > 0) {
-                    useCustomerAccountStore.getState().recordInitialOrderPayment(
-                        customer.id,
-                        createdOrder,
-                        safeAmountPaid,
-                        activeBranch.id,
-                    );
-                }
-            }
+            // La dirección de entrega todavía no se envía: el backend la gestiona
+            // como un recurso aparte (POST /orders/{id}/shipment).
+            await createOrder(
+                {
+                    branchId: Number(activeBranch.id),
+                    customerId: toBackendCustomerId(customer),
+                    salesType: 'WITH_PRODUCTS',
+                    deliveryType: 'SHIPPING',
+                    items: toOrderItemRequests(items),
+                    ...toOrderPaymentOptions(draft),
+                },
+                token,
+            );
 
             resetDraft();
             router.back();
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error ? error.message : 'No se pudo crear el envío.',
+            );
         } finally {
             setIsSubmitting(false);
         }
@@ -96,6 +101,8 @@ export default function NewShipmentScreen() {
                 <View style={SharedStyles.headerSpacer} />
             </View>
 
+            {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
+
             <OrderForm
                 mode="SHIPMENT"
                 onSubmitOrder={handleSubmitOrder}
@@ -110,5 +117,11 @@ export default function NewShipmentScreen() {
 const styles = StyleSheet.create({
     container: {
         padding: 0,
+    },
+    errorText: {
+        color: Colors.error,
+        fontSize: 13,
+        paddingHorizontal: Spacing.lg,
+        paddingVertical: Spacing.sm,
     },
 });

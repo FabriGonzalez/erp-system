@@ -11,6 +11,7 @@ import {
     Order,
     OrderCreationMode,
     OrderItem,
+    PaymentMethod,
     SalesType,
 } from '@/types/order';
 import { Product } from '@/types/product';
@@ -24,6 +25,8 @@ type OrderDraftState = {
     address: CustomerAddress | undefined;
     items: OrderItem[];
     amountPaid: number;
+    paymentMethod: PaymentMethod;
+    applyCredit: boolean;
 
     initNewOrder: (mode?: OrderCreationMode) => void;
     initEditOrder: (order: Order, customer: Customer) => void;
@@ -35,6 +38,8 @@ type OrderDraftState = {
     setDeliveryType: (deliveryType: DeliveryType) => void;
     setAddress: (address: CustomerAddress) => void;
     setAmountPaid: (amount: number) => void;
+    setPaymentMethod: (method: PaymentMethod) => void;
+    setApplyCredit: (applyCredit: boolean) => void;
 
     addItem: (product: Product, maxStock: number, variantId?: string) => void;
     updateItemQuantity: (
@@ -57,6 +62,8 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
     address: undefined,
     items: [],
     amountPaid: 0,
+    paymentMethod: 'CASH',
+    applyCredit: false,
 
     initNewOrder: (mode = 'SALE') => {
         set({
@@ -68,6 +75,8 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
             address: undefined,
             items: [],
             amountPaid: 0,
+            paymentMethod: 'CASH',
+            applyCredit: false,
         });
     },
 
@@ -108,6 +117,7 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
         set({
             customer,
             address: undefined,
+            applyCredit: false,
         });
     },
 
@@ -128,6 +138,14 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
             deliveryType,
             address: undefined,
         });
+    },
+
+    setPaymentMethod: (paymentMethod) => {
+        set({ paymentMethod });
+    },
+
+    setApplyCredit: (applyCredit) => {
+        set({ applyCredit });
     },
 
     setAddress: (address) => {
@@ -243,6 +261,8 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
             address: undefined,
             items: [],
             amountPaid: 0,
+            paymentMethod: 'CASH',
+            applyCredit: false,
         });
     },
 }));

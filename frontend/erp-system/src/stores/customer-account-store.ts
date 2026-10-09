@@ -355,7 +355,6 @@ export const useCustomerAccountStore = create<CustomerAccountState>(
                 }
 
                 if (
-                    order.status === 'DRAFT' ||
                     order.status === 'CANCELLED'
                 ) {
                     continue;

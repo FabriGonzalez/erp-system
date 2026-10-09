@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
 
 import { OrderActions } from '@/components/orders/OrderActions';
 import { OrderHeader } from '@/components/orders/OrderHeader';
@@ -9,29 +9,44 @@ import { OrderProducts } from '@/components/orders/OrderProducts';
 import { OrderTimeline } from '@/components/orders/OrderTimeline';
 import { SuccessBanner } from '@/components/orders/SuccessBanner';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
+import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useOrderActions } from '@/hooks/use-order-actions';
+import { useOrderDetail } from '@/hooks/use-order-detail';
 import { useAuthStore } from '@/stores/auth-store';
-import { useOrderStore } from '@/stores/order-store';
-import { SHIPPING_STATUS_FLOW } from '@/types/order';
 
 export default function OperationDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const user = useAuthStore((state) => state.user);
-    const orders = useOrderStore((state) => state.orders);
-    const confirmOrder = useOrderStore((state) => state.confirmOrder);
-    const cancelOrder = useOrderStore((state) => state.cancelOrder);
-    const advanceOrderStatus = useOrderStore((state) => state.advanceOrderStatus);
+    const { order, isLoading, loadError } = useOrderDetail(id);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-    const order = orders.find((item) => item.id === id);
+    function showSuccess(message: string) {
+        setSuccessMessage(message);
+        setTimeout(() => setSuccessMessage(null), 2000);
+    }
+
+    const { isBusy, errorMessage, handleCancel, handleDispatch } = useOrderActions(
+        showSuccess,
+        { cancel: 'Operación cancelada', dispatch: 'Envío despachado correctamente' },
+    );
 
     if (!order) {
+        if (isLoading) {
+            return (
+                <Screen style={styles.screen}>
+                    <LoadingState />
+                </Screen>
+            );
+        }
+
         return (
             <Screen style={styles.screen}>
                 <EmptyState
                     title="Operación no encontrada"
-                    description="La venta o envío que buscás no existe o fue eliminado."
+                    description={loadError ?? 'La venta o envío que buscás no existe o fue eliminado.'}
                     actionLabel="Volver a operaciones"
                     onAction={() => router.back()}
                 />
@@ -41,31 +56,12 @@ export default function OperationDetailScreen() {
 
     const currentOrder = order;
 
-    const canUpdate = user?.role === 'ADMINISTRATOR' || Boolean(user?.permissions?.includes('ORDERS_UPDATE'));
-    const isDraft = currentOrder.status === 'DRAFT';
-    const isCancelled = currentOrder.status === 'CANCELLED';
-    const isShipped = currentOrder.status === 'SHIPPED';
-    const isToPrepare = currentOrder.status === 'TO_PREPARE';
+    const canUpdate = user?.role === 'Administrador' || user?.role === 'ADMINISTRATOR' || Boolean(user?.permissions?.includes('ORDERS_UPDATE'));
     const isShipping = currentOrder.deliveryType === 'SHIPPING';
-    const statusIndex = SHIPPING_STATUS_FLOW.indexOf(currentOrder.status);
-    const canAdvance = isShipping && !isDraft && !isCancelled && !isShipped && statusIndex >= 0 && statusIndex < SHIPPING_STATUS_FLOW.length - 1;
-
-    function showSuccess(message: string) {
-        setSuccessMessage(message);
-        setTimeout(() => setSuccessMessage(null), 2000);
-    }
-
-    function handleConfirm() {
-        if (confirmOrder(currentOrder.id)) showSuccess(isShipping ? 'Envío confirmado correctamente' : 'Venta confirmada correctamente');
-    }
-
-    function handleCancel() {
-        if (cancelOrder(currentOrder.id)) showSuccess('Operación cancelada');
-    }
-
-    function handleAdvance() {
-        if (advanceOrderStatus(currentOrder.id)) showSuccess('Estado actualizado');
-    }
+    const isToPrepare = currentOrder.status === 'TO_PREPARE';
+    const canCancel = currentOrder.status === 'CONFIRMED' || isToPrepare;
+    const canDispatch = isShipping && isToPrepare;
+    const canEdit = isShipping && isToPrepare;
 
     return (
         <Screen style={styles.screen}>
@@ -76,15 +72,16 @@ export default function OperationDetailScreen() {
                 <OrderProducts order={currentOrder} />
                 <OrderTimeline order={currentOrder} />
             </ScrollView>
-            {canUpdate && !isCancelled && !isShipped && (
+            {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
+            {canUpdate && (canCancel || canDispatch || canEdit) && (
                 <OrderActions
-                    isDraft={isDraft}
-                    canEdit={false}
-                    canAdvance={canAdvance}
-                    onEdit={() => { }}
-                    onConfirm={handleConfirm}
-                    onAdvance={handleAdvance}
-                    onCancel={handleCancel}
+                    canEdit={canEdit}
+                    canDispatch={canDispatch}
+                    canCancel={canCancel}
+                    isBusy={isBusy}
+                    onEdit={() => router.push(`/shipments/${currentOrder.id}/edit`)}
+                    onDispatch={() => void handleDispatch(currentOrder)}
+                    onCancel={() => void handleCancel(currentOrder)}
                 />
             )}
         </Screen>
@@ -94,4 +91,5 @@ export default function OperationDetailScreen() {
 const styles = StyleSheet.create({
     screen: { padding: 0 },
     scrollContent: { padding: Spacing.lg, paddingBottom: Spacing.xxl * 2, gap: Spacing.md },
+    errorText: { color: Colors.error, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, fontSize: 13 },
 });

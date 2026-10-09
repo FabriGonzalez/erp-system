@@ -11,15 +11,14 @@ import { OrderSummarySection } from './OrderSummarySection';
 import { AppInput } from '@/components/ui/AppInput';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useCustomerAccountSummary } from '@/hooks/use-customer-account-summary';
 import { useBranchStore } from '@/stores/branch-store';
-import { useCustomerAccountStore } from '@/stores/customer-account-store';
 import { useCustomerStore } from '@/stores/customer-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import { Order, OrderCreationMode } from '@/types/order';
-import { calculateCustomerCredit } from '@/utils/customer-account';
 
 type OrderFormProps = {
     mode?: OrderCreationMode;
@@ -41,8 +40,6 @@ export function OrderForm({
     submitLabel = 'Crear Pedido',
 }: OrderFormProps) {
     const activeBranch = useBranchStore((state) => state.activeBranch);
-    const payments = useCustomerAccountStore((state) => state.payments);
-    const allocations = useCustomerAccountStore((state) => state.allocations);
     const products = useProductStore((state) => state.products);
     const getCustomerById = useCustomerStore(
         (state) => state.getCustomerById,
@@ -54,6 +51,8 @@ export function OrderForm({
         quickSaleAmount,
         address,
         items,
+        applyCredit,
+        setApplyCredit,
         initNewOrder,
         initEditOrder,
         setSalesType,
@@ -69,16 +68,18 @@ export function OrderForm({
         quickSaleAmount > 0 ? String(quickSaleAmount) : '',
     );
 
-    const branchId = activeBranch?.id ?? '1';
-    const branchName = activeBranch?.name ?? 'Sucursal Central';
+    const branchId = activeBranch?.id ?? '';
+    const branchName = activeBranch?.name ?? 'Sin sucursal activa';
 
     useEffect(() => {
         if (initialOrder) {
-            const currentCustomer = getCustomerById(initialOrder.customerId);
-
-            if (!currentCustomer) {
-                return;
-            }
+            // Los clientes reales todavía no están en el store local; se arma
+            // uno mínimo con los datos de la orden.
+            const currentCustomer = getCustomerById(initialOrder.customerId) ?? {
+                id: initialOrder.customerId,
+                name: initialOrder.customerName,
+                addresses: [],
+            };
 
             initEditOrder(initialOrder, currentCustomer);
             return;
@@ -103,7 +104,10 @@ export function OrderForm({
     const effectiveSalesType = isShipment ? 'WITH_PRODUCTS' : salesType;
     const isShipping = effectiveDeliveryType === 'SHIPPING';
     const hasAddresses = customer.addresses.length > 0;
-    const isShippingBlocked = isShipping && !hasAddresses;
+    // Al editar, el backend solo admite cambiar ítems o importe: cliente y
+    // dirección de entrega quedan fijos.
+    const isEditing = Boolean(initialOrder);
+    const isShippingBlocked = isShipping && !isEditing && !hasAddresses;
 
     const itemsTotal = items.reduce(
         (sum, item) => sum + item.subtotal,
@@ -112,9 +116,13 @@ export function OrderForm({
 
     const totalAmount = effectiveSalesType === 'QUICK_SALE' ? quickSaleAmount : itemsTotal;
 
-    const customerCredit = customer.id === CUSTOMER_ANONYMOUS.id
-        ? 0
-        : calculateCustomerCredit(customer.id, payments, allocations);
+    const accountSummary = useCustomerAccountSummary(customer);
+    const customerCredit = accountSummary?.credit ?? 0;
+    const customerDebt = accountSummary?.debt ?? 0;
+    // Estimación del saldo a favor que el backend aplicará a esta orden.
+    const creditApplied = !isEditing && applyCredit
+        ? Math.min(customerCredit, Math.max(0, totalAmount))
+        : 0;
 
     function handleSelectCustomer() {
         const requireRegisteredCustomer = isShipment || effectiveSalesType === 'QUICK_SALE';
@@ -180,7 +188,7 @@ export function OrderForm({
             return false;
         }
 
-        if (isShipping) {
+        if (isShipping && !isEditing) {
             if (!hasAddresses) {
                 setFormError(
                     'El cliente no tiene direcciones registradas para realizar un envío.',
@@ -229,10 +237,15 @@ export function OrderForm({
             <OrderCustomerSection
                 customer={customer}
                 customerCredit={customerCredit}
-                onSelectCustomer={handleSelectCustomer}
+                customerDebt={customerDebt}
+                pendingOrders={accountSummary?.pendingOrders ?? 0}
+                applyCredit={applyCredit}
+                onToggleApplyCredit={isEditing ? undefined : setApplyCredit}
+                requireRegisteredCustomer={isShipment || effectiveSalesType === 'QUICK_SALE'}
+                onSelectCustomer={isEditing ? () => {} : handleSelectCustomer}
             />
 
-            {isShipping && (
+            {isShipping && !isEditing && (
                 <OrderAddressSection
                     customer={customer}
                     selectedAddress={address}
@@ -278,6 +291,8 @@ export function OrderForm({
 
             <OrderSummarySection
                 total={totalAmount}
+                creditApplied={creditApplied}
+                showPayment={!isEditing}
                 itemsCount={effectiveSalesType === 'WITH_PRODUCTS' ? items.length : 0}
                 deliveryType={effectiveDeliveryType}
                 branchName={branchName}

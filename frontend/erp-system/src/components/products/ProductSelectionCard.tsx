@@ -6,6 +6,8 @@ import { Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 import { Product, ProductAttribute, ProductAttributeValue, ProductVariant } from '@/types/product';
 
+const LOW_STOCK_THRESHOLD = 3;
+
 type ProductSelectionCardProps = {
     product: Product;
     selectedVariant?: ProductVariant;
@@ -49,6 +51,17 @@ export function ProductSelectionCard({
         .filter((variant) => (variant.stockByBranch[branchId] ?? 0) > 0)
         .map((variant) => variant.price));
 
+    // Con variante elegida se muestra su stock; sin elegir, el total del producto en la sucursal.
+    const totalStock = product.variants.reduce(
+        (sum, variant) => sum + Math.max(0, variant.stockByBranch[branchId] ?? 0),
+        0,
+    );
+    const shownStock = selectedVariant ? availableStock : totalStock;
+    const isLowStock = shownStock > 0 && shownStock <= LOW_STOCK_THRESHOLD;
+    const stockLabel = selectedVariant
+        ? `Stock: ${shownStock}${qtyInCart > 0 ? ` · ${qtyInCart} en el carrito` : ''}`
+        : `Stock total: ${shownStock}`;
+
     return (
         <Pressable
             style={({ pressed }) => [SharedStyles.rowCard, styles.productCard, pressed && !isExpanded && SharedStyles.pressed]}
@@ -59,6 +72,9 @@ export function ProductSelectionCard({
                 <View style={styles.productMeta}>
                     <Text style={styles.productPrice}>
                         Desde ${priceFrom.toLocaleString('es-AR')}
+                    </Text>
+                    <Text style={[styles.stockText, isLowStock && styles.stockTextLow]}>
+                        {stockLabel}
                     </Text>
                 </View>
 
@@ -218,6 +234,16 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '700',
         color: Colors.primary,
+    },
+    stockText: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: Colors.textSecondary,
+        flexShrink: 1,
+    },
+    stockTextLow: {
+        color: Colors.warningDark,
+        fontWeight: '600',
     },
     cartActionContainer: {
         justifyContent: 'center',

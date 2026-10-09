@@ -22,6 +22,12 @@ public record OrderRequest(
         @NotNull(message = "deliveryType is required")
         DeliveryType deliveryType,
 
-        List<@Valid OrderItemRequest> items
+        List<@Valid OrderItemRequest> items,
+
+        // Aplica el saldo a favor disponible del cliente a esta orden.
+        Boolean applyCredit,
+
+        // Pago cobrado al crear la orden; se asigna a esta orden.
+        @Valid InitialPaymentRequest initialPayment
 ) {
 }

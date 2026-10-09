@@ -2,9 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useCustomerAccountStore } from '@/stores/customer-account-store';
 import { SharedStyles } from '@/styles/shared';
-import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import {
     DELIVERY_TYPE_LABELS,
     Order,
@@ -19,10 +17,8 @@ interface OrderInfoCardProps {
 
 export function OrderInfoCard({ order }: OrderInfoCardProps) {
     const isShipping = order.deliveryType === 'SHIPPING';
-    const allocatedPaidAmount = useCustomerAccountStore((state) => state.getOrderPaidAmount(order.id));
-    const paidAmount = order.customerId === CUSTOMER_ANONYMOUS.id
-        ? order.amountPaid
-        : allocatedPaidAmount;
+    // amountPaid lo calcula el backend a partir de los pagos asignados a la orden.
+    const paidAmount = order.amountPaid;
     const paymentStatus = getPaymentStatus({ total: order.total, amountPaid: paidAmount });
     const balanceDue = getBalanceDue({ total: order.total, amountPaid: paidAmount });
 
