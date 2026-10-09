@@ -145,19 +145,6 @@ public class GlobalExceptionHandler {
                 ));
     }
 
-    @ExceptionHandler(InsufficientStockException.class)
-    public ResponseEntity<ErrorResponse> handleInsufficientStock(
-            InsufficientStockException ex, HttpServletRequest request) {
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of(
-                        HttpStatus.BAD_REQUEST.value(),
-                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
-                        ex.getMessage(),
-                        request.getRequestURI()
-                ));
-    }
-
     @ExceptionHandler(InvalidStockTransferException.class)
     public ResponseEntity<ErrorResponse> handleInvalidStockTransfer(
             InvalidStockTransferException ex, HttpServletRequest request) {
@@ -172,21 +159,42 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({
-            InvalidOrderException.class,
             InvalidOrderStatusTransitionException.class,
-            QuickSaleValidationException.class,
             InsufficientStockForEditException.class,
+            InsufficientStockException.class
+    })
+    public ResponseEntity<ErrorResponse> handleOrderConflict(
+            RuntimeException ex, HttpServletRequest request) {
+        String code = ex instanceof InvalidOrderStatusTransitionException
+                ? "INVALID_STATUS_TRANSITION"
+                : "INSUFFICIENT_STOCK";
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(
+                        HttpStatus.CONFLICT.value(),
+                        HttpStatus.CONFLICT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        code
+                ));
+    }
+
+    @ExceptionHandler({
+            InvalidOrderException.class,
+            QuickSaleValidationException.class,
             InvalidPaymentException.class
     })
     public ResponseEntity<ErrorResponse> handleInvalidOrder(
             RuntimeException ex, HttpServletRequest request) {
+        String code = ex instanceof QuickSaleValidationException ? "QUICK_SALE_INVALID" : "INVALID_ORDER";
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of(
                         HttpStatus.BAD_REQUEST.value(),
                         HttpStatus.BAD_REQUEST.getReasonPhrase(),
                         ex.getMessage(),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        code
                 ));
     }
 

@@ -7,11 +7,15 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface CustomerAccountRepository extends JpaRepository<CustomerAccount, Long> {
 
     Optional<CustomerAccount> findByCustomerIdAndCompanyId(Long customerId, Long companyId);
+
+    List<CustomerAccount> findByCompanyIdAndCustomerIdIn(Long companyId, Collection<Long> customerIds);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT a FROM CustomerAccount a WHERE a.customer.id = :customerId AND a.company.id = :companyId")

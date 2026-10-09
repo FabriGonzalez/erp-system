@@ -1,5 +1,6 @@
 package com.gonzalez.erp.modules.orders.service;
 
+import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
@@ -35,12 +36,14 @@ import com.gonzalez.erp.modules.orders.exception.QuickSaleValidationException;
 import com.gonzalez.erp.modules.orders.mapper.OrderMapper;
 import com.gonzalez.erp.modules.orders.repository.OrderNumberCounterRepository;
 import com.gonzalez.erp.modules.orders.repository.OrderRepository;
+import com.gonzalez.erp.modules.payments.service.OrderPaymentService;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
 import com.gonzalez.erp.modules.users.repository.UserBranchRepository;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import com.gonzalez.erp.modules.orders.entity.PaymentStatus;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,9 +78,12 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final UserBranchRepository userBranchRepository;
     private final CompanyRepository companyRepository;
+    private final OrderPaymentService orderPaymentService;
 
     @Override
-    public List<OrderResponse> findAll(OrderStatus status, Long branchId, SalesType salesType, DeliveryType deliveryType) {
+    public PageResponse<OrderResponse> findAll(OrderStatus status, Long branchId, SalesType salesType,
+                                               DeliveryType deliveryType, Long customerId,
+                                               PaymentStatus paymentStatus, String query, Pageable pageable) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
         Long userId = SecurityUtils.getCurrentUserId();
 
@@ -85,11 +91,22 @@ public class OrderServiceImpl implements OrderService {
                 .map(ub -> ub.getBranch().getId())
                 .toList();
 
-        return orderRepository.search(companyId, status, salesType, deliveryType, branchId).stream()
-                .filter(order -> order.getBranch() != null
-                        && accessibleBranchIds.contains(order.getBranch().getId()))
-                .map(this::toOrderResponse)
-                .toList();
+        if (accessibleBranchIds.isEmpty()) {
+            return new PageResponse<>(List.of(), pageable.getPageNumber(), pageable.getPageSize(), 0, 0);
+        }
+
+        String trimmedQuery = query == null ? "" : query.trim().toLowerCase();
+        boolean hasQuery = !trimmedQuery.isEmpty();
+        String likePattern = hasQuery ? "%" + trimmedQuery + "%" : "%";
+
+        return PageResponse.of(
+                orderRepository.search(companyId, accessibleBranchIds, status, salesType, deliveryType,
+                        branchId, customerId, hasQuery, likePattern,
+                        paymentStatus == PaymentStatus.PAID,
+                        paymentStatus == PaymentStatus.PENDING,
+                        paymentStatus == PaymentStatus.PARTIAL,
+                        pageable),
+                this::toOrderResponse);
     }
 
     @Override
@@ -106,6 +123,7 @@ public class OrderServiceImpl implements OrderService {
 
         validateBranchAccess(request.branchId());
         validateSalesType(request.salesType(), request.items(), request.customerId(), request.quickSaleAmount());
+        validatePaymentOptions(request);
 
         Customer customer = resolveCustomerOrNull(request.customerId(), companyId);
         String orderNumber = generateOrderNumber(company);
@@ -176,34 +194,57 @@ public class OrderServiceImpl implements OrderService {
                 saveMovement(stock, StockMovementType.SALE, -item.getQuantity(), previousQuantity, saved.getId());
             }
 
-            if (saved.getCustomer() != null) {
-                customerAccountService.applyTransaction(
-                        saved.getCustomer().getId(),
-                        companyId,
-                        saved.getTotal(),
-                        TransactionType.ORDER_CHARGE,
-                        saved.getBranch(),
-                        "Cargo por pedido #" + saved.getOrderNumber()
-                );
-            }
-
-            return toOrderResponse(saved);
+            return completeCreation(saved, request, companyId, userId);
         } else {
             order.recalculateTotal();
             Order saved = orderRepository.saveAndFlush(order);
 
-            if (saved.getCustomer() != null) {
-                customerAccountService.applyTransaction(
-                        saved.getCustomer().getId(),
-                        companyId,
-                        saved.getTotal(),
-                        TransactionType.ORDER_CHARGE,
-                        saved.getBranch(),
-                        "Cargo por pedido #" + saved.getOrderNumber()
-                );
-            }
+            return completeCreation(saved, request, companyId, userId);
+        }
+    }
 
-            return toOrderResponse(saved);
+    /**
+     * Registra el cargo en la cuenta del cliente y aplica, en este orden, el saldo
+     * a favor (si se pidió) y el pago inicial. Ambos se asignan a esta orden aunque
+     * el cliente tenga deudas anteriores. Las ventas sin cliente se cobran en el acto.
+     */
+    private OrderResponse completeCreation(Order saved, OrderRequest request, Long companyId, Long userId) {
+        if (saved.getCustomer() == null) {
+            saved.setAmountPaid(saved.getTotal());
+            return toOrderResponse(orderRepository.save(saved));
+        }
+
+        customerAccountService.applyTransaction(
+                saved.getCustomer().getId(),
+                companyId,
+                saved.getTotal(),
+                TransactionType.ORDER_CHARGE,
+                saved.getBranch(),
+                "Cargo por pedido #" + saved.getOrderNumber()
+        );
+
+        if (Boolean.TRUE.equals(request.applyCredit())) {
+            orderPaymentService.applyCredit(saved, companyId);
+        }
+
+        if (request.initialPayment() != null) {
+            orderPaymentService.registerOrderPayment(
+                    saved,
+                    request.initialPayment().amount(),
+                    request.initialPayment().method(),
+                    userId,
+                    companyId
+            );
+        }
+
+        return toOrderResponse(saved);
+    }
+
+    private void validatePaymentOptions(OrderRequest request) {
+        if (request.customerId() == null
+                && (Boolean.TRUE.equals(request.applyCredit()) || request.initialPayment() != null)) {
+            throw new InvalidOrderException(
+                    "Orders without customer are paid at creation; applyCredit and initialPayment are not allowed");
         }
     }
 
@@ -222,37 +263,9 @@ public class OrderServiceImpl implements OrderService {
                     "Only TO_PREPARE orders can be edited. Current status: " + order.getStatus());
         }
 
-        if (request.branchId() != null && !request.branchId().equals(order.getBranch().getId())) {
-            throw new InvalidOrderStatusTransitionException(
-                    "Branch cannot be changed for TO_PREPARE orders because stock is already committed");
-        }
-
-        if (request.salesType() != null && request.salesType() != order.getSalesType()) {
-            throw new InvalidOrderStatusTransitionException(
-                    "Sales type cannot be changed for TO_PREPARE orders");
-        }
-
-        if (request.deliveryType() != null && request.deliveryType() != order.getDeliveryType()) {
-            throw new InvalidOrderStatusTransitionException(
-                    "Delivery type cannot be changed for TO_PREPARE orders");
-        }
-
-        if (request.customerId() != null) {
-            Long currentCustomerId = order.getCustomer() != null
-                    ? order.getCustomer().getId()
-                    : null;
-
-            if (!request.customerId().equals(currentCustomerId)) {
-                throw new InvalidOrderException(
-                        "Customer cannot be changed for an existing order");
-            }
-        }
-
         BigDecimal oldTotal = order.getTotal() != null ? order.getTotal() : BigDecimal.ZERO;
 
-        Long customerId = request.customerId() != null
-                ? request.customerId()
-                : (order.getCustomer() != null ? order.getCustomer().getId() : null);
+        Long customerId = order.getCustomer() != null ? order.getCustomer().getId() : null;
 
         Customer customer = resolveCustomerOrNull(customerId, companyId);
 
@@ -367,12 +380,19 @@ public class OrderServiceImpl implements OrderService {
             );
         }
 
+        if (saved.getCustomer() == null) {
+            saved.setAmountPaid(newTotal);
+            saved = orderRepository.save(saved);
+        } else if (deltaTotal.signum() < 0) {
+            orderPaymentService.trimAllocationsToTotal(saved);
+        }
+
         return toOrderResponse(saved);
     }
 
     @Override
     @Transactional
-    public OrderResponse ship(Long id) {
+    public OrderResponse dispatch(Long id) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
         Long userId = SecurityUtils.getCurrentUserId();
 
@@ -504,8 +524,10 @@ public class OrderServiceImpl implements OrderService {
                 ? order.getTotal()
                 : BigDecimal.ZERO;
 
-        BigDecimal amountPaid = paymentAllocationRepository
-                .sumAmountByOrderId(order.getId());
+        // Las ventas sin cliente se cobran al crearse.
+        BigDecimal amountPaid = order.getCustomer() == null
+                ? total
+                : paymentAllocationRepository.sumAmountByOrderId(order.getId());
 
         if (amountPaid == null) {
             amountPaid = BigDecimal.ZERO;

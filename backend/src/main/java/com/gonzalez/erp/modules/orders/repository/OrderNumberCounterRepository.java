@@ -19,12 +19,14 @@ public interface OrderNumberCounterRepository extends JpaRepository<OrderNumberC
     @Modifying
     @Query(value = """
             INSERT INTO order_number_counters (
+                id,
                 company_id,
                 last_number,
                 created_at,
                 updated_at
             )
             VALUES (
+                nextval('order_number_counters_seq'),
                 :companyId,
                 :lastNumber,
                 CURRENT_TIMESTAMP,

@@ -1,18 +1,21 @@
 package com.gonzalez.erp.modules.orders.service;
 
+import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.modules.orders.dto.request.OrderCancelRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderUpdateRequest;
 import com.gonzalez.erp.modules.orders.dto.response.OrderResponse;
 import com.gonzalez.erp.modules.orders.entity.DeliveryType;
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
+import com.gonzalez.erp.modules.orders.entity.PaymentStatus;
 import com.gonzalez.erp.modules.orders.entity.SalesType;
-
-import java.util.List;
+import org.springframework.data.domain.Pageable;
 
 public interface OrderService {
 
-    List<OrderResponse> findAll(OrderStatus status, Long branchId, SalesType salesType, DeliveryType deliveryType);
+    PageResponse<OrderResponse> findAll(OrderStatus status, Long branchId, SalesType salesType,
+                                        DeliveryType deliveryType, Long customerId,
+                                        PaymentStatus paymentStatus, String query, Pageable pageable);
 
     OrderResponse findById(Long id);
 
@@ -20,7 +23,7 @@ public interface OrderService {
 
     OrderResponse update(Long id, OrderUpdateRequest request);
 
-    OrderResponse ship(Long id);
+    OrderResponse dispatch(Long id);
 
     OrderResponse cancel(Long id, OrderCancelRequest request);
 }
