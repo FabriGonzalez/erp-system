@@ -1,20 +1,34 @@
 package com.gonzalez.erp.modules.roles.entity;
 
 import com.gonzalez.erp.common.entity.BaseEntity;
+import com.gonzalez.erp.modules.companies.entity.Company;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.util.Set;
 
 @Entity
-@Table(name = "roles")
+@Table(name = "roles", uniqueConstraints = {
+        @UniqueConstraint(
+                name = "uk_role_company_name",
+                columnNames = {"company_id", "name"}
+        ),
+        @UniqueConstraint(
+                name = "uk_role_company_code",
+                columnNames = {"company_id", "code"}
+        )
+})
 @Getter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Role extends BaseEntity {
 
-    @Column(nullable = false, unique = true, length = 50)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
+
+    @Column(nullable = false, length = 50)
     private String name;
 
-    @Column(nullable = false, unique = true, length = 20)
+    @Column(nullable = false, length = 20)
     private String code;
 
     @Column(length = 200)
@@ -25,6 +39,14 @@ public class Role extends BaseEntity {
     @Column(name = "permission")
     @Enumerated(EnumType.STRING)
     private Set<Permission> permissions;
+
+    /**
+     * Roles creados por la plataforma al provisionar la empresa (ej. el ADMIN inicial).
+     * No se pueden editar ni desactivar, para que la empresa no se quede sin administrador.
+     */
+    @Column(name = "system_role", nullable = false)
+    @Builder.Default
+    private boolean system = false;
 
     @Column(nullable = false)
     @Builder.Default

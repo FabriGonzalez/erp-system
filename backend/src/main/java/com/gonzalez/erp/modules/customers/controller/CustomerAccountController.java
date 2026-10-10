@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,6 +32,7 @@ public class CustomerAccountController {
 
     private final CustomerBalanceService customerBalanceService;
 
+    @PreAuthorize("hasAnyAuthority('ADMINISTRAR_CLIENTES','CREAR_PEDIDOS','REGISTRAR_PAGOS','VER_REPORTES')")
     @GetMapping("/{id}/account")
     @Operation(summary = "Estado de cuenta del cliente", description = "Retorna el saldo contable, la deuda pendiente, el saldo a favor disponible y la cantidad de órdenes con saldo pendiente.")
     @ApiResponse(responseCode = "200", description = "Estado de cuenta obtenido")
@@ -42,6 +44,7 @@ public class CustomerAccountController {
         return ResponseEntity.ok(customerBalanceService.getSummary(id));
     }
 
+    @PreAuthorize("hasAnyAuthority('ADMINISTRAR_CLIENTES','REGISTRAR_PAGOS','VER_REPORTES')")
     @GetMapping("/debtors")
     @Operation(summary = "Listar deudores", description = "Clientes con órdenes no canceladas y saldo pendiente, ordenados por deuda descendente.")
     @ApiResponse(responseCode = "200", description = "Deudores obtenidos")

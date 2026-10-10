@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -44,6 +45,7 @@ public class CustomerController {
         return ResponseEntity.ok(customerService.findById(id));
     }
 
+    @PreAuthorize("hasAnyAuthority('ADMINISTRAR_CLIENTES','CREAR_PEDIDOS')")
     @PostMapping
     @Operation(summary = "Crear nuevo cliente")
     @ApiResponses({
@@ -55,6 +57,7 @@ public class CustomerController {
         return ResponseEntity.status(HttpStatus.CREATED).body(customerService.create(request));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_CLIENTES')")
     @PatchMapping("/{id}")
     @Operation(summary = "Actualizar cliente existente")
     @ApiResponses({
@@ -69,6 +72,7 @@ public class CustomerController {
         return ResponseEntity.ok(customerService.update(id, request));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_CLIENTES')")
     @PatchMapping("/{id}/deactivate")
     @Operation(summary = "Desactivar cliente")
     @ApiResponses({
@@ -79,6 +83,7 @@ public class CustomerController {
         return ResponseEntity.ok(customerService.deactivate(id));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_CLIENTES')")
     @PatchMapping("/{id}/activate")
     @Operation(summary = "Activar cliente")
     @ApiResponses({

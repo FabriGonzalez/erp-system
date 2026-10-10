@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -43,6 +44,7 @@ public class ProductController {
         return ResponseEntity.ok(productService.findById(id));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_PRODUCTOS')")
     @PostMapping
     @Operation(summary = "Crear producto", description = "Crea un nuevo producto con variantes y, opcionalmente, stock inicial por sucursal. Cada variante debe tener un SKU único por empresa y al menos un valor de atributo.")
     @ApiResponse(responseCode = "201", description = "Producto creado exitosamente")
@@ -55,6 +57,7 @@ public class ProductController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_PRODUCTOS')")
     @PatchMapping("/{id}")
     @Operation(summary = "Actualizar producto", description = "Actualiza el nombre, descripción, categoría y variantes de un producto existente.")
     @ApiResponse(responseCode = "200", description = "Producto actualizado exitosamente")
@@ -69,6 +72,7 @@ public class ProductController {
         return ResponseEntity.ok(productService.update(id, request));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_PRODUCTOS')")
     @PatchMapping("/{id}/deactivate")
     @Operation(summary = "Desactivar producto", description = "Desactiva lógicamente un producto (soft delete).")
     @ApiResponse(responseCode = "200", description = "Producto desactivado exitosamente")
@@ -80,6 +84,7 @@ public class ProductController {
         return ResponseEntity.ok(productService.deactivate(id));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_PRODUCTOS')")
     @PatchMapping("/{id}/activate")
     @Operation(summary = "Activar producto", description = "Reactiva un producto previamente desactivado.")
     @ApiResponse(responseCode = "200", description = "Producto activado exitosamente")

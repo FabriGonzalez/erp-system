@@ -13,6 +13,7 @@ public final class RoleMapper {
                 role.getCode(),
                 role.getDescription(),
                 role.getPermissions(),
+                role.isSystem(),
                 role.isActive(),
                 role.getCreatedAt(),
                 role.getUpdatedAt()

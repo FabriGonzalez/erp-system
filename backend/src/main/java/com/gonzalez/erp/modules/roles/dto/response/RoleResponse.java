@@ -11,6 +11,7 @@ public record RoleResponse(
         String code,
         String description,
         Set<Permission> permissions,
+        boolean system,
         boolean active,
         Instant createdAt,
         Instant updatedAt

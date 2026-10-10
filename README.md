@@ -96,7 +96,7 @@ ERP_PLATFORM_ADMIN_PASSWORD="cambiame" \
 
 La API queda en `http://localhost:8080`.
 
-En el primer arranque se crea el usuario `platform_admin` (rol `PLATFORM_ADMIN`, sin empresa). Con ese usuario se provisionan las empresas desde `POST /api/v1/provisioning/companies`; cada empresa recibe su primer usuario administrador, que es quien opera el resto del sistema.
+En el primer arranque se crea el usuario `platform_admin` (administrador de plataforma, sin empresa ni rol de empresa). Con ese usuario se provisionan las empresas desde `POST /api/v1/provisioning/companies`; cada empresa recibe su propio rol `Administrador` (de sistema: no se puede editar ni desactivar) y su primer usuario administrador, que es quien opera el resto del sistema.
 
 ### 3. Frontend
 
@@ -124,8 +124,9 @@ Los endpoints cuelgan de `/api/v1/`: `auth`, `branches`, `categories`, `customer
 ## Seguridad
 
 - API stateless con JWT; solo `/api/v1/auth/login` es público.
-- `/api/v1/provisioning/**` requiere el rol `PLATFORM_ADMIN`.
-- El resto de los endpoints exige autenticación y los permisos del rol del usuario (por ejemplo `CREAR_PEDIDOS`, `ADMINISTRAR_PRODUCTOS`, `AJUSTAR_STOCK`, `TRANSFERIR_STOCK`, `VER_REPORTES`).
+- `/api/v1/provisioning/**` requiere ser administrador de plataforma (`users.platform_admin`). Ese acceso no sale de ningún rol de empresa, así que una empresa no puede otorgarlo.
+- El resto de los endpoints exige autenticación y los permisos del rol del usuario (por ejemplo `CREAR_PEDIDOS`, `ADMINISTRAR_PRODUCTOS`, `AJUSTAR_STOCK`, `TRANSFERIR_STOCK`, `VER_REPORTES`), aplicados con `@PreAuthorize` en cada controller. Las lecturas de catálogo (sucursales, categorías, productos, clientes) solo requieren autenticación.
+- Los roles son por empresa: cada empresa ve y gestiona únicamente los suyos. Un rol desactivado deja a sus usuarios sin permisos.
 - CORS está abierto a cualquier origen: restringilo antes de desplegar a producción.
 
 ## Desarrollo

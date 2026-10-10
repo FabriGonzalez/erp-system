@@ -11,11 +11,13 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
+@PreAuthorize("hasAuthority('ADMINISTRAR_USUARIOS')")
 @RequestMapping("/api/v1/roles")
 @RequiredArgsConstructor
 @Tag(name = "Roles", description = "Operaciones CRUD para gestión de roles")

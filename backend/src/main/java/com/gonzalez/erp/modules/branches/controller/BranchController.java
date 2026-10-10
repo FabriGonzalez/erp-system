@@ -13,6 +13,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -46,6 +47,7 @@ public class BranchController {
         return ResponseEntity.ok(branchService.findById(id));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_SUCURSALES')")
     @PostMapping
     @Operation(summary = "Crear nueva sucursal")
     @ApiResponses({
@@ -57,6 +59,7 @@ public class BranchController {
         return ResponseEntity.status(HttpStatus.CREATED).body(branchService.create(request));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_SUCURSALES')")
     @PatchMapping("/{id}")
     @Operation(summary = "Actualizar sucursal existente")
     @ApiResponses({
@@ -70,6 +73,7 @@ public class BranchController {
         return ResponseEntity.ok(branchService.update(id, request));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_SUCURSALES')")
     @PatchMapping("/{id}/deactivate")
     @Operation(summary = "Desactivar sucursal")
     @ApiResponses({
@@ -80,6 +84,7 @@ public class BranchController {
         return ResponseEntity.ok(branchService.deactivate(id));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_SUCURSALES')")
     @PatchMapping("/{id}/activate")
     @Operation(summary = "Activar sucursal")
     @ApiResponses({
@@ -90,6 +95,7 @@ public class BranchController {
         return ResponseEntity.ok(branchService.activate(id));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_USUARIOS')")
     @GetMapping("/{branchId}/users")
     @Operation(summary = "Obtener usuarios de una sucursal")
     @ApiResponses({

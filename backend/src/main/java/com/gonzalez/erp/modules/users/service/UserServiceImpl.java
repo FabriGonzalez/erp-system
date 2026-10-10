@@ -15,6 +15,7 @@ import com.gonzalez.erp.modules.users.exception.UserUsernameAlreadyExistsExcepti
 import com.gonzalez.erp.modules.users.mapper.UserMapper;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,8 +57,7 @@ public class UserServiceImpl implements UserService {
         if (userRepository.existsByUsernameAndCompanyId(request.username(), companyId)) {
             throw new UserUsernameAlreadyExistsException(request.username());
         }
-        Role role = roleRepository.findById(request.roleId())
-                .orElseThrow(() -> new ResourceNotFoundException("Role not found with id: " + request.roleId()));
+        Role role = findAssignableRoleOrThrow(request.roleId(), companyId);
         Company company = companyRepository.getReferenceById(companyId);
 
         User user = User.builder()
@@ -86,8 +86,7 @@ public class UserServiceImpl implements UserService {
                 && userRepository.existsByUsernameAndCompanyIdAndIdNot(request.username(), companyId, id)) {
             throw new UserUsernameAlreadyExistsException(request.username());
         }
-        Role role = roleRepository.findById(request.roleId())
-                .orElseThrow(() -> new ResourceNotFoundException("Role not found with id: " + request.roleId()));
+        Role role = findAssignableRoleOrThrow(request.roleId(), companyId);
 
         user.update(request.username(), request.email(), request.firstName(), request.lastName(), role);
         return UserMapper.toResponse(user);
@@ -97,6 +96,9 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse deactivate(Long id) {
         User user = findUserOrThrow(id);
+        if (user.getId().equals(SecurityUtils.getCurrentUserId())) {
+            throw new AccessDeniedException("You cannot deactivate your own user");
+        }
         user.deactivate();
         return UserMapper.toResponse(user);
     }
@@ -107,6 +109,12 @@ public class UserServiceImpl implements UserService {
         User user = findUserOrThrow(id);
         user.activate();
         return UserMapper.toResponse(user);
+    }
+
+    private Role findAssignableRoleOrThrow(Long roleId, Long companyId) {
+        return roleRepository.findByIdAndCompanyId(roleId, companyId)
+                .filter(Role::isActive)
+                .orElseThrow(() -> new ResourceNotFoundException("Role not found with id: " + roleId));
     }
 
     private User findUserOrThrow(Long id) {

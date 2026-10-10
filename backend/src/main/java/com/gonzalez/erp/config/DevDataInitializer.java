@@ -1,8 +1,5 @@
 package com.gonzalez.erp.config;
 
-import com.gonzalez.erp.modules.roles.entity.Permission;
-import com.gonzalez.erp.modules.roles.entity.Role;
-import com.gonzalez.erp.modules.roles.repository.RoleRepository;
 import com.gonzalez.erp.modules.users.entity.User;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -12,14 +9,11 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
-import java.util.EnumSet;
-
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class DevDataInitializer implements CommandLineRunner {
 
-    private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
@@ -45,31 +39,19 @@ public class DevDataInitializer implements CommandLineRunner {
                             + "Set the password to create the platform admin user.");
         }
 
-        Role platformAdminRole = roleRepository.findByCode("PLATFORM_ADMIN")
-                .orElseGet(this::createPlatformAdminRole);
-
         User platformAdmin = User.builder()
                 .username(platformAdminUsername)
                 .email(platformAdminEmail)
                 .firstName("Platform")
                 .lastName("Admin")
                 .password(passwordEncoder.encode(platformAdminPassword))
-                .role(platformAdminRole)
+                .role(null)
                 .company(null)
+                .platformAdmin(true)
                 .active(true)
                 .build();
 
         userRepository.save(platformAdmin);
         log.info("Platform admin '{}' created.", platformAdminUsername);
-    }
-
-    private Role createPlatformAdminRole() {
-        return roleRepository.save(Role.builder()
-                .name("Platform Administrator")
-                .code("PLATFORM_ADMIN")
-                .description("Administrador global de la plataforma. Acceso sin company.")
-                .permissions(EnumSet.allOf(Permission.class))
-                .active(true)
-                .build());
     }
 }

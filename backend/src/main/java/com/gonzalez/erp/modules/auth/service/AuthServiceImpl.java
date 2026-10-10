@@ -34,6 +34,7 @@ public class AuthServiceImpl implements AuthService {
                 userDetails.getLastName(),
                 userDetails.getRoleName(),
                 userDetails.getPermissions(),
+                userDetails.isPlatformAdmin(),
                 userDetails.getCompanyId(),
                 userDetails.getCompanyName()
         );

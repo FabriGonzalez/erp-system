@@ -24,6 +24,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -44,6 +45,7 @@ public class OrderController {
 
     private final OrderService orderService;
 
+    @PreAuthorize("hasAnyAuthority('VER_PEDIDOS','CREAR_PEDIDOS','PREPARAR_PEDIDOS')")
     @GetMapping
     @Operation(summary = "Listar órdenes", description = "Obtiene de forma paginada las órdenes de venta de la empresa y sucursales del usuario. Permite filtrar por estado, sucursal, tipo de venta o tipo de entrega, y buscar por número de orden o nombre de cliente.")
     @ApiResponse(responseCode = "400", description = "Parámetros de paginación u orden inválidos",
@@ -80,6 +82,7 @@ public class OrderController {
                 status, branchId, salesType, deliveryType, customerId, paymentStatus, q, pageable));
     }
 
+    @PreAuthorize("hasAnyAuthority('VER_PEDIDOS','CREAR_PEDIDOS','PREPARAR_PEDIDOS')")
     @GetMapping("/{id}")
     @Operation(summary = "Obtener orden por ID", description = "Busca y retorna una orden de venta por su identificador.")
     @ApiResponse(responseCode = "404", description = "Orden no encontrada",
@@ -90,6 +93,7 @@ public class OrderController {
         return ResponseEntity.ok(orderService.findById(id));
     }
 
+    @PreAuthorize("hasAuthority('CREAR_PEDIDOS')")
     @PostMapping
     @Operation(summary = "Crear orden", description = "Crea una orden en estado CONFIRMED (LOCAL_PICKUP) o TO_PREPARE (SHIPPING) aplicando el descuento de stock atómicamente si es WITH_PRODUCTS. QUICK_SALE requiere cliente registrado y no tiene ítems. Con cliente: applyCredit aplica su saldo a favor y initialPayment registra un pago; ambos se asignan a esta orden. Sin cliente, la orden se considera pagada al crearse.")
     @ApiResponse(responseCode = "201", description = "Orden creada exitosamente")
@@ -112,6 +116,7 @@ public class OrderController {
         return ResponseEntity.created(location).body(response);
     }
 
+    @PreAuthorize("hasAuthority('CREAR_PEDIDOS')")
     @PatchMapping("/{id}")
     @Operation(summary = "Editar orden", description = "Edita los ítems (WITH_PRODUCTS) o el monto (QUICK_SALE) de una orden en TO_PREPARE, ajustando stock de forma atómica.")
     @ApiResponse(responseCode = "200", description = "Orden editada exitosamente")
@@ -127,6 +132,7 @@ public class OrderController {
         return ResponseEntity.ok(orderService.update(id, request));
     }
 
+    @PreAuthorize("hasAuthority('PREPARAR_PEDIDOS')")
     @PostMapping("/{id}/dispatch")
     @Operation(summary = "Despachar orden", description = "Despacha una orden SHIPPING en TO_PREPARE, pasándola a SHIPPED. No modifica stock.")
     @ApiResponse(responseCode = "200", description = "Orden despachada exitosamente")
@@ -140,6 +146,7 @@ public class OrderController {
         return ResponseEntity.ok(orderService.dispatch(id));
     }
 
+    @PreAuthorize("hasAuthority('CREAR_PEDIDOS')")
     @PostMapping("/{id}/cancel")
     @Operation(summary = "Cancelar orden", description = "Cancela una orden CONFIRMED o TO_PREPARE, revierte stock y movimientos contables, permitiendo optar por crédito o reembolso.")
     @ApiResponse(responseCode = "200", description = "Orden cancelada exitosamente")
