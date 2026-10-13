@@ -41,17 +41,37 @@ class ProvisioningServiceImplTest {
     }
 
     @Test
+    void tenantAdminWithPlatformAdminRoleCodeCannotListCompanies() {
+        authenticate(tenantAdminWithFakePlatformRole());
+
+        assertThatThrownBy(() -> provisioningService.findAllCompanies())
+                .isInstanceOf(AccessDeniedException.class);
+        verifyNoInteractions(companyRepository);
+    }
+
+    @Test
     void tenantAdminWithPlatformAdminRoleCodeCannotProvision() {
+        authenticate(tenantAdminWithFakePlatformRole());
+
+        ProvisionCompanyRequest request = new ProvisionCompanyRequest(
+                "Otra", null, null, "otro_admin", "otro@otra.com", null, null);
+
+        assertThatThrownBy(() -> provisioningService.provisionCompany(request))
+                .isInstanceOf(AccessDeniedException.class);
+        verifyNoInteractions(companyRepository, roleRepository, userRepository);
+    }
+
+    // El peor caso: un admin de empresa con todos los permisos y un rol llamado PLATFORM_ADMIN.
+    private User tenantAdminWithFakePlatformRole() {
         Company company = Company.builder().name("Acme").build();
         company.setId(1L);
-        // El peor caso: un admin de empresa con todos los permisos y un rol llamado PLATFORM_ADMIN.
         Role role = Role.builder()
                 .company(company)
                 .name("Falso admin")
                 .code("PLATFORM_ADMIN")
                 .permissions(EnumSet.allOf(Permission.class))
                 .build();
-        User tenantAdmin = User.builder()
+        return User.builder()
                 .username("admin")
                 .email("admin@acme.com")
                 .password("x")
@@ -60,14 +80,6 @@ class ProvisioningServiceImplTest {
                 .role(role)
                 .company(company)
                 .build();
-        authenticate(tenantAdmin);
-
-        ProvisionCompanyRequest request = new ProvisionCompanyRequest(
-                "Otra", null, null, "otro_admin", "otro@otra.com", null, null);
-
-        assertThatThrownBy(() -> provisioningService.provisionCompany(request))
-                .isInstanceOf(AccessDeniedException.class);
-        verifyNoInteractions(companyRepository, roleRepository, userRepository);
     }
 
     private void authenticate(User user) {

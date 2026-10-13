@@ -5,20 +5,27 @@ import com.gonzalez.erp.modules.companies.entity.CompanyStatus;
 
 import java.time.Instant;
 
-public record CompanyStatusResponse(
+/** Vista de una empresa para el administrador de plataforma. */
+public record CompanyResponse(
         Long id,
         String name,
+        String legalName,
+        String taxId,
         CompanyStatus status,
         String statusReason,
-        Instant statusChangedAt
+        Instant statusChangedAt,
+        Instant createdAt
 ) {
-    public static CompanyStatusResponse from(Company company) {
-        return new CompanyStatusResponse(
+    public static CompanyResponse from(Company company) {
+        return new CompanyResponse(
                 company.getId(),
                 company.getName(),
+                company.getLegalName(),
+                company.getTaxId(),
                 company.getStatus(),
                 company.getStatusReason(),
-                company.getStatusChangedAt()
+                company.getStatusChangedAt(),
+                company.getCreatedAt()
         );
     }
 }

@@ -9,7 +9,7 @@ import com.gonzalez.erp.modules.companies.exception.CompanyTaxIdAlreadyExistsExc
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.provisioning.dto.request.ChangeCompanyStatusRequest;
 import com.gonzalez.erp.modules.provisioning.dto.request.ProvisionCompanyRequest;
-import com.gonzalez.erp.modules.provisioning.dto.response.CompanyStatusResponse;
+import com.gonzalez.erp.modules.provisioning.dto.response.CompanyResponse;
 import com.gonzalez.erp.modules.provisioning.dto.response.ProvisionCompanyResponse;
 import com.gonzalez.erp.modules.roles.entity.Permission;
 import com.gonzalez.erp.modules.roles.entity.Role;
@@ -19,12 +19,14 @@ import com.gonzalez.erp.modules.users.exception.UserEmailAlreadyExistsException;
 import com.gonzalez.erp.modules.users.exception.UserUsernameAlreadyExistsException;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.EnumSet;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -35,6 +37,15 @@ public class ProvisioningServiceImpl implements ProvisioningService {
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CompanyResponse> findAllCompanies() {
+        checkPlatformAdminRole();
+        return companyRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
+                .map(CompanyResponse::from)
+                .toList();
+    }
 
     @Override
     public ProvisionCompanyResponse provisionCompany(ProvisionCompanyRequest request) {
@@ -76,7 +87,7 @@ public class ProvisioningServiceImpl implements ProvisioningService {
     }
 
     @Override
-    public CompanyStatusResponse changeCompanyStatus(Long companyId, ChangeCompanyStatusRequest request) {
+    public CompanyResponse changeCompanyStatus(Long companyId, ChangeCompanyStatusRequest request) {
         checkPlatformAdminRole();
 
         Company company = companyRepository.findById(companyId)
@@ -88,7 +99,7 @@ public class ProvisioningServiceImpl implements ProvisioningService {
             case SUSPENDED -> company.suspend(request.reason().trim());
             case CANCELLED -> company.cancel(request.reason().trim());
         }
-        return CompanyStatusResponse.from(company);
+        return CompanyResponse.from(company);
     }
 
     private void checkPlatformAdminRole() {
