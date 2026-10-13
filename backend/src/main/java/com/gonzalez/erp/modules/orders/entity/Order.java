@@ -12,7 +12,9 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Entity
 @Table(
@@ -128,10 +130,32 @@ public class Order extends BaseEntity {
         item.setOrder(null);
     }
 
+    /*
+     * Reemplaza los ítems conservando la fila de cada variante que sigue en el pedido.
+     * Vaciar la lista y volver a agregar fallaba al editar: Hibernate inserta las filas
+     * nuevas antes de borrar las huérfanas y choca con uk_order_item_variant.
+     */
     public void updateItems(List<OrderItem> newItems) {
-        this.items.clear();
-        if (newItems != null) {
-            for (OrderItem item : newItems) {
+        List<OrderItem> incoming = newItems != null ? newItems : List.of();
+        Map<Long, OrderItem> incomingByVariant = new HashMap<>();
+        for (OrderItem item : incoming) {
+            incomingByVariant.put(item.getProductVariant().getId(), item);
+        }
+
+        this.items.removeIf(existing ->
+                !incomingByVariant.containsKey(existing.getProductVariant().getId()));
+
+        Map<Long, OrderItem> currentByVariant = new HashMap<>();
+        for (OrderItem existing : this.items) {
+            currentByVariant.put(existing.getProductVariant().getId(), existing);
+        }
+
+        for (OrderItem item : incoming) {
+            OrderItem existing = currentByVariant.get(item.getProductVariant().getId());
+            if (existing != null) {
+                existing.setQuantity(item.getQuantity());
+                existing.setUnitPrice(item.getUnitPrice());
+            } else {
                 addItem(item);
             }
         }
