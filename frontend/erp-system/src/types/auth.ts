@@ -50,3 +50,14 @@ export type LoginResponse = {
     companyId: number;
     companyName: string;
 };
+
+export type ChangePasswordRequest = {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+};
+
+export type TokenResponse = {
+    token: string;
+    type: string;
+};

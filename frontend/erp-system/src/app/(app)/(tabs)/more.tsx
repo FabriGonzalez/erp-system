@@ -141,6 +141,12 @@ export default function MoreScreen() {
                 <Text style={styles.sectionTitle}>Sesión</Text>
                 <View style={styles.section}>
                     <MenuListItem
+                        title="Cambiar contraseña"
+                        subtitle="Actualizá la contraseña de tu cuenta"
+                        iconName={{ ios: 'lock.fill', android: 'lock', web: 'lock' }}
+                        onPress={() => router.push('/settings/change-password')}
+                    />
+                    <MenuListItem
                         title="Cerrar sesión"
                         iconName={{ ios: 'arrow.right.to.line.compact', android: 'logout', web: 'logout' }}
                         onPress={handleLogout}

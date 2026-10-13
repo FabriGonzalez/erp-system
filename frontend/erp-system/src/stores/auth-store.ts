@@ -12,24 +12,35 @@ type StoredSession = {
     user: User;
 };
 
+export type SessionEndReason = 'expired' | 'company_suspended' | 'company_cancelled';
+
 type AuthState = {
     user: User | null;
     token: string | null;
     isHydrated: boolean;
     sessionExpired: boolean;
+    sessionEndReason: SessionEndReason;
     isLoggingOut: boolean;
 
     login: (response: LoginResponse) => Promise<void>;
     hydrate: () => Promise<void>;
-    expireSession: () => Promise<void>;
+    expireSession: (reason?: SessionEndReason) => Promise<void>;
+    replaceToken: (previousToken: string, token: string) => Promise<void>;
     logout: () => Promise<void>;
 };
+
+function reasonFromErrorCode(code: string | null): SessionEndReason {
+    if (code === 'COMPANY_SUSPENDED') return 'company_suspended';
+    if (code === 'COMPANY_CANCELLED') return 'company_cancelled';
+    return 'expired';
+}
 
 export const useAuthStore = create<AuthState>((set) => ({
     user: null,
     token: null,
     isHydrated: false,
     sessionExpired: false,
+    sessionEndReason: 'expired',
     isLoggingOut: false,
 
     login: async (response) => {
@@ -66,6 +77,7 @@ export const useAuthStore = create<AuthState>((set) => ({
             token: response.token,
             isHydrated: true,
             sessionExpired: false,
+            sessionEndReason: 'expired',
             isLoggingOut: false,
         });
     },
@@ -114,7 +126,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
     },
 
-    expireSession: async () => {
+    expireSession: async (reason = 'expired') => {
         const state = useAuthStore.getState();
         if (state.sessionExpired || state.isLoggingOut || !state.token) {
             return;
@@ -124,10 +136,27 @@ export const useAuthStore = create<AuthState>((set) => ({
             user: null,
             token: null,
             sessionExpired: true,
+            sessionEndReason: reason,
         });
 
         await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
         await useBranchStore.getState().clearActiveBranch();
+    },
+
+    // Cambiar la contraseña revoca los tokens anteriores; el backend devuelve uno nuevo.
+    replaceToken: async (previousToken, token) => {
+        const { user, token: currentToken } = useAuthStore.getState();
+        // Solo si sigue la misma sesión que hizo el pedido: si mientras tanto expiró,
+        // se cerró o entró otro usuario, el token nuevo no debe pisar ese estado.
+        if (!user || currentToken !== previousToken) {
+            return;
+        }
+
+        set({ token });
+        await AsyncStorage.setItem(
+            AUTH_STORAGE_KEY,
+            JSON.stringify({ token, user } satisfies StoredSession)
+        );
     },
 
     logout: async () => {
@@ -139,6 +168,7 @@ export const useAuthStore = create<AuthState>((set) => ({
             user: null,
             token: null,
             sessionExpired: false,
+            sessionEndReason: 'expired',
             isLoggingOut: false,
         });
     },
@@ -146,6 +176,6 @@ export const useAuthStore = create<AuthState>((set) => ({
 
 // Un 401 de cualquier request autenticada expira la sesión. expireSession ya
 // ignora el caso sin token, el logout voluntario y los 401 repetidos.
-setUnauthorizedHandler(() => {
-    void useAuthStore.getState().expireSession();
+setUnauthorizedHandler((code) => {
+    void useAuthStore.getState().expireSession(reasonFromErrorCode(code));
 });
