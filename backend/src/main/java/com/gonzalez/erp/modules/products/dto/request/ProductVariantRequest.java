@@ -18,9 +18,12 @@ public record ProductVariantRequest(
         @DecimalMin(value = "0.0", message = "Variant price cannot be negative")
         BigDecimal price,
 
-        @NotNull(message = "At least one attribute value is required")
-        @Size(min = 1, message = "At least one attribute value is required")
+        // Vacío = producto sin variantes (una sola variante sin atributos).
         List<Long> attributeValueIds,
 
         List<@Valid InitialStockRequest> initialStock
-) {}
+) {
+    public ProductVariantRequest {
+        attributeValueIds = attributeValueIds == null ? List.of() : attributeValueIds;
+    }
+}

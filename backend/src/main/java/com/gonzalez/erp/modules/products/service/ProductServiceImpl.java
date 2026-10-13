@@ -23,6 +23,7 @@ import com.gonzalez.erp.modules.products.entity.Product;
 import com.gonzalez.erp.modules.products.entity.ProductAttributeValue;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.entity.ProductVariantAttribute;
+import com.gonzalez.erp.modules.products.exception.InvalidProductVariantsException;
 import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveException;
 import com.gonzalez.erp.modules.products.exception.ProductVariantSkuAlreadyExistsException;
 import com.gonzalez.erp.modules.products.mapper.ProductMapper;
@@ -203,6 +204,12 @@ public class ProductServiceImpl implements ProductService {
             List<ProductVariantRequest> variantRequests,
             Long companyId
     ) {
+        validateVariantsWithoutAttributes(
+                variantRequests.stream()
+                        .map(ProductVariantRequest::attributeValueIds)
+                        .toList()
+        );
+
         Set<String> seenSkus = new HashSet<>();
 
         for (ProductVariantRequest vr : variantRequests) {
@@ -284,6 +291,12 @@ public class ProductServiceImpl implements ProductService {
             List<ProductVariantUpdateRequest> variantRequests,
             Long companyId
     ) {
+        validateVariantsWithoutAttributes(
+                variantRequests.stream()
+                        .map(ProductVariantUpdateRequest::attributeValueIds)
+                        .toList()
+        );
+
         Set<String> incomingSkus = variantRequests.stream()
                 .map(ProductVariantUpdateRequest::sku)
                 .collect(Collectors.toSet());
@@ -522,6 +535,24 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    /*
+     * Un producto sin variantes (p. ej. un pack de medias surtidas) se guarda como
+     * una única variante sin atributos. Si hay varias, cada una necesita atributos
+     * para distinguirse de las demás.
+     */
+    static void validateVariantsWithoutAttributes(
+            List<List<Long>> attributeValueIdsByVariant
+    ) {
+        boolean hasVariantWithoutAttributes = attributeValueIdsByVariant.stream()
+                .anyMatch(List::isEmpty);
+
+        if (hasVariantWithoutAttributes && attributeValueIdsByVariant.size() > 1) {
+            throw new InvalidProductVariantsException(
+                    "A variant without attribute values must be the product's only variant"
+            );
+        }
+    }
+
     private void validateOneValuePerAttribute(
             List<Long> attributeValueIds,
             String sku
@@ -536,7 +567,7 @@ public class ProductServiceImpl implements ProductService {
                     value.getAttribute().getId();
 
             if (!seenAttributes.add(attributeId)) {
-                throw new IllegalArgumentException(
+                throw new InvalidProductVariantsException(
                         "Variant '%s' has multiple values for attribute '%s'"
                                 .formatted(
                                         sku,

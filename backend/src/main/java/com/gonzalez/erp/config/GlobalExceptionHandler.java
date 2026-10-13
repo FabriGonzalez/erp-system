@@ -21,6 +21,7 @@ import com.gonzalez.erp.modules.orders.exception.InvalidOrderException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderStatusTransitionException;
 import com.gonzalez.erp.modules.orders.exception.QuickSaleValidationException;
 import com.gonzalez.erp.modules.payments.exception.InvalidPaymentException;
+import com.gonzalez.erp.modules.products.exception.InvalidProductVariantsException;
 import com.gonzalez.erp.modules.products.exception.ProductAttributeNameAlreadyExistsException;
 import com.gonzalez.erp.modules.products.exception.ProductAttributeValueAlreadyExistsException;
 import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveException;
@@ -218,6 +219,20 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_REQUEST.getReasonPhrase(),
                         ex.getMessage(),
                         request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(InvalidProductVariantsException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidProductVariants(
+            InvalidProductVariantsException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "INVALID_PRODUCT_VARIANTS"
                 ));
     }
 

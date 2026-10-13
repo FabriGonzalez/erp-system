@@ -80,8 +80,9 @@ function uniqueSku(baseSku: string, usedSkus: Set<string>) {
     return candidate;
 }
 
+// La variante única de un producto sin variantes (p. ej. un pack surtido) no tiene atributos.
 function isManualPlaceholder(variant: DraftVariant) {
-    return variant.id === 'variant-new' && variant.attributes.length === 0;
+    return variant.attributes.length === 0;
 }
 
 function generateCombinations(
@@ -212,6 +213,9 @@ export function ProductForm({
         return values;
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
+    // Se guarda al pasar a modo variantes para no perder su SKU (y en edición, su stock)
+    // si se vuelve a "sin variantes".
+    const manualVariantRef = useRef<DraftVariant | null>(null);
     const [categoryModalVisible, setCategoryModalVisible] = useState(false);
     const [isCreateCategoryModalVisible, setIsCreateCategoryModalVisible] = useState(false);
     const openCreateCategoryOnDismissRef = useRef(false);
@@ -290,7 +294,6 @@ export function ProductForm({
                 if (!Number.isInteger(stock) || stock < 0) nextErrors.variants = 'El stock debe ser un número entero no negativo';
             });
             const attributeIds = variant.attributes.map((attribute) => attribute.attributeId);
-            if (!variant.attributes.length) nextErrors.variants = 'Cada variante debe tener al menos un valor de atributo';
             if (new Set(attributeIds).size !== attributeIds.length) nextErrors.variants = 'Una variante no puede tener dos valores del mismo atributo';
             variant.attributes.forEach((attribute) => {
                 const value = attributeValues.find((item) => item.id === attribute.attributeValueId);
@@ -304,6 +307,8 @@ export function ProductForm({
 
         const keys = variants.map((variant) => combinationKey(variant.attributes));
         if (new Set(keys).size !== keys.length) nextErrors.variants = 'No puede haber combinaciones duplicadas';
+        // Sin atributos solo puede haber una variante: la del producto sin variantes.
+        if (variants.length > 1 && variants.some(isManualPlaceholder)) nextErrors.variants = 'Si el producto tiene varias variantes, cada una debe tener al menos un valor de atributo';
         setErrors(nextErrors);
         return Object.keys(nextErrors).length === 0;
     }
@@ -369,18 +374,18 @@ export function ProductForm({
                     value={variantMode}
                     onValueChange={(value) => {
                         setVariantMode(value);
+                        setErrors((current) => ({ ...current, variants: '' }));
                         if (value) {
-                            setVariants((current) => current.filter((variant) => !isManualPlaceholder(variant)));
+                            manualVariantRef.current = variants.find(isManualPlaceholder) ?? manualVariantRef.current;
+                            setVariants(variants.filter((variant) => !isManualPlaceholder(variant)));
                         } else {
                             setSelectedValues({});
-                            setVariants((current) => [{
-                                ...(current.find((variant) => isManualPlaceholder(variant)) ?? {
-                                    id: 'variant-new',
-                                    sku: '',
-                                    price: basePrice,
-                                    stockByBranch: {},
-                                }),
+                            setVariants([manualVariantRef.current ?? {
+                                id: 'variant-new',
+                                sku: name.trim() ? buildSku(name, [], attributeValues) : '',
+                                price: basePrice,
                                 attributes: [],
+                                stockByBranch: {},
                             }]);
                         }
                     }}
