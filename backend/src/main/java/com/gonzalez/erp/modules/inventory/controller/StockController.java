@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -29,12 +30,14 @@ public class StockController {
 
     private final StockService stockService;
 
+    @PreAuthorize("hasAnyAuthority('CONSULTAR_STOCK','AJUSTAR_STOCK','TRANSFERIR_STOCK','CREAR_PEDIDOS')")
     @GetMapping
     @Operation(summary = "Listar stocks", description = "Obtiene todos los registros de stock.")
     public ResponseEntity<List<StockResponse>> findAll() {
         return ResponseEntity.ok(stockService.findAll());
     }
 
+    @PreAuthorize("hasAnyAuthority('CONSULTAR_STOCK','AJUSTAR_STOCK','TRANSFERIR_STOCK','CREAR_PEDIDOS')")
     @GetMapping("/{id}")
     @Operation(summary = "Obtener stock por ID", description = "Busca y retorna un registro de stock por su identificador.")
     public ResponseEntity<StockResponse> findById(
@@ -43,6 +46,7 @@ public class StockController {
         return ResponseEntity.ok(stockService.findById(id));
     }
 
+    @PreAuthorize("hasAnyAuthority('CONSULTAR_STOCK','AJUSTAR_STOCK','TRANSFERIR_STOCK','CREAR_PEDIDOS')")
     @GetMapping("/variant/{productVariantId}")
     @Operation(summary = "Obtener stock por variante", description = "Busca el stock de una variante de producto en todas las sucursales.")
     public ResponseEntity<List<StockResponse>> findByProductVariantId(
@@ -51,6 +55,7 @@ public class StockController {
         return ResponseEntity.ok(stockService.findByProductVariantId(productVariantId));
     }
 
+    @PreAuthorize("hasAnyAuthority('CONSULTAR_STOCK','AJUSTAR_STOCK','TRANSFERIR_STOCK','CREAR_PEDIDOS')")
     @GetMapping("/branch/{branchId}")
     @Operation(summary = "Obtener stock por sucursal", description = "Busca el stock de todos los productos en una sucursal.")
     public ResponseEntity<List<StockResponse>> findByBranchId(
@@ -59,6 +64,7 @@ public class StockController {
         return ResponseEntity.ok(stockService.findByBranchId(branchId));
     }
 
+    @PreAuthorize("hasAuthority('AJUSTAR_STOCK')")
     @PatchMapping("/adjust")
     @Operation(summary = "Ajustar stock", description = "Ajusta la cantidad final del stock. quantity en el movimiento es el delta firmado (newQuantity - previousQuantity); requiere AJUSTAR_STOCK.")
     @ApiResponse(responseCode = "200", description = "Stock ajustado exitosamente")

@@ -49,8 +49,7 @@ public class ProvisioningServiceImpl implements ProvisioningService {
                 .active(true)
                 .build());
 
-        Role adminRole = roleRepository.findByCode("ADMIN")
-                .orElseGet(this::createAdminRole);
+        Role adminRole = createAdminRole(company);
 
         User admin = userRepository.save(User.builder()
                 .username(request.adminUsername())
@@ -76,8 +75,7 @@ public class ProvisioningServiceImpl implements ProvisioningService {
     }
 
     private void checkPlatformAdminRole() {
-        String roleCode = SecurityUtils.getCurrentUserDetails().getRoleCode();
-        if (!"PLATFORM_ADMIN".equals(roleCode)) {
+        if (!SecurityUtils.getCurrentUserDetails().isPlatformAdmin()) {
             throw new AccessDeniedException("Only PLATFORM_ADMIN can provision companies");
         }
     }
@@ -109,12 +107,14 @@ public class ProvisioningServiceImpl implements ProvisioningService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    private Role createAdminRole() {
+    private Role createAdminRole(Company company) {
         return roleRepository.save(Role.builder()
+                .company(company)
                 .name("Administrador")
                 .code("ADMIN")
                 .description("Rol con acceso total al sistema")
                 .permissions(EnumSet.allOf(Permission.class))
+                .system(true)
                 .active(true)
                 .build());
     }

@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -24,6 +25,7 @@ public class ShipmentController {
 
     private final ShipmentService shipmentService;
 
+    @PreAuthorize("hasAuthority('CREAR_ENVIOS')")
     @PostMapping
     @Operation(summary = "Crear shipment para una orden", description = "Crea un envío asociado a la orden. La dirección es un snapshot de los datos recibidos, independiente de las direcciones del cliente. Una orden solo puede tener un envío.")
     @ApiResponses({
@@ -42,6 +44,7 @@ public class ShipmentController {
                 .body(shipmentService.create(orderId, request));
     }
 
+    @PreAuthorize("hasAnyAuthority('CONSULTAR_ENVIOS','CREAR_ENVIOS','VER_PEDIDOS','PREPARAR_PEDIDOS')")
     @GetMapping
     @Operation(summary = "Obtener shipment de una orden", description = "Busca y retorna el envío asociado a la orden.")
     @ApiResponses({
@@ -53,6 +56,7 @@ public class ShipmentController {
         return ResponseEntity.ok(shipmentService.findByOrderId(orderId));
     }
 
+    @PreAuthorize("hasAuthority('CREAR_ENVIOS')")
     @PatchMapping
     @Operation(
             summary = "Actualizar envío de una orden",

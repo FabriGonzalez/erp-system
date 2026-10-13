@@ -16,6 +16,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -44,6 +45,7 @@ public class ProductAttributeController {
         return ResponseEntity.ok(attributeService.findById(id));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_PRODUCTOS')")
     @PostMapping
     @Operation(summary = "Crear atributo", description = "Crea un nuevo atributo con nombre único por empresa.")
     @ApiResponse(responseCode = "201", description = "Atributo creado exitosamente")
@@ -55,6 +57,7 @@ public class ProductAttributeController {
                 .body(attributeService.create(request));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_PRODUCTOS')")
     @PatchMapping("/{id}")
     @Operation(summary = "Actualizar atributo", description = "Actualiza el nombre de un atributo existente.")
     public ResponseEntity<ProductAttributeResponse> update(
@@ -64,6 +67,7 @@ public class ProductAttributeController {
         return ResponseEntity.ok(attributeService.update(id, request));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_PRODUCTOS')")
     @PatchMapping("/{id}/deactivate")
     @Operation(summary = "Desactivar atributo", description = "Desactiva lógicamente un atributo.")
     public ResponseEntity<ProductAttributeResponse> deactivate(
@@ -72,6 +76,7 @@ public class ProductAttributeController {
         return ResponseEntity.ok(attributeService.deactivate(id));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_PRODUCTOS')")
     @PatchMapping("/{id}/activate")
     @Operation(summary = "Activar atributo", description = "Reactiva un atributo previamente desactivado.")
     public ResponseEntity<ProductAttributeResponse> activate(
@@ -89,6 +94,7 @@ public class ProductAttributeController {
         return ResponseEntity.ok(attributeService.findValues(id));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_PRODUCTOS')")
     @PostMapping("/{id}/values")
     @Operation(summary = "Agregar valor al atributo", description = "Agrega un valor a un atributo existente. El valor debe ser único dentro del atributo.")
     @ApiResponse(responseCode = "201", description = "Valor agregado exitosamente")
@@ -102,6 +108,7 @@ public class ProductAttributeController {
                 .body(attributeService.addValue(id, request));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_PRODUCTOS')")
     @PatchMapping("/values/{valueId}")
     @Operation(summary = "Actualizar valor", description = "Actualiza el texto de un valor de atributo.")
     public ResponseEntity<ProductAttributeValueResponse> updateValue(
@@ -111,6 +118,7 @@ public class ProductAttributeController {
         return ResponseEntity.ok(attributeService.updateValue(valueId, request));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_PRODUCTOS')")
     @PatchMapping("/values/{valueId}/deactivate")
     @Operation(summary = "Desactivar valor", description = "Desactiva lógicamente un valor de atributo.")
     public ResponseEntity<ProductAttributeValueResponse> deactivateValue(
@@ -119,6 +127,7 @@ public class ProductAttributeController {
         return ResponseEntity.ok(attributeService.deactivateValue(valueId));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_PRODUCTOS')")
     @PatchMapping("/values/{valueId}/activate")
     @Operation(summary = "Activar valor", description = "Reactiva un valor de atributo previamente desactivado.")
     public ResponseEntity<ProductAttributeValueResponse> activateValue(

@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -45,6 +46,7 @@ public class CustomerAddressController {
         return ResponseEntity.ok(addressService.findById(customerId, addressId));
     }
 
+    @PreAuthorize("hasAnyAuthority('ADMINISTRAR_CLIENTES','CREAR_PEDIDOS')")
     @PostMapping
     @Operation(summary = "Crear nueva dirección para un cliente")
     @ApiResponses({
@@ -58,6 +60,7 @@ public class CustomerAddressController {
         return ResponseEntity.status(HttpStatus.CREATED).body(addressService.create(customerId, request));
     }
 
+    @PreAuthorize("hasAnyAuthority('ADMINISTRAR_CLIENTES','CREAR_PEDIDOS')")
     @PatchMapping("/{addressId}")
     @Operation(summary = "Actualizar dirección existente")
     @ApiResponses({
@@ -72,6 +75,7 @@ public class CustomerAddressController {
         return ResponseEntity.ok(addressService.update(customerId, addressId, request));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_CLIENTES')")
     @PatchMapping("/{addressId}/deactivate")
     @Operation(summary = "Desactivar dirección")
     @ApiResponses({
@@ -84,6 +88,7 @@ public class CustomerAddressController {
         return ResponseEntity.ok(addressService.deactivate(customerId, addressId));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_CLIENTES')")
     @PatchMapping("/{addressId}/activate")
     @Operation(summary = "Activar dirección")
     @ApiResponses({

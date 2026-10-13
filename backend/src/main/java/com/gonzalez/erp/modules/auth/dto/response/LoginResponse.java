@@ -14,6 +14,7 @@ public record LoginResponse(
         String lastName,
         String roleName,
         Set<Permission> permissions,
+        boolean platformAdmin,
         Long companyId,
         String companyName
 ) {}

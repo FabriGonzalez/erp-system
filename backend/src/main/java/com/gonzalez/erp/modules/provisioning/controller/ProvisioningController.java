@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,6 +25,7 @@ public class ProvisioningController {
 
     private final ProvisioningService provisioningService;
 
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     @PostMapping("/companies")
     @Operation(summary = "Provisionar nueva empresa",
                description = "Crea una Company con su primer usuario ADMIN. Solo PLATFORM_ADMIN.")

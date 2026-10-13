@@ -26,13 +26,24 @@ public class User extends BaseEntity {
     @Column(name = "last_name", nullable = false, length = 100)
     private String lastName;
 
+    /** Rol dentro de la empresa. Null solo para administradores de plataforma. */
     @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "role_id", nullable = false)
+    @JoinColumn(name = "role_id")
     private Role role;
 
+    /** Null solo para administradores de plataforma. */
     @ManyToOne(fetch = FetchType.LAZY, optional = true)
     @JoinColumn(name = "company_id")
     private Company company;
+
+    /**
+     * Administrador global de la plataforma (provisiona y gestiona empresas).
+     * No pertenece a ninguna empresa ni tiene rol de empresa, así que no es asignable
+     * ni visible desde los endpoints de los tenants.
+     */
+    @Column(name = "platform_admin", nullable = false)
+    @Builder.Default
+    private boolean platformAdmin = false;
 
     @Column(nullable = false)
     @Builder.Default

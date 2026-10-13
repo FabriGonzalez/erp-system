@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,6 +22,7 @@ public class UserBranchController {
 
     private final UserBranchService userBranchService;
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_USUARIOS') or #userId == authentication.principal.userId")
     @GetMapping
     @Operation(summary = "Obtener sucursales del usuario")
     @ApiResponses({
@@ -31,6 +33,7 @@ public class UserBranchController {
         return ResponseEntity.ok(userBranchService.findBranchesByUserId(userId));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_USUARIOS')")
     @PostMapping("/{branchId}")
     @Operation(summary = "Asignar usuario a sucursal")
     @ApiResponses({
@@ -42,6 +45,7 @@ public class UserBranchController {
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_USUARIOS')")
     @DeleteMapping("/{branchId}")
     @Operation(summary = "Remover usuario de sucursal")
     @ApiResponses({

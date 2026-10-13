@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,6 +26,7 @@ public class PaymentController {
 
     private final PaymentService paymentService;
 
+    @PreAuthorize("hasAuthority('REGISTRAR_PAGOS')")
     @PostMapping
     @Operation(summary = "Registrar un pago", description = "Registra un pago para un cliente, actualiza su cuenta corriente y aplica asignaciones a órdenes pendientes mediante criterio FIFO.")
     public ResponseEntity<PaymentResponse> createPayment(@Valid @RequestBody PaymentRequest request) {
@@ -32,6 +34,7 @@ public class PaymentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @PreAuthorize("hasAuthority('REGISTRAR_PAGOS')")
     @PatchMapping("/{id}/cancel")
     @Operation(summary = "Cancelar un pago", description = "Cancela un pago activo, elimina sus asignaciones y revierte su efecto contable en la cuenta corriente del cliente.")
     public ResponseEntity<PaymentResponse> cancelPayment(@PathVariable Long id) {
@@ -39,6 +42,7 @@ public class PaymentController {
         return ResponseEntity.ok(response);
     }
 
+    @PreAuthorize("hasAnyAuthority('REGISTRAR_PAGOS','VER_PEDIDOS','VER_REPORTES')")
     @GetMapping("/{id}")
     @Operation(summary = "Obtener pago por ID", description = "Obtiene los detalles de un pago específico de la empresa autenticada.")
     public ResponseEntity<PaymentResponse> getPaymentById(@PathVariable Long id) {
@@ -46,6 +50,7 @@ public class PaymentController {
         return ResponseEntity.ok(response);
     }
 
+    @PreAuthorize("hasAnyAuthority('REGISTRAR_PAGOS','VER_PEDIDOS','VER_REPORTES')")
     @GetMapping
     @Operation(summary = "Listar pagos", description = "Lista los pagos de la empresa autenticada, opcionalmente filtrados por cliente.")
     public ResponseEntity<List<PaymentResponse>> getPayments(

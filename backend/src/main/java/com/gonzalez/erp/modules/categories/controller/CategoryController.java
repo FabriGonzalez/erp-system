@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -42,6 +43,7 @@ public class CategoryController {
         return ResponseEntity.ok(categoryService.findById(id));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_CATEGORIAS')")
     @PostMapping
     @Operation(summary = "Crear categoría", description = "Crea una nueva categoría con nombre y descripción opcional.")
     @ApiResponse(responseCode = "201", description = "Categoría creada exitosamente")
@@ -52,6 +54,7 @@ public class CategoryController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_CATEGORIAS')")
     @PatchMapping("/{id}")
     @Operation(summary = "Actualizar categoría", description = "Actualiza el nombre y/o descripción de una categoría existente.")
     @ApiResponse(responseCode = "200", description = "Categoría actualizada exitosamente")
@@ -64,6 +67,7 @@ public class CategoryController {
         return ResponseEntity.ok(categoryService.update(id, request));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_CATEGORIAS')")
     @PatchMapping("/{id}/deactivate")
     @Operation(summary = "Desactivar categoría", description = "Desactiva lógicamente una categoría (soft delete).")
     @ApiResponse(responseCode = "200", description = "Categoría desactivada exitosamente")
@@ -75,6 +79,7 @@ public class CategoryController {
         return ResponseEntity.ok(categoryService.deactivate(id));
     }
 
+    @PreAuthorize("hasAuthority('ADMINISTRAR_CATEGORIAS')")
     @PatchMapping("/{id}/activate")
     @Operation(summary = "Activar categoría", description = "Reactiva una categoría previamente desactivada.")
     @ApiResponse(responseCode = "200", description = "Categoría activada exitosamente")
