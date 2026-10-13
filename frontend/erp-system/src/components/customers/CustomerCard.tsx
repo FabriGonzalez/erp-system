@@ -31,7 +31,14 @@ export function CustomerCard({ customer, onPress }: CustomerCardProps) {
             />
 
             <View style={styles.info}>
-                <Text style={styles.name}>{customer.name}</Text>
+                <View style={styles.nameRow}>
+                    <Text style={styles.name}>{customer.name}</Text>
+                    {!customer.active ? (
+                        <View style={styles.inactiveBadge}>
+                            <Text style={styles.inactiveBadgeText}>Inactivo</Text>
+                        </View>
+                    ) : null}
+                </View>
                 {customer.email ? (
                     <Text style={styles.detailText}>{customer.email}</Text>
                 ) : null}
@@ -74,11 +81,28 @@ const styles = StyleSheet.create({
     info: {
         flex: 1,
     },
+    nameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.xs,
+        marginBottom: 2,
+    },
     name: {
+        flexShrink: 1,
         fontSize: 16,
         fontWeight: '600',
         color: Colors.text,
-        marginBottom: 2,
+    },
+    inactiveBadge: {
+        backgroundColor: Colors.muted,
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: 4,
+    },
+    inactiveBadgeText: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: Colors.textSecondary,
     },
     detailText: {
         fontSize: 13,

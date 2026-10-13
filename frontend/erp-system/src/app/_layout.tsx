@@ -3,6 +3,9 @@ import { Slot, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
+import { QueryClientProvider } from '@tanstack/react-query';
+
+import { queryClient } from '@/services/query-client';
 import { useAuthStore } from '@/stores/auth-store';
 import { SessionExpiredOverlay } from '@/components/SessionExpiredOverlay';
 import { StatusBar } from 'expo-status-bar';
@@ -48,7 +51,7 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <QueryClientProvider client={queryClient}>
       <Head>
         <title>ERP System</title>
       </Head>
@@ -56,6 +59,6 @@ export default function RootLayout() {
 
       <Slot />
       <SessionExpiredOverlay key={sessionExpired ? 'expired' : 'active'} />
-    </>
+    </QueryClientProvider>
   );
 }

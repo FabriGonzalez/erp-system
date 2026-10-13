@@ -78,6 +78,25 @@ export type CustomerListParams = {
 
 // --- Dominio del frontend ---
 
+/**
+ * Lista fija para que el mismo documento no se cargue como 'dni', 'D.N.I.', etc. y la
+ * detección de duplicados del backend (tipo + número por empresa) funcione.
+ */
+export const DOCUMENT_TYPES = [
+    { value: 'DNI', label: 'DNI' },
+    { value: 'CUIT', label: 'CUIT' },
+    { value: 'CUIL', label: 'CUIL' },
+    { value: 'PASAPORTE', label: 'Pasaporte' },
+    { value: 'OTRO', label: 'Otro' },
+] as const;
+
+export type DocumentType = (typeof DOCUMENT_TYPES)[number]['value'];
+
+export function documentTypeLabel(value: string | undefined): string | undefined {
+    if (!value) return undefined;
+    return DOCUMENT_TYPES.find((type) => type.value === value)?.label ?? value;
+}
+
 export type CustomerAddress = {
     id: string;
     // Opcional: con label se muestra como título y la dirección como subtítulo.

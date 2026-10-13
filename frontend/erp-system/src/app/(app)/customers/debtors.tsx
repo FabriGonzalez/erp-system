@@ -15,7 +15,8 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useKeyedQuery } from '@/hooks/use-keyed-query';
+import { useQuery } from '@tanstack/react-query';
+
 import { getDebtors } from '@/services/customer-account-service';
 import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
@@ -29,11 +30,15 @@ export default function CustomerAccountsScreen() {
     const token = useAuthStore((state) => state.token);
 
     // Deudores calculados por el backend (GET /customers/debtors), de mayor a menor deuda.
-    const { data, error, isLoading, reload } = useKeyedQuery(
-        token ? `debtors|${token}` : null,
-        () => getDebtors({ page: 0, size: DEBTORS_PAGE_SIZE }, token as string),
-        'No se pudieron cargar los deudores.',
-    );
+    const query = useQuery({
+        queryKey: ['customers', 'debtors', DEBTORS_PAGE_SIZE],
+        queryFn: () => getDebtors({ page: 0, size: DEBTORS_PAGE_SIZE }, token as string),
+        enabled: Boolean(token),
+    });
+    const { data, refetch } = query;
+    const isLoading = query.isPending || query.isRefetching;
+    const error = query.error instanceof Error ? query.error.message : null;
+    const reload = () => void refetch();
 
     const debtors = data?.content ?? [];
     const totalDebtors = data?.totalElements ?? 0;

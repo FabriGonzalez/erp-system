@@ -23,6 +23,20 @@ export const EMPTY_ADDRESS_DRAFT: AddressDraft = {
     postalCode: '',
 };
 
+/** Borrador a partir de una dirección guardada (para editarla o reenviarla completa). */
+export function addressToDraft(address: CustomerAddress): AddressDraft {
+    return {
+        label: address.label ?? '',
+        street: address.street,
+        number: address.number ?? '',
+        floor: address.floor ?? '',
+        apartment: address.apartment ?? '',
+        city: address.city,
+        state: address.state ?? '',
+        postalCode: address.postalCode ?? '',
+    };
+}
+
 /** Mismas reglas que AddressRequest en el backend: calle y ciudad obligatorias. */
 export function validateAddressDraft(draft: AddressDraft): string | null {
     if (!draft.street.trim()) return 'Ingresá la calle.';

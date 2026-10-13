@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 
 import { setUnauthorizedHandler } from '@/services/api-client';
+import { clearServerCache } from '@/services/query-client';
 import { useBranchStore } from '@/stores/branch-store';
 import { LoginResponse, User } from '@/types/auth';
 
@@ -61,6 +62,9 @@ export const useAuthStore = create<AuthState>((set) => ({
             token: response.token,
             user,
         };
+
+        // Nada cacheado de una sesión anterior puede verse en esta (otra empresa, otro usuario).
+        clearServerCache();
 
         useBranchStore.getState().setSessionContext({
             userId: user.id,
@@ -139,6 +143,7 @@ export const useAuthStore = create<AuthState>((set) => ({
             sessionEndReason: reason,
         });
 
+        clearServerCache();
         await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
         await useBranchStore.getState().clearActiveBranch();
     },
@@ -161,6 +166,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     logout: async () => {
         set({ isLoggingOut: true });
+        clearServerCache();
         await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
         await useBranchStore.getState().clearActiveBranch();
 

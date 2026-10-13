@@ -8,7 +8,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useCustomerAddresses } from '@/hooks/use-customer';
+import { useCustomerAddresses } from '@/hooks/use-customer-queries';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
 import { CustomerAddress } from '@/types/customer';

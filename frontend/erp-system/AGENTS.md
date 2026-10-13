@@ -68,6 +68,14 @@ Backend REST
 
 Evitá colocar llamadas HTTP directamente en componentes si el módulo ya utiliza un servicio/store para ese propósito. No agregues estado global para datos que claramente pertenecen solo a un componente.
 
+### Estado del servidor: TanStack Query
+
+- **Datos que vienen del backend → TanStack Query** (`@tanstack/react-query`, cliente en `src/services/query-client.ts`). **Estado propio del cliente → Zustand** (sesión, sucursal activa, borrador de orden).
+- Clientes ya usa este esquema (`src/hooks/use-customer-queries.ts`): claves por entidad (`customerKeys`), listados con `useInfiniteQuery` y mutaciones que actualizan o invalidan la caché y sincronizan las copias que viven fuera de ella (p. ej. el cliente del borrador de orden).
+- Los demás módulos todavía usan stores de Zustand con fetch propio. Se migran de a uno y con decisión explícita; no mezcles los dos esquemas para la misma entidad.
+- La sesión no va en las claves: `clearServerCache()` vacía la caché al iniciar sesión, al cerrarla y al expirar, para que nunca se vean datos de otra empresa. Toda query nueva debe estar deshabilitada sin token.
+- Las queries no se reintentan ante 4xx (configurado en el cliente).
+
 Los stores deben mantener sincronizadas todas las representaciones de una entidad que efectivamente se usen en la UI. Si una operación modifica una entidad, revisá las listas, selecciones y detalles que puedan contener copias de esa entidad.
 
 ## 5. Cliente API y manejo de errores

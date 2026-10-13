@@ -14,26 +14,40 @@ import {
 import { CustomerCard } from '@/components/customers/CustomerCard';
 import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { FilterChip } from '@/components/ui/FilterChip';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useCustomerList } from '@/hooks/use-customer-list';
+import { CustomerStatusFilter, useCustomerList } from '@/hooks/use-customer-queries';
+import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
+import { hasPermission } from '@/utils/permissions';
+
+const STATUS_FILTERS: { value: CustomerStatusFilter; label: string }[] = [
+    { value: 'active', label: 'Activos' },
+    { value: 'inactive', label: 'Inactivos' },
+    { value: 'all', label: 'Todos' },
+];
 
 export default function CustomersScreen() {
     const [searchQuery, setSearchQuery] = useState('');
+    const [status, setStatus] = useState<CustomerStatusFilter>('active');
+    // El backend deja crear clientes a quien los administra o crea pedidos.
+    const canCreate = useAuthStore((state) =>
+        hasPermission(state.user, 'ADMINISTRAR_CLIENTES') || hasPermission(state.user, 'CREAR_PEDIDOS'));
     const {
         customers,
         totalElements,
-        isLoading,
+        isRefreshing,
         isInitialLoading,
         isLoadingMore,
         error,
         loadMore,
         refresh,
-    } = useCustomerList({ query: searchQuery });
+    } = useCustomerList({ query: searchQuery, status });
     const isError = Boolean(error) && customers.length === 0;
+    const isFiltered = Boolean(searchQuery.trim()) || status !== 'active';
 
     function handleCreateCustomer() {
         router.push('/customers/new');
@@ -66,24 +80,26 @@ export default function CustomersScreen() {
                     <Text style={styles.screenSubtitle}>
                         {isInitialLoading
                             ? 'Cargando...'
-                            : `${totalElements} ${totalElements === 1 ? 'cliente' : 'clientes'}${searchQuery.trim() ? ' encontrados' : ''}`}
+                            : `${totalElements} ${totalElements === 1 ? 'cliente' : 'clientes'}${isFiltered ? ' encontrados' : ''}`}
                     </Text>
                 </View>
 
-                <Pressable
-                    style={({ pressed }) => [
-                        styles.createButton,
-                        pressed && SharedStyles.pressed,
-                    ]}
-                    onPress={handleCreateCustomer}
-                >
-                    <SymbolView
-                        name={{ ios: 'plus', android: 'add', web: 'add' }}
-                        size={18}
-                        tintColor={Colors.white}
-                    />
-                    <Text style={styles.createButtonText}>Nuevo</Text>
-                </Pressable>
+                {canCreate ? (
+                    <Pressable
+                        style={({ pressed }) => [
+                            styles.createButton,
+                            pressed && SharedStyles.pressed,
+                        ]}
+                        onPress={handleCreateCustomer}
+                    >
+                        <SymbolView
+                            name={{ ios: 'plus', android: 'add', web: 'add' }}
+                            size={18}
+                            tintColor={Colors.white}
+                        />
+                        <Text style={styles.createButtonText}>Nuevo</Text>
+                    </Pressable>
+                ) : null}
             </View>
 
             {/* Búsqueda */}
@@ -95,6 +111,16 @@ export default function CustomersScreen() {
                     autoCapitalize="none"
                     autoCorrect={false}
                 />
+                <View style={styles.filters}>
+                    {STATUS_FILTERS.map((filter) => (
+                        <FilterChip
+                            key={filter.value}
+                            label={filter.label}
+                            selected={status === filter.value}
+                            onPress={() => setStatus(filter.value)}
+                        />
+                    ))}
+                </View>
             </View>
 
             {isInitialLoading && (
@@ -125,31 +151,32 @@ export default function CustomersScreen() {
                     }
                     refreshControl={
                         <RefreshControl
-                            refreshing={isLoading && !isLoadingMore}
+                            refreshing={isRefreshing}
                             onRefresh={refresh}
                             tintColor={Colors.primary}
                         />
                     }
                     ListEmptyComponent={
-                        <EmptyState
-                            title={
-                                searchQuery.trim()
-                                    ? 'No se encontraron clientes'
-                                    : 'No hay clientes registrados'
-                            }
-                            description={
-                                searchQuery.trim()
-                                    ? 'Intenta con otro término de búsqueda.'
-                                    : 'Crea tu primer cliente para comenzar a registrar sus datos y direcciones.'
-                            }
-                            iconName={{ ios: 'person.2', android: 'group', web: 'group' }}
-                            actionLabel={searchQuery.trim() ? 'Limpiar búsqueda' : 'Nuevo cliente'}
-                            onAction={
-                                searchQuery.trim()
-                                    ? () => setSearchQuery('')
-                                    : handleCreateCustomer
-                            }
-                        />
+                        isFiltered ? (
+                            <EmptyState
+                                title="No se encontraron clientes"
+                                description="Probá con otro término o con otro filtro."
+                                iconName={{ ios: 'person.2', android: 'group', web: 'group' }}
+                                actionLabel="Limpiar filtros"
+                                onAction={() => {
+                                    setSearchQuery('');
+                                    setStatus('active');
+                                }}
+                            />
+                        ) : (
+                            <EmptyState
+                                title="No hay clientes registrados"
+                                description="Creá tu primer cliente para comenzar a registrar sus datos y direcciones."
+                                iconName={{ ios: 'person.2', android: 'group', web: 'group' }}
+                                actionLabel={canCreate ? 'Nuevo cliente' : undefined}
+                                onAction={canCreate ? handleCreateCustomer : undefined}
+                            />
+                        )
                     }
                     renderItem={({ item }) => (
                         <CustomerCard
@@ -210,6 +237,11 @@ const styles = StyleSheet.create({
     },
     footerLoader: {
         paddingVertical: Spacing.md,
+    },
+    filters: {
+        flexDirection: 'row',
+        gap: Spacing.xs,
+        marginTop: Spacing.sm,
     },
     errorContainer: {
         padding: Spacing.xl,

@@ -16,40 +16,45 @@ import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useCustomer } from '@/hooks/use-customer';
-import { createAddress, getCustomer } from '@/services/customer-service';
-import { useAuthStore } from '@/stores/auth-store';
-import { useCustomerStore } from '@/stores/customer-store';
+import {
+    useCreateAddress,
+    useCustomer,
+    useCustomerAddresses,
+    useUpdateAddress,
+} from '@/hooks/use-customer-queries';
 import { SharedStyles } from '@/styles/shared';
-import { CustomerAddress } from '@/types/customer';
+import { Customer, CustomerAddress } from '@/types/customer';
 import {
     AddressDraft,
+    addressToDraft,
     EMPTY_ADDRESS_DRAFT,
     toAddressRequest,
     validateAddressDraft,
 } from '@/utils/address';
 
-type AddCustomerAddressFormProps = {
+type CustomerAddressFormProps = {
     customerId: string;
+    // Si se pasa, edita esa dirección; si no, agrega una nueva.
+    addressId?: string;
     onAddressCreated?: (address: CustomerAddress) => void;
 };
 
-export function AddCustomerAddressForm({
+/** Alta o edición de una dirección. Carga los datos y monta el formulario ya inicializado. */
+export function CustomerAddressForm({
     customerId,
+    addressId,
     onAddressCreated,
-}: AddCustomerAddressFormProps) {
-    const token = useAuthStore((state) => state.token);
-    const customersChanged = useCustomerStore((state) => state.customersChanged);
+}: CustomerAddressFormProps) {
+    const isEdit = Boolean(addressId);
+    const title = isEdit ? 'Editar dirección' : 'Agregar dirección';
     const { customer, notFound, isLoading } = useCustomer(customerId);
+    const { addresses, isLoading: addressesLoading } = useCustomerAddresses(isEdit ? customerId : undefined);
+    const address = isEdit ? addresses.find((item) => item.id === addressId) : undefined;
 
-    const [draft, setDraft] = useState<AddressDraft>(EMPTY_ADDRESS_DRAFT);
-    const [formError, setFormError] = useState<string | null>(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    if (!customer && isLoading) {
+    if ((!customer && isLoading) || (isEdit && !address && addressesLoading)) {
         return (
             <Screen>
-                <LoadingState label="Cargando cliente..." />
+                <LoadingState label="Cargando..." />
             </Screen>
         );
     }
@@ -57,12 +62,50 @@ export function AddCustomerAddressForm({
     if (!customer && notFound) {
         return (
             <NotFound
-                headerTitle="Agregar dirección"
+                headerTitle={title}
                 title="Cliente no encontrado"
-                description="No se pudo encontrar el cliente al que querés agregar la dirección."
+                description="No se pudo encontrar el cliente de esta dirección."
             />
         );
     }
+
+    if (isEdit && !address) {
+        return (
+            <NotFound
+                headerTitle={title}
+                title="Dirección no encontrada"
+                description="La dirección que querés editar no existe o ya no está disponible."
+            />
+        );
+    }
+
+    return (
+        <AddressFormBody
+            key={address?.id ?? 'new'}
+            customerId={customerId}
+            customer={customer}
+            address={address}
+            title={title}
+            onAddressCreated={onAddressCreated}
+        />
+    );
+}
+
+type AddressFormBodyProps = {
+    customerId: string;
+    customer: Customer | null;
+    address?: CustomerAddress;
+    title: string;
+    onAddressCreated?: (address: CustomerAddress) => void;
+};
+
+function AddressFormBody({ customerId, customer, address, title, onAddressCreated }: AddressFormBodyProps) {
+    const createAddress = useCreateAddress(customerId);
+    const updateAddress = useUpdateAddress(customerId);
+
+    const [draft, setDraft] = useState<AddressDraft>(address ? addressToDraft(address) : EMPTY_ADDRESS_DRAFT);
+    const [formError, setFormError] = useState<string | null>(null);
+    const isSubmitting = createAddress.isPending || updateAddress.isPending;
 
     async function handleSave() {
         if (isSubmitting) {
@@ -74,28 +117,21 @@ export function AddCustomerAddressForm({
             setFormError(validationError);
             return;
         }
-        if (!token) {
-            setFormError('No hay sesión activa.');
-            return;
-        }
 
         setFormError(null);
-        setIsSubmitting(true);
 
         try {
-            const address = await createAddress(customerId, toAddressRequest(draft), token);
-
-            // El cliente cambió (cantidad de direcciones, quizá la principal): se publica
-            // la versión del backend para el borrador de orden y los listados abiertos.
-            const updatedCustomer = await getCustomer(customerId, token).catch(() => undefined);
-            customersChanged(updatedCustomer);
-
-            onAddressCreated?.(address);
+            if (address) {
+                // El PATCH reemplaza todos los campos. mainAddress=false no le quita el
+                // rol de principal: eso solo cambia marcando otra.
+                await updateAddress.mutateAsync({ addressId: address.id, data: toAddressRequest(draft) });
+            } else {
+                const created = await createAddress.mutateAsync(toAddressRequest(draft));
+                onAddressCreated?.(created);
+            }
             router.back();
         } catch (error: unknown) {
-            setFormError(error instanceof Error ? error.message : 'No se pudo agregar la dirección.');
-        } finally {
-            setIsSubmitting(false);
+            setFormError(error instanceof Error ? error.message : 'No se pudo guardar la dirección.');
         }
     }
 
@@ -128,7 +164,7 @@ export function AddCustomerAddressForm({
 
                 <View style={styles.headerText}>
                     <Text style={SharedStyles.headerTitle}>
-                        Agregar dirección
+                        {title}
                     </Text>
 
                     {customer ? (

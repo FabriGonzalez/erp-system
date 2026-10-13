@@ -10,7 +10,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useCustomerList } from '@/hooks/use-customer-list';
+import { useCustomerList } from '@/hooks/use-customer-queries';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
 import { Customer, CUSTOMER_ANONYMOUS } from '@/types/customer';
@@ -34,7 +34,7 @@ export function SelectCustomerScreen({ flow }: SelectCustomerScreenProps) {
         error,
         loadMore,
         refresh,
-    } = useCustomerList({ query: searchQuery, activeOnly: true });
+    } = useCustomerList({ query: searchQuery, status: 'active' });
     const setDraftCustomer = useOrderDraftStore((state) => state.setCustomer);
     const currentCustomer = useOrderDraftStore((state) => state.customer);
     const newCustomerRoute = flow === 'shipments'

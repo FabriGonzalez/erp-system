@@ -13,14 +13,13 @@ import {
 import { AddressFields } from '@/components/customers/AddressFields';
 import { AddressSummary } from '@/components/customers/AddressSummary';
 import { AppInput } from '@/components/ui/AppInput';
+import { FilterChip } from '@/components/ui/FilterChip';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { createCustomer } from '@/services/customer-service';
-import { useAuthStore } from '@/stores/auth-store';
-import { useCustomerStore } from '@/stores/customer-store';
+import { useCreateCustomer, useUpdateCustomer } from '@/hooks/use-customer-queries';
 import { SharedStyles } from '@/styles/shared';
-import { Customer } from '@/types/customer';
+import { Customer, CustomerRequest, DOCUMENT_TYPES } from '@/types/customer';
 import {
     AddressDraft,
     EMPTY_ADDRESS_DRAFT,
@@ -30,22 +29,41 @@ import {
 } from '@/utils/address';
 
 type CustomerFormProps = {
+    // Si se pasa, el formulario edita ese cliente; si no, da de alta uno nuevo.
+    customer?: Customer;
     onCustomerCreated?: (customer: Customer) => void;
 };
 
 // Validación liviana: el backend valida el formato completo.
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Para estos tipos se guardan solo los dígitos: "20-12345678-3" y "20123456783" son
+// el mismo documento y así el backend detecta el duplicado.
+const NUMERIC_DOCUMENTS: Record<string, { min: number; max: number }> = {
+    DNI: { min: 7, max: 8 },
+    CUIT: { min: 11, max: 11 },
+    CUIL: { min: 11, max: 11 },
+};
+
+function normalizeDocumentNumber(type: string, value: string): string {
+    return NUMERIC_DOCUMENTS[type] ? value.replace(/\D/g, '') : value.trim();
+}
+
 export function CustomerForm({
+    customer,
     onCustomerCreated,
 }: CustomerFormProps) {
-    const token = useAuthStore((state) => state.token);
-    const customersChanged = useCustomerStore((state) => state.customersChanged);
+    const isEdit = Boolean(customer);
+    const createCustomer = useCreateCustomer();
+    const updateCustomer = useUpdateCustomer(customer?.id ?? '');
 
-    const [firstName, setFirstName] = useState('');
-    const [lastName, setLastName] = useState('');
-    const [email, setEmail] = useState('');
-    const [phone, setPhone] = useState('');
+    const [firstName, setFirstName] = useState(customer?.firstName ?? '');
+    const [lastName, setLastName] = useState(customer?.lastName ?? '');
+    const [email, setEmail] = useState(customer?.email ?? '');
+    const [phone, setPhone] = useState(customer?.phone ?? '');
+    const [documentType, setDocumentType] = useState(customer?.documentType ?? '');
+    const [documentNumber, setDocumentNumber] = useState(customer?.documentNumber ?? '');
+    const [observations, setObservations] = useState(customer?.observations ?? '');
 
     const [addresses, setAddresses] = useState<AddressDraft[]>([]);
     const [showAddressForm, setShowAddressForm] = useState(false);
@@ -54,7 +72,7 @@ export function CustomerForm({
 
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submitError, setSubmitError] = useState<string | null>(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const isSubmitting = createCustomer.isPending || updateCustomer.isPending;
 
     function handleAddAddress() {
         const validationError = validateAddressDraft(addressDraft);
@@ -87,6 +105,21 @@ export function CustomerForm({
             newErrors.email = 'El email no es válido.';
         }
 
+        // El backend exige tipo y número juntos.
+        const normalizedDocument = normalizeDocumentNumber(documentType, documentNumber);
+        if (documentType && !normalizedDocument) {
+            newErrors.document = 'Ingresá el número de documento.';
+        } else if (!documentType && documentNumber.trim()) {
+            newErrors.document = 'Elegí el tipo de documento.';
+        } else if (NUMERIC_DOCUMENTS[documentType]) {
+            const { min, max } = NUMERIC_DOCUMENTS[documentType];
+            if (normalizedDocument.length < min || normalizedDocument.length > max) {
+                newErrors.document = min === max
+                    ? `El ${documentType} debe tener ${min} dígitos.`
+                    : `El ${documentType} debe tener entre ${min} y ${max} dígitos.`;
+            }
+        }
+
         setErrors(newErrors);
 
         return Object.keys(newErrors).length === 0;
@@ -96,34 +129,38 @@ export function CustomerForm({
         if (isSubmitting || !validate()) {
             return;
         }
-        if (!token) {
-            setSubmitError('No hay sesión activa.');
-            return;
-        }
 
         setSubmitError(null);
-        setIsSubmitting(true);
+
+        // El PATCH reemplaza todos los campos: se manda siempre el objeto completo.
+        const data: CustomerRequest = {
+            firstName: firstName.trim() || null,
+            lastName: lastName.trim() || null,
+            email: email.trim() || null,
+            phone: phone.trim() || null,
+            documentType: documentType || null,
+            documentNumber: documentType ? normalizeDocumentNumber(documentType, documentNumber) : null,
+            observations: observations.trim() || null,
+        };
 
         try {
-            // Cliente y direcciones en una sola request: si algo falla, no queda nada a medias.
-            const newCustomer = await createCustomer(
-                {
-                    firstName: firstName.trim() || null,
-                    lastName: lastName.trim() || null,
-                    email: email.trim() || null,
-                    phone: phone.trim() || null,
+            if (customer) {
+                await updateCustomer.mutateAsync(data);
+            } else {
+                // Cliente y direcciones en una sola request: si algo falla, no queda nada a medias.
+                const newCustomer = await createCustomer.mutateAsync({
+                    ...data,
                     addresses: addresses.map((address) => toAddressRequest(address)),
-                },
-                token,
-            );
-
-            customersChanged(newCustomer);
-            onCustomerCreated?.(newCustomer);
+                });
+                onCustomerCreated?.(newCustomer);
+            }
             router.back();
         } catch (error: unknown) {
-            setSubmitError(error instanceof Error ? error.message : 'No se pudo crear el cliente.');
-        } finally {
-            setIsSubmitting(false);
+            setSubmitError(
+                error instanceof Error
+                    ? error.message
+                    : isEdit ? 'No se pudo guardar el cliente.' : 'No se pudo crear el cliente.'
+            );
         }
     }
 
@@ -163,7 +200,9 @@ export function CustomerForm({
                     />
                 </Pressable>
 
-                <Text style={SharedStyles.headerTitle}>Nuevo Cliente</Text>
+                <Text style={SharedStyles.headerTitle}>
+                    {isEdit ? 'Editar Cliente' : 'Nuevo Cliente'}
+                </Text>
 
                 <View style={SharedStyles.headerSpacer} />
             </View>
@@ -249,6 +288,63 @@ export function CustomerForm({
                     />
                 </View>
 
+                <View style={styles.formGroup}>
+                    <Text style={SharedStyles.sectionTitle}>Documento</Text>
+
+                    <View style={styles.chips}>
+                        {DOCUMENT_TYPES.map((type) => (
+                            <FilterChip
+                                key={type.value}
+                                label={type.label}
+                                selected={documentType === type.value}
+                                onPress={() => {
+                                    if (isSubmitting) return;
+                                    // Tocar el seleccionado lo quita (cliente sin documento).
+                                    setDocumentType((current) => (current === type.value ? '' : type.value));
+                                    clearError('document');
+                                }}
+                            />
+                        ))}
+                    </View>
+
+                    {documentType ? (
+                        <AppInput
+                            placeholder={NUMERIC_DOCUMENTS[documentType] ? 'Solo números' : 'Número de documento'}
+                            value={documentNumber}
+                            onChangeText={(text) => {
+                                setDocumentNumber(text);
+                                clearError('document');
+                            }}
+                            keyboardType={NUMERIC_DOCUMENTS[documentType] ? 'number-pad' : 'default'}
+                            autoCapitalize="characters"
+                            maxLength={50}
+                            editable={!isSubmitting}
+                        />
+                    ) : null}
+
+                    {errors.document ? (
+                        <Text style={styles.errorText}>{errors.document}</Text>
+                    ) : null}
+                </View>
+
+                <View style={styles.formGroup}>
+                    <Text style={SharedStyles.sectionTitle}>Observaciones</Text>
+
+                    <AppInput
+                        placeholder="Notas internas sobre el cliente"
+                        value={observations}
+                        onChangeText={setObservations}
+                        multiline
+                        maxLength={1000}
+                        textAlignVertical="top"
+                        style={styles.observationsInput}
+                        editable={!isSubmitting}
+                    />
+                </View>
+
+                {/* En la edición las direcciones se gestionan desde el detalle del cliente. */}
+                {!isEdit ? (
+                <>
                 <View style={styles.sectionHeader}>
                     <Text style={SharedStyles.cardTitle}>
                         Direcciones ({addresses.length})
@@ -351,6 +447,9 @@ export function CustomerForm({
                     </Pressable>
                 )}
 
+                </>
+                ) : null}
+
                 {submitError ? (
                     <View style={styles.submitErrorBox}>
                         <Text style={styles.submitErrorText}>{submitError}</Text>
@@ -380,7 +479,7 @@ export function CustomerForm({
                             </View>
                         ) : (
                             <Text style={SharedStyles.buttonSubmitText}>
-                                Guardar cliente
+                                {isEdit ? 'Guardar cambios' : 'Guardar cliente'}
                             </Text>
                         )}
                     </Pressable>
@@ -417,6 +516,16 @@ const styles = StyleSheet.create({
     },
     flex1: {
         flex: 1,
+    },
+    chips: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.xs,
+        marginBottom: Spacing.sm,
+    },
+    observationsInput: {
+        height: 96,
+        paddingTop: Spacing.sm,
     },
     hint: {
         fontSize: 12,
