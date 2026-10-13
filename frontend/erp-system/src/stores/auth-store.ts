@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 
+import { setUnauthorizedHandler } from '@/services/api-client';
 import { useBranchStore } from '@/stores/branch-store';
 import { LoginResponse, User } from '@/types/auth';
 
@@ -142,3 +143,9 @@ export const useAuthStore = create<AuthState>((set) => ({
         });
     },
 }));
+
+// Un 401 de cualquier request autenticada expira la sesión. expireSession ya
+// ignora el caso sin token, el logout voluntario y los 401 repetidos.
+setUnauthorizedHandler(() => {
+    void useAuthStore.getState().expireSession();
+});

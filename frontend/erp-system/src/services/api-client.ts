@@ -1,8 +1,16 @@
-import { useAuthStore } from '@/stores/auth-store';
-
 type ApiFetchOptions = {
     ignoreUnauthorized?: boolean;
 };
+
+type UnauthorizedHandler = () => void;
+
+// auth-store registra aquí cómo expirar la sesión. Se inyecta en lugar de
+// importar el store para no crear el ciclo auth-store -> ... -> api-client.
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null) {
+    unauthorizedHandler = handler;
+}
 
 export async function apiFetch(
     input: RequestInfo | URL,
@@ -11,14 +19,8 @@ export async function apiFetch(
 ): Promise<Response> {
     const response = await fetch(input, init);
 
-    const { token, isLoggingOut } = useAuthStore.getState();
-    if (
-        response.status === 401 &&
-        token &&
-        !isLoggingOut &&
-        !options?.ignoreUnauthorized
-    ) {
-        void useAuthStore.getState().expireSession();
+    if (response.status === 401 && !options?.ignoreUnauthorized) {
+        unauthorizedHandler?.();
     }
 
     return response;
