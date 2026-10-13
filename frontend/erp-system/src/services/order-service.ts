@@ -7,9 +7,11 @@ import {
     OrderListParams,
     OrderRequest,
     OrderResponse,
+    OrderShippingAddress,
     OrderUpdateRequest,
     PageResponse,
     RefundAction,
+    ShipmentResponse,
 } from '@/types/order';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -17,8 +19,11 @@ const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 const ERROR_MESSAGES_BY_CODE: Record<string, string> = {
     INSUFFICIENT_STOCK: 'No hay stock suficiente para completar la operación.',
     INVALID_STATUS_TRANSITION: 'La orden no está en un estado que permita esta operación.',
-    QUICK_SALE_INVALID: 'La venta rápida requiere un cliente registrado y un importe válido.',
+    QUICK_SALE_INVALID:
+        'La venta rápida es solo con retiro en el local y requiere un cliente registrado y un importe válido.',
     CUSTOMER_INACTIVE: 'El cliente está inactivo y no puede recibir pedidos nuevos.',
+    INVALID_SHIPPING_ADDRESS:
+        'La dirección de envío no es válida: tiene que ser una dirección activa del cliente, con calle y ciudad.',
 };
 
 async function handleResponse<T>(
@@ -85,6 +90,22 @@ function normalizeOrderItem(item: OrderItemResponse): OrderItem {
     };
 }
 
+function normalizeShippingAddress(shipment: ShipmentResponse): OrderShippingAddress {
+    const optional = (value?: string | null) => value ?? undefined;
+
+    return {
+        street: shipment.street,
+        number: optional(shipment.number),
+        apartment: optional(shipment.apartment),
+        floor: optional(shipment.floor),
+        city: shipment.city,
+        state: optional(shipment.state),
+        postalCode: optional(shipment.postalCode),
+        country: shipment.country,
+        reference: optional(shipment.reference),
+    };
+}
+
 function normalizeOrder(data: OrderResponse): Order {
     return {
         id: String(data.id),
@@ -100,6 +121,7 @@ function normalizeOrder(data: OrderResponse): Order {
                 ? Number(data.quickSaleAmount)
                 : undefined,
         deliveryType: data.deliveryType,
+        shippingAddress: data.shipment ? normalizeShippingAddress(data.shipment) : undefined,
         branchId: String(data.branchId),
         branchName: data.branchName,
         items: (data.items ?? []).map(normalizeOrderItem),

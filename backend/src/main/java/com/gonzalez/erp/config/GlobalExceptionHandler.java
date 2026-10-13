@@ -20,6 +20,7 @@ import com.gonzalez.erp.modules.orders.exception.InactiveOrderCustomerException;
 import com.gonzalez.erp.modules.orders.exception.InsufficientStockForEditException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderStatusTransitionException;
+import com.gonzalez.erp.modules.orders.exception.InvalidShippingAddressException;
 import com.gonzalez.erp.modules.orders.exception.QuickSaleValidationException;
 import com.gonzalez.erp.modules.payments.exception.InvalidPaymentException;
 import com.gonzalez.erp.modules.products.exception.InvalidProductVariantsException;
@@ -30,6 +31,7 @@ import com.gonzalez.erp.modules.products.exception.ProductSkuAlreadyExistsExcept
 import com.gonzalez.erp.modules.products.exception.ProductVariantSkuAlreadyExistsException;
 import com.gonzalez.erp.modules.roles.exception.RoleCodeAlreadyExistsException;
 import com.gonzalez.erp.modules.roles.exception.RoleNameAlreadyExistsException;
+import com.gonzalez.erp.modules.shipments.exception.InvalidShipmentException;
 import com.gonzalez.erp.modules.shipments.exception.OrderAlreadyHasShipmentException;
 import com.gonzalez.erp.modules.transfers.exception.InvalidStockTransferException;
 import com.gonzalez.erp.modules.users.exception.UserEmailAlreadyExistsException;
@@ -301,12 +303,16 @@ public class GlobalExceptionHandler {
             InvalidOrderException.class,
             QuickSaleValidationException.class,
             InvalidPaymentException.class,
-            InactiveOrderCustomerException.class
+            InactiveOrderCustomerException.class,
+            InvalidShippingAddressException.class,
+            InvalidShipmentException.class
     })
     public ResponseEntity<ErrorResponse> handleInvalidOrder(
             RuntimeException ex, HttpServletRequest request) {
         String code = ex instanceof QuickSaleValidationException ? "QUICK_SALE_INVALID"
                 : ex instanceof InactiveOrderCustomerException ? "CUSTOMER_INACTIVE"
+                : ex instanceof InvalidShippingAddressException ? "INVALID_SHIPPING_ADDRESS"
+                : ex instanceof InvalidShipmentException ? "INVALID_SHIPMENT"
                 : "INVALID_ORDER";
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)

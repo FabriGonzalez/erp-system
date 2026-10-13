@@ -55,13 +55,17 @@ export function OrderInfoCard({ order }: OrderInfoCardProps) {
                 value={DELIVERY_TYPE_LABELS[order.deliveryType]}
             />
 
-            {isShipping && order.address && (
+            {isShipping && (
                 <>
                     <View style={styles.divider} />
 
                     <InfoRow
                         label="Dirección"
-                        value={formatAddress(order.address)}
+                        value={
+                            order.shippingAddress
+                                ? formatAddress(order.shippingAddress)
+                                : 'Sin dirección registrada'
+                        }
                     />
                 </>
             )}

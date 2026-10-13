@@ -6,6 +6,7 @@ import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 import { Customer, CustomerAddress } from '@/types/customer';
+import { OrderShippingAddress } from '@/types/order';
 
 type OrderAddressSectionProps = {
     customer: Customer;
@@ -164,9 +165,107 @@ export function OrderAddressSection({
     );
 }
 
+type OrderEditAddressSectionProps = {
+    // La que el envío tiene guardada; falta en los envíos creados antes de guardarla.
+    currentAddress?: OrderShippingAddress;
+    // La dirección del cliente elegida para reemplazarla, si se eligió una.
+    selectedAddress?: CustomerAddress;
+    isSelectedAddressUnavailable?: boolean;
+    onSelectAddress: () => void;
+};
+
+/** Al editar un envío: muestra la dirección guardada y permite cambiarla. */
+export function OrderEditAddressSection({
+    currentAddress,
+    selectedAddress,
+    isSelectedAddressUnavailable = false,
+    onSelectAddress,
+}: OrderEditAddressSectionProps) {
+    const shownAddress = selectedAddress ?? currentAddress;
+
+    return (
+        <View style={styles.container}>
+            <Text style={SharedStyles.sectionTitle}>Dirección de Envío</Text>
+
+            {isSelectedAddressUnavailable ? (
+                <Text style={[styles.unavailableText, styles.unavailableSpacing]}>
+                    La dirección elegida ya no está disponible. Seleccioná otra.
+                </Text>
+            ) : null}
+
+            {shownAddress ? (
+                <View style={styles.addressCard}>
+                    <View style={styles.addressHeader}>
+                        <AddressSummary address={shownAddress} />
+
+                        <Pressable onPress={onSelectAddress} style={styles.linkBtn}>
+                            <Text style={styles.linkBtnText}>Cambiar</Text>
+                        </Pressable>
+                    </View>
+                    {selectedAddress ? (
+                        <Text style={styles.changeNote}>
+                            Se guardará al confirmar los cambios.
+                        </Text>
+                    ) : null}
+                </View>
+            ) : (
+                <View style={styles.selectGroup}>
+                    <Text style={styles.missingText}>
+                        Este envío no tiene una dirección registrada.
+                    </Text>
+
+                    <Pressable
+                        style={({ pressed }) => [
+                            styles.selectPromptCard,
+                            pressed && SharedStyles.pressed,
+                        ]}
+                        onPress={onSelectAddress}
+                    >
+                        <SymbolView
+                            name={{
+                                ios: 'mappin.circle',
+                                android: 'location_on',
+                                web: 'location_on',
+                            }}
+                            size={22}
+                            tintColor={Colors.primary}
+                        />
+
+                        <Text style={styles.selectPromptText}>
+                            Seleccionar dirección de envío
+                        </Text>
+
+                        <SymbolView
+                            name={{
+                                ios: 'chevron.right',
+                                android: 'chevron_right',
+                                web: 'chevron_right',
+                            }}
+                            size={16}
+                            tintColor={Colors.textSecondary}
+                        />
+                    </Pressable>
+                </View>
+            )}
+        </View>
+    );
+}
+
 const styles = StyleSheet.create({
     container: {
         marginBottom: Spacing.lg,
+    },
+    unavailableSpacing: {
+        marginBottom: Spacing.sm,
+    },
+    changeNote: {
+        fontSize: 12,
+        color: Colors.textSecondary,
+        marginTop: Spacing.sm,
+    },
+    missingText: {
+        fontSize: 13,
+        color: Colors.textSecondary,
     },
     warningCard: {
         backgroundColor: Colors.warningLight,

@@ -1,5 +1,3 @@
-import { CustomerAddress } from './customer';
-
 export type OrderStatus =
     | 'CONFIRMED'
     | 'TO_PREPARE'
@@ -25,6 +23,22 @@ export type OrderItem = {
     subtotal: number;
 };
 
+/**
+ * Dirección de entrega copiada al crear el envío: no cambia si después editan la
+ * dirección del cliente. No es una CustomerAddress (no tiene id, principal ni activa).
+ */
+export type OrderShippingAddress = {
+    street: string;
+    number?: string;
+    apartment?: string;
+    floor?: string;
+    city: string;
+    state?: string;
+    postalCode?: string;
+    country: string;
+    reference?: string;
+};
+
 export type Order = {
     id: string;
     orderNumber: string;
@@ -33,7 +47,8 @@ export type Order = {
     salesType: SalesType;
     quickSaleAmount?: number;
     deliveryType: DeliveryType;
-    address?: CustomerAddress;
+    // Sin dirección en retiros y en envíos creados antes de que se guardara.
+    shippingAddress?: OrderShippingAddress;
     branchId: string;
     branchName: string;
     items: OrderItem[];
@@ -71,6 +86,8 @@ export type OrderRequest = {
     salesType: SalesType;
     quickSaleAmount?: number;
     deliveryType: DeliveryType;
+    // Obligatoria con SHIPPING y prohibida con LOCAL_PICKUP: dirección del cliente del pedido.
+    shippingAddressId?: number;
     items?: OrderItemRequest[];
     // Solo con cliente: aplica su saldo a favor a esta orden.
     applyCredit?: boolean;
@@ -81,6 +98,8 @@ export type OrderRequest = {
 export type OrderUpdateRequest = {
     quickSaleAmount?: number;
     items?: OrderItemRequest[];
+    // Solo envíos: cambia la dirección de entrega. Sin el campo queda la actual.
+    shippingAddressId?: number;
 };
 
 export type OrderCancelRequest = {
@@ -97,6 +116,20 @@ export type OrderItemResponse = {
     unitPrice: number | string;
 };
 
+export type ShipmentResponse = {
+    id: number | string;
+    orderId: number | string;
+    street: string;
+    number?: string | null;
+    apartment?: string | null;
+    floor?: string | null;
+    city: string;
+    state?: string | null;
+    postalCode?: string | null;
+    country: string;
+    reference?: string | null;
+};
+
 export type OrderResponse = {
     id: number | string;
     orderNumber: string;
@@ -107,6 +140,7 @@ export type OrderResponse = {
     salesType: SalesType;
     quickSaleAmount?: number | string | null;
     deliveryType: DeliveryType;
+    shipment?: ShipmentResponse | null;
     status: OrderStatus;
     total: number | string;
     amountPaid?: number | string | null;

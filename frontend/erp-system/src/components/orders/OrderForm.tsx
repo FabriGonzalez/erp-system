@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { OrderAddressSection } from './OrderAddressSection';
+import { OrderAddressSection, OrderEditAddressSection } from './OrderAddressSection';
 import { OrderCartSection } from './OrderCartSection';
 import { OrderCustomerSection } from './OrderCustomerSection';
 import { OrderSalesTypeSection } from './OrderSalesTypeSection';
@@ -54,6 +54,7 @@ export function OrderForm({
         setApplyCredit,
         initNewOrder,
         initEditOrder,
+        reset: resetDraft,
         setSalesType,
         setQuickSaleAmount,
         updateItemQuantity,
@@ -72,8 +73,14 @@ export function OrderForm({
 
     useEffect(() => {
         if (initialOrder) {
-            // Al editar, cliente y dirección quedan fijos: alcanza con los datos
-            // de la orden, sin pedir el cliente al backend.
+            // Se inicializa una sola vez por orden: el store la reemplaza por un objeto
+            // nuevo cada vez que se recarga, y eso no debe pisar lo que ya se editó.
+            if (useOrderDraftStore.getState().orderId === initialOrder.id) {
+                return;
+            }
+
+            // Al editar, el cliente queda fijo: alcanza con los datos de la orden,
+            // sin pedir el cliente al backend.
             const currentCustomer = initialOrder.customerId === CUSTOMER_ANONYMOUS.id
                 ? CUSTOMER_ANONYMOUS
                 : {
@@ -95,6 +102,17 @@ export function OrderForm({
         }
     }, [initialOrder, initEditOrder, initNewOrder, creationMode, initialSalesType, setSalesType]);
 
+    // Al salir de la edición se descarta el borrador, para que volver a abrir la misma
+    // orden parta de sus datos y no de cambios sin guardar.
+    const editingOrderId = initialOrder?.id;
+    useEffect(() => {
+        if (!editingOrderId) {
+            return;
+        }
+
+        return () => resetDraft();
+    }, [editingOrderId, resetDraft]);
+
     function handleQuickSaleInputChange(text: string) {
         const cleaned = text.replace(/[^0-9]/g, '');
         setQuickSaleInput(cleaned);
@@ -106,8 +124,8 @@ export function OrderForm({
     const effectiveDeliveryType = isShipment ? 'SHIPPING' : 'LOCAL_PICKUP';
     const effectiveSalesType = isShipment ? 'WITH_PRODUCTS' : salesType;
     const isShipping = effectiveDeliveryType === 'SHIPPING';
-    // Al editar, el backend solo admite cambiar ítems o importe: cliente y
-    // dirección de entrega quedan fijos.
+    // Al editar, el backend admite cambiar ítems o importe y, en envíos, la
+    // dirección de entrega; el cliente queda fijo.
     const isEditing = Boolean(initialOrder);
 
     // En el alta, el cliente y la dirección del borrador se revalidan contra el backend:
@@ -116,11 +134,13 @@ export function OrderForm({
     const currentCustomer = freshCustomer ?? customer;
     const isCustomerInactive = !isEditing && !currentCustomer.active;
     const needsAddress = isShipping && !isEditing;
+    // Al editar, address solo existe si se eligió una dirección nueva; se revalida igual.
+    const isChangingAddress = isShipping && isEditing && Boolean(address);
     const {
         addresses: activeAddresses,
         isLoading: addressesLoading,
         error: addressesError,
-    } = useCustomerAddresses(needsAddress ? customer.id : undefined, { activeOnly: true });
+    } = useCustomerAddresses(needsAddress || isChangingAddress ? customer.id : undefined, { activeOnly: true });
     const canCheckAddresses = !addressesLoading && !addressesError;
     const selectedAddress = address?.active
         ? (canCheckAddresses ? activeAddresses.find((item) => item.id === address.id) : address)
@@ -229,6 +249,11 @@ export function OrderForm({
             }
         }
 
+        if (isChangingAddress && !selectedAddress) {
+            setFormError('La dirección elegida ya no está disponible. Seleccioná otra.');
+            return false;
+        }
+
         return true;
     }
 
@@ -284,6 +309,15 @@ export function OrderForm({
                     isSelectedAddressUnavailable={isAddressUnavailable}
                     onSelectAddress={handleSelectAddress}
                     onAddCustomerAddress={handleAddCustomerAddress}
+                />
+            )}
+
+            {isShipping && isEditing && (
+                <OrderEditAddressSection
+                    currentAddress={initialOrder?.shippingAddress}
+                    selectedAddress={selectedAddress}
+                    isSelectedAddressUnavailable={isAddressUnavailable}
+                    onSelectAddress={handleSelectAddress}
                 />
             )}
 

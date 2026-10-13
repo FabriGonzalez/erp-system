@@ -107,7 +107,9 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
             salesType: initialSalesType,
             quickSaleAmount: initialQuickSaleAmount,
             deliveryType: order.deliveryType,
-            address: order.address,
+            // Al editar, address es la dirección nueva que se elija; la actual del envío
+            // es un snapshot (order.shippingAddress), no una dirección del cliente.
+            address: undefined,
             items: order.items,
             amountPaid,
         });

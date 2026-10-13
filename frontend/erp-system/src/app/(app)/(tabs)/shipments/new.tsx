@@ -49,14 +49,14 @@ export default function NewShipmentScreen() {
             // El resumen guarda el importe cobrado justo antes de enviar.
             const draft = useOrderDraftStore.getState();
 
-            // La dirección de entrega todavía no se envía: el backend la gestiona
-            // como un recurso aparte (POST /orders/{id}/shipment).
+            // El backend copia la dirección al envío en la misma transacción del alta.
             await createOrder(
                 {
                     branchId: Number(activeBranch.id),
                     customerId: toBackendCustomerId(customer),
                     salesType: 'WITH_PRODUCTS',
                     deliveryType: 'SHIPPING',
+                    shippingAddressId: Number(address.id),
                     items: toOrderItemRequests(items),
                     ...toOrderPaymentOptions(draft),
                 },

@@ -46,7 +46,6 @@ export const mockOrders: Order[] = [
         customerName: 'Carlos López',
         salesType: 'WITH_PRODUCTS',
         deliveryType: 'SHIPPING',
-        address: { id: 'addr-3', label: 'Casa', street: 'Calle Florida', number: '456', city: 'Buenos Aires', state: 'CABA', postalCode: 'C1005', isMain: true, active: true },
         branchId: '1',
         branchName: 'Sucursal Centro',
         items: [
@@ -66,7 +65,6 @@ export const mockOrders: Order[] = [
         customerName: 'Ana Rodríguez',
         salesType: 'WITH_PRODUCTS',
         deliveryType: 'SHIPPING',
-        address: { id: 'addr-4', label: 'Casa', street: 'Calle San Martín', number: '789', city: 'San Isidro', state: 'Buenos Aires', postalCode: 'B1642', isMain: true, active: true },
         branchId: '2',
         branchName: 'Sucursal Norte',
         items: [
@@ -86,7 +84,6 @@ export const mockOrders: Order[] = [
         customerName: 'Pedro Martínez',
         salesType: 'WITH_PRODUCTS',
         deliveryType: 'SHIPPING',
-        address: { id: 'addr-5', label: 'Casa', street: 'Av. Santa Fe', number: '2345', city: 'Buenos Aires', state: 'CABA', postalCode: 'C1425', isMain: true, active: true },
         branchId: '1',
         branchName: 'Sucursal Centro',
         items: [
@@ -106,7 +103,6 @@ export const mockOrders: Order[] = [
         customerName: 'María García',
         salesType: 'WITH_PRODUCTS',
         deliveryType: 'SHIPPING',
-        address: { id: 'addr-1', label: 'Casa', street: 'Av. Corrientes', number: '1234', city: 'Buenos Aires', state: 'CABA', postalCode: 'C1042', isMain: true, active: true },
         branchId: '1',
         branchName: 'Sucursal Centro',
         items: [
@@ -126,7 +122,6 @@ export const mockOrders: Order[] = [
         customerName: 'Ana Rodríguez',
         salesType: 'WITH_PRODUCTS',
         deliveryType: 'SHIPPING',
-        address: { id: 'addr-4', label: 'Casa', street: 'Calle San Martín', number: '789', city: 'San Isidro', state: 'Buenos Aires', postalCode: 'B1642', isMain: true, active: true },
         branchId: '2',
         branchName: 'Sucursal Norte',
         items: [
@@ -146,7 +141,6 @@ export const mockOrders: Order[] = [
         customerName: 'Pedro Martínez',
         salesType: 'WITH_PRODUCTS',
         deliveryType: 'SHIPPING',
-        address: { id: 'addr-6', label: 'Depósito', street: 'Calle Lavalle', number: '890', city: 'Buenos Aires', state: 'CABA', postalCode: 'C1047', isMain: true, active: true },
         branchId: '1',
         branchName: 'Sucursal Centro',
         items: [
@@ -167,7 +161,6 @@ export const mockOrders: Order[] = [
         customerName: 'Carlos López',
         salesType: 'WITH_PRODUCTS',
         deliveryType: 'SHIPPING',
-        address: { id: 'addr-3', label: 'Casa', street: 'Calle Florida', number: '456', city: 'Buenos Aires', state: 'CABA', postalCode: 'C1005', isMain: true, active: true },
         branchId: '3',
         branchName: 'Sucursal Sur',
         items: [

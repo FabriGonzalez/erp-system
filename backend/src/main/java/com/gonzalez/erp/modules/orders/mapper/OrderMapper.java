@@ -6,6 +6,8 @@ import com.gonzalez.erp.modules.orders.dto.response.OrderResponse;
 import com.gonzalez.erp.modules.orders.entity.Order;
 import com.gonzalez.erp.modules.orders.entity.OrderItem;
 import com.gonzalez.erp.modules.orders.entity.PaymentStatus;
+import com.gonzalez.erp.modules.shipments.entity.Shipment;
+import com.gonzalez.erp.modules.shipments.mapper.ShipmentMapper;
 
 import java.math.BigDecimal;
 
@@ -15,6 +17,7 @@ public final class OrderMapper {
 
     public static OrderResponse toResponse(
             Order order,
+            Shipment shipment,
             BigDecimal amountPaid,
             PaymentStatus paymentStatus,
             BigDecimal balance
@@ -33,6 +36,7 @@ public final class OrderMapper {
                 order.getSalesType(),
                 order.getQuickSaleAmount(),
                 order.getDeliveryType(),
+                shipment != null ? ShipmentMapper.toResponse(shipment) : null,
                 order.getStatus(),
                 order.getTotal(),
                 amountPaid,

@@ -4,6 +4,7 @@ import com.gonzalez.erp.modules.orders.entity.DeliveryType;
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 import com.gonzalez.erp.modules.orders.entity.PaymentStatus;
 import com.gonzalez.erp.modules.orders.entity.SalesType;
+import com.gonzalez.erp.modules.shipments.dto.response.ShipmentResponse;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -21,6 +22,8 @@ public record OrderResponse(
         SalesType salesType,
         BigDecimal quickSaleAmount,
         DeliveryType deliveryType,
+        // Snapshot de la dirección de entrega; null en retiros y en envíos creados sin ella.
+        ShipmentResponse shipment,
         OrderStatus status,
         BigDecimal total,
         BigDecimal amountPaid,

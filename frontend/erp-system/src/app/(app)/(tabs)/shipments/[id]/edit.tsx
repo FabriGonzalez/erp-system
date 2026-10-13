@@ -18,7 +18,11 @@ import { toOrderItemRequests } from '@/utils/order-request';
 export default function EditShipmentScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const { order: loadedOrder, isLoading, loadError } = useOrderDetail(id);
-    const order = loadedOrder?.deliveryType === 'SHIPPING' ? loadedOrder : undefined;
+    // Se espera la carga del detalle aunque la orden ya esté en el store (copia del
+    // listado): el borrador se inicializa una sola vez y tiene que partir de datos frescos.
+    const order = !isLoading && !loadError && loadedOrder?.deliveryType === 'SHIPPING'
+        ? loadedOrder
+        : undefined;
     const token = useAuthStore((state) => state.token);
     const updateOrder = useOrderStore((state) => state.updateOrder);
     const items = useOrderDraftStore((state) => state.items);
@@ -46,8 +50,8 @@ export default function EditShipmentScreen() {
 
     const shipment = order;
 
-    // El backend solo permite cambiar los ítems de una orden en TO_PREPARE;
-    // cliente, sucursal y tipo de entrega no se pueden modificar.
+    // El backend permite cambiar los ítems y la dirección de entrega de una orden en
+    // TO_PREPARE; cliente, sucursal y tipo de entrega no se pueden modificar.
     async function handleSubmit() {
         if (!token || isSubmitting || items.length === 0) return;
 
@@ -55,7 +59,16 @@ export default function EditShipmentScreen() {
         setErrorMessage(null);
 
         try {
-            await updateOrder(shipment.id, { items: toOrderItemRequests(items) }, token);
+            // Sin dirección nueva elegida, el envío conserva la que tiene.
+            const { address } = useOrderDraftStore.getState();
+            await updateOrder(
+                shipment.id,
+                {
+                    items: toOrderItemRequests(items),
+                    shippingAddressId: address ? Number(address.id) : undefined,
+                },
+                token,
+            );
             resetDraft();
             router.back();
         } catch (error) {

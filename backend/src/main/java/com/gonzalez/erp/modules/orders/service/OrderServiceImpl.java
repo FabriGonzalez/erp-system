@@ -6,8 +6,10 @@ import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
+import com.gonzalez.erp.modules.customers.entity.Address;
 import com.gonzalez.erp.modules.customers.entity.Customer;
 import com.gonzalez.erp.modules.customers.entity.TransactionType;
+import com.gonzalez.erp.modules.customers.repository.AddressRepository;
 import com.gonzalez.erp.modules.customers.repository.CustomerRepository;
 import com.gonzalez.erp.modules.customers.service.CustomerAccountService;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
@@ -33,6 +35,7 @@ import com.gonzalez.erp.modules.orders.exception.InactiveOrderCustomerException;
 import com.gonzalez.erp.modules.orders.exception.InsufficientStockForEditException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderStatusTransitionException;
+import com.gonzalez.erp.modules.orders.exception.InvalidShippingAddressException;
 import com.gonzalez.erp.modules.orders.exception.QuickSaleValidationException;
 import com.gonzalez.erp.modules.orders.mapper.OrderMapper;
 import com.gonzalez.erp.modules.orders.repository.OrderNumberCounterRepository;
@@ -40,10 +43,13 @@ import com.gonzalez.erp.modules.orders.repository.OrderRepository;
 import com.gonzalez.erp.modules.payments.service.OrderPaymentService;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
+import com.gonzalez.erp.modules.shipments.entity.Shipment;
+import com.gonzalez.erp.modules.shipments.repository.ShipmentRepository;
 import com.gonzalez.erp.modules.users.repository.UserBranchRepository;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import com.gonzalez.erp.modules.orders.entity.PaymentStatus;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -59,6 +65,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -80,6 +88,8 @@ public class OrderServiceImpl implements OrderService {
     private final UserBranchRepository userBranchRepository;
     private final CompanyRepository companyRepository;
     private final OrderPaymentService orderPaymentService;
+    private final AddressRepository addressRepository;
+    private final ShipmentRepository shipmentRepository;
 
     @Override
     public PageResponse<OrderResponse> findAll(OrderStatus status, Long branchId, SalesType salesType,
@@ -100,14 +110,25 @@ public class OrderServiceImpl implements OrderService {
         boolean hasQuery = !trimmedQuery.isEmpty();
         String likePattern = hasQuery ? "%" + trimmedQuery + "%" : "%";
 
-        return PageResponse.of(
-                orderRepository.search(companyId, accessibleBranchIds, status, salesType, deliveryType,
-                        branchId, customerId, hasQuery, likePattern,
-                        paymentStatus == PaymentStatus.PAID,
-                        paymentStatus == PaymentStatus.PENDING,
-                        paymentStatus == PaymentStatus.PARTIAL,
-                        pageable),
-                this::toOrderResponse);
+        Page<Order> orders = orderRepository.search(companyId, accessibleBranchIds, status, salesType, deliveryType,
+                branchId, customerId, hasQuery, likePattern,
+                paymentStatus == PaymentStatus.PAID,
+                paymentStatus == PaymentStatus.PENDING,
+                paymentStatus == PaymentStatus.PARTIAL,
+                pageable);
+
+        // Una sola consulta para los envíos de la página, no una por pedido.
+        List<Long> shippingOrderIds = orders.getContent().stream()
+                .filter(order -> order.getDeliveryType() == DeliveryType.SHIPPING)
+                .map(Order::getId)
+                .toList();
+        Map<Long, Shipment> shipmentsByOrderId = shippingOrderIds.isEmpty()
+                ? Map.of()
+                : shipmentRepository.findByOrderIdIn(shippingOrderIds).stream()
+                        .collect(Collectors.toMap(shipment -> shipment.getOrder().getId(), Function.identity()));
+
+        return PageResponse.of(orders,
+                order -> toOrderResponse(order, shipmentsByOrderId.get(order.getId())));
     }
 
     @Override
@@ -123,7 +144,8 @@ public class OrderServiceImpl implements OrderService {
         Company company = companyRepository.getReferenceById(companyId);
 
         validateBranchAccess(request.branchId());
-        validateSalesType(request.salesType(), request.items(), request.customerId(), request.quickSaleAmount());
+        validateSalesType(request.salesType(), request.deliveryType(), request.items(),
+                request.customerId(), request.quickSaleAmount());
         validatePaymentOptions(request);
 
         Customer customer = resolveCustomerOrNull(request.customerId(), companyId);
@@ -131,6 +153,7 @@ public class OrderServiceImpl implements OrderService {
         if (customer != null && !customer.isActive()) {
             throw new InactiveOrderCustomerException(customer.getId());
         }
+        Address shippingAddress = resolveShippingAddressForCreate(request, customer);
         String orderNumber = generateOrderNumber(company);
 
         OrderStatus status = (request.deliveryType() == DeliveryType.LOCAL_PICKUP)
@@ -199,24 +222,28 @@ public class OrderServiceImpl implements OrderService {
                 saveMovement(stock, StockMovementType.SALE, -item.getQuantity(), previousQuantity, saved.getId());
             }
 
-            return completeCreation(saved, request, companyId, userId);
+            return completeCreation(saved, shippingAddress, request, companyId, userId);
         } else {
             order.recalculateTotal();
             Order saved = orderRepository.saveAndFlush(order);
 
-            return completeCreation(saved, request, companyId, userId);
+            return completeCreation(saved, shippingAddress, request, companyId, userId);
         }
     }
 
     /**
-     * Registra el cargo en la cuenta del cliente y aplica, en este orden, el saldo
-     * a favor (si se pidió) y el pago inicial. Ambos se asignan a esta orden aunque
-     * el cliente tenga deudas anteriores. Las ventas sin cliente se cobran en el acto.
+     * Guarda el envío (si lo hay) y registra el cargo en la cuenta del cliente y aplica,
+     * en este orden, el saldo a favor (si se pidió) y el pago inicial. Ambos se asignan a
+     * esta orden aunque el cliente tenga deudas anteriores. Las ventas sin cliente se
+     * cobran en el acto.
      */
-    private OrderResponse completeCreation(Order saved, OrderRequest request, Long companyId, Long userId) {
+    private OrderResponse completeCreation(Order saved, Address shippingAddress, OrderRequest request,
+                                           Long companyId, Long userId) {
+        Shipment shipment = shippingAddress != null ? saveShipment(saved, shippingAddress) : null;
+
         if (saved.getCustomer() == null) {
             saved.setAmountPaid(saved.getTotal());
-            return toOrderResponse(orderRepository.save(saved));
+            return toOrderResponse(orderRepository.save(saved), shipment);
         }
 
         customerAccountService.applyTransaction(
@@ -242,7 +269,7 @@ public class OrderServiceImpl implements OrderService {
             );
         }
 
-        return toOrderResponse(saved);
+        return toOrderResponse(saved, shipment);
     }
 
     private void validatePaymentOptions(OrderRequest request) {
@@ -273,6 +300,15 @@ public class OrderServiceImpl implements OrderService {
         Long customerId = order.getCustomer() != null ? order.getCustomer().getId() : null;
 
         Customer customer = resolveCustomerOrNull(customerId, companyId);
+
+        Address newShippingAddress = null;
+        if (request.shippingAddressId() != null) {
+            if (order.getDeliveryType() != DeliveryType.SHIPPING) {
+                throw new InvalidShippingAddressException(
+                        "shippingAddressId is only allowed for SHIPPING orders");
+            }
+            newShippingAddress = findShippingAddress(request.shippingAddressId(), customer);
+        }
 
         Order saved;
         if (order.getSalesType() == SalesType.QUICK_SALE) {
@@ -392,6 +428,10 @@ public class OrderServiceImpl implements OrderService {
             orderPaymentService.trimAllocationsToTotal(saved);
         }
 
+        // Crea el envío si el pedido no lo tenía (los creados antes de guardar la dirección).
+        if (newShippingAddress != null) {
+            return toOrderResponse(saved, saveShipment(saved, newShippingAddress));
+        }
         return toOrderResponse(saved);
     }
 
@@ -525,6 +565,13 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private OrderResponse toOrderResponse(Order order) {
+        Shipment shipment = order.getDeliveryType() == DeliveryType.SHIPPING
+                ? shipmentRepository.findByOrderId(order.getId()).orElse(null)
+                : null;
+        return toOrderResponse(order, shipment);
+    }
+
+    private OrderResponse toOrderResponse(Order order, Shipment shipment) {
         BigDecimal total = order.getTotal() != null
                 ? order.getTotal()
                 : BigDecimal.ZERO;
@@ -547,6 +594,7 @@ public class OrderServiceImpl implements OrderService {
 
         return OrderMapper.toResponse(
                 order,
+                shipment,
                 amountPaid,
                 paymentStatus,
                 balance
@@ -579,8 +627,58 @@ public class OrderServiceImpl implements OrderService {
                         "Customer not found with id: " + customerId + " in the current company"));
     }
 
-    private void validateSalesType(SalesType salesType, List<OrderItemRequest> items, Long customerId, BigDecimal quickSaleAmount) {
+    private Address resolveShippingAddressForCreate(OrderRequest request, Customer customer) {
+        if (request.deliveryType() != DeliveryType.SHIPPING) {
+            if (request.shippingAddressId() != null) {
+                throw new InvalidShippingAddressException(
+                        "shippingAddressId is only allowed for SHIPPING orders");
+            }
+            return null;
+        }
+        if (request.shippingAddressId() == null) {
+            throw new InvalidShippingAddressException("SHIPPING orders require a shippingAddressId");
+        }
+        return findShippingAddress(request.shippingAddressId(), customer);
+    }
+
+    /** La dirección tiene que ser del cliente del pedido (y por lo tanto de la empresa) y estar activa. */
+    private Address findShippingAddress(Long addressId, Customer customer) {
+        if (customer == null) {
+            throw new InvalidShippingAddressException("SHIPPING orders require a customer");
+        }
+
+        Address address = addressRepository.findByIdAndCustomerId(addressId, customer.getId())
+                .orElseThrow(() -> new InvalidShippingAddressException(
+                        "Address " + addressId + " does not belong to customer " + customer.getId()));
+
+        if (!address.isActive()) {
+            throw new InvalidShippingAddressException("Address " + addressId + " is inactive");
+        }
+        // Calle y ciudad son obligatorias en el envío; direcciones viejas podrían no tenerlas.
+        if (isBlank(address.getStreet()) || isBlank(address.getCity())) {
+            throw new InvalidShippingAddressException("Address " + addressId + " has no street or city");
+        }
+        return address;
+    }
+
+    private Shipment saveShipment(Order order, Address address) {
+        Shipment shipment = shipmentRepository.findByOrderId(order.getId())
+                .orElseGet(() -> Shipment.builder().order(order).build());
+        shipment.copyAddress(address);
+        return shipmentRepository.saveAndFlush(shipment);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private void validateSalesType(SalesType salesType, DeliveryType deliveryType, List<OrderItemRequest> items,
+                                   Long customerId, BigDecimal quickSaleAmount) {
         if (salesType == SalesType.QUICK_SALE) {
+            // La venta rápida es solo en el local: un envío siempre lleva productos.
+            if (deliveryType != DeliveryType.LOCAL_PICKUP) {
+                throw new QuickSaleValidationException("QUICK_SALE orders must be LOCAL_PICKUP");
+            }
             if (customerId == null) {
                 throw new QuickSaleValidationException("QUICK_SALE requires a registered customer");
             }

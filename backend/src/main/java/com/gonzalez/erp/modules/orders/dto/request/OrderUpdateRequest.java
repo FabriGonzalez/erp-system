@@ -8,6 +8,9 @@ import java.util.List;
 public record OrderUpdateRequest(
         BigDecimal quickSaleAmount,
 
-        List<@Valid OrderItemRequest> items
+        List<@Valid OrderItemRequest> items,
+
+        // Solo pedidos SHIPPING: cambia la dirección de entrega. Null la deja como está.
+        Long shippingAddressId
 ) {
 }

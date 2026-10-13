@@ -1,6 +1,7 @@
 package com.gonzalez.erp.modules.shipments.entity;
 
 import com.gonzalez.erp.common.entity.BaseEntity;
+import com.gonzalez.erp.modules.customers.entity.Address;
 import com.gonzalez.erp.modules.orders.entity.Order;
 import jakarta.persistence.*;
 import lombok.*;
@@ -18,6 +19,9 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 public class Shipment extends BaseEntity {
+
+    /** En Address el país es opcional; acá es obligatorio. */
+    public static final String DEFAULT_COUNTRY = "Argentina";
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false)
@@ -70,5 +74,21 @@ public class Shipment extends BaseEntity {
         this.postalCode = postalCode;
         this.country = country;
         this.reference = reference;
+    }
+
+    /** Copia la dirección del cliente: si después la editan, el envío conserva esta. */
+    public void copyAddress(Address address) {
+        String addressCountry = address.getCountry();
+        update(
+                address.getStreet(),
+                address.getNumber(),
+                address.getApartment(),
+                address.getFloor(),
+                address.getCity(),
+                address.getState(),
+                address.getPostalCode(),
+                addressCountry == null || addressCountry.isBlank() ? DEFAULT_COUNTRY : addressCountry,
+                address.getReference()
+        );
     }
 }
