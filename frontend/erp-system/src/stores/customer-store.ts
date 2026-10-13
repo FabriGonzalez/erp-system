@@ -1,106 +1,32 @@
 import { create } from 'zustand';
 
-import { mockCustomers } from '@/data/mock-customers';
-import { Customer, CustomerAddress, CUSTOMER_ANONYMOUS } from '@/types/customer';
+import { useOrderDraftStore } from '@/stores/order-draft-store';
+import { Customer } from '@/types/customer';
 
+/**
+ * Lo único compartido entre pantallas de clientes. Los datos (listados, detalle,
+ * direcciones) viven en los hooks de cada pantalla; acá solo hay:
+ * - version: cambia con cada alta o modificación, para que los listados y detalles
+ *   abiertos se recarguen sin depender de cuándo se vuelve a la pantalla.
+ * - la sincronización del cliente del borrador de orden, que es una copia.
+ *
+ * Como no guarda clientes, no puede mostrar datos de otra empresa al cambiar de sesión.
+ */
 type CustomerState = {
-    customers: Customer[];
-    searchQuery: string;
-    isLoading: boolean;
-    isError: boolean;
-    errorMessage: string | null;
-
-    setSearchQuery: (query: string) => void;
-    setLoading: (loading: boolean) => void;
-    setError: (error: boolean, message?: string | null) => void;
-    reloadCustomers: () => void;
-
-    addCustomer: (customerData: Omit<Customer, 'id'>) => Customer;
-    addCustomerAddress: (customerId: string, addressData: Omit<CustomerAddress, 'id'>) => CustomerAddress | null;
-    getCustomerById: (id: string) => Customer | undefined;
+    version: number;
+    customersChanged: (updated?: Customer) => void;
 };
 
-export const useCustomerStore = create<CustomerState>((set, get) => ({
-    customers: mockCustomers,
-    searchQuery: '',
-    isLoading: false,
-    isError: false,
-    errorMessage: null,
+export const useCustomerStore = create<CustomerState>((set) => ({
+    version: 0,
 
-    setSearchQuery: (searchQuery) => {
-        set({ searchQuery });
-    },
-
-    setLoading: (isLoading) => {
-        set({ isLoading });
-    },
-
-    setError: (isError, errorMessage = null) => {
-        set({
-            isError,
-            errorMessage,
-        });
-    },
-
-    reloadCustomers: () => {
-        set({
-            isLoading: true,
-            isError: false,
-            errorMessage: null,
-        });
-
-        setTimeout(() => {
-            set({
-                isLoading: false,
-            });
-        }, 600);
-    },
-
-    addCustomer: (customerData) => {
-        const id = `cust-${Date.now()}`;
-        const newCustomer: Customer = {
-            ...customerData,
-            id,
-            addresses: customerData.addresses.map((addr, index) => ({
-                ...addr,
-                id: addr.id || `addr-${Date.now()}-${index}`,
-            })),
-        };
-
-        set((state) => ({
-            customers: [newCustomer, ...state.customers],
-        }));
-
-        return newCustomer;
-    },
-
-    addCustomerAddress: (customerId, addressData) => {
-        const customer = get().customers.find((c) => c.id === customerId);
-        if (!customer) return null;
-
-        const newAddress: CustomerAddress = {
-            ...addressData,
-            id: `addr-${Date.now()}`,
-        };
-
-        set((state) => ({
-            customers: state.customers.map((c) =>
-                c.id === customerId
-                    ? {
-                        ...c,
-                        addresses: [...c.addresses, newAddress],
-                    }
-                    : c
-            ),
-        }));
-
-        return newAddress;
-    },
-
-    getCustomerById: (id) => {
-        if (id === CUSTOMER_ANONYMOUS.id) {
-            return CUSTOMER_ANONYMOUS;
+    customersChanged: (updated) => {
+        if (updated) {
+            const draft = useOrderDraftStore.getState();
+            if (draft.customer.id === updated.id) {
+                draft.updateCustomer(updated);
+            }
         }
-        return get().customers.find((c) => c.id === id);
+        set((state) => ({ version: state.version + 1 }));
     },
 }));

@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
 import {
+    ActivityIndicator,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -9,14 +10,24 @@ import {
     View,
 } from 'react-native';
 
-import { AppInput } from '@/components/ui/AppInput';
+import { AddressFields } from '@/components/customers/AddressFields';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useCustomer } from '@/hooks/use-customer';
+import { createAddress, getCustomer } from '@/services/customer-service';
+import { useAuthStore } from '@/stores/auth-store';
 import { useCustomerStore } from '@/stores/customer-store';
 import { SharedStyles } from '@/styles/shared';
 import { CustomerAddress } from '@/types/customer';
+import {
+    AddressDraft,
+    EMPTY_ADDRESS_DRAFT,
+    toAddressRequest,
+    validateAddressDraft,
+} from '@/utils/address';
 
 type AddCustomerAddressFormProps = {
     customerId: string;
@@ -27,23 +38,23 @@ export function AddCustomerAddressForm({
     customerId,
     onAddressCreated,
 }: AddCustomerAddressFormProps) {
-    const customer = useCustomerStore((state) =>
-        state.getCustomerById(customerId),
-    );
+    const token = useAuthStore((state) => state.token);
+    const customersChanged = useCustomerStore((state) => state.customersChanged);
+    const { customer, notFound, isLoading } = useCustomer(customerId);
 
-    const addCustomerAddress = useCustomerStore(
-        (state) => state.addCustomerAddress,
-    );
-
-    const [label, setLabel] = useState('');
-    const [street, setStreet] = useState('');
-    const [number, setNumber] = useState('');
-    const [city, setCity] = useState('');
-    const [province, setProvince] = useState('');
-    const [zipCode, setZipCode] = useState('');
+    const [draft, setDraft] = useState<AddressDraft>(EMPTY_ADDRESS_DRAFT);
     const [formError, setFormError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    if (!customer) {
+    if (!customer && isLoading) {
+        return (
+            <Screen>
+                <LoadingState label="Cargando cliente..." />
+            </Screen>
+        );
+    }
+
+    if (!customer && notFound) {
         return (
             <NotFound
                 headerTitle="Agregar dirección"
@@ -53,55 +64,45 @@ export function AddCustomerAddressForm({
         );
     }
 
-    function handleSave() {
+    async function handleSave() {
+        if (isSubmitting) {
+            return;
+        }
+
+        const validationError = validateAddressDraft(draft);
+        if (validationError) {
+            setFormError(validationError);
+            return;
+        }
+        if (!token) {
+            setFormError('No hay sesión activa.');
+            return;
+        }
+
         setFormError(null);
+        setIsSubmitting(true);
 
-        if (!label.trim()) {
-            setFormError('Ingresá una etiqueta para la dirección.');
-            return;
+        try {
+            const address = await createAddress(customerId, toAddressRequest(draft), token);
+
+            // El cliente cambió (cantidad de direcciones, quizá la principal): se publica
+            // la versión del backend para el borrador de orden y los listados abiertos.
+            const updatedCustomer = await getCustomer(customerId, token).catch(() => undefined);
+            customersChanged(updatedCustomer);
+
+            onAddressCreated?.(address);
+            router.back();
+        } catch (error: unknown) {
+            setFormError(error instanceof Error ? error.message : 'No se pudo agregar la dirección.');
+        } finally {
+            setIsSubmitting(false);
         }
-
-        if (!street.trim()) {
-            setFormError('Ingresá la calle.');
-            return;
-        }
-
-        if (!number.trim()) {
-            setFormError('Ingresá el número.');
-            return;
-        }
-
-        if (!city.trim()) {
-            setFormError('Ingresá la ciudad.');
-            return;
-        }
-
-        if (!province.trim()) {
-            setFormError('Ingresá la provincia.');
-            return;
-        }
-
-        const newAddress = addCustomerAddress(customerId, {
-            label: label.trim(),
-            street: street.trim(),
-            number: number.trim(),
-            city: city.trim(),
-            province: province.trim(),
-            zipCode: zipCode.trim(),
-        });
-
-        if (!newAddress) {
-            setFormError('No se pudo agregar la dirección.');
-            return;
-        }
-
-        onAddressCreated?.(newAddress);
-
-        router.back();
     }
 
     function handleCancel() {
-        router.back();
+        if (!isSubmitting) {
+            router.back();
+        }
     }
 
     return (
@@ -130,9 +131,11 @@ export function AddCustomerAddressForm({
                         Agregar dirección
                     </Text>
 
-                    <Text style={styles.headerSubtitle}>
-                        {customer.name}
-                    </Text>
+                    {customer ? (
+                        <Text style={styles.headerSubtitle}>
+                            {customer.name}
+                        </Text>
+                    ) : null}
                 </View>
 
                 <View style={SharedStyles.headerSpacer} />
@@ -148,73 +151,14 @@ export function AddCustomerAddressForm({
                         Datos de la dirección
                     </Text>
 
-                    <View style={styles.field}>
-                        <Text style={styles.label}>Etiqueta</Text>
-
-                        <AppInput
-                            placeholder="Ej. Casa"
-                            value={label}
-                            onChangeText={setLabel}
-                            autoCapitalize="words"
-                        />
-                    </View>
-
-                    <View style={styles.row}>
-                        <View style={[styles.field, styles.streetField]}>
-                            <Text style={styles.label}>Calle</Text>
-
-                            <AppInput
-                                placeholder="Ej. Av. Colón"
-                                value={street}
-                                onChangeText={setStreet}
-                                autoCapitalize="words"
-                            />
-                        </View>
-
-                        <View style={[styles.field, styles.numberField]}>
-                            <Text style={styles.label}>Número</Text>
-
-                            <AppInput
-                                placeholder="123"
-                                value={number}
-                                onChangeText={setNumber}
-                                keyboardType="numeric"
-                            />
-                        </View>
-                    </View>
-
-                    <View style={styles.field}>
-                        <Text style={styles.label}>Ciudad</Text>
-
-                        <AppInput
-                            placeholder="Ej. Bahía Blanca"
-                            value={city}
-                            onChangeText={setCity}
-                            autoCapitalize="words"
-                        />
-                    </View>
-
-                    <View style={styles.field}>
-                        <Text style={styles.label}>Provincia</Text>
-
-                        <AppInput
-                            placeholder="Ej. Buenos Aires"
-                            value={province}
-                            onChangeText={setProvince}
-                            autoCapitalize="words"
-                        />
-                    </View>
-
-                    <View style={styles.field}>
-                        <Text style={styles.label}>Código postal</Text>
-
-                        <AppInput
-                            placeholder="Ej. 8000"
-                            value={zipCode}
-                            onChangeText={setZipCode}
-                            keyboardType="numeric"
-                        />
-                    </View>
+                    <AddressFields
+                        value={draft}
+                        onChange={(next) => {
+                            setDraft(next);
+                            setFormError(null);
+                        }}
+                        editable={!isSubmitting}
+                    />
 
                     {formError ? (
                         <View style={styles.errorBox}>
@@ -238,6 +182,7 @@ export function AddCustomerAddressForm({
                 <View style={styles.actions}>
                     <Pressable
                         onPress={handleCancel}
+                        disabled={isSubmitting}
                         style={({ pressed }) => [
                             SharedStyles.buttonSecondary,
                             pressed && SharedStyles.pressed,
@@ -250,14 +195,19 @@ export function AddCustomerAddressForm({
 
                     <Pressable
                         onPress={handleSave}
+                        disabled={isSubmitting}
                         style={({ pressed }) => [
                             SharedStyles.buttonPrimary,
-                            pressed && SharedStyles.pressed,
+                            (pressed || isSubmitting) && SharedStyles.pressed,
                         ]}
                     >
-                        <Text style={SharedStyles.buttonPrimaryText}>
-                            Guardar dirección
-                        </Text>
+                        {isSubmitting ? (
+                            <ActivityIndicator size="small" color={Colors.white} />
+                        ) : (
+                            <Text style={SharedStyles.buttonPrimaryText}>
+                                Guardar dirección
+                            </Text>
+                        )}
                     </Pressable>
                 </View>
             </ScrollView>
@@ -283,25 +233,6 @@ const styles = StyleSheet.create({
     },
     sectionTitle: {
         marginBottom: Spacing.lg,
-    },
-    field: {
-        marginBottom: Spacing.md,
-    },
-    label: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: Colors.text,
-        marginBottom: Spacing.xs,
-    },
-    row: {
-        flexDirection: 'row',
-        gap: Spacing.md,
-    },
-    streetField: {
-        flex: 1,
-    },
-    numberField: {
-        width: 110,
     },
     errorBox: {
         flexDirection: 'row',

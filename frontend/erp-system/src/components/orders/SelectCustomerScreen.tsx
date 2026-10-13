@@ -1,15 +1,16 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useMemo } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppInput } from '@/components/ui/AppInput';
 import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useCustomerStore } from '@/stores/customer-store';
+import { useCustomerList } from '@/hooks/use-customer-list';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
 import { Customer, CUSTOMER_ANONYMOUS } from '@/types/customer';
@@ -24,24 +25,21 @@ type SelectCustomerScreenProps = {
 export function SelectCustomerScreen({ flow }: SelectCustomerScreenProps) {
     const { allowAnonymous } = useLocalSearchParams<{ allowAnonymous?: string }>();
     const canSelectAnonymous = allowAnonymous !== 'false';
-    const { customers, searchQuery, setSearchQuery } = useCustomerStore();
+    const [searchQuery, setSearchQuery] = useState('');
+    // Propio de esta pantalla: no pisa la búsqueda del listado de clientes.
+    const {
+        customers,
+        isInitialLoading,
+        isLoadingMore,
+        error,
+        loadMore,
+        refresh,
+    } = useCustomerList({ query: searchQuery, activeOnly: true });
     const setDraftCustomer = useOrderDraftStore((state) => state.setCustomer);
     const currentCustomer = useOrderDraftStore((state) => state.customer);
     const newCustomerRoute = flow === 'shipments'
         ? '/shipments/new-customers'
         : '/orders/new-customer';
-
-    const filteredCustomers = useMemo(() => {
-        const query = searchQuery.trim().toLowerCase();
-        if (!query) return customers;
-
-        return customers.filter((customer) => {
-            const matchesName = customer.name.toLowerCase().includes(query);
-            const matchesEmail = customer.email?.toLowerCase().includes(query) ?? false;
-            const matchesPhone = customer.phone?.includes(query) ?? false;
-            return matchesName || matchesEmail || matchesPhone;
-        });
-    }, [customers, searchQuery]);
 
     function handleSelectCustomer(customer: Customer) {
         setDraftCustomer(customer);
@@ -73,17 +71,25 @@ export function SelectCustomerScreen({ flow }: SelectCustomerScreenProps) {
 
             <View style={styles.searchBox}>
                 <AppInput
-                    placeholder="Buscar cliente por nombre, email o teléfono..."
+                    placeholder="Buscar por nombre, teléfono, email o documento..."
                     value={searchQuery}
                     onChangeText={setSearchQuery}
+                    autoCapitalize="none"
+                    autoCorrect={false}
                 />
             </View>
 
             <FlatList
-                data={filteredCustomers}
+                data={customers}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContainer}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                onEndReached={loadMore}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={
+                    isLoadingMore ? <ActivityIndicator style={styles.footerLoader} color={Colors.primary} /> : null
+                }
                 ListHeaderComponent={
                     <View style={styles.headerComponent}>
                         {canSelectAnonymous && (
@@ -112,16 +118,27 @@ export function SelectCustomerScreen({ flow }: SelectCustomerScreenProps) {
                     </View>
                 }
                 ListEmptyComponent={
-                    <EmptyState
-                        title="No se encontraron clientes"
-                        description="Intenta con otro término o crea un nuevo cliente."
-                        actionLabel="+ Nuevo cliente"
-                        onAction={handleCreateNewCustomer}
-                    />
+                    isInitialLoading ? (
+                        <LoadingState label="Buscando clientes..." />
+                    ) : error ? (
+                        <EmptyState
+                            title="No se pudieron cargar los clientes"
+                            description={error}
+                            actionLabel="Reintentar"
+                            onAction={refresh}
+                        />
+                    ) : (
+                        <EmptyState
+                            title="No se encontraron clientes"
+                            description="Intenta con otro término o crea un nuevo cliente."
+                            actionLabel="+ Nuevo cliente"
+                            onAction={handleCreateNewCustomer}
+                        />
+                    )
                 }
                 renderItem={({ item }) => {
                     const isSelected = currentCustomer.id === item.id;
-                    const addressCount = item.addresses.length;
+                    const addressCount = item.addressCount;
 
                     return (
                         <Pressable
@@ -178,4 +195,5 @@ const styles = StyleSheet.create({
     cardTitle: { fontSize: 15, fontWeight: '600', color: Colors.text },
     cardSub: { fontSize: 13, color: Colors.textSecondary, marginTop: 1 },
     cardAddrBadge: { fontSize: 11, color: Colors.textSecondary, marginTop: 4 },
+    footerLoader: { paddingVertical: Spacing.md },
 });

@@ -1,6 +1,7 @@
 import { SymbolView } from 'expo-symbols';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AddressSummary } from '@/components/customers/AddressSummary';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
@@ -19,7 +20,7 @@ export function OrderAddressSection({
     onSelectAddress,
     onAddCustomerAddress,
 }: OrderAddressSectionProps) {
-    const hasAddresses = customer.addresses.length > 0;
+    const hasAddresses = customer.addressCount > 0;
 
     return (
         <View style={styles.container}>
@@ -71,11 +72,7 @@ export function OrderAddressSection({
             ) : selectedAddress ? (
                 <View style={styles.addressCard}>
                     <View style={styles.addressHeader}>
-                        <View style={styles.labelBadge}>
-                            <Text style={styles.labelBadgeText}>
-                                {selectedAddress.label}
-                            </Text>
-                        </View>
+                        <AddressSummary address={selectedAddress} />
 
                         <View style={styles.addressActions}>
                             <Pressable
@@ -97,17 +94,6 @@ export function OrderAddressSection({
                             </Pressable>
                         </View>
                     </View>
-
-                    <Text style={styles.streetText}>
-                        {selectedAddress.street} {selectedAddress.number}
-                    </Text>
-
-                    <Text style={styles.cityText}>
-                        {selectedAddress.city}, {selectedAddress.province}{' '}
-                        {selectedAddress.zipCode
-                            ? `(${selectedAddress.zipCode})`
-                            : ''}
-                    </Text>
                 </View>
             ) : (
                 <View style={styles.selectGroup}>
@@ -224,24 +210,12 @@ const styles = StyleSheet.create({
     addressHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 6,
-    },
-    labelBadge: {
-        backgroundColor: Colors.primaryLight,
-        paddingHorizontal: Spacing.xs + 2,
-        paddingVertical: 2,
-        borderRadius: 4,
-    },
-    labelBadgeText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: Colors.primary,
+        alignItems: 'flex-start',
+        gap: Spacing.sm,
     },
     addressActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
+        alignItems: 'flex-end',
+        gap: Spacing.xs,
     },
     linkBtn: {
         paddingVertical: 2,
@@ -253,16 +227,6 @@ const styles = StyleSheet.create({
     },
     selectGroup: {
         gap: Spacing.sm,
-    },
-    streetText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: Colors.text,
-    },
-    cityText: {
-        fontSize: 13,
-        color: Colors.textSecondary,
-        marginTop: 2,
     },
     selectPromptCard: {
         flexDirection: 'row',

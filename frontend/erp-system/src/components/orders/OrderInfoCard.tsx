@@ -9,6 +9,7 @@ import {
     getBalanceDue,
     getPaymentStatus,
 } from '@/types/order';
+import { formatAddress } from '@/utils/address';
 import { formatDateTime } from '@/utils/format';
 
 interface OrderInfoCardProps {
@@ -60,7 +61,7 @@ export function OrderInfoCard({ order }: OrderInfoCardProps) {
 
                     <InfoRow
                         label="Dirección"
-                        value={`${order.address.street} ${order.address.number}\n${order.address.city}, ${order.address.province}`}
+                        value={formatAddress(order.address)}
                     />
                 </>
             )}

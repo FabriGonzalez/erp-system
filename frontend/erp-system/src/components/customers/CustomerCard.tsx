@@ -14,7 +14,7 @@ type CustomerCardProps = {
 };
 
 export function CustomerCard({ customer, onPress }: CustomerCardProps) {
-    const addressCount = customer.addresses.length;
+    const addressCount = customer.addressCount;
 
     return (
         <Pressable

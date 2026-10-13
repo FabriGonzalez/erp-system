@@ -1,36 +1,22 @@
 import { useLocalSearchParams } from 'expo-router';
 
 import { AddCustomerAddressForm } from '@/components/customers/AddCustomerAddressForm';
-import { useCustomerStore } from '@/stores/customer-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 
 export default function AddOrderCustomerAddressScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
-
-    const getCustomerById = useCustomerStore(
-        (state) => state.getCustomerById,
-    );
-
-    const updateCustomer = useOrderDraftStore(
-        (state) => state.updateCustomer,
-    );
+    const setDraftAddress = useOrderDraftStore((state) => state.setAddress);
 
     if (!id) {
         return null;
     }
 
-    function handleAddressCreated() {
-        const updatedCustomer = getCustomerById(id);
-
-        if (updatedCustomer) {
-            updateCustomer(updatedCustomer);
-        }
-    }
-
+    // El cliente del borrador ya se actualiza desde el formulario; acá solo se elige
+    // la dirección recién creada, que es para la que se la cargó.
     return (
         <AddCustomerAddressForm
             customerId={id}
-            onAddressCreated={handleAddressCreated}
+            onAddressCreated={setDraftAddress}
         />
     );
 }

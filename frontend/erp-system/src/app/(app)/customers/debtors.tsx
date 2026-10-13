@@ -1,173 +1,42 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useMemo } from 'react';
 import {
     FlatList,
     Pressable,
+    RefreshControl,
     StyleSheet,
     Text,
     View,
 } from 'react-native';
 
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useCustomerAccountStore } from '@/stores/customer-account-store';
-import { useCustomerStore } from '@/stores/customer-store';
-import { useOrderStore } from '@/stores/order-store';
+import { useKeyedQuery } from '@/hooks/use-keyed-query';
+import { getDebtors } from '@/services/customer-account-service';
+import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
-import { CUSTOMER_ANONYMOUS } from '@/types/customer';
-import { Order } from '@/types/order';
-import {
-    calculateCustomerCredit,
-    calculateOrderBalanceDue,
-} from '@/utils/customer-account';
-import { formatCurrency } from '@/utils/format';
+import { formatCurrency, formatDate } from '@/utils/format';
 
-type CustomerAccountSummary = {
-    customerId: string;
-    customerName: string;
-    totalDebt: number;
-    availableCredit: number;
-    pendingOrdersCount: number;
-    originBranchNames: string[];
-};
+// El backend admite hasta 100 por página; el paginado completo llega con la etapa de
+// cuenta corriente.
+const DEBTORS_PAGE_SIZE = 100;
 
 export default function CustomerAccountsScreen() {
-    const orders = useOrderStore((state) => state.orders);
-    const customers = useCustomerStore((state) => state.customers);
+    const token = useAuthStore((state) => state.token);
 
-    const accounts = useCustomerAccountStore(
-        (state) => state.accounts,
+    // Deudores calculados por el backend (GET /customers/debtors), de mayor a menor deuda.
+    const { data, error, isLoading, reload } = useKeyedQuery(
+        token ? `debtors|${token}` : null,
+        () => getDebtors({ page: 0, size: DEBTORS_PAGE_SIZE }, token as string),
+        'No se pudieron cargar los deudores.',
     );
 
-    const payments = useCustomerAccountStore(
-        (state) => state.payments,
-    );
-
-    const allocations = useCustomerAccountStore(
-        (state) => state.allocations,
-    );
-
-    const accountsInActivity = useMemo(
-        (): CustomerAccountSummary[] => {
-            const customerIds = new Set<string>();
-
-            // Clientes que tienen una cuenta corriente.
-            for (const account of accounts) {
-                if (account.customerId !== CUSTOMER_ANONYMOUS.id) {
-                    customerIds.add(account.customerId);
-                }
-            }
-
-            // Clientes que realizaron pagos.
-            for (const payment of payments) {
-                if (payment.customerId !== CUSTOMER_ANONYMOUS.id) {
-                    customerIds.add(payment.customerId);
-                }
-            }
-
-            // Clientes que tienen órdenes identificadas.
-            for (const order of orders) {
-                if (
-                    order.customerId === CUSTOMER_ANONYMOUS.id ||
-                    order.status === 'CANCELLED'
-                ) {
-                    continue;
-                }
-
-                customerIds.add(order.customerId);
-            }
-
-            const summaries: CustomerAccountSummary[] = [];
-
-            for (const customerId of customerIds) {
-                const customerOrders: Order[] = [];
-                const pendingOrders: Order[] = [];
-
-                let totalDebt = 0;
-
-                const branchNames = new Set<string>();
-
-                // Buscamos las órdenes del cliente y calculamos
-                // la deuda pendiente.
-                for (const order of orders) {
-                    if (order.customerId !== customerId) {
-                        continue;
-                    }
-
-                    if (
-                        order.status === 'CANCELLED'
-                    ) {
-                        continue;
-                    }
-
-                    customerOrders.push(order);
-
-                    const balance = calculateOrderBalanceDue(
-                        order,
-                        allocations,
-                    );
-
-                    if (balance <= 0) {
-                        continue;
-                    }
-
-                    pendingOrders.push(order);
-                    totalDebt += balance;
-
-                    if (order.branchName) {
-                        branchNames.add(order.branchName);
-                    }
-                }
-
-                const availableCredit = calculateCustomerCredit(
-                    customerId,
-                    payments,
-                    allocations,
-                );
-
-                const customer = customers.find(
-                    (item) => item.id === customerId,
-                );
-
-                const customerName =
-                    customer?.name ??
-                    customerOrders[0]?.customerName ??
-                    'Cliente';
-
-                summaries.push({
-                    customerId,
-                    customerName,
-                    totalDebt,
-                    availableCredit,
-                    pendingOrdersCount: pendingOrders.length,
-                    originBranchNames: Array.from(branchNames),
-                });
-            }
-
-            // Primero los clientes con mayor actividad económica.
-            // La deuda y el crédito se mantienen separados visualmente.
-            summaries.sort((left, right) => {
-                const leftActivity =
-                    left.totalDebt + left.availableCredit;
-
-                const rightActivity =
-                    right.totalDebt + right.availableCredit;
-
-                return (
-                    rightActivity - leftActivity ||
-                    left.customerName.localeCompare(
-                        right.customerName,
-                    )
-                );
-            });
-
-            return summaries;
-        },
-        [accounts, customers, orders, payments, allocations],
-    );
+    const debtors = data?.content ?? [];
+    const totalDebtors = data?.totalElements ?? 0;
 
     return (
         <Screen style={styles.screen}>
@@ -196,20 +65,23 @@ export default function CustomerAccountsScreen() {
                     </Text>
 
                     <Text style={styles.screenSubtitle}>
-                        {accountsInActivity.length}{' '}
-                        {accountsInActivity.length === 1
-                            ? 'cliente con actividad'
-                            : 'clientes con actividad'}
+                        {!data
+                            ? 'Cargando...'
+                            : `${totalDebtors} ${totalDebtors === 1 ? 'cliente con deuda' : 'clientes con deuda'}`}
                     </Text>
                 </View>
 
                 <View style={styles.headerSpacer} />
             </View>
 
-            {accountsInActivity.length === 0 ? (
+            {!data && isLoading ? (
+                <LoadingState label="Cargando deudores..." />
+            ) : !data && error ? (
+                <ErrorState message={error} onRetry={reload} />
+            ) : debtors.length === 0 ? (
                 <EmptyState
-                    title="Sin actividad en cuentas corrientes"
-                    description="Todavía no hay deudas, saldos a favor ni pagos registrados."
+                    title="Sin deudas pendientes"
+                    description="Ningún cliente tiene pedidos con saldo pendiente."
                     iconName={{
                         ios: 'checkmark.seal.fill',
                         android: 'verified',
@@ -218,10 +90,24 @@ export default function CustomerAccountsScreen() {
                 />
             ) : (
                 <FlatList
-                    data={accountsInActivity}
+                    data={debtors}
                     keyExtractor={(item) => item.customerId}
                     contentContainerStyle={styles.listContainer}
                     showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={isLoading}
+                            onRefresh={reload}
+                            tintColor={Colors.primary}
+                        />
+                    }
+                    ListFooterComponent={
+                        totalDebtors > debtors.length ? (
+                            <Text style={styles.branches}>
+                                Mostrando {debtors.length} de {totalDebtors} clientes con mayor deuda.
+                            </Text>
+                        ) : null
+                    }
                     renderItem={({ item }) => (
                         <Pressable
                             style={({ pressed }) => [
@@ -246,8 +132,8 @@ export default function CustomerAccountsScreen() {
                                     </Text>
 
                                     <Text style={styles.ordersCount}>
-                                        {item.pendingOrdersCount}{' '}
-                                        {item.pendingOrdersCount === 1
+                                        {item.pendingOrders}{' '}
+                                        {item.pendingOrders === 1
                                             ? 'pedido pendiente'
                                             : 'pedidos pendientes'}
                                     </Text>
@@ -283,7 +169,7 @@ export default function CustomerAccountsScreen() {
                                         style={styles.debtAmount}
                                     >
                                         {formatCurrency(
-                                            item.totalDebt,
+                                            item.debt,
                                         )}
                                     </Text>
                                 </View>
@@ -304,20 +190,18 @@ export default function CustomerAccountsScreen() {
                                         style={styles.creditAmount}
                                     >
                                         {formatCurrency(
-                                            item.availableCredit,
+                                            item.credit,
                                         )}
                                     </Text>
                                 </View>
                             </View>
 
-                            {item.originBranchNames.length > 0 && (
+                            {item.oldestPendingOrderAt ? (
                                 <Text style={styles.branches}>
-                                    Sucursales:{' '}
-                                    {item.originBranchNames.join(
-                                        ', ',
-                                    )}
+                                    Pendiente desde el{' '}
+                                    {formatDate(item.oldestPendingOrderAt)}
                                 </Text>
-                            )}
+                            ) : null}
                         </Pressable>
                     )}
                 />

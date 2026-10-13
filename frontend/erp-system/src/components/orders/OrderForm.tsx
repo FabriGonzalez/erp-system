@@ -13,7 +13,6 @@ import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useCustomerAccountSummary } from '@/hooks/use-customer-account-summary';
 import { useBranchStore } from '@/stores/branch-store';
-import { useCustomerStore } from '@/stores/customer-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
@@ -41,9 +40,6 @@ export function OrderForm({
 }: OrderFormProps) {
     const activeBranch = useBranchStore((state) => state.activeBranch);
     const products = useProductStore((state) => state.products);
-    const getCustomerById = useCustomerStore(
-        (state) => state.getCustomerById,
-    );
 
     const {
         customer,
@@ -73,13 +69,17 @@ export function OrderForm({
 
     useEffect(() => {
         if (initialOrder) {
-            // Los clientes reales todavía no están en el store local; se arma
-            // uno mínimo con los datos de la orden.
-            const currentCustomer = getCustomerById(initialOrder.customerId) ?? {
-                id: initialOrder.customerId,
-                name: initialOrder.customerName,
-                addresses: [],
-            };
+            // Al editar, cliente y dirección quedan fijos: alcanza con los datos
+            // de la orden, sin pedir el cliente al backend.
+            const currentCustomer = initialOrder.customerId === CUSTOMER_ANONYMOUS.id
+                ? CUSTOMER_ANONYMOUS
+                : {
+                    id: initialOrder.customerId,
+                    name: initialOrder.customerName,
+                    active: true,
+                    addressCount: 0,
+                    mainAddress: null,
+                };
 
             initEditOrder(initialOrder, currentCustomer);
             return;
@@ -90,7 +90,7 @@ export function OrderForm({
         if (creationMode === 'SALE' && initialSalesType) {
             setSalesType(initialSalesType);
         }
-    }, [initialOrder,getCustomerById,initEditOrder,initNewOrder,creationMode,initialSalesType,setSalesType,]);
+    }, [initialOrder, initEditOrder, initNewOrder, creationMode, initialSalesType, setSalesType]);
 
     function handleQuickSaleInputChange(text: string) {
         const cleaned = text.replace(/[^0-9]/g, '');
@@ -103,7 +103,7 @@ export function OrderForm({
     const effectiveDeliveryType = isShipment ? 'SHIPPING' : 'LOCAL_PICKUP';
     const effectiveSalesType = isShipment ? 'WITH_PRODUCTS' : salesType;
     const isShipping = effectiveDeliveryType === 'SHIPPING';
-    const hasAddresses = customer.addresses.length > 0;
+    const hasAddresses = customer.addressCount > 0;
     // Al editar, el backend solo admite cambiar ítems o importe: cliente y
     // dirección de entrega quedan fijos.
     const isEditing = Boolean(initialOrder);

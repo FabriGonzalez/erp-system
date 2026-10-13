@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import {
+    ActivityIndicator,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -8,26 +9,44 @@ import {
     View,
 } from 'react-native';
 
+import { AddressSummary } from '@/components/customers/AddressSummary';
 import { Avatar } from '@/components/ui/Avatar';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useCustomerStore } from '@/stores/customer-store';
+import { useCustomer, useCustomerAddresses } from '@/hooks/use-customer';
 import { SharedStyles } from '@/styles/shared';
+import { getInitials } from '@/utils/format';
 
 export default function CustomerDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
+    const { customer, error, notFound, isLoading, reload } = useCustomer(id);
+    // Solo las activas: la gestión de inactivas llega con la edición de direcciones.
+    const {
+        addresses,
+        error: addressesError,
+        isLoading: addressesLoading,
+        reload: reloadAddresses,
+    } = useCustomerAddresses(id, { activeOnly: true });
 
-    const getCustomerById = useCustomerStore(
-        (state) => state.getCustomerById,
-    );
+    if (!customer && isLoading) {
+        return (
+            <Screen>
+                <LoadingState label="Cargando cliente..." />
+            </Screen>
+        );
+    }
 
-    const customers = useCustomerStore((state) => state.customers);
-
-    const customer = id
-        ? customers.find((item) => item.id === id)
-        : undefined;
+    if (!customer && error && !notFound) {
+        return (
+            <Screen>
+                <ErrorState message={error} onRetry={reload} />
+            </Screen>
+        );
+    }
 
     if (!customer) {
         return (
@@ -44,12 +63,7 @@ export default function CustomerDetailScreen() {
         );
     }
 
-    const initials = customer.name
-        .split(' ')
-        .map((name) => name[0])
-        .join('')
-        .slice(0, 2)
-        .toUpperCase();
+    const initials = getInitials(customer.name);
 
     return (
         <Screen style={styles.screen}>
@@ -139,9 +153,9 @@ export default function CustomerDetailScreen() {
                                 Direcciones
                             </Text>
                             <Text style={styles.sectionSubtitle}>
-                                {customer.addresses.length === 0
+                                {customer.addressCount === 0
                                     ? 'No hay direcciones registradas'
-                                    : `${customer.addresses.length} ${customer.addresses.length === 1
+                                    : `${customer.addressCount} ${customer.addressCount === 1
                                         ? 'dirección registrada'
                                         : 'direcciones registradas'
                                     }`}
@@ -175,7 +189,16 @@ export default function CustomerDetailScreen() {
                         </Pressable>
                     </View>
 
-                    {customer.addresses.length === 0 ? (
+                    {addressesLoading && addresses.length === 0 ? (
+                        <ActivityIndicator color={Colors.primary} style={styles.addressesLoader} />
+                    ) : addressesError && addresses.length === 0 ? (
+                        <View style={styles.emptyAddresses}>
+                            <Text style={styles.emptyDescription}>{addressesError}</Text>
+                            <Pressable onPress={reloadAddresses} style={styles.retryLink}>
+                                <Text style={styles.retryLinkText}>Reintentar</Text>
+                            </Pressable>
+                        </View>
+                    ) : addresses.length === 0 ? (
                         <View style={styles.emptyAddresses}>
                             <SymbolView
                                 name={{
@@ -196,7 +219,7 @@ export default function CustomerDetailScreen() {
                         </View>
                     ) : (
                         <View style={styles.addressList}>
-                            {customer.addresses.map((address) => (
+                            {addresses.map((address) => (
                                 <View
                                     key={address.id}
                                     style={styles.addressCard}
@@ -213,23 +236,7 @@ export default function CustomerDetailScreen() {
                                         />
                                     </View>
 
-                                    <View style={styles.addressInfo}>
-                                        <Text style={styles.addressLabel}>
-                                            {address.label}
-                                        </Text>
-
-                                        <Text style={styles.addressStreet}>
-                                            {address.street} {address.number}
-                                        </Text>
-
-                                        <Text style={styles.addressCity}>
-                                            {address.city},{' '}
-                                            {address.province}
-                                            {address.zipCode
-                                                ? ` (${address.zipCode})`
-                                                : ''}
-                                        </Text>
-                                    </View>
+                                    <AddressSummary address={address} />
                                 </View>
                             ))}
                         </View>
@@ -357,22 +364,15 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.primaryLight,
         marginRight: Spacing.md,
     },
-    addressInfo: {
-        flex: 1,
+    addressesLoader: {
+        paddingVertical: Spacing.lg,
     },
-    addressLabel: {
+    retryLink: {
+        marginTop: Spacing.sm,
+    },
+    retryLinkText: {
         fontSize: 14,
         fontWeight: '600',
-        color: Colors.text,
-        marginBottom: 3,
-    },
-    addressStreet: {
-        fontSize: 14,
-        color: Colors.text,
-    },
-    addressCity: {
-        fontSize: 13,
-        color: Colors.textSecondary,
-        marginTop: 2,
+        color: Colors.primary,
     },
 });

@@ -10,74 +10,61 @@ import {
     View,
 } from 'react-native';
 
+import { AddressFields } from '@/components/customers/AddressFields';
+import { AddressSummary } from '@/components/customers/AddressSummary';
 import { AppInput } from '@/components/ui/AppInput';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { createCustomer } from '@/services/customer-service';
+import { useAuthStore } from '@/stores/auth-store';
 import { useCustomerStore } from '@/stores/customer-store';
 import { SharedStyles } from '@/styles/shared';
-import { Customer, CustomerAddress } from '@/types/customer';
+import { Customer } from '@/types/customer';
+import {
+    AddressDraft,
+    EMPTY_ADDRESS_DRAFT,
+    draftToDisplayAddress,
+    toAddressRequest,
+    validateAddressDraft,
+} from '@/utils/address';
 
 type CustomerFormProps = {
     onCustomerCreated?: (customer: Customer) => void;
 };
 
+// Validación liviana: el backend valida el formato completo.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function CustomerForm({
     onCustomerCreated,
 }: CustomerFormProps) {
-    const addCustomer = useCustomerStore((state) => state.addCustomer);
+    const token = useAuthStore((state) => state.token);
+    const customersChanged = useCustomerStore((state) => state.customersChanged);
 
-    const [name, setName] = useState('');
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
 
-    const [addresses, setAddresses] = useState<
-        Omit<CustomerAddress, 'id'>[]
-    >([]);
-
+    const [addresses, setAddresses] = useState<AddressDraft[]>([]);
     const [showAddressForm, setShowAddressForm] = useState(false);
-    const [addrLabel, setAddrLabel] = useState('');
-    const [addrStreet, setAddrStreet] = useState('');
-    const [addrNumber, setAddrNumber] = useState('');
-    const [addrCity, setAddrCity] = useState('');
-    const [addrProvince, setAddrProvince] = useState('');
-    const [addrZipCode, setAddrZipCode] = useState('');
+    const [addressDraft, setAddressDraft] = useState<AddressDraft>(EMPTY_ADDRESS_DRAFT);
+    const [addrError, setAddrError] = useState('');
 
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [addrError, setAddrError] = useState('');
+    const [submitError, setSubmitError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     function handleAddAddress() {
-        if (
-            !addrStreet.trim() ||
-            !addrNumber.trim() ||
-            !addrCity.trim() ||
-            !addrProvince.trim()
-        ) {
-            setAddrError(
-                'Completa al menos Calle, Número, Ciudad y Provincia.',
-            );
+        const validationError = validateAddressDraft(addressDraft);
+        if (validationError) {
+            setAddrError(validationError);
             return;
         }
 
-        setAddresses((currentAddresses) => [
-            ...currentAddresses,
-            {
-                label: addrLabel.trim() || 'Principal',
-                street: addrStreet.trim(),
-                number: addrNumber.trim(),
-                city: addrCity.trim(),
-                province: addrProvince.trim(),
-                zipCode: addrZipCode.trim(),
-            },
-        ]);
-
-        setAddrLabel('');
-        setAddrStreet('');
-        setAddrNumber('');
-        setAddrCity('');
-        setAddrProvince('');
-        setAddrZipCode('');
+        setAddresses((currentAddresses) => [...currentAddresses, addressDraft]);
+        setAddressDraft(EMPTY_ADDRESS_DRAFT);
         setAddrError('');
         setShowAddressForm(false);
     }
@@ -93,8 +80,11 @@ export function CustomerForm({
     function validate(): boolean {
         const newErrors: Record<string, string> = {};
 
-        if (!name.trim()) {
-            newErrors.name = 'El nombre del cliente es obligatorio.';
+        if (!firstName.trim() && !lastName.trim()) {
+            newErrors.name = 'Ingresá el nombre o el apellido del cliente.';
+        }
+        if (email.trim() && !EMAIL_PATTERN.test(email.trim())) {
+            newErrors.email = 'El email no es válido.';
         }
 
         setErrors(newErrors);
@@ -102,29 +92,36 @@ export function CustomerForm({
         return Object.keys(newErrors).length === 0;
     }
 
-    function handleSubmit() {
-        if (!validate()) {
+    async function handleSubmit() {
+        if (isSubmitting || !validate()) {
+            return;
+        }
+        if (!token) {
+            setSubmitError('No hay sesión activa.');
             return;
         }
 
+        setSubmitError(null);
         setIsSubmitting(true);
 
         try {
-            const newCustomer = addCustomer({
-                name: name.trim(),
-                email: email.trim() || undefined,
-                phone: phone.trim() || undefined,
-                addresses: addresses.map((address) => ({
-                    ...address,
-                    id: `addr-${Date.now()}-${Math.random()}`,
-                })),
-            });
+            // Cliente y direcciones en una sola request: si algo falla, no queda nada a medias.
+            const newCustomer = await createCustomer(
+                {
+                    firstName: firstName.trim() || null,
+                    lastName: lastName.trim() || null,
+                    email: email.trim() || null,
+                    phone: phone.trim() || null,
+                    addresses: addresses.map((address) => toAddressRequest(address)),
+                },
+                token,
+            );
 
+            customersChanged(newCustomer);
             onCustomerCreated?.(newCustomer);
-
             router.back();
-        } catch (error) {
-            console.error('Error al crear cliente:', error);
+        } catch (error: unknown) {
+            setSubmitError(error instanceof Error ? error.message : 'No se pudo crear el cliente.');
         } finally {
             setIsSubmitting(false);
         }
@@ -136,6 +133,12 @@ export function CustomerForm({
         }
 
         router.back();
+    }
+
+    function clearError(field: string) {
+        if (errors[field]) {
+            setErrors((currentErrors) => ({ ...currentErrors, [field]: '' }));
+        }
     }
 
     return (
@@ -170,33 +173,47 @@ export function CustomerForm({
                 contentContainerStyle={styles.scrollContainer}
                 keyboardShouldPersistTaps="handled"
             >
-                <View style={styles.formGroup}>
-                    <Text style={SharedStyles.sectionTitle}>
-                        Nombre completo{' '}
-                        <Text style={styles.required}>*</Text>
-                    </Text>
+                <View style={styles.row}>
+                    <View style={[styles.formGroup, styles.flex1]}>
+                        <Text style={SharedStyles.sectionTitle}>Nombre</Text>
+                        <AppInput
+                            placeholder="Ej. María"
+                            value={firstName}
+                            onChangeText={(text) => {
+                                setFirstName(text);
+                                clearError('name');
+                            }}
+                            autoCapitalize="words"
+                            maxLength={100}
+                            editable={!isSubmitting}
+                        />
+                    </View>
 
-                    <AppInput
-                        placeholder="Ej. María González"
-                        value={name}
-                        onChangeText={(text) => {
-                            setName(text);
-
-                            if (errors.name) {
-                                setErrors((currentErrors) => ({
-                                    ...currentErrors,
-                                    name: '',
-                                }));
-                            }
-                        }}
-                    />
-
-                    {errors.name ? (
-                        <Text style={styles.errorText}>
-                            {errors.name}
-                        </Text>
-                    ) : null}
+                    <View style={[styles.formGroup, styles.flex1]}>
+                        <Text style={SharedStyles.sectionTitle}>Apellido</Text>
+                        <AppInput
+                            placeholder="Ej. González"
+                            value={lastName}
+                            onChangeText={(text) => {
+                                setLastName(text);
+                                clearError('name');
+                            }}
+                            autoCapitalize="words"
+                            maxLength={100}
+                            editable={!isSubmitting}
+                        />
+                    </View>
                 </View>
+
+                {errors.name ? (
+                    <Text style={[styles.errorText, styles.nameError]}>
+                        {errors.name}
+                    </Text>
+                ) : (
+                    <Text style={styles.hint}>
+                        Completá al menos uno de los dos.
+                    </Text>
+                )}
 
                 <View style={styles.formGroup}>
                     <Text style={SharedStyles.sectionTitle}>Email</Text>
@@ -204,10 +221,19 @@ export function CustomerForm({
                     <AppInput
                         placeholder="maria@email.com"
                         value={email}
-                        onChangeText={setEmail}
+                        onChangeText={(text) => {
+                            setEmail(text);
+                            clearError('email');
+                        }}
                         keyboardType="email-address"
                         autoCapitalize="none"
+                        maxLength={100}
+                        editable={!isSubmitting}
                     />
+
+                    {errors.email ? (
+                        <Text style={styles.errorText}>{errors.email}</Text>
+                    ) : null}
                 </View>
 
                 <View style={styles.formGroup}>
@@ -218,6 +244,8 @@ export function CustomerForm({
                         value={phone}
                         onChangeText={setPhone}
                         keyboardType="phone-pad"
+                        maxLength={30}
+                        editable={!isSubmitting}
                     />
                 </View>
 
@@ -225,47 +253,35 @@ export function CustomerForm({
                     <Text style={SharedStyles.cardTitle}>
                         Direcciones ({addresses.length})
                     </Text>
+                    {addresses.length > 1 ? (
+                        <Text style={styles.hint}>La primera queda como principal.</Text>
+                    ) : null}
                 </View>
 
                 {addresses.map((address, index) => (
                     <View
-                        key={`${address.street}-${address.number}-${index}`}
+                        key={index}
                         style={styles.addressCard}
                     >
-                        <View style={styles.addressCardHeader}>
-                            <View style={styles.labelBadge}>
-                                <Text style={styles.labelBadgeText}>
-                                    {address.label}
-                                </Text>
-                            </View>
+                        <AddressSummary
+                            address={{ ...draftToDisplayAddress(address), isMain: index === 0 }}
+                        />
 
-                            <Pressable
-                                onPress={() =>
-                                    handleRemoveAddress(index)
-                                }
-                            >
-                                <SymbolView
-                                    name={{
-                                        ios: 'trash',
-                                        android: 'delete',
-                                        web: 'delete',
-                                    }}
-                                    size={18}
-                                    tintColor={Colors.error}
-                                />
-                            </Pressable>
-                        </View>
-
-                        <Text style={styles.addressText}>
-                            {address.street} {address.number}
-                        </Text>
-
-                        <Text style={styles.addressSubtext}>
-                            {address.city}, {address.province}
-                            {address.zipCode
-                                ? ` (${address.zipCode})`
-                                : ''}
-                        </Text>
+                        <Pressable
+                            onPress={() => handleRemoveAddress(index)}
+                            disabled={isSubmitting}
+                            hitSlop={8}
+                        >
+                            <SymbolView
+                                name={{
+                                    ios: 'trash',
+                                    android: 'delete',
+                                    web: 'delete',
+                                }}
+                                size={18}
+                                tintColor={Colors.error}
+                            />
+                        </Pressable>
                     </View>
                 ))}
 
@@ -275,102 +291,13 @@ export function CustomerForm({
                             Nueva dirección
                         </Text>
 
-                        <View style={styles.formGroup}>
-                            <Text style={styles.subLabel}>
-                                Etiqueta (ej. Casa, Oficina)
-                            </Text>
-
-                            <AppInput
-                                placeholder="Casa"
-                                value={addrLabel}
-                                onChangeText={setAddrLabel}
-                            />
-                        </View>
-
-                        <View style={styles.row}>
-                            <View
-                                style={[
-                                    styles.formGroup,
-                                    styles.flex2,
-                                ]}
-                            >
-                                <Text style={styles.subLabel}>
-                                    Calle *
-                                </Text>
-
-                                <AppInput
-                                    placeholder="Av. Corrientes"
-                                    value={addrStreet}
-                                    onChangeText={setAddrStreet}
-                                />
-                            </View>
-
-                            <View
-                                style={[
-                                    styles.formGroup,
-                                    styles.flex1,
-                                ]}
-                            >
-                                <Text style={styles.subLabel}>
-                                    Número *
-                                </Text>
-
-                                <AppInput
-                                    placeholder="1234"
-                                    value={addrNumber}
-                                    onChangeText={setAddrNumber}
-                                    keyboardType="number-pad"
-                                />
-                            </View>
-                        </View>
-
-                        <View style={styles.row}>
-                            <View
-                                style={[
-                                    styles.formGroup,
-                                    styles.flex1,
-                                ]}
-                            >
-                                <Text style={styles.subLabel}>
-                                    Ciudad *
-                                </Text>
-
-                                <AppInput
-                                    placeholder="CABA"
-                                    value={addrCity}
-                                    onChangeText={setAddrCity}
-                                />
-                            </View>
-
-                            <View
-                                style={[
-                                    styles.formGroup,
-                                    styles.flex1,
-                                ]}
-                            >
-                                <Text style={styles.subLabel}>
-                                    Provincia *
-                                </Text>
-
-                                <AppInput
-                                    placeholder="Buenos Aires"
-                                    value={addrProvince}
-                                    onChangeText={setAddrProvince}
-                                />
-                            </View>
-                        </View>
-
-                        <View style={styles.formGroup}>
-                            <Text style={styles.subLabel}>
-                                Código Postal
-                            </Text>
-
-                            <AppInput
-                                placeholder="C1042"
-                                value={addrZipCode}
-                                onChangeText={setAddrZipCode}
-                            />
-                        </View>
+                        <AddressFields
+                            value={addressDraft}
+                            onChange={(next) => {
+                                setAddressDraft(next);
+                                setAddrError('');
+                            }}
+                        />
 
                         {addrError ? (
                             <Text style={styles.errorText}>
@@ -384,7 +311,7 @@ export function CustomerForm({
                                 onPress={handleAddAddress}
                             >
                                 <Text style={styles.addAddrConfirmText}>
-                                    Guardar Dirección
+                                    Agregar dirección
                                 </Text>
                             </Pressable>
 
@@ -392,6 +319,7 @@ export function CustomerForm({
                                 style={styles.cancelAddrButton}
                                 onPress={() => {
                                     setShowAddressForm(false);
+                                    setAddressDraft(EMPTY_ADDRESS_DRAFT);
                                     setAddrError('');
                                 }}
                             >
@@ -405,6 +333,7 @@ export function CustomerForm({
                     <Pressable
                         style={styles.addAddressButton}
                         onPress={() => setShowAddressForm(true)}
+                        disabled={isSubmitting}
                     >
                         <SymbolView
                             name={{
@@ -421,6 +350,12 @@ export function CustomerForm({
                         </Text>
                     </Pressable>
                 )}
+
+                {submitError ? (
+                    <View style={styles.submitErrorBox}>
+                        <Text style={styles.submitErrorText}>{submitError}</Text>
+                    </View>
+                ) : null}
 
                 <View style={styles.actionsContainer}>
                     <Pressable
@@ -476,14 +411,22 @@ const styles = StyleSheet.create({
     formGroup: {
         marginBottom: Spacing.lg,
     },
-    subLabel: {
-        fontSize: 13,
-        fontWeight: '500',
-        color: Colors.textSecondary,
-        marginBottom: 4,
+    row: {
+        flexDirection: 'row',
+        gap: Spacing.md,
     },
-    required: {
-        color: Colors.error,
+    flex1: {
+        flex: 1,
+    },
+    hint: {
+        fontSize: 12,
+        color: Colors.textSecondary,
+        marginTop: -Spacing.sm,
+        marginBottom: Spacing.lg,
+    },
+    nameError: {
+        marginTop: -Spacing.sm,
+        marginBottom: Spacing.lg,
     },
     errorText: {
         fontSize: 12,
@@ -496,39 +439,15 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.sm,
     },
     addressCard: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: Spacing.sm,
         backgroundColor: Colors.surface,
         borderRadius: 10,
         padding: Spacing.md,
         borderWidth: 1,
         borderColor: Colors.border,
         marginBottom: Spacing.sm,
-    },
-    addressCardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 4,
-    },
-    labelBadge: {
-        backgroundColor: Colors.muted,
-        paddingHorizontal: Spacing.xs + 2,
-        paddingVertical: 2,
-        borderRadius: 4,
-    },
-    labelBadgeText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: Colors.textSecondary,
-    },
-    addressText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.text,
-    },
-    addressSubtext: {
-        fontSize: 13,
-        color: Colors.textSecondary,
-        marginTop: 2,
     },
     addAddressButton: {
         flexDirection: 'row',
@@ -562,16 +481,6 @@ const styles = StyleSheet.create({
         color: Colors.text,
         marginBottom: Spacing.md,
     },
-    row: {
-        flexDirection: 'row',
-        gap: Spacing.md,
-    },
-    flex1: {
-        flex: 1,
-    },
-    flex2: {
-        flex: 2,
-    },
     addressFormActions: {
         flexDirection: 'row',
         gap: Spacing.md,
@@ -600,6 +509,18 @@ const styles = StyleSheet.create({
     cancelAddrText: {
         color: Colors.textSecondary,
         fontWeight: '500',
+        fontSize: 13,
+    },
+    submitErrorBox: {
+        backgroundColor: Colors.errorLight,
+        borderWidth: 1,
+        borderColor: Colors.errorBorder,
+        borderRadius: 8,
+        padding: Spacing.md,
+        marginBottom: Spacing.md,
+    },
+    submitErrorText: {
+        color: Colors.error,
         fontSize: 13,
     },
     actionsContainer: {

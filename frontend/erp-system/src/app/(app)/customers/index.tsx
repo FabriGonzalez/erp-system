@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useMemo } from 'react';
+import { useState } from 'react';
 import {
+    ActivityIndicator,
     FlatList,
     Pressable,
     RefreshControl,
@@ -17,31 +18,22 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useCustomerStore } from '@/stores/customer-store';
+import { useCustomerList } from '@/hooks/use-customer-list';
 import { SharedStyles } from '@/styles/shared';
 
 export default function CustomersScreen() {
+    const [searchQuery, setSearchQuery] = useState('');
     const {
         customers,
-        searchQuery,
+        totalElements,
         isLoading,
-        isError,
-        errorMessage,
-        setSearchQuery,
-        reloadCustomers,
-    } = useCustomerStore();
-
-    const filteredCustomers = useMemo(() => {
-        const query = searchQuery.trim().toLowerCase();
-        if (!query) return customers;
-
-        return customers.filter((customer) => {
-            const matchesName = customer.name.toLowerCase().includes(query);
-            const matchesEmail = customer.email?.toLowerCase().includes(query) ?? false;
-            const matchesPhone = customer.phone?.includes(query) ?? false;
-            return matchesName || matchesEmail || matchesPhone;
-        });
-    }, [customers, searchQuery]);
+        isInitialLoading,
+        isLoadingMore,
+        error,
+        loadMore,
+        refresh,
+    } = useCustomerList({ query: searchQuery });
+    const isError = Boolean(error) && customers.length === 0;
 
     function handleCreateCustomer() {
         router.push('/customers/new');
@@ -72,7 +64,9 @@ export default function CustomersScreen() {
                 <View style={styles.titleContainer}>
                     <Text style={styles.screenTitle}>Clientes</Text>
                     <Text style={styles.screenSubtitle}>
-                        {customers.length} {customers.length === 1 ? 'cliente registrado' : 'clientes registrados'}
+                        {isInitialLoading
+                            ? 'Cargando...'
+                            : `${totalElements} ${totalElements === 1 ? 'cliente' : 'clientes'}${searchQuery.trim() ? ' encontrados' : ''}`}
                     </Text>
                 </View>
 
@@ -95,35 +89,44 @@ export default function CustomersScreen() {
             {/* Búsqueda */}
             <View style={styles.searchContainer}>
                 <AppInput
-                    placeholder="Buscar cliente por nombre, email o teléfono..."
+                    placeholder="Buscar por nombre, teléfono, email o documento..."
                     value={searchQuery}
                     onChangeText={setSearchQuery}
+                    autoCapitalize="none"
+                    autoCorrect={false}
                 />
             </View>
 
-            {isLoading && (
+            {isInitialLoading && (
                 <LoadingState label="Cargando clientes..." />
             )}
 
-            {!isLoading && isError && (
+            {!isInitialLoading && isError && (
                 <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>{errorMessage ?? 'Error al cargar clientes'}</Text>
-                    <Pressable style={styles.retryButton} onPress={reloadCustomers}>
+                    <Text style={styles.errorText}>{error}</Text>
+                    <Pressable style={styles.retryButton} onPress={refresh}>
                         <Text style={styles.retryButtonText}>Reintentar</Text>
                     </Pressable>
                 </View>
             )}
 
-            {!isLoading && !isError && (
+            {!isInitialLoading && !isError && (
                 <FlatList
-                    data={filteredCustomers}
+                    data={customers}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContainer}
                     showsVerticalScrollIndicator={false}
+                    onEndReached={loadMore}
+                    onEndReachedThreshold={0.5}
+                    ListFooterComponent={
+                        isLoadingMore ? (
+                            <ActivityIndicator style={styles.footerLoader} color={Colors.primary} />
+                        ) : null
+                    }
                     refreshControl={
                         <RefreshControl
-                            refreshing={isLoading}
-                            onRefresh={reloadCustomers}
+                            refreshing={isLoading && !isLoadingMore}
+                            onRefresh={refresh}
                             tintColor={Colors.primary}
                         />
                     }
@@ -204,6 +207,9 @@ const styles = StyleSheet.create({
     listContainer: {
         paddingHorizontal: Spacing.lg,
         paddingBottom: Spacing.xxl * 2,
+    },
+    footerLoader: {
+        paddingVertical: Spacing.md,
     },
     errorContainer: {
         padding: Spacing.xl,
