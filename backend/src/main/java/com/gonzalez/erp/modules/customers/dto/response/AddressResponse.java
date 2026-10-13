@@ -4,6 +4,7 @@ import java.time.Instant;
 
 public record AddressResponse(
         Long id,
+        String label,
         String street,
         String number,
         String apartment,
@@ -13,7 +14,8 @@ public record AddressResponse(
         String postalCode,
         String country,
         String reference,
-        boolean primary,
+        // Mismo nombre que en AddressRequest.
+        boolean mainAddress,
         boolean active,
         Instant createdAt,
         Instant updatedAt

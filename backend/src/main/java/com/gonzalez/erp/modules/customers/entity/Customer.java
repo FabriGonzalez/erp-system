@@ -2,11 +2,14 @@ package com.gonzalez.erp.modules.customers.entity;
 
 import com.gonzalez.erp.common.entity.BaseEntity;
 import com.gonzalez.erp.modules.companies.entity.Company;
+import com.gonzalez.erp.modules.customers.exception.InvalidCustomerAddressException;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 @Entity
 @Table(name = "customers", uniqueConstraints = {
@@ -65,11 +68,6 @@ public class Customer extends BaseEntity {
         this.observations = observations;
     }
 
-    public void addAddress(Address address) {
-        address.setCustomer(this);
-        this.addresses.add(address);
-    }
-
     public void deactivate() {
         this.active = false;
     }
@@ -78,7 +76,55 @@ public class Customer extends BaseEntity {
         this.active = true;
     }
 
-    public void removeMainAddress() {
-        this.addresses.forEach(Address::removeAsMain);
+    // Regla de direcciones: mientras el cliente tenga alguna activa, exactamente una
+    // de ellas es la principal. Por eso los cambios pasan por estos métodos.
+
+    /** La primera dirección activa queda como principal aunque no se pida. */
+    public void addAddress(Address address, boolean makeMain) {
+        address.setCustomer(this);
+        this.addresses.add(address);
+        if (makeMain || findMainAddress().isEmpty()) {
+            makeMain(address);
+        }
+    }
+
+    public void makeMain(Address target) {
+        if (!target.isActive()) {
+            throw new InvalidCustomerAddressException("An inactive address cannot be the main address");
+        }
+        for (Address address : addresses) {
+            if (address == target) {
+                address.markAsMain();
+            } else {
+                address.removeAsMain();
+            }
+        }
+    }
+
+    public void deactivateAddress(Address address) {
+        address.deactivate();
+        ensureMainAddress();
+    }
+
+    public void activateAddress(Address address) {
+        address.activate();
+        ensureMainAddress();
+    }
+
+    public Optional<Address> findMainAddress() {
+        return addresses.stream()
+                .filter(address -> address.isActive() && address.isMainAddress())
+                .findFirst();
+    }
+
+    /** Si no queda principal activa, pasa a serlo la activa más antigua. */
+    private void ensureMainAddress() {
+        if (findMainAddress().isPresent()) {
+            return;
+        }
+        addresses.stream()
+                .filter(Address::isActive)
+                .min(Comparator.comparing(Address::getId, Comparator.nullsLast(Comparator.naturalOrder())))
+                .ifPresent(this::makeMain);
     }
 }

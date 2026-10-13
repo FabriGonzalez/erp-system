@@ -1,7 +1,11 @@
 package com.gonzalez.erp.modules.customers.dto.request;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
+
+import java.util.List;
 
 public record CustomerRequest(
         @Size(max = 100, message = "First name must not exceed 100 characters")
@@ -24,5 +28,23 @@ public record CustomerRequest(
         String documentNumber,
 
         @Size(max = 1000, message = "Observations must not exceed 1000 characters")
-        String observations
-) {}
+        String observations,
+
+        /**
+         * Solo en el alta: se crean en la misma transacción que el cliente. En la edición
+         * se rechaza; las direcciones se gestionan en /customers/{id}/addresses.
+         */
+        @Valid
+        @Size(max = 20, message = "A customer can be created with at most 20 addresses")
+        List<AddressRequest> addresses
+) {
+    @AssertTrue(message = "First name or last name is required")
+    public boolean isNamePresent() {
+        return (firstName != null && !firstName.isBlank())
+                || (lastName != null && !lastName.isBlank());
+    }
+
+    public boolean hasAddresses() {
+        return addresses != null && !addresses.isEmpty();
+    }
+}

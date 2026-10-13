@@ -26,7 +26,7 @@ public class AddressServiceImpl implements AddressService {
     @Override
     public List<AddressResponse> findByCustomerId(Long customerId) {
         findCustomerOrThrow(customerId);
-        return addressRepository.findByCustomerId(customerId).stream()
+        return addressRepository.findByCustomerIdOrderByMainAddressDescActiveDescIdAsc(customerId).stream()
                 .map(AddressMapper::toResponse)
                 .toList();
     }
@@ -41,28 +41,9 @@ public class AddressServiceImpl implements AddressService {
     @Transactional
     public AddressResponse create(Long customerId, AddressRequest request) {
         Customer customer = findCustomerOrThrow(customerId);
-
-        Address address = Address.builder()
-                .street(trim(request.street()))
-                .number(trim(request.number()))
-                .apartment(trim(request.apartment()))
-                .floor(trim(request.floor()))
-                .city(trim(request.city()))
-                .state(trim(request.state()))
-                .postalCode(trim(request.postalCode()))
-                .country(trim(request.country()))
-                .reference(trim(request.reference()))
-                .mainAddress(request.mainAddress())
-                .build();
-
-        customer.addAddress(address);
-
-        if (address.isMainAddress()) {
-            makeMain(customer, address);
-        }
-
+        Address address = AddressMapper.toEntity(request);
+        customer.addAddress(address, request.requestsMain());
         addressRepository.save(address);
-
         return AddressMapper.toResponse(address);
     }
 
@@ -71,24 +52,11 @@ public class AddressServiceImpl implements AddressService {
     public AddressResponse update(Long customerId, Long addressId, AddressRequest request) {
         Customer customer = findCustomerOrThrow(customerId);
         Address address = findAddressOrThrow(customerId, addressId);
-
-        address.update(
-                trim(request.street()),
-                trim(request.number()),
-                trim(request.apartment()),
-                trim(request.floor()),
-                trim(request.city()),
-                trim(request.state()),
-                trim(request.postalCode()),
-                trim(request.country()),
-                trim(request.reference()),
-                request.mainAddress()
-        );
-
-        if (request.mainAddress()) {
-            makeMain(customer, address);
+        AddressMapper.applyFields(address, request);
+        // false no le quita el rol de principal: para cambiarla se marca otra.
+        if (request.requestsMain()) {
+            customer.makeMain(address);
         }
-
         return AddressMapper.toResponse(address);
     }
 
@@ -97,19 +65,7 @@ public class AddressServiceImpl implements AddressService {
     public AddressResponse deactivate(Long customerId, Long addressId) {
         Customer customer = findCustomerOrThrow(customerId);
         Address address = findAddressOrThrow(customerId, addressId);
-
-        address.deactivate();
-
-        if (address.isMainAddress()) {
-            addressRepository.findByCustomerIdAndActiveTrueOrderByIdAsc(customerId).stream()
-                    .filter(a -> !a.getId().equals(addressId))
-                    .findFirst()
-                    .ifPresentOrElse(
-                            replacement -> makeMain(customer, replacement),
-                            () -> address.removeAsMain()
-                    );
-        }
-
+        customer.deactivateAddress(address);
         return AddressMapper.toResponse(address);
     }
 
@@ -118,29 +74,12 @@ public class AddressServiceImpl implements AddressService {
     public AddressResponse activate(Long customerId, Long addressId) {
         Customer customer = findCustomerOrThrow(customerId);
         Address address = findAddressOrThrow(customerId, addressId);
-
-        address.activate();
-
-        if (address.isMainAddress()) {
-            makeMain(customer, address);
-        }
-
+        customer.activateAddress(address);
         return AddressMapper.toResponse(address);
-    }
-
-    private void makeMain(Customer customer, Address target) {
-        for (Address address : customer.getAddresses()) {
-            if (address.equals(target)) {
-                address.markAsMain();
-            } else {
-                address.removeAsMain();
-            }
-        }
     }
 
     private Customer findCustomerOrThrow(Long customerId) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
-
         return customerRepository.findByIdAndCompanyId(customerId, companyId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
@@ -150,9 +89,5 @@ public class AddressServiceImpl implements AddressService {
     private Address findAddressOrThrow(Long customerId, Long addressId) {
         return addressRepository.findByIdAndCustomerId(addressId, customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Address not found with id: " + addressId));
-    }
-
-    private String trim(String value) {
-        return value == null ? null : value.trim();
     }
 }

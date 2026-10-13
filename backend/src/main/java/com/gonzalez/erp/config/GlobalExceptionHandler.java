@@ -10,7 +10,9 @@ import com.gonzalez.erp.modules.companies.exception.InvalidCompanyStatusTransiti
 import com.gonzalez.erp.modules.branches.exception.BranchNameAlreadyExistsException;
 import com.gonzalez.erp.modules.categories.exception.CategoryNameAlreadyExistsException;
 import com.gonzalez.erp.modules.customers.exception.CustomerDocumentAlreadyExistsException;
+import com.gonzalez.erp.modules.customers.exception.InvalidCustomerAddressException;
 import com.gonzalez.erp.modules.customers.exception.InvalidCustomerDocumentException;
+import com.gonzalez.erp.modules.customers.exception.InvalidCustomerRequestException;
 import com.gonzalez.erp.modules.inventory.exception.InsufficientStockException;
 import com.gonzalez.erp.modules.inventory.exception.StockAlreadyExistsException;
 import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
@@ -35,6 +37,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -185,6 +188,26 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler({
+            InvalidCustomerAddressException.class,
+            InvalidCustomerRequestException.class
+    })
+    public ResponseEntity<ErrorResponse> handleInvalidCustomerRequest(
+            RuntimeException ex, HttpServletRequest request) {
+        String code = ex instanceof InvalidCustomerAddressException
+                ? "INVALID_CUSTOMER_ADDRESS"
+                : "INVALID_CUSTOMER_QUERY";
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        code
+                ));
+    }
+
     @ExceptionHandler(InvalidCustomerDocumentException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCustomerDocument(
             InvalidCustomerDocumentException ex, HttpServletRequest request) {
@@ -274,6 +297,22 @@ public class GlobalExceptionHandler {
                         ex.getMessage(),
                         request.getRequestURI(),
                         code
+                ));
+    }
+
+    // JSON mal formado o con tipos incompatibles: antes caía en el catch-all como 500.
+    // No se devuelve el detalle de Jackson para no exponer tipos internos.
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableBody(
+            HttpMessageNotReadableException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        "Malformed request body",
+                        request.getRequestURI(),
+                        "MALFORMED_REQUEST"
                 ));
     }
 

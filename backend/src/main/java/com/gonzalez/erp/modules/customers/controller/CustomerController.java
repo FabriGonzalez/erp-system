@@ -1,7 +1,9 @@
 package com.gonzalez.erp.modules.customers.controller;
 
+import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.modules.customers.dto.request.CustomerRequest;
 import com.gonzalez.erp.modules.customers.dto.response.CustomerResponse;
+import com.gonzalez.erp.modules.customers.exception.InvalidCustomerRequestException;
 import com.gonzalez.erp.modules.customers.service.CustomerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -9,12 +11,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/customers")
@@ -22,17 +25,31 @@ import java.util.List;
 @Tag(name = "Customers", description = "Operaciones CRUD para gestión de clientes")
 public class CustomerController {
 
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final CustomerService customerService;
 
     @GetMapping
-    @Operation(summary = "Obtener todos los clientes", description = "Retorna lista de clientes, opcionalmente filtrados por estado activo y texto de búsqueda")
+    @Operation(summary = "Listar clientes",
+               description = "Paginado. q busca por nombre, apellido, nombre completo, teléfono, email o documento. "
+                       + "sort: name (apellido y nombre) o createdAt, con ,asc o ,desc. "
+                       + "Cada cliente incluye la cantidad de direcciones activas y la principal.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Lista de clientes obtenida exitosamente")
+            @ApiResponse(responseCode = "200", description = "Página de clientes"),
+            @ApiResponse(responseCode = "400", description = "Parámetros de paginación u orden inválidos")
     })
-    public ResponseEntity<List<CustomerResponse>> findAll(
+    public ResponseEntity<PageResponse<CustomerResponse>> findAll(
             @RequestParam(required = false) Boolean active,
-            @RequestParam(required = false) String q) {
-        return ResponseEntity.ok(customerService.findAll(active, q));
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "name,asc") String sort) {
+        if (page < 0 || size < 1 || size > MAX_PAGE_SIZE) {
+            throw new InvalidCustomerRequestException(
+                    "page must be >= 0 and size between 1 and " + MAX_PAGE_SIZE);
+        }
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        return ResponseEntity.ok(customerService.findAll(active, q, pageable));
     }
 
     @GetMapping("/{id}")
@@ -94,4 +111,19 @@ public class CustomerController {
         return ResponseEntity.ok(customerService.activate(id));
     }
 
+    private Sort parseSort(String sort) {
+        String[] parts = sort.split(",");
+        String field = parts[0].trim();
+        String direction = parts.length == 2 ? parts[1].trim().toLowerCase() : "asc";
+        if (parts.length > 2 || (!direction.equals("asc") && !direction.equals("desc"))) {
+            throw new InvalidCustomerRequestException("sort must be <field>[,asc|desc]");
+        }
+        Sort.Direction dir = direction.equals("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
+        // El id desempata para que la paginación sea estable.
+        return switch (field) {
+            case "name" -> Sort.by(dir, "lastName", "firstName").and(Sort.by(dir, "id"));
+            case "createdAt" -> Sort.by(dir, "createdAt").and(Sort.by(dir, "id"));
+            default -> throw new InvalidCustomerRequestException("sort field must be one of: name, createdAt");
+        };
+    }
 }
