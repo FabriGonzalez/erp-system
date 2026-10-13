@@ -16,6 +16,7 @@ import com.gonzalez.erp.modules.customers.exception.InvalidCustomerRequestExcept
 import com.gonzalez.erp.modules.inventory.exception.InsufficientStockException;
 import com.gonzalez.erp.modules.inventory.exception.StockAlreadyExistsException;
 import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
+import com.gonzalez.erp.modules.orders.exception.InactiveOrderCustomerException;
 import com.gonzalez.erp.modules.orders.exception.InsufficientStockForEditException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderStatusTransitionException;
@@ -299,11 +300,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             InvalidOrderException.class,
             QuickSaleValidationException.class,
-            InvalidPaymentException.class
+            InvalidPaymentException.class,
+            InactiveOrderCustomerException.class
     })
     public ResponseEntity<ErrorResponse> handleInvalidOrder(
             RuntimeException ex, HttpServletRequest request) {
-        String code = ex instanceof QuickSaleValidationException ? "QUICK_SALE_INVALID" : "INVALID_ORDER";
+        String code = ex instanceof QuickSaleValidationException ? "QUICK_SALE_INVALID"
+                : ex instanceof InactiveOrderCustomerException ? "CUSTOMER_INACTIVE"
+                : "INVALID_ORDER";
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of(

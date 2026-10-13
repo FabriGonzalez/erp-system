@@ -29,6 +29,7 @@ import com.gonzalez.erp.modules.orders.entity.OrderItem;
 import com.gonzalez.erp.modules.orders.entity.OrderNumberCounter;
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 import com.gonzalez.erp.modules.orders.entity.SalesType;
+import com.gonzalez.erp.modules.orders.exception.InactiveOrderCustomerException;
 import com.gonzalez.erp.modules.orders.exception.InsufficientStockForEditException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderStatusTransitionException;
@@ -126,6 +127,10 @@ public class OrderServiceImpl implements OrderService {
         validatePaymentOptions(request);
 
         Customer customer = resolveCustomerOrNull(request.customerId(), companyId);
+        // Solo en el alta: los pedidos ya creados de un cliente desactivado se siguen pudiendo editar.
+        if (customer != null && !customer.isActive()) {
+            throw new InactiveOrderCustomerException(customer.getId());
+        }
         String orderNumber = generateOrderNumber(company);
 
         OrderStatus status = (request.deliveryType() == DeliveryType.LOCAL_PICKUP)

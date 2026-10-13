@@ -27,15 +27,10 @@ export function toOrderPaymentOptions(
     };
 }
 
-// Los clientes todavía provienen de datos locales; solo los ids numéricos
-// corresponden a un cliente real del backend.
+// Todos los clientes vienen del backend; el consumidor final es el único que no
+// existe allí y el pedido se envía sin cliente.
 export function toBackendCustomerId(customer: Customer): number | undefined {
-    if (customer.id === CUSTOMER_ANONYMOUS.id) {
-        return undefined;
-    }
-
-    const id = Number(customer.id);
-    return Number.isInteger(id) && id > 0 ? id : undefined;
+    return customer.id === CUSTOMER_ANONYMOUS.id ? undefined : Number(customer.id);
 }
 
 export function toOrderItemRequests(items: OrderItem[]): OrderItemRequest[] {

@@ -13,8 +13,7 @@ type SummaryResult = {
 
 /**
  * Estado de cuenta (deuda y saldo a favor) del cliente seleccionado.
- * Solo consulta clientes que existen en el backend; para el consumidor final
- * o clientes locales devuelve null.
+ * Para el consumidor final, que no existe en el backend, devuelve null.
  */
 export function useCustomerAccountSummary(customer: Customer) {
     const token = useAuthStore((state) => state.token);

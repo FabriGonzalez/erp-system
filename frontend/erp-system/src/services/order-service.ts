@@ -18,6 +18,7 @@ const ERROR_MESSAGES_BY_CODE: Record<string, string> = {
     INSUFFICIENT_STOCK: 'No hay stock suficiente para completar la operación.',
     INVALID_STATUS_TRANSITION: 'La orden no está en un estado que permita esta operación.',
     QUICK_SALE_INVALID: 'La venta rápida requiere un cliente registrado y un importe válido.',
+    CUSTOMER_INACTIVE: 'El cliente está inactivo y no puede recibir pedidos nuevos.',
 };
 
 async function handleResponse<T>(

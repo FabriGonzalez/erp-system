@@ -10,6 +10,8 @@ import { Customer, CustomerAddress } from '@/types/customer';
 type OrderAddressSectionProps = {
     customer: Customer;
     selectedAddress?: CustomerAddress;
+    // La dirección elegida se desactivó o se eliminó después de seleccionarla.
+    isSelectedAddressUnavailable?: boolean;
     onSelectAddress: () => void;
     onAddCustomerAddress: () => void;
 };
@@ -17,6 +19,7 @@ type OrderAddressSectionProps = {
 export function OrderAddressSection({
     customer,
     selectedAddress,
+    isSelectedAddressUnavailable = false,
     onSelectAddress,
     onAddCustomerAddress,
 }: OrderAddressSectionProps) {
@@ -97,6 +100,12 @@ export function OrderAddressSection({
                 </View>
             ) : (
                 <View style={styles.selectGroup}>
+                    {isSelectedAddressUnavailable ? (
+                        <Text style={styles.unavailableText}>
+                            La dirección elegida ya no está disponible. Seleccioná otra.
+                        </Text>
+                    ) : null}
+
                     <Pressable
                         style={({ pressed }) => [
                             styles.selectPromptCard,
@@ -227,6 +236,11 @@ const styles = StyleSheet.create({
     },
     selectGroup: {
         gap: Spacing.sm,
+    },
+    unavailableText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: Colors.warningText,
     },
     selectPromptCard: {
         flexDirection: 'row',

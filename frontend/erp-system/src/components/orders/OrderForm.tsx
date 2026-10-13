@@ -12,12 +12,15 @@ import { AppInput } from '@/components/ui/AppInput';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useCustomerAccountSummary } from '@/hooks/use-customer-account-summary';
+import { useCustomer, useCustomerAddresses } from '@/hooks/use-customer-queries';
 import { useBranchStore } from '@/stores/branch-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import { Order, OrderCreationMode } from '@/types/order';
+
+const INACTIVE_CUSTOMER_MESSAGE = 'El cliente seleccionado está inactivo. Elegí otro cliente para continuar.';
 
 type OrderFormProps = {
     mode?: OrderCreationMode;
@@ -103,11 +106,28 @@ export function OrderForm({
     const effectiveDeliveryType = isShipment ? 'SHIPPING' : 'LOCAL_PICKUP';
     const effectiveSalesType = isShipment ? 'WITH_PRODUCTS' : salesType;
     const isShipping = effectiveDeliveryType === 'SHIPPING';
-    const hasAddresses = customer.addressCount > 0;
     // Al editar, el backend solo admite cambiar ítems o importe: cliente y
     // dirección de entrega quedan fijos.
     const isEditing = Boolean(initialOrder);
-    const isShippingBlocked = isShipping && !isEditing && !hasAddresses;
+
+    // En el alta, el cliente y la dirección del borrador se revalidan contra el backend:
+    // pueden haberse desactivado o editado desde otra pantalla u otro dispositivo.
+    const { customer: freshCustomer } = useCustomer(isEditing ? undefined : customer.id);
+    const currentCustomer = freshCustomer ?? customer;
+    const isCustomerInactive = !isEditing && !currentCustomer.active;
+    const needsAddress = isShipping && !isEditing;
+    const {
+        addresses: activeAddresses,
+        isLoading: addressesLoading,
+        error: addressesError,
+    } = useCustomerAddresses(needsAddress ? customer.id : undefined, { activeOnly: true });
+    const canCheckAddresses = !addressesLoading && !addressesError;
+    const selectedAddress = address?.active
+        ? (canCheckAddresses ? activeAddresses.find((item) => item.id === address.id) : address)
+        : undefined;
+    const isAddressUnavailable = Boolean(address) && !selectedAddress;
+    const hasAddresses = currentCustomer.addressCount > 0;
+    const isShippingBlocked = needsAddress && !hasAddresses;
 
     const itemsTotal = items.reduce(
         (sum, item) => sum + item.subtotal,
@@ -188,7 +208,12 @@ export function OrderForm({
             return false;
         }
 
-        if (isShipping && !isEditing) {
+        if (isCustomerInactive) {
+            setFormError(INACTIVE_CUSTOMER_MESSAGE);
+            return false;
+        }
+
+        if (needsAddress) {
             if (!hasAddresses) {
                 setFormError(
                     'El cliente no tiene direcciones registradas para realizar un envío.',
@@ -196,7 +221,7 @@ export function OrderForm({
                 return false;
             }
 
-            if (!address) {
+            if (!selectedAddress) {
                 setFormError(
                     'Debes seleccionar una dirección de envío para el cliente.',
                 );
@@ -217,6 +242,7 @@ export function OrderForm({
 
     const isFormInvalid =
         isShippingBlocked ||
+        isCustomerInactive ||
         (effectiveSalesType === 'WITH_PRODUCTS' ? items.length === 0 : quickSaleAmount <= 0) ||
         ((isShipment || effectiveSalesType === 'QUICK_SALE') && customer.id === CUSTOMER_ANONYMOUS.id);
 
@@ -235,7 +261,7 @@ export function OrderForm({
             ) : null}
 
             <OrderCustomerSection
-                customer={customer}
+                customer={currentCustomer}
                 customerCredit={customerCredit}
                 customerDebt={customerDebt}
                 pendingOrders={accountSummary?.pendingOrders ?? 0}
@@ -245,10 +271,17 @@ export function OrderForm({
                 onSelectCustomer={isEditing ? () => {} : handleSelectCustomer}
             />
 
-            {isShipping && !isEditing && (
+            {isCustomerInactive ? (
+                <View style={styles.errorBox}>
+                    <Text style={styles.errorBoxText}>{INACTIVE_CUSTOMER_MESSAGE}</Text>
+                </View>
+            ) : null}
+
+            {needsAddress && (
                 <OrderAddressSection
-                    customer={customer}
-                    selectedAddress={address}
+                    customer={currentCustomer}
+                    selectedAddress={selectedAddress}
+                    isSelectedAddressUnavailable={isAddressUnavailable}
                     onSelectAddress={handleSelectAddress}
                     onAddCustomerAddress={handleAddCustomerAddress}
                 />
