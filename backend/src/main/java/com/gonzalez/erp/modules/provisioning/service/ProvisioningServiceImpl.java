@@ -1,11 +1,15 @@
 package com.gonzalez.erp.modules.provisioning.service;
 
+import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.SecurityUtils;
+import com.gonzalez.erp.config.security.TemporaryPasswords;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.exception.CompanyNameAlreadyExistsException;
 import com.gonzalez.erp.modules.companies.exception.CompanyTaxIdAlreadyExistsException;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
+import com.gonzalez.erp.modules.provisioning.dto.request.ChangeCompanyStatusRequest;
 import com.gonzalez.erp.modules.provisioning.dto.request.ProvisionCompanyRequest;
+import com.gonzalez.erp.modules.provisioning.dto.response.CompanyStatusResponse;
 import com.gonzalez.erp.modules.provisioning.dto.response.ProvisionCompanyResponse;
 import com.gonzalez.erp.modules.roles.entity.Permission;
 import com.gonzalez.erp.modules.roles.entity.Role;
@@ -20,8 +24,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.EnumSet;
 
 @Service
@@ -40,13 +42,12 @@ public class ProvisioningServiceImpl implements ProvisioningService {
 
         validateUniqueness(request);
 
-        String temporaryPassword = generateTemporaryPassword();
+        String temporaryPassword = TemporaryPasswords.generate();
 
         Company company = companyRepository.save(Company.builder()
                 .name(request.companyName())
                 .legalName(request.legalName())
                 .taxId(request.taxId())
-                .active(true)
                 .build());
 
         Role adminRole = createAdminRole(company);
@@ -74,6 +75,22 @@ public class ProvisioningServiceImpl implements ProvisioningService {
         );
     }
 
+    @Override
+    public CompanyStatusResponse changeCompanyStatus(Long companyId, ChangeCompanyStatusRequest request) {
+        checkPlatformAdminRole();
+
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Company not found with id: " + companyId));
+
+        // El corte es inmediato: JwtAuthFilter lee el estado en cada request.
+        switch (request.status()) {
+            case ACTIVE -> company.reactivate();
+            case SUSPENDED -> company.suspend(request.reason().trim());
+            case CANCELLED -> company.cancel(request.reason().trim());
+        }
+        return CompanyStatusResponse.from(company);
+    }
+
     private void checkPlatformAdminRole() {
         if (!SecurityUtils.getCurrentUserDetails().isPlatformAdmin()) {
             throw new AccessDeniedException("Only PLATFORM_ADMIN can provision companies");
@@ -99,12 +116,6 @@ public class ProvisioningServiceImpl implements ProvisioningService {
                 && companyRepository.existsByTaxId(request.taxId())) {
             throw new CompanyTaxIdAlreadyExistsException(request.taxId());
         }
-    }
-
-    private String generateTemporaryPassword() {
-        byte[] bytes = new byte[16];
-        new SecureRandom().nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     private Role createAdminRole(Company company) {

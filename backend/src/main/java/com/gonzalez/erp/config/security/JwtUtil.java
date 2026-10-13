@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Date;
 
 @Component
@@ -37,9 +38,17 @@ public class JwtUtil {
                 .compact();
     }
 
-    public String extractUsernameIfValid(String token) {
+    /** Datos del token que el filtro necesita para autenticar la request. */
+    public record ValidatedToken(String username, Instant issuedAt) {}
+
+    /** Devuelve null si la firma es inválida, el token expiró o está mal formado. */
+    public ValidatedToken validate(String token) {
         try {
-            return extractClaims(token).getSubject();
+            Claims claims = extractClaims(token);
+            Date issuedAt = claims.getIssuedAt();
+            return new ValidatedToken(
+                    claims.getSubject(),
+                    issuedAt != null ? issuedAt.toInstant() : null);
         } catch (JwtException | IllegalArgumentException e) {
             return null;
         }

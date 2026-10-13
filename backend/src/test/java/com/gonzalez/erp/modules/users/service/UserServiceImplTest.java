@@ -2,12 +2,14 @@ package com.gonzalez.erp.modules.users.service;
 
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.CustomUserDetails;
+import com.gonzalez.erp.config.security.LoginAttemptService;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.roles.entity.Permission;
 import com.gonzalez.erp.modules.roles.entity.Role;
 import com.gonzalez.erp.modules.roles.repository.RoleRepository;
 import com.gonzalez.erp.modules.users.dto.request.UserRequest;
+import com.gonzalez.erp.modules.users.dto.response.PasswordResetResponse;
 import com.gonzalez.erp.modules.users.entity.User;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -18,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -42,11 +45,13 @@ class UserServiceImplTest {
     @Mock private RoleRepository roleRepository;
     @Mock private CompanyRepository companyRepository;
     @Mock private PasswordEncoder passwordEncoder;
+    @Mock private LoginAttemptService loginAttemptService;
 
     @InjectMocks private UserServiceImpl userService;
 
     private Company company;
     private Role adminRole;
+    private User tenantAdmin;
 
     @BeforeEach
     void setUp() {
@@ -60,7 +65,7 @@ class UserServiceImplTest {
                 .build();
         adminRole.setId(ROLE_ID);
 
-        User tenantAdmin = User.builder()
+        tenantAdmin = User.builder()
                 .username("admin")
                 .email("admin@acme.com")
                 .password("x")
@@ -69,6 +74,7 @@ class UserServiceImplTest {
                 .role(adminRole)
                 .company(company)
                 .build();
+        tenantAdmin.setId(1L);
         CustomUserDetails details = new CustomUserDetails(tenantAdmin);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(details, null, details.getAuthorities()));
@@ -101,6 +107,58 @@ class UserServiceImplTest {
         assertThatThrownBy(() -> userService.create(request(foreignRoleId)))
                 .isInstanceOf(ResourceNotFoundException.class);
         verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void resetPasswordReturnsTemporaryPasswordAndRevokesSessions() {
+        User employee = User.builder()
+                .username("vendedor")
+                .email("vendedor@acme.com")
+                .password("hash-viejo")
+                .firstName("Ven")
+                .lastName("Dedor")
+                .role(adminRole)
+                .company(company)
+                .build();
+        employee.setId(2L);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(employee));
+        when(passwordEncoder.encode(any())).thenAnswer(inv -> "hash:" + inv.getArgument(0));
+
+        PasswordResetResponse response = userService.resetPassword(2L);
+
+        assertThat(response.temporaryPassword()).isNotBlank();
+        assertThat(employee.getPassword()).isEqualTo("hash:" + response.temporaryPassword());
+        assertThat(employee.getPasswordChangedAt()).isNotNull();
+        verify(loginAttemptService).recordSuccess("vendedor");
+    }
+
+    @Test
+    void cannotResetOwnPassword() {
+        when(userRepository.findById(1L)).thenReturn(Optional.of(tenantAdmin));
+
+        assertThatThrownBy(() -> userService.resetPassword(1L))
+                .isInstanceOf(AccessDeniedException.class);
+        assertThat(tenantAdmin.getPasswordChangedAt()).isNull();
+    }
+
+    @Test
+    void cannotResetPasswordOfUserFromAnotherCompany() {
+        Company other = Company.builder().name("Otra").build();
+        other.setId(2L);
+        User foreign = User.builder()
+                .username("ajeno")
+                .email("ajeno@otra.com")
+                .password("x")
+                .firstName("A")
+                .lastName("Jeno")
+                .company(other)
+                .build();
+        foreign.setId(3L);
+        when(userRepository.findById(3L)).thenReturn(Optional.of(foreign));
+
+        assertThatThrownBy(() -> userService.resetPassword(3L))
+                .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(foreign.getPasswordChangedAt()).isNull();
     }
 
     private UserRequest request(Long roleId) {

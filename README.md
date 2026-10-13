@@ -60,6 +60,12 @@ docker compose up -d
 
 Levanta PostgreSQL 17 en `localhost:5432` con la base `erp_db` (usuario y contraseña `postgres`). Hibernate crea y actualiza las tablas automáticamente (`ddl-auto: update`).
 
+`ddl-auto: update` agrega columnas pero nunca las borra. Si tu base es anterior al estado de empresa (`companies.status`), eliminá la columna vieja o fallará el alta de empresas:
+
+```sql
+ALTER TABLE companies DROP COLUMN IF EXISTS active;
+```
+
 ### 2. Backend
 
 Spring Boot **no lee archivos `.env`** por sí solo: tenés que definir las variables de entorno en tu shell o en la configuración de ejecución de tu IDE. Usá [backend/.env.example](backend/.env.example) como referencia.

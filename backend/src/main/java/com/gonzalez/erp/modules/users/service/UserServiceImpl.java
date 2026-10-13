@@ -1,13 +1,16 @@
 package com.gonzalez.erp.modules.users.service;
 
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.config.security.LoginAttemptService;
 import com.gonzalez.erp.config.security.SecurityUtils;
+import com.gonzalez.erp.config.security.TemporaryPasswords;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.roles.entity.Role;
 import com.gonzalez.erp.modules.roles.repository.RoleRepository;
 import com.gonzalez.erp.modules.users.dto.request.UserRequest;
 import com.gonzalez.erp.modules.users.dto.request.UserUpdateRequest;
+import com.gonzalez.erp.modules.users.dto.response.PasswordResetResponse;
 import com.gonzalez.erp.modules.users.dto.response.UserResponse;
 import com.gonzalez.erp.modules.users.entity.User;
 import com.gonzalez.erp.modules.users.exception.UserEmailAlreadyExistsException;
@@ -31,6 +34,7 @@ public class UserServiceImpl implements UserService {
     private final RoleRepository roleRepository;
     private final CompanyRepository companyRepository;
     private final PasswordEncoder passwordEncoder;
+    private final LoginAttemptService loginAttemptService;
 
     @Override
     public List<UserResponse> findAll(Boolean active) {
@@ -109,6 +113,24 @@ public class UserServiceImpl implements UserService {
         User user = findUserOrThrow(id);
         user.activate();
         return UserMapper.toResponse(user);
+    }
+
+    @Override
+    @Transactional
+    public PasswordResetResponse resetPassword(Long id) {
+        User user = findUserOrThrow(id);
+        // La propia se cambia con /auth/change-password, que exige la contraseña actual:
+        // así una sesión robada de un admin no alcanza para quedarse con la cuenta.
+        if (user.getId().equals(SecurityUtils.getCurrentUserId())) {
+            throw new AccessDeniedException("Use change-password to change your own password");
+        }
+
+        String temporaryPassword = TemporaryPasswords.generate();
+        user.updatePassword(passwordEncoder.encode(temporaryPassword));
+        // Si el usuario estaba bloqueado por intentos fallidos, el reset lo habilita.
+        loginAttemptService.recordSuccess(user.getUsername());
+
+        return new PasswordResetResponse(user.getId(), user.getUsername(), temporaryPassword);
     }
 
     private Role findAssignableRoleOrThrow(Long roleId, Long companyId) {

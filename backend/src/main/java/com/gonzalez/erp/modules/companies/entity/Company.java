@@ -1,8 +1,11 @@
 package com.gonzalez.erp.modules.companies.entity;
 
 import com.gonzalez.erp.common.entity.BaseEntity;
+import com.gonzalez.erp.modules.companies.exception.InvalidCompanyStatusTransitionException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -10,6 +13,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
+
+import java.time.Instant;
 
 @Entity
 @Table(name = "companies")
@@ -32,9 +38,18 @@ public class Company extends BaseEntity {
     @Column(unique = true, length = 20)
     private String taxId;
 
-    @Column(nullable = false)
+    // El default de columna permite que ddl-auto agregue la columna sobre filas existentes.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @ColumnDefault("'ACTIVE'")
     @Builder.Default
-    private boolean active = true;
+    private CompanyStatus status = CompanyStatus.ACTIVE;
+
+    @Column(name = "status_reason", length = 500)
+    private String statusReason;
+
+    @Column(name = "status_changed_at")
+    private Instant statusChangedAt;
 
     public void update(String name, String legalName, String taxId) {
         this.name = name;
@@ -42,11 +57,37 @@ public class Company extends BaseEntity {
         this.taxId = taxId;
     }
 
-    public void deactivate() {
-        this.active = false;
+    public boolean isActive() {
+        return status == CompanyStatus.ACTIVE;
     }
 
-    public void activate() {
-        this.active = true;
+    public void suspend(String reason) {
+        requireStatus(CompanyStatus.SUSPENDED, CompanyStatus.ACTIVE);
+        changeStatus(CompanyStatus.SUSPENDED, reason);
+    }
+
+    public void reactivate() {
+        requireStatus(CompanyStatus.ACTIVE, CompanyStatus.SUSPENDED);
+        changeStatus(CompanyStatus.ACTIVE, null);
+    }
+
+    public void cancel(String reason) {
+        requireStatus(CompanyStatus.CANCELLED, CompanyStatus.ACTIVE, CompanyStatus.SUSPENDED);
+        changeStatus(CompanyStatus.CANCELLED, reason);
+    }
+
+    private void requireStatus(CompanyStatus target, CompanyStatus... allowedFrom) {
+        for (CompanyStatus allowed : allowedFrom) {
+            if (status == allowed) {
+                return;
+            }
+        }
+        throw new InvalidCompanyStatusTransitionException(status, target);
+    }
+
+    private void changeStatus(CompanyStatus newStatus, String reason) {
+        this.status = newStatus;
+        this.statusReason = reason;
+        this.statusChangedAt = Instant.now();
     }
 }

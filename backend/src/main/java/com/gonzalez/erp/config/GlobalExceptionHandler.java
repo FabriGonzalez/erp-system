@@ -2,7 +2,11 @@ package com.gonzalez.erp.config;
 
 import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.modules.auth.exception.InvalidPasswordChangeException;
+import com.gonzalez.erp.modules.auth.exception.TooManyLoginAttemptsException;
 import com.gonzalez.erp.modules.companies.exception.CompanyNameAlreadyExistsException;
+import com.gonzalez.erp.modules.companies.exception.CompanyNotActiveException;
+import com.gonzalez.erp.modules.companies.exception.InvalidCompanyStatusTransitionException;
 import com.gonzalez.erp.modules.branches.exception.BranchNameAlreadyExistsException;
 import com.gonzalez.erp.modules.categories.exception.CategoryNameAlreadyExistsException;
 import com.gonzalez.erp.modules.customers.exception.CustomerDocumentAlreadyExistsException;
@@ -28,9 +32,11 @@ import com.gonzalez.erp.modules.users.exception.UserEmailAlreadyExistsException;
 import com.gonzalez.erp.modules.users.exception.UserUsernameAlreadyExistsException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -52,6 +58,79 @@ public class GlobalExceptionHandler {
                                                 request.getRequestURI()
                                 ));
         }
+
+    // Sin este handler el catch-all de Exception devolvía 500 ante credenciales inválidas.
+    // El mensaje es siempre el mismo para no revelar si el usuario existe o está deshabilitado.
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthentication(
+            AuthenticationException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(ErrorResponse.of(
+                        HttpStatus.UNAUTHORIZED.value(),
+                        HttpStatus.UNAUTHORIZED.getReasonPhrase(),
+                        "Invalid credentials",
+                        request.getRequestURI(),
+                        "INVALID_CREDENTIALS"
+                ));
+    }
+
+    @ExceptionHandler(TooManyLoginAttemptsException.class)
+    public ResponseEntity<ErrorResponse> handleTooManyLoginAttempts(
+            TooManyLoginAttemptsException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .body(ErrorResponse.of(
+                        HttpStatus.TOO_MANY_REQUESTS.value(),
+                        HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "TOO_MANY_LOGIN_ATTEMPTS"
+                ));
+    }
+
+    @ExceptionHandler(CompanyNotActiveException.class)
+    public ResponseEntity<ErrorResponse> handleCompanyNotActive(
+            CompanyNotActiveException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of(
+                        HttpStatus.FORBIDDEN.value(),
+                        HttpStatus.FORBIDDEN.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        ex.getCode()
+                ));
+    }
+
+    @ExceptionHandler(InvalidPasswordChangeException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidPasswordChange(
+            InvalidPasswordChangeException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        ex.getCode()
+                ));
+    }
+
+    @ExceptionHandler(InvalidCompanyStatusTransitionException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCompanyStatusTransition(
+            InvalidCompanyStatusTransitionException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(
+                        HttpStatus.CONFLICT.value(),
+                        HttpStatus.CONFLICT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "INVALID_COMPANY_STATUS_TRANSITION"
+                ));
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleResourceNotFound(

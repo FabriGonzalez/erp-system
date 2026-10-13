@@ -2,6 +2,7 @@ package com.gonzalez.erp.modules.users.controller;
 
 import com.gonzalez.erp.modules.users.dto.request.UserRequest;
 import com.gonzalez.erp.modules.users.dto.request.UserUpdateRequest;
+import com.gonzalez.erp.modules.users.dto.response.PasswordResetResponse;
 import com.gonzalez.erp.modules.users.dto.response.UserResponse;
 import com.gonzalez.erp.modules.users.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -88,5 +89,18 @@ public class UserController {
     })
     public ResponseEntity<UserResponse> activate(@PathVariable Long id) {
         return ResponseEntity.ok(userService.activate(id));
+    }
+
+    @PostMapping("/{id}/password-reset")
+    @Operation(summary = "Restablecer contraseña de un usuario",
+               description = "Genera una contraseña temporal, la devuelve una sola vez y cierra las sesiones "
+                       + "abiertas del usuario. No aplica al propio usuario.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Contraseña restablecida"),
+            @ApiResponse(responseCode = "403", description = "Intento de restablecer la propia contraseña"),
+            @ApiResponse(responseCode = "404", description = "Usuario no encontrado")
+    })
+    public ResponseEntity<PasswordResetResponse> resetPassword(@PathVariable Long id) {
+        return ResponseEntity.ok(userService.resetPassword(id));
     }
 }

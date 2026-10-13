@@ -6,6 +6,8 @@ import com.gonzalez.erp.modules.roles.entity.Role;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.Instant;
+
 @Entity
 @Table(name = "users")
 @Getter @NoArgsConstructor @AllArgsConstructor @Builder
@@ -49,6 +51,10 @@ public class User extends BaseEntity {
     @Builder.Default
     private boolean active = true;
 
+    /** Los JWT emitidos antes de este instante dejan de ser válidos. */
+    @Column(name = "password_changed_at")
+    private Instant passwordChangedAt;
+
     public void update(String username, String email, String firstName, String lastName, Role role) {
         this.username = username;
         this.email = email;
@@ -57,8 +63,10 @@ public class User extends BaseEntity {
         this.role = role;
     }
 
-    public void updatePassword(String password) {
-        this.password = password;
+    /** Recibe la contraseña ya codificada e invalida las sesiones abiertas. */
+    public void updatePassword(String encodedPassword) {
+        this.password = encodedPassword;
+        this.passwordChangedAt = Instant.now();
     }
 
     public void deactivate() {
