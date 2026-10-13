@@ -1,5 +1,6 @@
 import { ProductAttributeFormModal } from '@/components/attributes/ProductAttributeFormModal';
 import { ProductAttributeValueFormModal } from '@/components/attributes/ProductAttributeValueFormModal';
+import { CategoryFormModal } from '@/components/categories/CategoryFormModal';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useBranchStore } from '@/stores/branch-store';
@@ -15,10 +16,12 @@ import {
     ProductFormData,
     ProductVariantAttribute,
 } from '@/types/product';
+import { hasPermission } from '@/utils/permissions';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -210,11 +213,19 @@ export function ProductForm({
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+    const [isCreateCategoryModalVisible, setIsCreateCategoryModalVisible] = useState(false);
+    const openCreateCategoryOnDismissRef = useRef(false);
+    const canCreateCategory = useAuthStore((state) => hasPermission(state.user, 'ADMINISTRAR_CATEGORIAS'));
     const [isCreateAttrModalVisible, setIsCreateAttrModalVisible] = useState(false);
     const [createValueAttrId, setCreateValueAttrId] = useState<string | null>(null);
 
     const activeBranch = useBranchStore((state) => state.activeBranch);
     const selectedCategory = categories.find((category) => category.id === categoryId);
+
+    function selectCategory(id: string) {
+        setCategoryId(id);
+        setErrors((current) => ({ ...current, categoryId: '' }));
+    }
 
     function updateName(value: string) {
         setName(value);
@@ -642,15 +653,30 @@ export function ProductForm({
                 visible={categoryModalVisible}
                 categories={categories}
                 selectedCategoryId={categoryId}
-                onSelect={(id) => {
-                    setCategoryId(id);
-
-                    setErrors((current) => ({
-                        ...current,
-                        categoryId: '',
-                    }));
-                }}
+                onSelect={selectCategory}
                 onClose={() => setCategoryModalVisible(false)}
+                onCreateCategory={canCreateCategory ? () => {
+                    // Dos Modal a la vez fallan en iOS: se cierra el selector y el alta se abre
+                    // en onDismiss, cuando terminó de cerrarse. Android y web no tienen onDismiss.
+                    setCategoryModalVisible(false);
+                    if (Platform.OS === 'ios') {
+                        openCreateCategoryOnDismissRef.current = true;
+                    } else {
+                        setIsCreateCategoryModalVisible(true);
+                    }
+                } : undefined}
+                onDismiss={() => {
+                    if (openCreateCategoryOnDismissRef.current) {
+                        openCreateCategoryOnDismissRef.current = false;
+                        setIsCreateCategoryModalVisible(true);
+                    }
+                }}
+            />
+
+            <CategoryFormModal
+                visible={isCreateCategoryModalVisible}
+                onClose={() => setIsCreateCategoryModalVisible(false)}
+                onSaved={(category) => selectCategory(category.id)}
             />
 
             <ProductAttributeFormModal

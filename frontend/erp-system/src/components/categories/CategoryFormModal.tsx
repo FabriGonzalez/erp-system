@@ -12,12 +12,15 @@ type CategoryFormModalProps = {
     visible: boolean;
     categoryToEdit?: Category | null;
     onClose: () => void;
+    // Para usarlo dentro de otro flujo (p. ej. elegir la categoría recién creada en un producto).
+    onSaved?: (category: Category) => void;
 };
 
 export function CategoryFormModal({
     visible,
     categoryToEdit,
     onClose,
+    onSaved,
 }: CategoryFormModalProps) {
     const token = useAuthStore((state) => state.token);
     const { createCategory, updateCategory } = useCategoryStore();
@@ -73,11 +76,10 @@ export function CategoryFormModal({
                 description: trimmedDescription || null,
             };
 
-            if (isEdit && categoryToEdit) {
-                await updateCategory(categoryToEdit.id, data, token);
-            } else {
-                await createCategory(data, token);
-            }
+            const saved = isEdit && categoryToEdit
+                ? await updateCategory(categoryToEdit.id, data, token)
+                : await createCategory(data, token);
+            onSaved?.(saved);
             onClose();
         } catch (error: unknown) {
             setErrorMessage(

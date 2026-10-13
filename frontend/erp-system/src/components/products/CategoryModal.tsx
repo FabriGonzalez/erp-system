@@ -11,6 +11,11 @@ interface CategoryModalProps {
     selectedCategoryId: string;
     onSelect: (categoryId: string) => void;
     onClose: () => void;
+    // Si se pasa, aparece "Crear categoría" debajo de la lista. El llamador cierra este
+    // modal antes de abrir el alta: dos Modal superpuestos fallan en iOS.
+    onCreateCategory?: () => void;
+    // iOS: se llama cuando el modal terminó de cerrarse. Recién ahí se puede abrir otro.
+    onDismiss?: () => void;
 }
 
 export function CategoryModal({
@@ -19,6 +24,8 @@ export function CategoryModal({
     selectedCategoryId,
     onSelect,
     onClose,
+    onCreateCategory,
+    onDismiss,
 }: CategoryModalProps) {
     function handleSelect(categoryId: string) {
         onSelect(categoryId);
@@ -31,6 +38,7 @@ export function CategoryModal({
             animationType="slide"
             transparent
             onRequestClose={onClose}
+            onDismiss={onDismiss}
         >
             <View style={styles.overlay}>
                 <View style={styles.content}>
@@ -88,6 +96,24 @@ export function CategoryModal({
                                 </Pressable>
                             );
                         })}
+
+                        {categories.length === 0 ? (
+                            <Text style={styles.emptyText}>Todavía no hay categorías.</Text>
+                        ) : null}
+
+                        {onCreateCategory ? (
+                            <Pressable
+                                style={({ pressed }) => [styles.createButton, pressed && styles.pressed]}
+                                onPress={onCreateCategory}
+                            >
+                                <SymbolView
+                                    name={{ ios: 'plus.circle', android: 'add_circle', web: 'add_circle' }}
+                                    size={20}
+                                    tintColor={Colors.primary}
+                                />
+                                <Text style={styles.createButtonText}>Crear categoría</Text>
+                            </Pressable>
+                        ) : null}
                     </ScrollView>
                 </View>
             </View>
@@ -167,5 +193,36 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: Colors.textSecondary,
         marginTop: 2,
+    },
+
+    emptyText: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+        textAlign: 'center',
+        paddingVertical: Spacing.md,
+    },
+
+    createButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: Spacing.xs,
+        marginTop: Spacing.sm,
+        marginBottom: Spacing.md,
+        paddingVertical: Spacing.md,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        borderColor: Colors.primary,
+    },
+
+    createButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: Colors.primary,
+    },
+
+    pressed: {
+        opacity: 0.7,
     },
 });
