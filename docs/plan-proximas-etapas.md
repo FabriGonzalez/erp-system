@@ -1,7 +1,7 @@
 # Plan de las etapas que quedan
 
-Estado al 2026-10-13, rama `feature/customers-api`. Etapas 1 a 4 de clientes terminadas y commiteadas.
-Para retomar: pasarle este archivo a Claude y elegir la etapa.
+Estado al 2026-10-14, rama `feature/customer-payments`. Para retomar: pasarle este archivo a Claude y
+elegir la etapa.
 
 ## Cómo se trabaja (vale para todas las etapas)
 
@@ -15,108 +15,157 @@ Para retomar: pasarle este archivo a Claude y elegir la etapa.
   No mezclar los dos esquemas para la misma entidad.
 - No navegar entre stacks de Expo Router: reutilizar componentes o re-exportar pantallas.
 
----
+## Hecho
 
-## Etapa 5 — Dirección de envío persistida
-
-**Problema.** El pedido con envío elige una dirección del cliente, pero nunca la manda: el backend no
-guarda dónde se entrega. `OrderResponse` no trae dirección, así que `OrderInfoCard` nunca la muestra
-para pedidos reales.
-
-**Lo que ya existe en el backend.**
-- `Shipment` (1:1 con `Order`, unique `order_id`): snapshot de la dirección
-  (street, number, apartment, floor, city, state, postalCode, **country NOT NULL**, reference).
-- `POST/GET/PATCH /api/v1/orders/{orderId}/shipment`: crear y editar solo en `TO_PREPARE`.
-
-**Decisiones a tomar antes de arrancar.**
-1. **Transacción única (recomendado):** `OrderRequest.shippingAddressId` y el backend crea el
-   `Shipment` dentro del mismo `create`. La otra opción es que el frontend llame `POST /shipment`
-   después del alta, pero si esa segunda llamada falla queda un pedido sin dirección.
-2. **`country`:** en `Address` es opcional y en `Shipment` obligatorio. Opciones: default
-   `"Argentina"` al copiar, o volver nullable la columna (con `ddl-auto` hay que hacer
-   `ALTER TABLE ... DROP NOT NULL` a mano y documentarlo).
-3. ¿Se puede cambiar la dirección de un pedido ya creado (mientras está `TO_PREPARE`)?
-   El backend ya lo permite con `PATCH /shipment`.
-
-**Backend.**
-- `OrderRequest.shippingAddressId` (Long, opcional). Validar: obligatorio si `deliveryType = SHIPPING`,
-  prohibido si es `LOCAL_PICKUP`; la dirección debe ser **del cliente del pedido**, **activa** y de la
-  misma empresa (400 con código propio, p. ej. `INVALID_SHIPPING_ADDRESS`).
-- Crear el `Shipment` copiando los campos de la dirección (snapshot: si después editan la dirección del
-  cliente, el pedido conserva la original).
-- `OrderResponse.shipment` (o `shippingAddress`) con el snapshot, para detalle y listados.
-- **Seguridad:** `ShipmentServiceImpl.findOrderOrThrow` solo filtra por empresa; no verifica que el
-  usuario esté asignado a la sucursal del pedido (`OrderServiceImpl` sí lo hace). Igualarlo.
-- Tests unitarios de la validación y E2E: alta con dirección, dirección de otro cliente, inactiva,
-  `LOCAL_PICKUP` con dirección, editar la dirección del cliente y ver que el pedido no cambia.
-
-**Frontend.**
-- `utils/order-request.ts`, `orders/new.tsx` y `shipments/new.tsx`: mandar `shippingAddressId` del borrador
-  (hoy hay un comentario en `shipments/new.tsx` que dice que todavía no se envía).
-- `order-service`: normalizar el snapshot a un tipo propio (no reutilizar `CustomerAddress`, que tiene
-  `isMain`/`active`), y `OrderInfoCard` lo muestra con `formatAddress`.
-- `order-draft-store.initEditOrder`: hoy toma `order.address`; pasar al snapshot.
-- Mensaje en español para el código nuevo en `order-service`.
-- Si se decide editar la dirección de un pedido existente: pantalla que reutilice `SelectAddressScreen`
-  dentro del mismo stack.
-
-**Pruebas manuales.** Crear envío con dirección, verla en el detalle; editar la dirección del cliente y
-confirmar que el pedido mantiene la vieja; venta en local sin dirección.
+- **Etapas 1-4 — Clientes** (`feature/customers-api`): API real, TanStack Query, integración con pedidos.
+- **Etapa 5 — Dirección de envío persistida** (`feature/shipping-address`, 1447c90):
+  `OrderRequest.shippingAddressId`, snapshot en `Shipment`, `OrderResponse.shipment`.
+- **Etapa 6 — Cuenta corriente y pagos reales** (`feature/customer-payments`, e5c7337 y aa4f843):
+  resumen, pendientes, movimientos, deudores, registrar y anular pagos. Se borraron
+  `customer-account-store`, `utils/customer-account.ts` y `data/mock-orders.ts`.
 
 ---
 
-## Etapa 6 — Cuenta corriente y pagos reales
+## Mapa de integración (relevado el 2026-10-14)
 
-**Problema.** `customers/[id]/debts.tsx` y `RegisterCustomerPaymentModal` calculan deuda, pagos y
-asignaciones en el frontend con `customer-account-store` (persistido localmente y sembrado con
-`data/mock-orders.ts`). El backend ya hace todo eso.
+| Módulo | Backend | Frontend |
+|---|---|---|
+| Auth, sucursales, categorías, productos, atributos, stock, pedidos/envíos | Completo | Conectado (Zustand) |
+| Clientes, cuenta corriente, pagos | Completo | Conectado (TanStack) |
+| **Transferencias** `/api/v1/inventory/transfers` | Completo (GET, GET `/{id}`, POST, PATCH `/{id}/cancel`) | **Nada** |
+| **Usuarios** `/api/v1/users` (CRUD, activar/desactivar, `password-reset`) | Completo | Solo el listado dentro de `BranchUsersAssignmentModal`; el ítem "Usuarios" de `more.tsx` no hace nada |
+| **Roles** `/api/v1/roles` | Completo (falta un endpoint que liste los permisos) | **Nada** |
+| **Movimientos de stock** `/api/v1/inventory/movements` | Solo lectura, sin paginar, la respuesta solo trae `stockId` | **Nada** |
+| Dashboard / reportes | **Nada** (solo existe el permiso `VER_REPORTES`) | Ítem "Analytics – Próximamente" en `more.tsx` |
 
-**Lo que ya existe en el backend.**
-- `GET /api/v1/customers/{id}/account` → `{ balance, debt, credit, pendingOrders }` (ya usado por
-  `useCustomerAccountSummary`).
-- `GET /api/v1/customers/debtors` (ya usado por `debtors.tsx`).
-- `GET /api/v1/orders?customerId=&paymentStatus=PENDING|PARTIAL` → pedidos con `total`, `amountPaid`,
-  `balance`, `paymentStatus`.
-- `POST /api/v1/payments` `{ customerId, branchId, amount, method }`: asigna FIFO en el backend.
-  `GET /api/v1/payments?customerId=`, `PATCH /api/v1/payments/{id}/cancel`.
-- Permiso `REGISTRAR_PAGOS`.
+---
+
+## Etapa 7 — Permisos reales
+
+Va primero: rompe la UI para cualquier rol que no se llame "Administrador" y las etapas 8 y 9 dependen
+de ella.
+
+**Problema.**
+- `src/types/auth.ts:10-28`: el tipo `Permission` usa nombres inventados (`PRODUCTS_CREATE`,
+  `ORDERS_UPDATE`, ...) que no existen en el backend. `auth-store.ts:58` lo tapa con un cast y
+  `utils/permissions.ts:hasPermission` recibe `string`.
+- Checks que nunca coinciden con un permiso real (solo pasan por el nombre del rol):
+  `(tabs)/products/index.tsx:67-72`, `(tabs)/shipments/[id]/index.tsx:65`, `operations/[id].tsx:59`.
+  Un empleado con `CREAR_PEDIDOS`/`PREPARAR_PEDIDOS` no puede despachar ni cancelar desde la app.
+- `(tabs)/more.tsx:22`: la sección Administración se muestra solo si el rol se llama "Administrador".
+- Sin chequeo: ajuste de stock (`inventory/index.tsx`, `StockAdjustModal`), categorías, atributos,
+  sucursales.
 
 **Plan.**
-1. `services/payment-service.ts` (createPayment, listPayments, cancelPayment) y tipos.
-2. `hooks/use-customer-account-queries.ts` con TanStack: resumen de cuenta, pedidos pendientes del
-   cliente, pagos del cliente; mutaciones que invalidan cuenta, pendientes, deudores y el detalle del
-   cliente. Migrar `useCustomerAccountSummary` y `debtors.tsx` a estas claves.
-3. Reescribir `debts.tsx`: pedidos pendientes desde el backend (ya traen `balance`), total desde
-   `/account`, historial de pagos, botón "Registrar pago" solo con `REGISTRAR_PAGOS`.
-4. `RegisterCustomerPaymentModal`: llamar a `POST /payments` con la sucursal activa; mostrar las
-   asignaciones que devuelve el backend en lugar de calcularlas.
-5. Cancelar pago (con `confirmAction`), si se decide exponerlo.
-6. `order-draft-store.initEditOrder`: usar `order.amountPaid` del backend en vez de
-   `useCustomerAccountStore.getOrderPaidAmount`.
-7. Borrar `customer-account-store.ts`, `utils/customer-account.ts` (si no queda uso),
-   `data/mock-orders.ts` y su persistencia en AsyncStorage (limpiar la clave vieja una vez).
+- `Permission` = los 17 valores de `backend/.../roles/entity/Permission.java`; quitar el cast y el `string`.
+- Reemplazar los checks según el `@PreAuthorize` real: productos y atributos → `ADMINISTRAR_PRODUCTOS`;
+  despachar → `PREPARAR_PEDIDOS`; editar/cancelar pedido → `CREAR_PEDIDOS`; categorías →
+  `ADMINISTRAR_CATEGORIAS`; sucursales → `ADMINISTRAR_SUCURSALES`; ajuste → `AJUSTAR_STOCK`.
+- Ítems de Administración en `more.tsx` según el permiso de cada uno, no por el nombre del rol.
+- Borrar `src/data/mock-user.ts` (sin uso y con los nombres viejos).
 
-**Decisiones a tomar.** ¿Se permite cancelar pagos desde la app? ¿Se muestra el historial de
-movimientos de la cuenta (cargos, pagos, ajustes por edición) o solo pendientes y pagos?
+**Decisión a tomar.** Los permisos y el rol se guardan al loguearse y nunca se refrescan (`hydrate()`
+solo lee AsyncStorage). Para refrescarlos hace falta `GET /api/v1/auth/me` en el backend, que no existe.
+Recomendado agregarlo.
 
-**Pruebas.** Pago parcial y total (FIFO entre dos pedidos), pago mayor a la deuda (queda saldo a
-favor), cancelar pago, editar un pedido y ver el ajuste en la cuenta, deudores coherente con el detalle.
+**Pruebas.** Con un usuario **no administrador**: despachar, cancelar, editar, ver solo los ítems de
+Administración que le corresponden; el administrador sigue viendo todo.
 
 ---
 
-## Pendientes técnicos (tanda aparte, sin orden fijo)
+## Etapa 8 — Transferencias entre sucursales
 
-- **Tipo `Permission` del frontend** (`types/auth.ts`): usa nombres inventados (`PRODUCTS_CREATE`,
-  ...) que no coinciden con los del backend (`ADMINISTRAR_CLIENTES`, `CREAR_PEDIDOS`, ...).
-  `hasPermission` recibe `string` para esquivarlo. Reemplazarlo por la lista real del backend.
-- **Migrar a TanStack Query** los demás módulos (productos, categorías, atributos, stock, pedidos),
-  de a uno y con decisión explícita. Pedidos es el que más se beneficia (listados por pestaña,
-  detalle, invalidación tras editar/cancelar/despachar).
-- **Mocks sin uso**: `data/mock-dashboard.ts` y `data/mock-user.ts` no se importan desde ningún lado;
-  el dashboard sigue sin datos reales.
-- **Mensajes de error del backend en inglés** que llegan tal cual a la UI (productos, por ejemplo
-  `INVALID_PRODUCT_VARIANTS`): mapear por `code` como ya hace `order-service`.
-- **Precio al editar un pedido**: al editar, los ítems toman el precio actual de la variante (no el
-  del momento de la venta). Confirmar si es lo deseado.
-- `BackendApplicationTests` (test de contexto): su último reporte (2026-10-06) es un fallo y no se
-  volvió a correr; los tests unitarios se corren excluyéndolo (`-Dtest=!BackendApplicationTests`).
+**Lo que ya existe en el backend.** `StockTransferController` (`/api/v1/inventory/transfers`):
+- `GET` (sin paginar) y `GET /{id}` → `StockTransferResponse{id, originBranchId/Name,
+  destinationBranchId/Name, status: CONFIRMED|CANCELLED, createdById/Username, confirmedAt, items}`.
+- `POST` `{originBranchId, destinationBranchId, items: [{productVariantId, quantity ≥ 1}]}` → 201.
+- `PATCH /{id}/cancel`.
+- Permisos: lectura `TRANSFERIR_STOCK` o `CONSULTAR_STOCK`; escritura `TRANSFERIR_STOCK`.
+
+**Plan.**
+1. `types/transfer.ts`, `services/transfer-service.ts` (patrón de `payment-service.ts`: error con
+   `status`, ids normalizados a string), `hooks/use-transfer-queries.ts` (TanStack; módulo nuevo).
+2. Pantallas: listado, detalle, alta (origen = sucursal activa, destino, ítems con cantidad ≤ stock en
+   origen) y anular con `confirmAction`.
+3. Selector de variantes: reutilizar el componente de `orders/select-products` dentro del mismo stack.
+4. Tras crear o anular, releer el stock (Zustand: `stock-store`/`product-store`), igual que hace
+   `refreshAfterPayment` con los pedidos.
+5. Backend: `InvalidStockTransferException` responde 400 sin `code` → agregar `INVALID_STOCK_TRANSFER`
+   y mapearlo a español.
+
+**Pruebas.** Transferir entre dos sucursales y ver el stock en ambas; cantidad mayor al stock de origen;
+origen igual a destino; anular y ver el stock restaurado; usuario sin `TRANSFERIR_STOCK`.
+
+---
+
+## Etapa 9 — Usuarios y roles
+
+**Lo que ya existe en el backend.** Todo con `ADMINISTRAR_USUARIOS`:
+- `/api/v1/users`: listado (`active?`), detalle, alta `{username, password, email, firstName, lastName,
+  roleId}`, edición, activar/desactivar, `POST /{id}/password-reset` → contraseña temporal. Desactivar y
+  resetear sobre uno mismo da 403.
+- `/api/v1/roles`: listado, detalle, alta/edición `{name, code, description, permissions}`,
+  activar/desactivar. Los roles `system` no se pueden editar (403).
+
+**Plan.**
+1. `services/user-service.ts` (mover ahí `getCompanyUsers`/`getBranchUsers` de `branch-service.ts`),
+   `services/role-service.ts` y hooks TanStack.
+2. Usuarios: listado con filtro de activos, alta con rol, edición, activar/desactivar, reset mostrando la
+   contraseña temporal una sola vez. Ocultar las acciones sobre uno mismo.
+3. Roles: listado, alta/edición con checklist de permisos (etiquetas en español), activar/desactivar.
+4. Conectar el ítem "Usuarios" de `more.tsx`.
+
+**Decisión a tomar.** Lista de permisos hardcodeada en el frontend o `GET /api/v1/roles/permissions` en
+el backend (recomendado: evita que el enum se vuelva a desincronizar).
+
+---
+
+## Etapa 10 — Historial de movimientos de stock
+
+- Backend: `StockMovementResponse` solo trae `stockId`; agregar variante y sucursal, y paginación, antes
+  de exponer el listado general.
+- Frontend: historial por stock (`/inventory/movements/stock/{stockId}`) desde inventario, con tipo
+  (venta, ajuste, transferencia entrada/salida, devolución), cantidades y motivo.
+
+---
+
+## Etapa 11 — Errores en español y robustez del backend
+
+- Frontend: branch, category, product, product-attribute y stock-service muestran el `message` del
+  backend en inglés. Mapear por `code` como `order-service` (y revisar el fallback de `order-service`,
+  que también lo muestra). Evaluar un helper común en `api-client.ts`.
+- Backend:
+  - `CompanyTaxIdAlreadyExistsException` no está en `GlobalExceptionHandler` → 500 en vez de 409.
+  - Sin handler para `MethodArgumentTypeMismatchException`: `?status=FOO` da 500 en vez de 400.
+  - Sin `code`: los `*AlreadyExists` (409), los 404 y `ProductCategoryNotActiveException`.
+
+---
+
+## Etapa 12 — Dashboard / reportes
+
+No hay nada en ningún lado. Antes de codear, definir las métricas (ventas por período y sucursal, deuda
+total, stock bajo, ...). Después: endpoints con `VER_REPORTES` y pantalla. Borrar
+`src/data/mock-dashboard.ts` (sin uso).
+
+---
+
+## Pendientes chicos (sin orden; sumar a la etapa afín)
+
+- **Bug:** `products/[id]/index.tsx:32,142` lee `attributeValues` del store sin cargarlos; si no se
+  cargaron en otra pantalla, muestra el id del valor en lugar del nombre.
+- `fetchAttributes` hace una request de valores por atributo (N+1).
+- `product-store` pide todo `/inventory/stocks` y pisa `variant.stock`, que ya viene en el producto.
+  Verificar antes de cambiar la estrategia.
+- Redirección inicial inconsistente: `index.tsx` y `login.tsx` van a `/orders`, `_layout.tsx:45` a
+  `/shipments`.
+- `customers/[id]/debts.tsx` solo se abre desde `debtors.tsx`; evaluar acceso desde el detalle del cliente.
+- Pedidos: `normalizeOrder` descarta `paymentStatus` y `balance` (útiles en el listado); `quickSaleAmount`
+  no se puede editar; no hay transición CONFIRMED → TO_PREPARE en el backend.
+- Limpieza: `FRONTEND_DOCS.md` desactualizado (describe dashboard y login mock); clave huérfana
+  `@erp/active-branch-id` en AsyncStorage; funciones sin uso (`getBranchById`, `getCategoryById`,
+  `getStockById`, `getStocksByVariant`); "Mi Perfil" sin acción en `more.tsx`.
+- Migrar los demás módulos a TanStack Query, de a uno y con decisión explícita (pedidos primero).
+- Precio al editar un pedido: los ítems toman el precio actual de la variante. Confirmar si es lo deseado.
+- Permisos que el backend nunca chequea: `ADMINISTRAR_PRECIOS` y `ACCEDER_TODAS_SUCURSALES`.
+- `BackendApplicationTests` (test de contexto) falla desde 2026-10-06; los unitarios se corren con
+  `-Dtest=!BackendApplicationTests`.
