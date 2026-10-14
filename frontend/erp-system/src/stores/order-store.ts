@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 
+import { invalidateCustomerAccount } from '@/hooks/customer-account-keys';
 import {
     cancelOrder as cancelOrderRequest,
     createOrder as createOrderRequest,
@@ -9,6 +10,7 @@ import {
     updateOrder as updateOrderRequest,
 } from '@/services/order-service';
 import { useAuthStore } from '@/stores/auth-store';
+import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import {
     Order,
     OrderDeliveryFilter,
@@ -82,6 +84,14 @@ function upsertOrder(orders: Order[], updated: Order): Order[] {
     return orders.some((order) => order.id === updated.id)
         ? orders.map((order) => (order.id === updated.id ? updated : order))
         : [updated, ...orders];
+}
+
+// Alta, edición y cancelación cargan o revierten importes en la cuenta del cliente, que
+// vive en la caché de TanStack (cuenta corriente y deudores).
+function syncCustomerAccount(order: Order) {
+    if (order.customerId !== CUSTOMER_ANONYMOUS.id) {
+        invalidateCustomerAccount(order.customerId);
+    }
 }
 
 // Identifica la última carga de listado; las respuestas anteriores se descartan.
@@ -235,6 +245,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
             orders: upsertOrder(state.orders, order),
             totalElements: state.totalElements + 1,
         }));
+        syncCustomerAccount(order);
 
         return order;
     },
@@ -243,6 +254,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
         const order = await updateOrderRequest(id, data, token);
 
         set((state) => ({ orders: upsertOrder(state.orders, order) }));
+        syncCustomerAccount(order);
 
         return order;
     },
@@ -251,6 +263,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
         const order = await cancelOrderRequest(id, token, refundAction);
 
         set((state) => ({ orders: upsertOrder(state.orders, order) }));
+        syncCustomerAccount(order);
 
         return order;
     },

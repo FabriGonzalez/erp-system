@@ -1,46 +1,13 @@
-import { useEffect, useState } from 'react';
-
-import { getCustomerAccountSummary } from '@/services/customer-account-service';
-import { useAuthStore } from '@/stores/auth-store';
 import { Customer } from '@/types/customer';
 import { CustomerAccountSummary } from '@/types/customer-account';
-import { toBackendCustomerId } from '@/utils/order-request';
 
-type SummaryResult = {
-    key: string;
-    summary: CustomerAccountSummary | null;
-};
+import { useCustomerAccountSummaryQuery } from './use-customer-account-queries';
 
 /**
  * Estado de cuenta (deuda y saldo a favor) del cliente seleccionado.
- * Para el consumidor final, que no existe en el backend, devuelve null.
+ * Para el consumidor final, que no existe en el backend, o si falla, devuelve null:
+ * la venta sigue pudiendo hacerse sin aplicar crédito.
  */
-export function useCustomerAccountSummary(customer: Customer) {
-    const token = useAuthStore((state) => state.token);
-    const backendId = toBackendCustomerId(customer);
-    const key = backendId && token ? `${backendId}:${token}` : null;
-    const [result, setResult] = useState<SummaryResult | null>(null);
-
-    useEffect(() => {
-        if (!backendId || !token || !key) {
-            return;
-        }
-
-        let isCurrent = true;
-
-        getCustomerAccountSummary(String(backendId), token)
-            .then((summary) => {
-                if (isCurrent) setResult({ key, summary });
-            })
-            .catch(() => {
-                // Sin estado de cuenta, la venta sigue pudiendo hacerse sin aplicar crédito.
-                if (isCurrent) setResult({ key, summary: null });
-            });
-
-        return () => {
-            isCurrent = false;
-        };
-    }, [backendId, token, key]);
-
-    return result && result.key === key ? result.summary : null;
+export function useCustomerAccountSummary(customer: Customer): CustomerAccountSummary | null {
+    return useCustomerAccountSummaryQuery(customer.id).summary;
 }

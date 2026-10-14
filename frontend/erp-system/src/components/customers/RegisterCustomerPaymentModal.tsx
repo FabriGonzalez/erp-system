@@ -3,67 +3,76 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
+import { FilterChip } from '@/components/ui/FilterChip';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useCustomerAccountStore } from '@/stores/customer-account-store';
-import { Order } from '@/types/order';
+import {
+    useCustomerAccountSummaryQuery,
+    useRegisterPayment,
+} from '@/hooks/use-customer-account-queries';
+import { useBranchStore } from '@/stores/branch-store';
+import { PAYMENT_METHOD_LABELS, PaymentMethod } from '@/types/order';
+import { Payment } from '@/types/payment';
 import { formatCurrency } from '@/utils/format';
+
+const PAYMENT_METHODS = Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[];
 
 type RegisterCustomerPaymentModalProps = {
     visible: boolean;
     customerId: string;
-    orders: Order[];
-    branchId?: string;
     onClose: () => void;
 };
 
+/** Registra un pago del cliente; el backend lo aplica a sus pedidos del más viejo al más nuevo. */
 export function RegisterCustomerPaymentModal({
     visible,
     customerId,
-    orders,
-    branchId,
     onClose,
 }: RegisterCustomerPaymentModalProps) {
     const [amount, setAmount] = useState('');
+    const [method, setMethod] = useState<PaymentMethod>('CASH');
     const [error, setError] = useState<string | null>(null);
-    const [result, setResult] = useState<string | null>(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const recordCustomerPayment = useCustomerAccountStore((state) => state.recordCustomerPayment);
-    const debt = useCustomerAccountStore((state) => state.getCustomerDebt(customerId, orders));
-    const credit = useCustomerAccountStore((state) => state.getCustomerCredit(customerId));
+    const [registered, setRegistered] = useState<Payment | null>(null);
+    const activeBranch = useBranchStore((state) => state.activeBranch);
+    const { summary } = useCustomerAccountSummaryQuery(customerId);
+    const registerPayment = useRegisterPayment(customerId);
+    const isSubmitting = registerPayment.isPending;
 
     function handleClose() {
+        if (isSubmitting) return;
         setAmount('');
+        setMethod('CASH');
         setError(null);
-        setResult(null);
+        setRegistered(null);
         onClose();
     }
 
-    function handleSubmit() {
-        const numericAmount = Number(amount.replace(',', '.'));
+    async function handleSubmit() {
+        if (isSubmitting) return;
+
+        if (!activeBranch) {
+            setError('Elegí una sucursal activa para registrar el pago.');
+            return;
+        }
+
+        const numericAmount = Math.round(Number(amount.replace(',', '.')) * 100) / 100;
         if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
             setError('Ingresá un importe mayor que cero.');
             return;
         }
 
-        setIsSubmitting(true);
         setError(null);
+        setRegistered(null);
         try {
-            const paymentResult = recordCustomerPayment({
-                customerId,
+            const payment = await registerPayment.mutateAsync({
                 amount: numericAmount,
-                orders,
-                branchId,
+                method,
+                branchId: activeBranch.id,
             });
-            setResult(
-                `Pago registrado. Aplicado: ${formatCurrency(numericAmount - paymentResult.remainingAmount)}. ` +
-                `Saldo a favor: ${formatCurrency(paymentResult.remainingAmount)}.`,
-            );
+            setRegistered(payment);
             setAmount('');
         } catch (submissionError) {
             setError(submissionError instanceof Error ? submissionError.message : 'No se pudo registrar el pago.');
-        } finally {
-            setIsSubmitting(false);
         }
     }
 
@@ -73,26 +82,64 @@ export function RegisterCustomerPaymentModal({
                 <View style={styles.modal}>
                     <View style={styles.header}>
                         <Text style={styles.title}>Registrar pago</Text>
-                        <Pressable onPress={handleClose}>
+                        <Pressable onPress={handleClose} disabled={isSubmitting}>
                             <Text style={styles.close}>Cerrar</Text>
                         </Pressable>
                     </View>
 
-                    <Text style={styles.summary}>Deuda actual: {formatCurrency(debt)}</Text>
-                    <Text style={styles.summary}>Saldo a favor: {formatCurrency(credit)}</Text>
+                    <Text style={styles.summary}>
+                        Deuda actual: {summary ? formatCurrency(summary.debt) : '—'}
+                    </Text>
+                    <Text style={styles.summary}>
+                        Saldo a favor: {summary ? formatCurrency(summary.credit) : '—'}
+                    </Text>
+                    <Text style={styles.summary}>
+                        Sucursal: {activeBranch?.name ?? 'sin sucursal activa'}
+                    </Text>
+
                     <AppInput
                         value={amount}
                         onChangeText={setAmount}
                         placeholder="Importe recibido"
                         keyboardType="decimal-pad"
-                        autoFocus
+                        editable={!isSubmitting}
                     />
+
+                    <View style={styles.methods}>
+                        {PAYMENT_METHODS.map((item) => (
+                            <FilterChip
+                                key={item}
+                                label={PAYMENT_METHOD_LABELS[item]}
+                                selected={method === item}
+                                onPress={() => !isSubmitting && setMethod(item)}
+                            />
+                        ))}
+                    </View>
+
                     {error && <Text style={styles.error}>{error}</Text>}
-                    {result && <Text style={styles.success}>{result}</Text>}
+
+                    {registered && (
+                        <View style={styles.result}>
+                            <Text style={styles.success}>
+                                Pago de {formatCurrency(registered.amount)} registrado.
+                            </Text>
+                            {registered.allocations.map((allocation) => (
+                                <Text key={allocation.orderId} style={styles.resultLine}>
+                                    {allocation.orderNumber}: {formatCurrency(allocation.amount)}
+                                </Text>
+                            ))}
+                            {registered.unallocatedAmount > 0 && (
+                                <Text style={styles.resultLine}>
+                                    Quedó como saldo a favor: {formatCurrency(registered.unallocatedAmount)}
+                                </Text>
+                            )}
+                        </View>
+                    )}
+
                     <AppButton
                         title={isSubmitting ? 'Registrando...' : 'Confirmar pago'}
-                        onPress={handleSubmit}
-                        disabled={isSubmitting}
+                        onPress={() => void handleSubmit()}
+                        disabled={isSubmitting || !activeBranch}
                     />
                 </View>
             </View>
@@ -131,12 +178,28 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         fontSize: 14,
     },
+    methods: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.xs,
+    },
     error: {
         color: Colors.error,
         fontSize: 13,
     },
+    result: {
+        backgroundColor: Colors.successLight,
+        borderRadius: 10,
+        padding: Spacing.md,
+        gap: 2,
+    },
     success: {
-        color: Colors.success,
+        color: Colors.successDark,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    resultLine: {
+        color: Colors.successDark,
         fontSize: 13,
     },
 });

@@ -22,6 +22,8 @@ const ERROR_MESSAGES_BY_CODE: Record<string, string> = {
     QUICK_SALE_INVALID:
         'La venta rápida es solo con retiro en el local y requiere un cliente registrado y un importe válido.',
     CUSTOMER_INACTIVE: 'El cliente está inactivo y no puede recibir pedidos nuevos.',
+    // En el alta: el pago inicial no puede superar el saldo del pedido.
+    INVALID_PAYMENT: 'El pago inicial no es válido: no puede superar el total del pedido.',
     INVALID_SHIPPING_ADDRESS:
         'La dirección de envío no es válida: tiene que ser una dirección activa del cliente, con calle y ciudad.',
 };

@@ -15,33 +15,23 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useQuery } from '@tanstack/react-query';
-
-import { getDebtors } from '@/services/customer-account-service';
-import { useAuthStore } from '@/stores/auth-store';
+import { useDebtors } from '@/hooks/use-customer-account-queries';
 import { SharedStyles } from '@/styles/shared';
 import { formatCurrency, formatDate } from '@/utils/format';
 
-// El backend admite hasta 100 por página; el paginado completo llega con la etapa de
-// cuenta corriente.
-const DEBTORS_PAGE_SIZE = 100;
-
 export default function CustomerAccountsScreen() {
-    const token = useAuthStore((state) => state.token);
-
     // Deudores calculados por el backend (GET /customers/debtors), de mayor a menor deuda.
-    const query = useQuery({
-        queryKey: ['customers', 'debtors', DEBTORS_PAGE_SIZE],
-        queryFn: () => getDebtors({ page: 0, size: DEBTORS_PAGE_SIZE }, token as string),
-        enabled: Boolean(token),
-    });
-    const { data, refetch } = query;
-    const isLoading = query.isPending || query.isRefetching;
-    const error = query.error instanceof Error ? query.error.message : null;
-    const reload = () => void refetch();
-
-    const debtors = data?.content ?? [];
-    const totalDebtors = data?.totalElements ?? 0;
+    const {
+        items: debtors,
+        totalElements: totalDebtors,
+        isInitialLoading,
+        isRefreshing,
+        isLoadingMore,
+        error,
+        loadMore,
+        refresh: reload,
+    } = useDebtors();
+    const hasData = !isInitialLoading && !(error && debtors.length === 0);
 
     return (
         <Screen style={styles.screen}>
@@ -70,7 +60,7 @@ export default function CustomerAccountsScreen() {
                     </Text>
 
                     <Text style={styles.screenSubtitle}>
-                        {!data
+                        {!hasData
                             ? 'Cargando...'
                             : `${totalDebtors} ${totalDebtors === 1 ? 'cliente con deuda' : 'clientes con deuda'}`}
                     </Text>
@@ -79,9 +69,9 @@ export default function CustomerAccountsScreen() {
                 <View style={styles.headerSpacer} />
             </View>
 
-            {!data && isLoading ? (
+            {isInitialLoading ? (
                 <LoadingState label="Cargando deudores..." />
-            ) : !data && error ? (
+            ) : error && debtors.length === 0 ? (
                 <ErrorState message={error} onRetry={reload} />
             ) : debtors.length === 0 ? (
                 <EmptyState
@@ -101,17 +91,15 @@ export default function CustomerAccountsScreen() {
                     showsVerticalScrollIndicator={false}
                     refreshControl={
                         <RefreshControl
-                            refreshing={isLoading}
+                            refreshing={isRefreshing}
                             onRefresh={reload}
                             tintColor={Colors.primary}
                         />
                     }
+                    onEndReached={loadMore}
+                    onEndReachedThreshold={0.4}
                     ListFooterComponent={
-                        totalDebtors > debtors.length ? (
-                            <Text style={styles.branches}>
-                                Mostrando {debtors.length} de {totalDebtors} clientes con mayor deuda.
-                            </Text>
-                        ) : null
+                        isLoadingMore ? <LoadingState label="Cargando más..." /> : null
                     }
                     renderItem={({ item }) => (
                         <Pressable

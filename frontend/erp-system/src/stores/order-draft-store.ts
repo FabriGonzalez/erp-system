@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 
-import { useCustomerAccountStore } from '@/stores/customer-account-store';
 import {
     CUSTOMER_ANONYMOUS,
     Customer,
@@ -81,19 +80,10 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
     },
 
     initEditOrder: (order, customer) => {
-        const isAnonymous = customer.id === CUSTOMER_ANONYMOUS.id;
-
-        let amountPaid = 0;
-
-        if (isAnonymous) {
-            amountPaid = Number.isFinite(order.amountPaid)
-                ? Math.max(0, order.amountPaid)
-                : 0;
-        } else {
-            amountPaid = useCustomerAccountStore
-                .getState()
-                .getOrderPaidAmount(order.id);
-        }
+        // Lo pagado lo calcula el backend a partir de los pagos asignados a la orden.
+        const amountPaid = Number.isFinite(order.amountPaid)
+            ? Math.max(0, order.amountPaid)
+            : 0;
 
         const initialSalesType = order.salesType;
 
