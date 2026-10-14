@@ -2,6 +2,9 @@ package com.gonzalez.erp.modules.payments.repository;
 
 import com.gonzalez.erp.modules.payments.entity.Payment;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -18,9 +21,27 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     @Query("SELECT p FROM Payment p WHERE p.id = :id AND p.company.id = :companyId")
     Optional<Payment> findByIdAndCompanyIdForUpdate(@Param("id") Long id, @Param("companyId") Long companyId);
 
-    List<Payment> findByCompanyId(Long companyId);
+    // Para bloquear la cuenta del cliente antes que el pago (ver PaymentServiceImpl.cancelPayment).
+    @Query("SELECT p.customer.id FROM Payment p WHERE p.id = :id AND p.company.id = :companyId")
+    Optional<Long> findCustomerIdByIdAndCompanyId(@Param("id") Long id, @Param("companyId") Long companyId);
 
-    List<Payment> findByCustomerIdAndCompanyId(Long customerId, Long companyId);
+    // Las relaciones a uno se traen en la misma consulta; las asignaciones, aparte y por página.
+    @EntityGraph(attributePaths = {"branch", "customer", "createdBy", "cancelledBy"})
+    @Query(value = """
+            SELECT p FROM Payment p
+            WHERE p.company.id = :companyId
+            AND (:customerId IS NULL OR p.customer.id = :customerId)
+            """,
+            countQuery = """
+            SELECT COUNT(p) FROM Payment p
+            WHERE p.company.id = :companyId
+            AND (:customerId IS NULL OR p.customer.id = :customerId)
+            """)
+    Page<Payment> search(
+            @Param("companyId") Long companyId,
+            @Param("customerId") Long customerId,
+            Pageable pageable
+    );
 
     // Pagos activos del cliente con importe todavía sin asignar a órdenes, del más viejo al más nuevo.
     @Lock(LockModeType.PESSIMISTIC_WRITE)

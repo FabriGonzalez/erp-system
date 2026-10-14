@@ -3,12 +3,16 @@ package com.gonzalez.erp.modules.customers.service;
 import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.SecurityUtils;
+import com.gonzalez.erp.modules.customers.dto.response.AccountTransactionResponse;
 import com.gonzalez.erp.modules.customers.dto.response.CustomerAccountSummaryResponse;
 import com.gonzalez.erp.modules.customers.dto.response.CustomerDebtorResponse;
+import com.gonzalez.erp.modules.customers.dto.response.CustomerPendingOrderResponse;
 import com.gonzalez.erp.modules.customers.entity.Customer;
 import com.gonzalez.erp.modules.customers.entity.CustomerAccount;
+import com.gonzalez.erp.modules.customers.repository.AccountTransactionRepository;
 import com.gonzalez.erp.modules.customers.repository.CustomerAccountRepository;
 import com.gonzalez.erp.modules.customers.repository.CustomerRepository;
+import com.gonzalez.erp.modules.orders.entity.Order;
 import com.gonzalez.erp.modules.orders.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -41,13 +45,12 @@ public class CustomerBalanceServiceImpl implements CustomerBalanceService {
     private final OrderRepository orderRepository;
     private final CustomerRepository customerRepository;
     private final CustomerAccountRepository customerAccountRepository;
+    private final AccountTransactionRepository accountTransactionRepository;
 
     @Override
     public CustomerAccountSummaryResponse getSummary(Long customerId) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
-
-        customerRepository.findByIdAndCompanyId(customerId, companyId)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+        requireCustomer(customerId, companyId);
 
         List<Object[]> pendingRows = orderRepository.findPendingBalances(companyId, customerId);
         BigDecimal debt = sumPending(pendingRows);
@@ -129,6 +132,53 @@ public class CustomerBalanceServiceImpl implements CustomerBalanceService {
                 debtors.size(),
                 totalPages
         );
+    }
+
+    @Override
+    public PageResponse<CustomerPendingOrderResponse> findPendingOrders(Long customerId, Pageable pageable) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+        requireCustomer(customerId, companyId);
+
+        return PageResponse.of(orderRepository.findPendingOrders(companyId, customerId, pageable), row -> {
+            Order order = (Order) row[0];
+            BigDecimal allocated = (BigDecimal) row[1];
+            BigDecimal total = order.getTotal() != null ? order.getTotal() : BigDecimal.ZERO;
+            return new CustomerPendingOrderResponse(
+                    order.getId(),
+                    order.getOrderNumber(),
+                    order.getBranch().getId(),
+                    order.getBranch().getName(),
+                    order.getStatus(),
+                    order.getSalesType(),
+                    order.getDeliveryType(),
+                    total,
+                    allocated,
+                    total.subtract(allocated),
+                    order.getCreatedAt()
+            );
+        });
+    }
+
+    @Override
+    public PageResponse<AccountTransactionResponse> findTransactions(Long customerId, Pageable pageable) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+        requireCustomer(customerId, companyId);
+
+        return PageResponse.of(accountTransactionRepository.findByCustomer(customerId, companyId, pageable),
+                transaction -> new AccountTransactionResponse(
+                        transaction.getId(),
+                        transaction.getType(),
+                        transaction.getAmount(),
+                        transaction.getDescription(),
+                        transaction.getBranch() != null ? transaction.getBranch().getId() : null,
+                        transaction.getBranch() != null ? transaction.getBranch().getName() : null,
+                        transaction.getCreatedAt()
+                ));
+    }
+
+    private void requireCustomer(Long customerId, Long companyId) {
+        customerRepository.findByIdAndCompanyId(customerId, companyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
     }
 
     @Override

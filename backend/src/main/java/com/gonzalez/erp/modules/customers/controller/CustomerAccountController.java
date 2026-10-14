@@ -2,8 +2,10 @@ package com.gonzalez.erp.modules.customers.controller;
 
 import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.common.dto.PageResponse;
+import com.gonzalez.erp.modules.customers.dto.response.AccountTransactionResponse;
 import com.gonzalez.erp.modules.customers.dto.response.CustomerAccountSummaryResponse;
 import com.gonzalez.erp.modules.customers.dto.response.CustomerDebtorResponse;
+import com.gonzalez.erp.modules.customers.dto.response.CustomerPendingOrderResponse;
 import com.gonzalez.erp.modules.customers.service.CustomerBalanceService;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -55,12 +57,49 @@ public class CustomerAccountController {
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Tamaño de página (1 a " + MAX_PAGE_SIZE + ")")
             @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(customerBalanceService.findDebtors(q, pageRequest(page, size)));
+    }
+
+    @PreAuthorize("hasAnyAuthority('ADMINISTRAR_CLIENTES','CREAR_PEDIDOS','REGISTRAR_PAGOS','VER_REPORTES')")
+    @GetMapping("/{id}/account/pending-orders")
+    @Operation(summary = "Órdenes con saldo pendiente", description = "Órdenes no canceladas del cliente con saldo pendiente, de todas las sucursales, en el orden en que se les aplican los pagos (de la más vieja a la más nueva).")
+    @ApiResponse(responseCode = "200", description = "Órdenes obtenidas")
+    @ApiResponse(responseCode = "404", description = "Cliente no encontrado",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<PageResponse<CustomerPendingOrderResponse>> findPendingOrders(
+            @Parameter(description = "ID del cliente")
+            @PathVariable Long id,
+            @Parameter(description = "Número de página, base 0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Tamaño de página (1 a " + MAX_PAGE_SIZE + ")")
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(customerBalanceService.findPendingOrders(id, pageRequest(page, size)));
+    }
+
+    @PreAuthorize("hasAnyAuthority('ADMINISTRAR_CLIENTES','CREAR_PEDIDOS','REGISTRAR_PAGOS','VER_REPORTES')")
+    @GetMapping("/{id}/account/transactions")
+    @Operation(summary = "Movimientos de la cuenta", description = "Cargos, pagos, ajustes y devoluciones de la cuenta corriente del cliente, del más nuevo al más viejo. Un importe positivo aumenta la deuda; uno negativo la reduce.")
+    @ApiResponse(responseCode = "200", description = "Movimientos obtenidos")
+    @ApiResponse(responseCode = "404", description = "Cliente no encontrado",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<PageResponse<AccountTransactionResponse>> findTransactions(
+            @Parameter(description = "ID del cliente")
+            @PathVariable Long id,
+            @Parameter(description = "Número de página, base 0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Tamaño de página (1 a " + MAX_PAGE_SIZE + ")")
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(customerBalanceService.findTransactions(id, pageRequest(page, size)));
+    }
+
+    // El orden lo define cada consulta: no se acepta sort desde afuera.
+    private static PageRequest pageRequest(int page, int size) {
         if (page < 0) {
             throw new InvalidOrderException("page must be greater than or equal to 0");
         }
         if (size < 1 || size > MAX_PAGE_SIZE) {
             throw new InvalidOrderException("size must be between 1 and " + MAX_PAGE_SIZE);
         }
-        return ResponseEntity.ok(customerBalanceService.findDebtors(q, PageRequest.of(page, size)));
+        return PageRequest.of(page, size);
     }
 }

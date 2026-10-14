@@ -1,5 +1,6 @@
 package com.gonzalez.erp.modules.payments.service;
 
+import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.branches.entity.Branch;
@@ -23,13 +24,16 @@ import com.gonzalez.erp.modules.users.entity.User;
 import com.gonzalez.erp.modules.users.repository.UserBranchRepository;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -74,6 +78,11 @@ public class PaymentServiceImpl implements PaymentService {
 
         User currentUser = userRepository.getReferenceById(userId);
 
+        // Primero las órdenes y después la cuenta, el mismo orden que editar o cancelar una
+        // orden: al revés, un pago y una edición simultáneos del mismo cliente se bloquean
+        // mutuamente.
+        List<Order> candidateOrders = orderRepository.findCandidateOrdersForUpdate(customer.getId(), companyId);
+
         Payment payment = Payment.builder()
                 .company(customer.getCompany())
                 .branch(branch)
@@ -95,7 +104,6 @@ public class PaymentServiceImpl implements PaymentService {
                 "Pago recibido #" + payment.getId()
         );
 
-        List<Order> candidateOrders = orderRepository.findCandidateOrdersForUpdate(customer.getId(), companyId);
         BigDecimal remainingPayment = request.amount();
 
         for (Order order : candidateOrders) {
@@ -133,6 +141,12 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentResponse cancelPayment(Long id) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
         Long userId = SecurityUtils.getCurrentUserId();
+
+        // La cuenta se bloquea antes que el pago, como al aplicar saldo a favor en una orden
+        // nueva (cuenta y después pagos); al revés pueden bloquearse mutuamente.
+        Long customerId = paymentRepository.findCustomerIdByIdAndCompanyId(id, companyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + id));
+        customerAccountService.getAccountByCustomerIdForUpdate(customerId, companyId);
 
         Payment payment = paymentRepository.findByIdAndCompanyIdForUpdate(id, companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + id));
@@ -175,16 +189,17 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    public List<PaymentResponse> getPayments(Long customerId) {
+    public PageResponse<PaymentResponse> getPayments(Long customerId, Pageable pageable) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
-        List<Payment> payments;
-        if (customerId != null) {
-            payments = paymentRepository.findByCustomerIdAndCompanyId(customerId, companyId);
-        } else {
-            payments = paymentRepository.findByCompanyId(companyId);
-        }
-        return payments.stream()
-                .map(PaymentMapper::toResponse)
-                .toList();
+        Page<Payment> payments = paymentRepository.search(companyId, customerId, pageable);
+
+        List<Long> paymentIds = payments.getContent().stream().map(Payment::getId).toList();
+        Map<Long, List<PaymentAllocation>> allocationsByPayment = paymentIds.isEmpty()
+                ? Map.of()
+                : paymentAllocationRepository.findByPaymentIdInWithOrder(paymentIds).stream()
+                        .collect(Collectors.groupingBy(allocation -> allocation.getPayment().getId()));
+
+        return PageResponse.of(payments, payment -> PaymentMapper.toResponse(
+                payment, allocationsByPayment.getOrDefault(payment.getId(), List.of())));
     }
 }

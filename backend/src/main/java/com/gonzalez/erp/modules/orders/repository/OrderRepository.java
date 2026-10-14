@@ -63,6 +63,34 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("customerId") Long customerId
     );
 
+    /**
+     * Las mismas órdenes que findPendingBalances para un cliente, paginadas y en el orden en
+     * que se aplican los pagos (FIFO). De toda la empresa: la deuda es del cliente, no de la
+     * sucursal. Cada fila es [order (Order con branch cargada), allocated (BigDecimal)].
+     */
+    @Query(value = """
+            SELECT o, (SELECT COALESCE(SUM(pa.amount), 0) FROM PaymentAllocation pa WHERE pa.order = o)
+            FROM Order o
+            JOIN FETCH o.branch
+            WHERE o.company.id = :companyId
+            AND o.customer.id = :customerId
+            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.total > (SELECT COALESCE(SUM(pa2.amount), 0) FROM PaymentAllocation pa2 WHERE pa2.order = o)
+            ORDER BY o.createdAt ASC, o.id ASC
+            """,
+            countQuery = """
+            SELECT COUNT(o) FROM Order o
+            WHERE o.company.id = :companyId
+            AND o.customer.id = :customerId
+            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.total > (SELECT COALESCE(SUM(pa2.amount), 0) FROM PaymentAllocation pa2 WHERE pa2.order = o)
+            """)
+    Page<Object[]> findPendingOrders(
+            @Param("companyId") Long companyId,
+            @Param("customerId") Long customerId,
+            Pageable pageable
+    );
+
     Optional<Order> findByOrderNumberAndCompanyId(String orderNumber, Long companyId);
 
     @Query("SELECT COALESCE(MAX(CAST(SUBSTRING(o.orderNumber, 5) AS INTEGER)), 0) FROM Order o WHERE o.company.id = :companyId")

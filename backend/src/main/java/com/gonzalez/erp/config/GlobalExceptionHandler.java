@@ -313,6 +313,7 @@ public class GlobalExceptionHandler {
                 : ex instanceof InactiveOrderCustomerException ? "CUSTOMER_INACTIVE"
                 : ex instanceof InvalidShippingAddressException ? "INVALID_SHIPPING_ADDRESS"
                 : ex instanceof InvalidShipmentException ? "INVALID_SHIPMENT"
+                : ex instanceof InvalidPaymentException ? "INVALID_PAYMENT"
                 : "INVALID_ORDER";
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
