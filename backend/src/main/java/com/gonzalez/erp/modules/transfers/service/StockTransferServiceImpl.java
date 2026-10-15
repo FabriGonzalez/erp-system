@@ -1,5 +1,6 @@
 package com.gonzalez.erp.modules.transfers.service;
 
+import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.CustomUserDetails;
 import com.gonzalez.erp.config.security.SecurityUtils;
@@ -23,9 +24,12 @@ import com.gonzalez.erp.modules.transfers.entity.StockTransferItem;
 import com.gonzalez.erp.modules.transfers.entity.StockTransferStatus;
 import com.gonzalez.erp.modules.transfers.exception.InvalidStockTransferException;
 import com.gonzalez.erp.modules.transfers.mapper.StockTransferMapper;
+import com.gonzalez.erp.modules.transfers.repository.StockTransferItemRepository;
 import com.gonzalez.erp.modules.transfers.repository.StockTransferRepository;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +41,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.time.Instant;
 
 @Service
@@ -47,6 +52,7 @@ public class StockTransferServiceImpl implements StockTransferService {
     private static final String REFERENCE_TYPE = "STOCK_TRANSFER";
 
     private final StockTransferRepository stockTransferRepository;
+    private final StockTransferItemRepository stockTransferItemRepository;
     private final StockRepository stockRepository;
     private final StockMovementRepository stockMovementRepository;
     private final BranchRepository branchRepository;
@@ -55,14 +61,18 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final CompanyRepository companyRepository;
 
     @Override
-    public List<StockTransferResponse> findAll() {
+    public PageResponse<StockTransferResponse> findAll(Pageable pageable) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
+        Page<StockTransfer> transfers = stockTransferRepository.findAllByCompanyId(companyId, pageable);
 
-        List<StockTransfer> transfers = stockTransferRepository.findAllByCompanyId(companyId);
+        List<Long> transferIds = transfers.getContent().stream().map(StockTransfer::getId).toList();
+        Map<Long, List<StockTransferItem>> itemsByTransfer = transferIds.isEmpty()
+                ? Map.of()
+                : stockTransferItemRepository.findByTransferIdInWithVariant(transferIds).stream()
+                        .collect(Collectors.groupingBy(item -> item.getTransfer().getId()));
 
-        return transfers.stream()
-                .map(StockTransferMapper::toResponse)
-                .toList();
+        return PageResponse.of(transfers, transfer -> StockTransferMapper.toResponse(
+                transfer, itemsByTransfer.getOrDefault(transfer.getId(), List.of())));
     }
 
     @Override

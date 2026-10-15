@@ -2,19 +2,25 @@ package com.gonzalez.erp.modules.transfers.repository;
 
 import com.gonzalez.erp.modules.transfers.entity.StockTransfer;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.util.List;
 import java.util.Optional;
 
 public interface StockTransferRepository extends JpaRepository<StockTransfer, Long> {
 
-    @Query("SELECT t FROM StockTransfer t WHERE t.company.id = :companyId")
-    List<StockTransfer> findAllByCompanyId(
-        @Param("companyId") Long companyId
+    // Las relaciones a uno se traen en la misma consulta; los ítems, aparte y por página.
+    @EntityGraph(attributePaths = {"originBranch", "destinationBranch", "createdBy"})
+    @Query(value = "SELECT t FROM StockTransfer t WHERE t.company.id = :companyId",
+        countQuery = "SELECT COUNT(t) FROM StockTransfer t WHERE t.company.id = :companyId")
+    Page<StockTransfer> findAllByCompanyId(
+        @Param("companyId") Long companyId,
+        Pageable pageable
     );
 
     @Query("SELECT t FROM StockTransfer t " +
