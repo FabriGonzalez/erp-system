@@ -1,9 +1,4 @@
-import {
-    QueryKey,
-    useInfiniteQuery,
-    useMutation,
-    useQuery,
-} from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 
 import {
     getCustomerAccountSummary,
@@ -15,73 +10,16 @@ import { cancelPayment, createPayment, getCustomerPayments } from '@/services/pa
 import { useAuthStore } from '@/stores/auth-store';
 import { useOrderStore } from '@/stores/order-store';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
-import { PageResponse, PaymentMethod } from '@/types/order';
+import { PaymentMethod } from '@/types/order';
 import { Payment } from '@/types/payment';
 
 import { customerAccountKeys, invalidateCustomerAccount } from './customer-account-keys';
+import { errorText, requireToken, usePagedList } from './use-paged-list';
 
 const PAGE_SIZE = 20;
 
-function requireToken(): string {
-    const token = useAuthStore.getState().token;
-    if (!token) {
-        throw new Error('No hay sesión activa.');
-    }
-    return token;
-}
-
-function errorText(error: unknown): string | null {
-    if (!error) return null;
-    return error instanceof Error ? error.message : 'Ocurrió un error inesperado.';
-}
-
 function isRegisteredCustomer(id: string | undefined): id is string {
     return Boolean(id) && id !== CUSTOMER_ANONYMOUS.id;
-}
-
-/** Listado paginado con scroll infinito; mismo contrato que useCustomerList. */
-function usePagedList<T>(
-    queryKey: QueryKey,
-    fetchPage: (page: number) => Promise<PageResponse<T>>,
-    enabled: boolean,
-    idOf: (item: T) => string,
-) {
-    const hasSession = useAuthStore((state) => Boolean(state.token));
-    const result = useInfiniteQuery({
-        queryKey,
-        queryFn: ({ pageParam }) => fetchPage(pageParam),
-        initialPageParam: 0,
-        getNextPageParam: (lastPage) =>
-            lastPage.page + 1 < lastPage.totalPages ? lastPage.page + 1 : undefined,
-        enabled: hasSession && enabled,
-    });
-
-    // Si entre páginas entró un elemento nuevo, el siguiente puede repetirse.
-    const items: T[] = [];
-    const seen = new Set<string>();
-    for (const item of (result.data?.pages ?? []).flatMap((page) => page.content)) {
-        const id = idOf(item);
-        if (!seen.has(id)) {
-            seen.add(id);
-            items.push(item);
-        }
-    }
-
-    return {
-        items,
-        totalElements: result.data?.pages[0]?.totalElements ?? 0,
-        isInitialLoading: result.isPending && hasSession && enabled,
-        isRefreshing: result.isRefetching && !result.isFetchingNextPage,
-        isLoadingMore: result.isFetchingNextPage,
-        error: errorText(result.error),
-        hasMore: result.hasNextPage,
-        loadMore: () => {
-            if (result.hasNextPage && !result.isFetchingNextPage) {
-                void result.fetchNextPage();
-            }
-        },
-        refresh: () => void result.refetch(),
-    };
 }
 
 // --- Consultas ---

@@ -15,6 +15,7 @@ import {
     hasPermission,
     ORDER_READ_PERMISSIONS,
     STOCK_READ_PERMISSIONS,
+    TRANSFER_READ_PERMISSIONS,
 } from '@/utils/permissions';
 
 export default function MoreScreen() {
@@ -30,6 +31,7 @@ export default function MoreScreen() {
     const canSeeStock = hasAnyPermission(user, STOCK_READ_PERMISSIONS);
     const canSeeDebtors = hasAnyPermission(user, DEBTORS_READ_PERMISSIONS);
     const canSeeOrders = hasAnyPermission(user, ORDER_READ_PERMISSIONS);
+    const canSeeTransfers = hasAnyPermission(user, TRANSFER_READ_PERMISSIONS);
     const canManageAttributes = hasPermission(user, 'ADMINISTRAR_PRODUCTOS');
     const canManageUsers = hasPermission(user, 'ADMINISTRAR_USUARIOS');
     // La pantalla de sucursales también asigna usuarios.
@@ -110,6 +112,14 @@ export default function MoreScreen() {
                             subtitle="Consultar ventas y envíos en una sola lista"
                             iconName={{ ios: 'list.bullet.rectangle', android: 'view_list', web: 'view_list' }}
                             onPress={() => router.push('/operations' as any)}
+                        />
+                    )}
+                    {canSeeTransfers && (
+                        <MenuListItem
+                            title="Transferencias"
+                            subtitle="Mover stock entre sucursales"
+                            iconName={{ ios: 'arrow.left.arrow.right', android: 'swap_horiz', web: 'swap_horiz' }}
+                            onPress={() => router.push('/transfers' as any)}
                         />
                     )}
                     <MenuListItem

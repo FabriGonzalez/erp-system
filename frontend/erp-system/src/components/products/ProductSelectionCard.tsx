@@ -26,6 +26,10 @@ type ProductSelectionCardProps = {
     onSelectProduct: () => void;
     onAddItem: (product: Product, stock: number, variantId: string) => void;
     onUpdateItemQuantity: (productId: string, variantId: string, quantity: number, stock: number) => void;
+    /** Las transferencias no usan precio. */
+    showPrice?: boolean;
+    /** Dónde están las unidades ya elegidas, p. ej. "en el carrito". */
+    selectedLabel?: string;
 };
 
 export function ProductSelectionCard({
@@ -46,6 +50,8 @@ export function ProductSelectionCard({
     onSelectProduct,
     onAddItem,
     onUpdateItemQuantity,
+    showPrice = true,
+    selectedLabel = 'en el carrito',
 }: ProductSelectionCardProps) {
     const priceFrom = Math.min(...product.variants
         .filter((variant) => (variant.stockByBranch[branchId] ?? 0) > 0)
@@ -59,7 +65,7 @@ export function ProductSelectionCard({
     const shownStock = selectedVariant ? availableStock : totalStock;
     const isLowStock = shownStock > 0 && shownStock <= LOW_STOCK_THRESHOLD;
     const stockLabel = selectedVariant
-        ? `Stock: ${shownStock}${qtyInCart > 0 ? ` · ${qtyInCart} en el carrito` : ''}`
+        ? `Stock: ${shownStock}${qtyInCart > 0 ? ` · ${qtyInCart} ${selectedLabel}` : ''}`
         : `Stock total: ${shownStock}`;
 
     return (
@@ -70,9 +76,11 @@ export function ProductSelectionCard({
                 <Text style={styles.productName}>{product.name}</Text>
                 <Text style={styles.productSku}>{product.variants.length} {product.variants.length === 1 ? 'variante' : 'variantes'}</Text>
                 <View style={styles.productMeta}>
-                    <Text style={styles.productPrice}>
-                        Desde ${priceFrom.toLocaleString('es-AR')}
-                    </Text>
+                    {showPrice && (
+                        <Text style={styles.productPrice}>
+                            Desde ${priceFrom.toLocaleString('es-AR')}
+                        </Text>
+                    )}
                     <Text style={[styles.stockText, isLowStock && styles.stockTextLow]}>
                         {stockLabel}
                     </Text>
