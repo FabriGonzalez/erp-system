@@ -7,6 +7,7 @@ import com.gonzalez.erp.config.security.LoginAttemptService;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.auth.dto.request.ChangePasswordRequest;
 import com.gonzalez.erp.modules.auth.dto.request.LoginRequest;
+import com.gonzalez.erp.modules.auth.dto.response.CurrentUserResponse;
 import com.gonzalez.erp.modules.auth.dto.response.LoginResponse;
 import com.gonzalez.erp.modules.auth.dto.response.TokenResponse;
 import com.gonzalez.erp.modules.auth.exception.InvalidPasswordChangeException;
@@ -94,5 +95,26 @@ public class AuthServiceImpl implements AuthService {
 
         // El cambio revoca todos los tokens anteriores; esta sesión sigue con uno nuevo.
         return new TokenResponse(jwtUtil.generateToken(new CustomUserDetails(user)), "Bearer");
+    }
+
+    /**
+     * JwtAuthFilter recarga el usuario en cada request, así que el principal ya trae el rol y
+     * los permisos vigentes: un cambio de rol se ve sin volver a loguearse.
+     */
+    @Override
+    public CurrentUserResponse currentUser() {
+        CustomUserDetails current = SecurityUtils.getCurrentUserDetails();
+        return new CurrentUserResponse(
+                current.getUserId(),
+                current.getUsername(),
+                current.getEmail(),
+                current.getFirstName(),
+                current.getLastName(),
+                current.getRoleName(),
+                current.getPermissions(),
+                current.isPlatformAdmin(),
+                current.getCompanyId(),
+                current.getCompanyName()
+        );
     }
 }

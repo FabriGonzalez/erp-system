@@ -5,12 +5,15 @@ import com.gonzalez.erp.config.security.JwtUtil;
 import com.gonzalez.erp.config.security.LoginAttemptService;
 import com.gonzalez.erp.modules.auth.dto.request.ChangePasswordRequest;
 import com.gonzalez.erp.modules.auth.dto.request.LoginRequest;
+import com.gonzalez.erp.modules.auth.dto.response.CurrentUserResponse;
 import com.gonzalez.erp.modules.auth.dto.response.TokenResponse;
 import com.gonzalez.erp.modules.auth.exception.InvalidPasswordChangeException;
 import com.gonzalez.erp.modules.auth.exception.TooManyLoginAttemptsException;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.entity.CompanyStatus;
 import com.gonzalez.erp.modules.companies.exception.CompanyNotActiveException;
+import com.gonzalez.erp.modules.roles.entity.Permission;
+import com.gonzalez.erp.modules.roles.entity.Role;
 import com.gonzalez.erp.modules.users.entity.User;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -26,7 +29,9 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.EnumSet;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -143,6 +148,52 @@ class AuthServiceImplTest {
         assertThat(user.getPassword()).isEqualTo("hash-nuevo");
         assertThat(user.getPasswordChangedAt()).isNotNull();
         verify(loginAttemptService).recordSuccess("vendedor");
+    }
+
+    @Test
+    void currentUserReturnsRoleAndPermissionsOfTheSession() {
+        authenticate(userWithRole(role(true, EnumSet.of(Permission.CREAR_PEDIDOS, Permission.PREPARAR_PEDIDOS))));
+
+        CurrentUserResponse response = authService.currentUser();
+
+        assertThat(response.id()).isEqualTo(6L);
+        assertThat(response.roleName()).isEqualTo("Vendedor");
+        assertThat(response.permissions()).containsExactlyInAnyOrder(
+                Permission.CREAR_PEDIDOS, Permission.PREPARAR_PEDIDOS);
+        assertThat(response.companyId()).isEqualTo(1L);
+        assertThat(response.companyName()).isEqualTo("Acme");
+        assertThat(response.platformAdmin()).isFalse();
+    }
+
+    @Test
+    void currentUserHasNoPermissionsWhenRoleIsInactive() {
+        authenticate(userWithRole(role(false, EnumSet.of(Permission.CREAR_PEDIDOS))));
+
+        assertThat(authService.currentUser().permissions()).isEmpty();
+    }
+
+    private Role role(boolean active, Set<Permission> permissions) {
+        return Role.builder()
+                .company(company)
+                .name("Vendedor")
+                .code("VEND")
+                .permissions(permissions)
+                .active(active)
+                .build();
+    }
+
+    private User userWithRole(Role role) {
+        User withRole = User.builder()
+                .username("vendedora")
+                .email("vendedora@acme.com")
+                .password("hash")
+                .firstName("Ven")
+                .lastName("Dedora")
+                .company(company)
+                .role(role)
+                .build();
+        withRole.setId(6L);
+        return withRole;
     }
 
     private ChangePasswordRequest changeRequest(String current, String next) {

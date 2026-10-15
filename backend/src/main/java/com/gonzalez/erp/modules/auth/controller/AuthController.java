@@ -2,6 +2,7 @@ package com.gonzalez.erp.modules.auth.controller;
 
 import com.gonzalez.erp.modules.auth.dto.request.ChangePasswordRequest;
 import com.gonzalez.erp.modules.auth.dto.request.LoginRequest;
+import com.gonzalez.erp.modules.auth.dto.response.CurrentUserResponse;
 import com.gonzalez.erp.modules.auth.dto.response.LoginResponse;
 import com.gonzalez.erp.modules.auth.dto.response.TokenResponse;
 import com.gonzalez.erp.modules.auth.service.AuthService;
@@ -13,6 +14,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -55,5 +57,16 @@ public class AuthController {
             @Valid @RequestBody ChangePasswordRequest request,
             HttpServletRequest httpRequest) {
         return ResponseEntity.ok(authService.changePassword(request, httpRequest.getRemoteAddr()));
+    }
+
+    @GetMapping("/me")
+    @Operation(summary = "Usuario de la sesión",
+               description = "Rol y permisos vigentes del usuario autenticado, para refrescar los del login.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Datos del usuario autenticado"),
+            @ApiResponse(responseCode = "401", description = "Sesión inválida, usuario desactivado o empresa no activa")
+    })
+    public ResponseEntity<CurrentUserResponse> me() {
+        return ResponseEntity.ok(authService.currentUser());
     }
 }
