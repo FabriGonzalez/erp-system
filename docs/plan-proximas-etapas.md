@@ -23,6 +23,9 @@ elegir la etapa.
 - **Etapa 6 — Cuenta corriente y pagos reales** (`feature/customer-payments`, e5c7337 y aa4f843):
   resumen, pendientes, movimientos, deudores, registrar y anular pagos. Se borraron
   `customer-account-store`, `utils/customer-account.ts` y `data/mock-orders.ts`.
+- **Etapa 7 — Permisos reales** (`feature/real-permissions`, implementada el 2026-10-14, **falta
+  commitear**): `Permission` = enum del backend, `GET /api/v1/auth/me` con refresco al hidratar y al
+  volver al frente, acciones y accesos ocultos según el permiso real.
 
 ---
 
@@ -75,26 +78,100 @@ Administración que le corresponden; el administrador sigue viendo todo.
 
 ## Etapa 8 — Transferencias entre sucursales
 
-**Lo que ya existe en el backend.** `StockTransferController` (`/api/v1/inventory/transfers`):
-- `GET` (sin paginar) y `GET /{id}` → `StockTransferResponse{id, originBranchId/Name,
-  destinationBranchId/Name, status: CONFIRMED|CANCELLED, createdById/Username, confirmedAt, items}`.
-- `POST` `{originBranchId, destinationBranchId, items: [{productVariantId, quantity ≥ 1}]}` → 201.
-- `PATCH /{id}/cancel`.
+Plan detallado el 2026-10-15, relevado contra el código.
+
+**Arranque.** Commitear la etapa 7 (backend y frontend en commits separados, como la 6) y crear
+`feature/stock-transfers` desde `feature/real-permissions`.
+
+**Lo que ya existe en el backend** (`modules/transfers`, `/api/v1/inventory/transfers`):
+- `GET` y `GET /{id}` → `StockTransferResponse{id, originBranchId/Name, destinationBranchId/Name,
+  status: CONFIRMED|CANCELLED, createdById, createdByUsername, confirmedAt, items, createdAt, updatedAt}`;
+  ítem: `{id, productId, productName, productVariantId, productVariantSku, quantity}`.
+- `POST {originBranchId, destinationBranchId, items: [{productVariantId, quantity ≥ 1}]}` → 201, nace
+  `CONFIRMED` y mueve el stock en la misma transacción (crea el stock de destino si no existe).
+- `PATCH /{id}/cancel` → 200; revierte y exige que el **destino** todavía tenga la cantidad.
 - Permisos: lectura `TRANSFERIR_STOCK` o `CONSULTAR_STOCK`; escritura `TRANSFERIR_STOCK`.
+  `GET /products` y `GET /branches` no piden permiso: cualquier usuario puede armar el alta.
+- No valida que el usuario esté asignado a la sucursal de origen ni que las sucursales estén activas.
+- Sin tests de transferencias.
 
-**Plan.**
-1. `types/transfer.ts`, `services/transfer-service.ts` (patrón de `payment-service.ts`: error con
-   `status`, ids normalizados a string), `hooks/use-transfer-queries.ts` (TanStack; módulo nuevo).
-2. Pantallas: listado, detalle, alta (origen = sucursal activa, destino, ítems con cantidad ≤ stock en
-   origen) y anular con `confirmAction`.
-3. Selector de variantes: reutilizar el componente de `orders/select-products` dentro del mismo stack.
-4. Tras crear o anular, releer el stock (Zustand: `stock-store`/`product-store`), igual que hace
-   `refreshAfterPayment` con los pedidos.
-5. Backend: `InvalidStockTransferException` responde 400 sin `code` → agregar `INVALID_STOCK_TRANSFER`
-   y mapearlo a español.
+**Errores que puede devolver hoy** (ninguno con `code` propio de transferencias):
+| Caso | Excepción | Status / code |
+|---|---|---|
+| Origen = destino, variante repetida, anular una ya anulada | `InvalidStockTransferException` | 400, sin code |
+| Stock insuficiente en origen (alta) o en destino (anulación) | `InsufficientStockException` | 409 `INSUFFICIENT_STOCK` |
+| La variante no tiene stock en origen | `StockNotFoundException` | 404 |
+| Sucursal, variante o transferencia inexistente | `ResourceNotFoundException` | 404 |
 
-**Pruebas.** Transferir entre dos sucursales y ver el stock en ambas; cantidad mayor al stock de origen;
-origen igual a destino; anular y ver el stock restaurado; usuario sin `TRANSFERIR_STOCK`.
+### Backend
+
+1. **Paginar y ordenar el listado.** `GET ?page=0&size=20` (máx. 100, validado como
+   `PaymentController`) → `PageResponse<StockTransferResponse>`, orden `createdAt DESC`.
+   Repositorio: `Page<StockTransfer> findAllByCompanyId(companyId, Pageable)` con `@EntityGraph` sobre
+   `originBranch`, `destinationBranch` y `createdBy` (no sobre `items`: fetch de colección + paginación
+   se hace en memoria). Los ítems y sus variantes/productos por `@BatchSize` o una segunda consulta por
+   ids, para no hacer N+1 en el mapper. Es un cambio de contrato: nadie más consume el endpoint.
+2. **Code `INVALID_STOCK_TRANSFER`** en el handler de `InvalidStockTransferException` (sigue en 400).
+   Para que el frontend distinga los casos sin leer el mensaje en inglés, alcanza con el code; los
+   textos en español van en el frontend.
+3. **Tests unitarios** de `StockTransferServiceImpl` (Mockito, como `AuthServiceImplTest`): origen =
+   destino, variante repetida, stock insuficiente, anular anulada, anular con destino sin stock.
+   Correr con `-Dtest=!BackendApplicationTests`.
+
+### Frontend (módulo nuevo → TanStack Query)
+
+1. **Tipos y servicio.** `types/transfer.ts` (`StockTransferResponse` de la API y `StockTransfer` de
+   dominio con ids string, `status: 'CONFIRMED' | 'CANCELLED'`). `services/transfer-service.ts` con el
+   patrón de `payment-service.ts`: `TransferServiceError` con `status`, `apiFetch`, mensajes propios:
+   `INVALID_STOCK_TRANSFER` → "La transferencia no es válida (sucursales iguales, productos repetidos o
+   ya anulada)."; `INSUFFICIENT_STOCK` → "No hay stock suficiente…"; 404 → "Sucursal, producto o stock
+   no encontrados en el origen."; 403 y 5xx como pagos. Funciones: `getTransfers({page,size})`,
+   `getTransferById`, `createTransfer`, `cancelTransfer`.
+2. **Hooks** `hooks/use-transfer-queries.ts`: `transferKeys` (`all`, `list(pageSize)`, `detail(id)`),
+   `useTransfers()` con `useInfiniteQuery` (reutilizar el patrón `usePagedList`; si se copia por segunda
+   vez, moverlo a un helper compartido en `hooks/`), `useTransfer(id)`, `useCreateTransfer()` y
+   `useCancelTransfer()`. Deshabilitadas sin token. Al crear: sembrar `detail(id)` con la respuesta e
+   invalidar `list`. Al anular: `setQueryData` del detalle e invalidar `list`.
+3. **Stock después de mutar** (`refreshStockAfterTransfer`, como `refreshAfterPayment`): el stock vive
+   en Zustand, así que se relee solo lo ya cargado: `product-store.fetchProducts` si hay productos y
+   `stock-store.fetchStocks` si hay stocks. Errores ignorados (se vuelven a pedir al abrir).
+4. **Selector de variantes extraído.** Sacar de `(tabs)/orders/select-products.tsx` la lista con
+   buscador y la lógica de selección (`filteredProducts`, `getSelectedVariant`, `attributeOptions`,
+   estado de producto/atributos elegidos) a `components/products/VariantCatalog.tsx`, que recibe
+   `branchId`, `getQuantity(productId, variantId)`, `onAddItem`, `onUpdateItemQuantity` y si muestra
+   precio. Pedidos lo usa con `order-draft-store` sin cambiar comportamiento (probar alta de pedido de
+   nuevo). Transferencias lo usa con estado local del alta. `ProductSelectionCard` gana una prop para
+   ocultar el precio.
+5. **Pantallas** — stack nuevo `src/app/(app)/transfers/` (`_layout.tsx` como `customers/_layout.tsx`):
+   - `index.tsx`: listado infinito (número, origen → destino, fecha, cantidad de ítems, badge de estado
+     con `StatusBadge`), pull to refresh, botón "Nueva" solo con `TRANSFERIR_STOCK`.
+   - `[id].tsx`: detalle con ítems (producto, SKU, cantidad), usuario y fecha; "Anular" solo si está
+     `CONFIRMED` y con `TRANSFERIR_STOCK`, con `confirmAction` destructivo que avisa que el destino
+     debe tener el stock.
+   - `new.tsx`: origen = sucursal activa (si no hay, `EmptyState` con acceso a elegirla, dentro de
+     `settings`, que es del mismo nivel); destino = sucursales activas de la empresa
+     (`branch-store.fetchAllBranches(token, true)`) menos el origen; ítems con cantidad 1..stock en
+     origen (`variant.stockByBranch[originId]`) y opción de quitar; el catálogo se abre en un `Modal`
+     dentro de la misma pantalla (sin estado global, sin navegar a otro stack). Botón deshabilitado sin
+     destino o sin ítems y mientras la mutación está pendiente; al terminar, `router.replace` al detalle.
+6. **Acceso.** `TRANSFER_READ_PERMISSIONS = ['TRANSFERIR_STOCK', 'CONSULTAR_STOCK']` en
+   `utils/permissions.ts`; ítem "Transferencias" en la sección Operaciones de `(tabs)/more.tsx`.
+
+### Validación
+
+- Backend: `mvnw test -Dtest=!BackendApplicationTests`; levantar en 8082 contra `erp_qa` (avisar antes:
+  compilar reinicia el backend de IntelliJ) y probar el contrato con curl, incluida la paginación.
+- Frontend: `npx tsc --noEmit`, eslint de los archivos tocados, `git diff --check`.
+
+**Pruebas manuales.** Transferir entre dos sucursales y ver el stock en ambas (inventario y catálogo);
+varias variantes en una transferencia; cantidad mayor al stock de origen; variante sin stock en destino
+(se crea); anular y ver el stock restaurado; anular cuando el destino ya vendió parte (409); anular dos
+veces; usuario con solo `CONSULTAR_STOCK` (ve, no crea ni anula); usuario sin ninguno (no ve el ítem);
+alta de pedido sigue funcionando con el catálogo extraído.
+
+**Fuera de alcance.** Validar asignación a la sucursal de origen o sucursales inactivas en el backend
+(anotado como pendiente chico); flujo en dos pasos (enviada/recibida): hoy la transferencia se confirma
+al crearla.
 
 ---
 
@@ -167,5 +244,7 @@ total, stock bajo, ...). Después: endpoints con `VER_REPORTES` y pantalla. Borr
 - Migrar los demás módulos a TanStack Query, de a uno y con decisión explícita (pedidos primero).
 - Precio al editar un pedido: los ítems toman el precio actual de la variante. Confirmar si es lo deseado.
 - Permisos que el backend nunca chequea: `ADMINISTRAR_PRECIOS` y `ACCEDER_TODAS_SUCURSALES`.
+- Transferencias: el backend no valida que el usuario esté asignado a la sucursal de origen ni que
+  origen/destino estén activas.
 - `BackendApplicationTests` (test de contexto) falla desde 2026-10-06; los unitarios se corren con
   `-Dtest=!BackendApplicationTests`.
