@@ -5,50 +5,54 @@ export type Company = {
     name: string;
 };
 
-export type Role = 'ADMINISTRATOR' | 'EMPLOYEE' | 'Administrador' | 'Empleado';
-
+/** Espejo del enum Permission del backend (modules/roles/entity/Permission.java). */
 export type Permission =
-    | 'PRODUCTS_CREATE'
-    | 'PRODUCTS_READ'
-    | 'PRODUCTS_UPDATE'
-    | 'CATEGORIES_CREATE'
-    | 'CATEGORIES_READ'
-    | 'CUSTOMERS_CREATE'
-    | 'CUSTOMERS_READ'
-    | 'ORDERS_CREATE'
-    | 'ORDERS_READ'
-    | 'ORDERS_UPDATE'
-    | 'INVENTORY_READ'
-    | 'INVENTORY_ADJUST'
-    | 'TRANSFERS_CREATE'
-    | 'TRANSFERS_READ'
-    | 'USERS_MANAGE'
-    | 'BRANCHES_MANAGE'
-    | 'REPORTS_READ'
-    | 'SHIPPING_READ';
+    | 'CREAR_PEDIDOS'
+    | 'ADMINISTRAR_CLIENTES'
+    | 'ADMINISTRAR_PRODUCTOS'
+    | 'ADMINISTRAR_CATEGORIAS'
+    | 'ADMINISTRAR_PRECIOS'
+    | 'AJUSTAR_STOCK'
+    | 'TRANSFERIR_STOCK'
+    | 'ADMINISTRAR_USUARIOS'
+    | 'VER_REPORTES'
+    | 'CREAR_ENVIOS'
+    | 'ACCEDER_TODAS_SUCURSALES'
+    | 'VER_PEDIDOS'
+    | 'PREPARAR_PEDIDOS'
+    | 'CONSULTAR_STOCK'
+    | 'CONSULTAR_ENVIOS'
+    | 'ADMINISTRAR_SUCURSALES'
+    | 'REGISTRAR_PAGOS';
 
 export type User = {
     id: string;
     name: string;
     email: string;
-    role: Role;
+    /** Nombre del rol tal como lo definió la empresa; vacío si el usuario no tiene rol. */
+    role: string;
     company: Company;
     branches: Branch[];
     permissions: Permission[];
 };
 
-export type LoginResponse = {
-    token: string;
-    type: string;
+/** GET /api/v1/auth/me: rol y permisos vigentes del usuario de la sesión. */
+export type CurrentUserResponse = {
     id: number;
     username: string;
     email: string;
     firstName: string;
     lastName: string;
-    roleName: string;
-    permissions: string[];
+    roleName: string | null;
+    permissions: Permission[];
+    platformAdmin: boolean;
     companyId: number;
     companyName: string;
+};
+
+export type LoginResponse = CurrentUserResponse & {
+    token: string;
+    type: string;
 };
 
 export type ChangePasswordRequest = {

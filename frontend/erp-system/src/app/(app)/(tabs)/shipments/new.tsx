@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { OrderForm } from '@/components/orders/OrderForm';
+import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
@@ -18,8 +19,10 @@ import {
     toOrderItemRequests,
     toOrderPaymentOptions,
 } from '@/utils/order-request';
+import { hasPermission } from '@/utils/permissions';
 
 export default function NewShipmentScreen() {
+    const canAccess = useAuthStore((state) => hasPermission(state.user, 'CREAR_PEDIDOS'));
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const createOrder = useOrderStore((state) => state.createOrder);
@@ -78,6 +81,16 @@ export default function NewShipmentScreen() {
         if (isSubmitting) return;
         resetDraft();
         router.back();
+    }
+
+    if (!canAccess) {
+        return (
+            <NotFound
+                headerTitle="Nuevo envío"
+                title="Sin permisos"
+                description="Tu usuario no tiene permiso para crear envíos."
+            />
+        );
     }
 
     return (

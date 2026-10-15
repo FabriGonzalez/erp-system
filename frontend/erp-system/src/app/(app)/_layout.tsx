@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { AppState, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppHeader } from '@/components/ui/AppHeader';
@@ -17,6 +17,16 @@ export default function AppLayout() {
             fetchUserBranches(user.id, token).catch(() => {});
         }
     }, [user, token, hasFetchedUserBranches, fetchUserBranches]);
+
+    // Al volver al frente se releen rol y permisos: un admin pudo cambiarlos mientras tanto.
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', (state) => {
+            if (state === 'active') {
+                void useAuthStore.getState().refreshUser();
+            }
+        });
+        return () => subscription.remove();
+    }, []);
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>

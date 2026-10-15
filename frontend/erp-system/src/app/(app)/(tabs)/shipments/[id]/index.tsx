@@ -18,6 +18,7 @@ import { useOrderActions } from '@/hooks/use-order-actions';
 import { useOrderDetail } from '@/hooks/use-order-detail';
 import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
+import { hasPermission } from '@/utils/permissions';
 
 export default function ShipmentDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -62,11 +63,11 @@ export default function ShipmentDetailScreen() {
 
     const shipment = order;
 
-    const canUpdate = user?.role === 'Administrador' || Boolean(user?.permissions?.includes('ORDERS_UPDATE'));
+    const canManageOrders = hasPermission(user, 'CREAR_PEDIDOS');
     const isToPrepare = order.status === 'TO_PREPARE';
-    const canCancel = order.status === 'CONFIRMED' || isToPrepare;
-    const canDispatch = isToPrepare;
-    const canEdit = isToPrepare;
+    const canCancel = canManageOrders && (order.status === 'CONFIRMED' || isToPrepare);
+    const canDispatch = hasPermission(user, 'PREPARAR_PEDIDOS') && isToPrepare;
+    const canEdit = canManageOrders && isToPrepare;
 
     return (
         <Screen style={styles.screen}>
@@ -78,7 +79,7 @@ export default function ShipmentDetailScreen() {
                 <OrderTimeline order={order} />
             </ScrollView>
             {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
-            {canUpdate && (canCancel || canDispatch || canEdit) && (
+            {(canCancel || canDispatch || canEdit) && (
                 <OrderActions
                     canEdit={canEdit}
                     canDispatch={canDispatch}

@@ -26,6 +26,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
 import { useCategoryStore } from '@/stores/category-store';
 import { useProductStore } from '@/stores/product-store';
+import { hasPermission } from '@/utils/permissions';
 
 export default function ProductsScreen() {
     const user = useAuthStore((state) => state.user);
@@ -63,13 +64,9 @@ export default function ProductsScreen() {
         }
     }
 
-    const canCreate =
-        user?.role === 'Administrador' ||
-        Boolean(user?.permissions?.includes('PRODUCTS_CREATE'));
-
-    const canEdit =
-        user?.role === 'Administrador' ||
-        Boolean(user?.permissions?.includes('PRODUCTS_UPDATE'));
+    // El backend usa el mismo permiso para crear, editar y activar/desactivar productos.
+    const canCreate = hasPermission(user, 'ADMINISTRAR_PRODUCTOS');
+    const canEdit = canCreate;
 
     const filteredProducts = useMemo(() => {
         const branchId = activeBranch?.id ?? '1';

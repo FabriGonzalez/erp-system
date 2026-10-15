@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { OrderForm } from '@/components/orders/OrderForm';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
@@ -14,8 +15,10 @@ import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { useOrderStore } from '@/stores/order-store';
 import { SharedStyles } from '@/styles/shared';
 import { toOrderItemRequests } from '@/utils/order-request';
+import { hasPermission } from '@/utils/permissions';
 
 export default function EditShipmentScreen() {
+    const canAccess = useAuthStore((state) => hasPermission(state.user, 'CREAR_PEDIDOS'));
     const { id } = useLocalSearchParams<{ id: string }>();
     const { order: loadedOrder, isLoading, loadError } = useOrderDetail(id);
     // Se espera la carga del detalle aunque la orden ya esté en el store (copia del
@@ -84,6 +87,16 @@ export default function EditShipmentScreen() {
         if (isSubmitting) return;
         resetDraft();
         router.back();
+    }
+
+    if (!canAccess) {
+        return (
+            <NotFound
+                headerTitle="Editar envío"
+                title="Sin permisos"
+                description="Tu usuario no tiene permiso para editar envíos."
+            />
+        );
     }
 
     return (

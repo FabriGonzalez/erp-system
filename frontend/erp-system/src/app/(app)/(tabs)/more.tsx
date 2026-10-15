@@ -9,6 +9,13 @@ import { Spacing } from '@/constants/spacing';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
 import { getInitials } from '@/utils/format';
+import {
+    DEBTORS_READ_PERMISSIONS,
+    hasAnyPermission,
+    hasPermission,
+    ORDER_READ_PERMISSIONS,
+    STOCK_READ_PERMISSIONS,
+} from '@/utils/permissions';
 
 export default function MoreScreen() {
     const { user, logout } = useAuthStore();
@@ -19,7 +26,16 @@ export default function MoreScreen() {
         router.replace('/(auth)/login');
     }
 
-    const isAdmin = user?.role === 'Administrador';
+    // Cada ítem se muestra si el backend aceptaría lo que hace esa pantalla.
+    const canSeeStock = hasAnyPermission(user, STOCK_READ_PERMISSIONS);
+    const canSeeDebtors = hasAnyPermission(user, DEBTORS_READ_PERMISSIONS);
+    const canSeeOrders = hasAnyPermission(user, ORDER_READ_PERMISSIONS);
+    const canManageAttributes = hasPermission(user, 'ADMINISTRAR_PRODUCTOS');
+    const canManageUsers = hasPermission(user, 'ADMINISTRAR_USUARIOS');
+    // La pantalla de sucursales también asigna usuarios.
+    const canManageBranches = hasPermission(user, 'ADMINISTRAR_SUCURSALES') || canManageUsers;
+    const canManageCategories = hasPermission(user, 'ADMINISTRAR_CATEGORIAS');
+    const showAdministration = canManageAttributes || canManageUsers || canManageBranches || canManageCategories;
 
     return (
         <Screen style={styles.screen}>
@@ -38,35 +54,39 @@ export default function MoreScreen() {
                     <View style={styles.profileInfo}>
                         <Text style={styles.profileName}>{user?.name ?? 'Usuario'}</Text>
                         <Text style={styles.profileEmail}>{user?.email ?? ''}</Text>
-                        <View style={styles.roleBadge}>
-                            <Text style={styles.roleBadgeText}>
-                                {isAdmin ? 'Administrador' : 'Empleado'}
-                            </Text>
-                        </View>
+                        {Boolean(user?.role) && (
+                            <View style={styles.roleBadge}>
+                                <Text style={styles.roleBadgeText}>{user?.role}</Text>
+                            </View>
+                        )}
                     </View>
                 </View>
 
                 {/* Sección General */}
                 <Text style={styles.sectionTitle}>General</Text>
                 <View style={styles.section}>
-                    <MenuListItem
-                        title="Inventario"
-                        subtitle="Consultar y ajustar stock por sucursal"
-                        iconName={{ ios: 'shippingbox.fill', android: 'inventory_2', web: 'inventory_2' }}
-                        onPress={() => router.push('/inventory' as any)}
-                    />
+                    {canSeeStock && (
+                        <MenuListItem
+                            title="Inventario"
+                            subtitle="Consultar y ajustar stock por sucursal"
+                            iconName={{ ios: 'shippingbox.fill', android: 'inventory_2', web: 'inventory_2' }}
+                            onPress={() => router.push('/inventory' as any)}
+                        />
+                    )}
                     <MenuListItem
                         title="Clientes"
                         subtitle="Gestión de clientes y direcciones"
                         iconName={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
                         onPress={() => router.push('/customers' as any)}
                     />
-                    <MenuListItem
-                        title="Cuentas corrientes"
-                        subtitle="Deudas, saldos a favor y pagos de clientes"
-                        iconName={{ ios: 'exclamationmark.circle.fill', android: 'warning', web: 'warning' }}
-                        onPress={() => router.push('/customers/debtors')}
-                    />
+                    {canSeeDebtors && (
+                        <MenuListItem
+                            title="Cuentas corrientes"
+                            subtitle="Deudas, saldos a favor y pagos de clientes"
+                            iconName={{ ios: 'exclamationmark.circle.fill', android: 'warning', web: 'warning' }}
+                            onPress={() => router.push('/customers/debtors')}
+                        />
+                    )}
                     <MenuListItem
                         title="Sucursal activa"
                         subtitle={activeBranch?.name ?? 'Ninguna seleccionada'}
@@ -84,12 +104,14 @@ export default function MoreScreen() {
 
                 <Text style={styles.sectionTitle}>Operaciones</Text>
                 <View style={styles.section}>
-                    <MenuListItem
-                        title="Operaciones"
-                        subtitle="Consultar ventas y envíos en una sola lista"
-                        iconName={{ ios: 'list.bullet.rectangle', android: 'view_list', web: 'view_list' }}
-                        onPress={() => router.push('/operations' as any)}
-                    />
+                    {canSeeOrders && (
+                        <MenuListItem
+                            title="Operaciones"
+                            subtitle="Consultar ventas y envíos en una sola lista"
+                            iconName={{ ios: 'list.bullet.rectangle', android: 'view_list', web: 'view_list' }}
+                            onPress={() => router.push('/operations' as any)}
+                        />
+                    )}
                     <MenuListItem
                         title="Analytics"
                         subtitle="Próximamente"
@@ -99,40 +121,48 @@ export default function MoreScreen() {
                     />
                 </View>
 
-                {/* Sección Administración (sólo Admin) */}
-                {isAdmin && (
+                {/* Sección Administración: cada ítem según su permiso */}
+                {showAdministration && (
                     <>
                         <Text style={styles.sectionTitle}>Administración</Text>
                         <View style={styles.section}>
-                            <MenuListItem
-                                title="Atributos de productos"
-                                subtitle="Administrar atributos y valores del catálogo"
-                                iconName={{ ios: 'tag.fill', android: 'label', web: 'label' }}
-                                onPress={() => router.push('/attributes' as any)}
-                            />
-                            <MenuListItem
-                                title="Usuarios"
-                                subtitle="Administrar empleados y permisos"
-                                iconName={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
-                                onPress={() => { }}
-                                showChevron={false}
-                            />
-                            <MenuListItem
-                                title="Sucursales"
-                                subtitle="Configurar locales y almacenes"
-                                iconName={{ ios: 'building.2.fill', android: 'store', web: 'store' }}
-                                onPress={() => {
-                                    router.push({ pathname: '/branches' });
-                                }}
-                            />
-                            <MenuListItem
-                                title="Categorías"
-                                subtitle="Organizar categorías del catálogo"
-                                iconName={{ ios: 'folder.fill', android: 'folder', web: 'folder' }}
-                                onPress={() => {
-                                    router.push('/categories' as any);
-                                }}
-                            />
+                            {canManageAttributes && (
+                                <MenuListItem
+                                    title="Atributos de productos"
+                                    subtitle="Administrar atributos y valores del catálogo"
+                                    iconName={{ ios: 'tag.fill', android: 'label', web: 'label' }}
+                                    onPress={() => router.push('/attributes' as any)}
+                                />
+                            )}
+                            {canManageUsers && (
+                                <MenuListItem
+                                    title="Usuarios"
+                                    subtitle="Administrar empleados y permisos"
+                                    iconName={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
+                                    onPress={() => { }}
+                                    showChevron={false}
+                                />
+                            )}
+                            {canManageBranches && (
+                                <MenuListItem
+                                    title="Sucursales"
+                                    subtitle="Configurar locales y almacenes"
+                                    iconName={{ ios: 'building.2.fill', android: 'store', web: 'store' }}
+                                    onPress={() => {
+                                        router.push({ pathname: '/branches' });
+                                    }}
+                                />
+                            )}
+                            {canManageCategories && (
+                                <MenuListItem
+                                    title="Categorías"
+                                    subtitle="Organizar categorías del catálogo"
+                                    iconName={{ ios: 'folder.fill', android: 'folder', web: 'folder' }}
+                                    onPress={() => {
+                                        router.push('/categories' as any);
+                                    }}
+                                />
+                            )}
                         </View>
                     </>
                 )}

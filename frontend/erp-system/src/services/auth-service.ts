@@ -1,4 +1,4 @@
-import { ChangePasswordRequest, LoginResponse, TokenResponse } from '@/types/auth';
+import { ChangePasswordRequest, CurrentUserResponse, LoginResponse, TokenResponse } from '@/types/auth';
 import { apiFetch } from '@/services/api-client';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -102,6 +102,25 @@ export async function changePassword(
             throw new Error('Tu sesión expiró.');
         }
         throw new Error('No se pudo cambiar la contraseña. Intentá de nuevo más tarde.');
+    }
+
+    return response.json();
+}
+
+/**
+ * Rol y permisos vigentes del usuario. Un 401 (usuario desactivado, empresa suspendida,
+ * contraseña cambiada en otro dispositivo) ya lo resuelve apiFetch expirando la sesión.
+ */
+export async function getCurrentUser(token: string): Promise<CurrentUserResponse> {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/auth/me`, {
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error('No se pudieron actualizar los permisos.');
     }
 
     return response.json();

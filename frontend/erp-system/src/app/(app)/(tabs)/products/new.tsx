@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ProductForm } from '@/components/products/ProductForm';
+import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/auth-store';
@@ -11,8 +12,10 @@ import { useCategoryStore } from '@/stores/category-store';
 import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
 import { ProductFormData } from '@/types/product';
+import { hasPermission } from '@/utils/permissions';
 
 export default function NewProductScreen() {
+    const canAccess = useAuthStore((state) => hasPermission(state.user, 'ADMINISTRAR_PRODUCTOS'));
     const { products, createProduct } = useProductStore();
     const { categories, fetchCategories } = useCategoryStore();
     const user = useAuthStore((state) => state.user);
@@ -63,6 +66,16 @@ export default function NewProductScreen() {
                 ),
             })),
         };
+    }
+
+    if (!canAccess) {
+        return (
+            <NotFound
+                headerTitle="Nuevo producto"
+                title="Sin permisos"
+                description="Tu usuario no tiene permiso para crear productos."
+            />
+        );
     }
 
     return (

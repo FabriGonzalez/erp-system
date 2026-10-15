@@ -8,6 +8,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/services/query-client';
 import { useAuthStore } from '@/stores/auth-store';
 import { SessionExpiredOverlay } from '@/components/SessionExpiredOverlay';
+import { homeRoute } from '@/utils/home-route';
 import { StatusBar } from 'expo-status-bar';
 
 export default function RootLayout() {
@@ -42,7 +43,7 @@ export default function RootLayout() {
     }
 
     if (user && inAuthGroup && !sessionExpired) {
-      router.replace('/(app)/(tabs)/shipments');
+      router.replace(homeRoute(user));
     }
   }, [user, isHydrated, segments, router, sessionExpired]);
 

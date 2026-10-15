@@ -3,8 +3,15 @@ import { Tabs } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useAuthStore } from '@/stores/auth-store';
+import { hasAnyPermission, hasPermission, ORDER_READ_PERMISSIONS } from '@/utils/permissions';
+
 export default function TabsLayout() {
     const insets = useSafeAreaInsets();
+    const user = useAuthStore((state) => state.user);
+    // href null oculta la pestaña: Ventas solo crea pedidos y Envíos necesita leerlos.
+    const canSell = hasPermission(user, 'CREAR_PEDIDOS');
+    const canSeeShipments = hasAnyPermission(user, ORDER_READ_PERMISSIONS);
 
     return (
         <Tabs
@@ -30,6 +37,7 @@ export default function TabsLayout() {
                 name="orders"
                 options={{
                     title: 'Ventas',
+                    href: canSell ? undefined : null,
                     tabBarIcon: ({ color, size }) => (
                         <SymbolView
                             name={{
@@ -48,6 +56,7 @@ export default function TabsLayout() {
                 name="shipments"
                 options={{
                     title: 'Envíos',
+                    href: canSeeShipments ? undefined : null,
                     tabBarIcon: ({ color, size }) => (
                         <SymbolView
                             name={{

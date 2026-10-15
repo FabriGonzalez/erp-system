@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ProductForm } from '@/components/products/ProductForm';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/auth-store';
@@ -13,8 +14,10 @@ import { useCategoryStore } from '@/stores/category-store';
 import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
 import { ProductFormData } from '@/types/product';
+import { hasPermission } from '@/utils/permissions';
 
 export default function EditProductScreen() {
+    const canAccess = useAuthStore((state) => hasPermission(state.user, 'ADMINISTRAR_PRODUCTOS'));
     const { id } = useLocalSearchParams<{ id: string }>();
     const {
         products,
@@ -110,6 +113,16 @@ export default function EditProductScreen() {
         } finally {
             setIsSubmitting(false);
         }
+    }
+
+    if (!canAccess) {
+        return (
+            <NotFound
+                headerTitle="Editar producto"
+                title="Sin permisos"
+                description="Tu usuario no tiene permiso para editar productos."
+            />
+        );
     }
 
     return (

@@ -5,9 +5,13 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
+import { hasPermission } from '@/utils/permissions';
 
 export default function ShipmentsScreen() {
+    const canCreate = useAuthStore((state) => hasPermission(state.user, 'CREAR_PEDIDOS'));
+
     function handleCreateShipment() {
         router.push('/shipments/new');
     }
@@ -22,32 +26,34 @@ export default function ShipmentsScreen() {
                     </Text>
                 </View>
 
-                <Pressable
-                    onPress={handleCreateShipment}
-                    accessibilityRole="button"
-                    accessibilityLabel="Crear nuevo envío"
-                    hitSlop={6}
-                    style={({ pressed }) => [
-                        SharedStyles.addButton,
-                        pressed && SharedStyles.pressed,
-                    ]}
-                >
-                    <View style={SharedStyles.addIconContainer}>
-                        <SymbolView
-                            name={{
-                                ios: 'plus',
-                                android: 'add',
-                                web: 'add',
-                            }}
-                            size={24}
-                            tintColor={Colors.white}
-                        />
-                    </View>
+                {canCreate && (
+                    <Pressable
+                        onPress={handleCreateShipment}
+                        accessibilityRole="button"
+                        accessibilityLabel="Crear nuevo envío"
+                        hitSlop={6}
+                        style={({ pressed }) => [
+                            SharedStyles.addButton,
+                            pressed && SharedStyles.pressed,
+                        ]}
+                    >
+                        <View style={SharedStyles.addIconContainer}>
+                            <SymbolView
+                                name={{
+                                    ios: 'plus',
+                                    android: 'add',
+                                    web: 'add',
+                                }}
+                                size={24}
+                                tintColor={Colors.white}
+                            />
+                        </View>
 
-                    <Text style={SharedStyles.addButtonText}>
-                        Nuevo envío
-                    </Text>
-                </Pressable>
+                        <Text style={SharedStyles.addButtonText}>
+                            Nuevo envío
+                        </Text>
+                    </Pressable>
+                )}
             </View>
 
             <View style={styles.content}>

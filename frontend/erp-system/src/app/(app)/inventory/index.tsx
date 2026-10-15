@@ -24,6 +24,7 @@ import { useProductStore } from '@/stores/product-store';
 import { useStockStore } from '@/stores/stock-store';
 import { SharedStyles } from '@/styles/shared';
 import { Stock } from '@/types/stock';
+import { hasPermission } from '@/utils/permissions';
 
 export default function InventoryScreen() {
     const token = useAuthStore((state) => state.token);
@@ -35,6 +36,8 @@ export default function InventoryScreen() {
     const { products, fetchProducts } = useProductStore();
     const { stocks, isLoading, error, fetchStocks, fetchStocksByBranch } = useStockStore();
     const user = useAuthStore((state) => state.user);
+    // Consultar stock alcanza para entrar; tocar un ítem abre el ajuste.
+    const canAdjust = hasPermission(user, 'AJUSTAR_STOCK');
     const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
     const [query, setQuery] = useState('');
     const [editingStock, setEditingStock] = useState<Stock | null>(null);
@@ -78,8 +81,9 @@ export default function InventoryScreen() {
     function renderItem({ item }: { item: Stock }) {
         return (
             <Pressable
-                style={({ pressed }) => [styles.card, pressed && SharedStyles.pressed]}
+                style={({ pressed }) => [styles.card, canAdjust && pressed && SharedStyles.pressed]}
                 onPress={() => setEditingStock(item)}
+                disabled={!canAdjust}
             >
                 <View style={styles.cardMain}>
                     <Text style={styles.productName}>{item.productName}</Text>

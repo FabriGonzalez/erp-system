@@ -24,6 +24,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
 import { SharedStyles } from '@/styles/shared';
 import { Branch } from '@/types/branch';
+import { hasPermission } from '@/utils/permissions';
 
 export default function BranchesListScreen() {
     const { token, user } = useAuthStore();
@@ -34,8 +35,13 @@ export default function BranchesListScreen() {
         fetchAllBranches,
         toggleBranchActive,
         activeBranch,
+        availableBranches,
         selectAndEnsureAssigned,
     } = useBranchStore();
+
+    // Se entra con cualquiera de los dos permisos; cada acción pide el suyo.
+    const canManageBranches = hasPermission(user, 'ADMINISTRAR_SUCURSALES');
+    const canManageUsers = hasPermission(user, 'ADMINISTRAR_USUARIOS');
 
     const [isFormModalVisible, setIsFormModalVisible] = useState(false);
     const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
@@ -99,6 +105,8 @@ export default function BranchesListScreen() {
     function renderItem({ item }: { item: Branch }) {
         const isActiveBranch = activeBranch?.id === item.id;
         const isSelectingThis = selectingBranchId === item.id;
+        // Elegir una sucursal no asignada la asigna al usuario, y eso exige ADMINISTRAR_USUARIOS.
+        const canSelect = canManageUsers || availableBranches.some((branch) => branch.id === item.id);
 
         return (
             <View
@@ -157,76 +165,82 @@ export default function BranchesListScreen() {
                         </View>
                     ) : null}
 
-                    {item.active && (
+                    {item.active && (canSelect || canManageUsers) && (
                         <View style={styles.cardBottomActions}>
-                            <Pressable
-                                style={({ pressed }) => [
-                                    styles.activeSelectButton,
-                                    isActiveBranch && styles.selectedActiveButton,
-                                    pressed && SharedStyles.pressed,
-                                ]}
-                                onPress={() => handleSelectActive(item)}
-                                disabled={isSelectingThis}
-                            >
-                                {isSelectingThis ? (
-                                    <ActivityIndicator size="small" color={Colors.primary} />
-                                ) : (
-                                    <SymbolView
-                                        name={{
-                                            ios: isActiveBranch ? 'checkmark.circle.fill' : 'circle',
-                                            android: isActiveBranch ? 'check_circle' : 'radio_button_unchecked',
-                                            web: isActiveBranch ? 'check_circle' : 'radio_button_unchecked',
-                                        }}
-                                        size={16}
-                                        tintColor={isActiveBranch ? Colors.primary : Colors.textSecondary}
-                                    />
-                                )}
-                                <Text
-                                    style={[
-                                        styles.activeSelectText,
-                                        isActiveBranch && styles.selectedActiveText,
+                            {canSelect && (
+                                <Pressable
+                                    style={({ pressed }) => [
+                                        styles.activeSelectButton,
+                                        isActiveBranch && styles.selectedActiveButton,
+                                        pressed && SharedStyles.pressed,
                                     ]}
+                                    onPress={() => handleSelectActive(item)}
+                                    disabled={isSelectingThis}
                                 >
-                                    {isActiveBranch ? 'Sucursal activa seleccionada' : 'Seleccionar como activa'}
-                                </Text>
-                            </Pressable>
+                                    {isSelectingThis ? (
+                                        <ActivityIndicator size="small" color={Colors.primary} />
+                                    ) : (
+                                        <SymbolView
+                                            name={{
+                                                ios: isActiveBranch ? 'checkmark.circle.fill' : 'circle',
+                                                android: isActiveBranch ? 'check_circle' : 'radio_button_unchecked',
+                                                web: isActiveBranch ? 'check_circle' : 'radio_button_unchecked',
+                                            }}
+                                            size={16}
+                                            tintColor={isActiveBranch ? Colors.primary : Colors.textSecondary}
+                                        />
+                                    )}
+                                    <Text
+                                        style={[
+                                            styles.activeSelectText,
+                                            isActiveBranch && styles.selectedActiveText,
+                                        ]}
+                                    >
+                                        {isActiveBranch ? 'Sucursal activa seleccionada' : 'Seleccionar como activa'}
+                                    </Text>
+                                </Pressable>
+                            )}
 
-                            <Pressable
-                                style={({ pressed }) => [styles.usersButton, pressed && SharedStyles.pressed]}
-                                onPress={() => handleOpenUsersAssignment(item)}
-                            >
-                                <SymbolView
-                                    name={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
-                                    size={15}
-                                    tintColor={Colors.primary}
-                                />
-                                <Text style={styles.usersButtonText}>Usuarios</Text>
-                            </Pressable>
+                            {canManageUsers && (
+                                <Pressable
+                                    style={({ pressed }) => [styles.usersButton, pressed && SharedStyles.pressed]}
+                                    onPress={() => handleOpenUsersAssignment(item)}
+                                >
+                                    <SymbolView
+                                        name={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
+                                        size={15}
+                                        tintColor={Colors.primary}
+                                    />
+                                    <Text style={styles.usersButtonText}>Usuarios</Text>
+                                </Pressable>
+                            )}
                         </View>
                     )}
                 </View>
 
-                <View style={styles.actionsRow}>
-                    <View style={styles.switchContainer}>
-                        <Switch
-                            value={item.active}
-                            onValueChange={() => handleToggleActive(item)}
-                            trackColor={{ false: Colors.track, true: Colors.primary }}
-                            thumbColor={Colors.white}
-                        />
-                    </View>
+                {canManageBranches && (
+                    <View style={styles.actionsRow}>
+                        <View style={styles.switchContainer}>
+                            <Switch
+                                value={item.active}
+                                onValueChange={() => handleToggleActive(item)}
+                                trackColor={{ false: Colors.track, true: Colors.primary }}
+                                thumbColor={Colors.white}
+                            />
+                        </View>
 
-                    <Pressable
-                        style={({ pressed }) => [styles.iconButton, pressed && SharedStyles.pressed]}
-                        onPress={() => handleOpenEdit(item)}
-                    >
-                        <SymbolView
-                            name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
-                            size={18}
-                            tintColor={Colors.primary}
-                        />
-                    </Pressable>
-                </View>
+                        <Pressable
+                            style={({ pressed }) => [styles.iconButton, pressed && SharedStyles.pressed]}
+                            onPress={() => handleOpenEdit(item)}
+                        >
+                            <SymbolView
+                                name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
+                                size={18}
+                                tintColor={Colors.primary}
+                            />
+                        </Pressable>
+                    </View>
+                )}
             </View>
         );
     }
@@ -258,11 +272,13 @@ export default function BranchesListScreen() {
                         Configurá los locales, depósitos y puntos de venta de la empresa.
                     </Text>
                 </View>
-                <AppButton
-                    title="+ Nueva"
-                    onPress={handleOpenCreate}
-                    style={styles.addButton}
-                />
+                {canManageBranches && (
+                    <AppButton
+                        title="+ Nueva"
+                        onPress={handleOpenCreate}
+                        style={styles.addButton}
+                    />
+                )}
             </View>
 
             {isLoading && allBranches.length === 0 ? (
@@ -299,8 +315,8 @@ export default function BranchesListScreen() {
                         <EmptyState
                             title="Sin sucursales registradas"
                             description="Creá la primera sucursal para comenzar a gestionar stock, pedidos y operaciones."
-                            actionLabel="+ Crear Sucursal"
-                            onAction={handleOpenCreate}
+                            actionLabel={canManageBranches ? '+ Crear Sucursal' : undefined}
+                            onAction={canManageBranches ? handleOpenCreate : undefined}
                         />
                     }
                 />

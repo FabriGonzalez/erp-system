@@ -16,6 +16,7 @@ import { Spacing } from '@/constants/spacing';
 import { useOrderActions } from '@/hooks/use-order-actions';
 import { useOrderDetail } from '@/hooks/use-order-detail';
 import { useAuthStore } from '@/stores/auth-store';
+import { hasPermission } from '@/utils/permissions';
 
 export default function OperationDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -56,12 +57,12 @@ export default function OperationDetailScreen() {
 
     const currentOrder = order;
 
-    const canUpdate = user?.role === 'Administrador' || user?.role === 'ADMINISTRATOR' || Boolean(user?.permissions?.includes('ORDERS_UPDATE'));
+    const canManageOrders = hasPermission(user, 'CREAR_PEDIDOS');
     const isShipping = currentOrder.deliveryType === 'SHIPPING';
     const isToPrepare = currentOrder.status === 'TO_PREPARE';
-    const canCancel = currentOrder.status === 'CONFIRMED' || isToPrepare;
-    const canDispatch = isShipping && isToPrepare;
-    const canEdit = isShipping && isToPrepare;
+    const canCancel = canManageOrders && (currentOrder.status === 'CONFIRMED' || isToPrepare);
+    const canDispatch = hasPermission(user, 'PREPARAR_PEDIDOS') && isShipping && isToPrepare;
+    const canEdit = canManageOrders && isShipping && isToPrepare;
 
     return (
         <Screen style={styles.screen}>
@@ -73,7 +74,7 @@ export default function OperationDetailScreen() {
                 <OrderTimeline order={currentOrder} />
             </ScrollView>
             {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
-            {canUpdate && (canCancel || canDispatch || canEdit) && (
+            {(canCancel || canDispatch || canEdit) && (
                 <OrderActions
                     canEdit={canEdit}
                     canDispatch={canDispatch}

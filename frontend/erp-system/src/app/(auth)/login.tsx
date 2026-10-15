@@ -6,6 +6,7 @@ import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import { login as loginService } from '@/services/auth-service';
 import { useAuthStore } from '@/stores/auth-store';
+import { homeRoute } from '@/utils/home-route';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -43,9 +44,7 @@ export default function LoginScreen() {
 
             console.log('AUTH STORE UPDATED');
 
-            router.replace({
-                pathname: '/(app)/(tabs)/orders',
-            });
+            router.replace(homeRoute(useAuthStore.getState().user));
 
             console.log('ROUTER REPLACE CALLED');
         } catch (error: unknown) {

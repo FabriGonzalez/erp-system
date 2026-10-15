@@ -2,11 +2,31 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 
 import { setUnauthorizedHandler } from '@/services/api-client';
+import { getCurrentUser } from '@/services/auth-service';
 import { clearServerCache } from '@/services/query-client';
 import { useBranchStore } from '@/stores/branch-store';
-import { LoginResponse, User } from '@/types/auth';
+import { CurrentUserResponse, LoginResponse, User } from '@/types/auth';
 
 const AUTH_STORAGE_KEY = '@erp/auth-session';
+
+// Solo se aplica la respuesta del último refresco pedido: si al volver la app al frente se
+// piden dos seguidos, uno viejo que termine tarde no puede pisar al más nuevo.
+let latestRefreshId = 0;
+
+function userFromSession(data: CurrentUserResponse, branches: User['branches']): User {
+    return {
+        id: String(data.id),
+        name: `${data.firstName} ${data.lastName}`,
+        email: data.email,
+        role: data.roleName ?? '',
+        company: {
+            id: String(data.companyId),
+            name: data.companyName,
+        },
+        branches,
+        permissions: data.permissions,
+    };
+}
 
 type StoredSession = {
     token: string;
@@ -25,6 +45,7 @@ type AuthState = {
 
     login: (response: LoginResponse) => Promise<void>;
     hydrate: () => Promise<void>;
+    refreshUser: () => Promise<void>;
     expireSession: (reason?: SessionEndReason) => Promise<void>;
     replaceToken: (previousToken: string, token: string) => Promise<void>;
     logout: () => Promise<void>;
@@ -45,18 +66,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     isLoggingOut: false,
 
     login: async (response) => {
-        const user: User = {
-            id: String(response.id),
-            name: `${response.firstName} ${response.lastName}`,
-            email: response.email,
-            role: response.roleName as User['role'],
-            company: {
-                id: String(response.companyId),
-                name: response.companyName,
-            },
-            branches: [],
-            permissions: response.permissions as User['permissions'],
-        };
+        const user = userFromSession(response, []);
 
         const session: StoredSession = {
             token: response.token,
@@ -117,6 +127,9 @@ export const useAuthStore = create<AuthState>((set) => ({
                 sessionExpired: false,
                 isLoggingOut: false,
             });
+
+            // La app arranca con los permisos guardados y los actualiza sin bloquear.
+            void useAuthStore.getState().refreshUser();
         } catch {
             await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
 
@@ -128,6 +141,39 @@ export const useAuthStore = create<AuthState>((set) => ({
                 isLoggingOut: false,
             });
         }
+    },
+
+    /**
+     * Trae el rol y los permisos vigentes (un admin puede haberlos cambiado). Si falla por
+     * red o 5xx se siguen usando los guardados; un 401 ya expira la sesión en apiFetch.
+     */
+    refreshUser: async () => {
+        const { token } = useAuthStore.getState();
+        if (!token) {
+            return;
+        }
+
+        const refreshId = ++latestRefreshId;
+        let current: CurrentUserResponse;
+        try {
+            current = await getCurrentUser(token);
+        } catch {
+            return;
+        }
+
+        const { user, token: currentToken } = useAuthStore.getState();
+        // Solo si sigue la misma sesión y es el último refresco pedido: si mientras tanto
+        // se cerró, expiró, entró otro usuario o cambió el token, la respuesta se descarta.
+        if (refreshId !== latestRefreshId || !user || currentToken !== token || user.id !== String(current.id)) {
+            return;
+        }
+
+        const refreshed = userFromSession(current, user.branches);
+        set({ user: refreshed });
+        await AsyncStorage.setItem(
+            AUTH_STORAGE_KEY,
+            JSON.stringify({ token, user: refreshed } satisfies StoredSession)
+        );
     },
 
     expireSession: async (reason = 'expired') => {

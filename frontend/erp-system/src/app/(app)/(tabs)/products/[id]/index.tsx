@@ -15,11 +15,13 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useProductAttributeStore } from '@/stores/product-attribute-store';
 import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
+import { hasPermission } from '@/utils/permissions';
 
 export default function ProductDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const activeBranch = useBranchStore((state) => state.activeBranch);
     const token = useAuthStore((state) => state.token);
+    const canEdit = useAuthStore((state) => hasPermission(state.user, 'ADMINISTRAR_PRODUCTOS'));
     const {
         products,
         isLoading,
@@ -111,12 +113,14 @@ export default function ProductDetailScreen() {
                 </Pressable>
                 <Text style={SharedStyles.headerTitle}>Detalle Producto</Text>
 
-                <Pressable
-                    style={({ pressed }) => [styles.editButton, pressed && SharedStyles.pressed]}
-                    onPress={handleEdit}
-                >
-                    <Text style={styles.editButtonText}>Editar</Text>
-                </Pressable>
+                {canEdit && (
+                    <Pressable
+                        style={({ pressed }) => [styles.editButton, pressed && SharedStyles.pressed]}
+                        onPress={handleEdit}
+                    >
+                        <Text style={styles.editButtonText}>Editar</Text>
+                    </Pressable>
+                )}
             </View>
 
             <ScrollView
@@ -126,7 +130,7 @@ export default function ProductDetailScreen() {
                 <ProductCard
                     product={currentProduct}
                     stock={currentStock}
-                    canEdit
+                    canEdit={canEdit}
                     onPress={handleEdit}
                     onToggleActive={handleToggleActive}
                 />
@@ -154,26 +158,28 @@ export default function ProductDetailScreen() {
                     ))}
                 </View>
 
-                <View style={styles.actionsCard}>
-                    <Text style={styles.actionsTitle}>Acciones</Text>
+                {canEdit && (
+                    <View style={styles.actionsCard}>
+                        <Text style={styles.actionsTitle}>Acciones</Text>
 
-                    <Pressable
-                        style={({ pressed }) => [styles.actionButton, pressed && SharedStyles.pressed]}
-                        onPress={handleEdit}
-                    >
-                        <Text style={styles.actionButtonText}>Editar Producto</Text>
-                    </Pressable>
+                        <Pressable
+                            style={({ pressed }) => [styles.actionButton, pressed && SharedStyles.pressed]}
+                            onPress={handleEdit}
+                        >
+                            <Text style={styles.actionButtonText}>Editar Producto</Text>
+                        </Pressable>
 
-                    <Pressable
-                        style={({ pressed }) => [styles.actionButtonSecondary, pressed && SharedStyles.pressed]}
-                        onPress={handleToggleActive}
-                        disabled={isToggling}
-                    >
-                        <Text style={styles.actionButtonSecondaryText}>
-                            {isToggling ? 'Guardando...' : currentProduct.active ? 'Desactivar' : 'Activar'}
-                        </Text>
-                    </Pressable>
-                </View>
+                        <Pressable
+                            style={({ pressed }) => [styles.actionButtonSecondary, pressed && SharedStyles.pressed]}
+                            onPress={handleToggleActive}
+                            disabled={isToggling}
+                        >
+                            <Text style={styles.actionButtonSecondaryText}>
+                                {isToggling ? 'Guardando...' : currentProduct.active ? 'Desactivar' : 'Activar'}
+                            </Text>
+                        </Pressable>
+                    </View>
+                )}
             </ScrollView>
         </Screen>
     );
