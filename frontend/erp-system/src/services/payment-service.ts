@@ -1,4 +1,4 @@
-import { apiFetch } from '@/services/api-client';
+import { API_BASE_URL, apiFetch } from '@/services/api-client';
 import { PageResponse } from '@/types/order';
 import {
     Payment,
@@ -6,8 +6,6 @@ import {
     PaymentRequest,
     PaymentResponse,
 } from '@/types/payment';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 type ErrorPayload = {
     message?: string;

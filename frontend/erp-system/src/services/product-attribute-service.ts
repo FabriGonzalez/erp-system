@@ -6,9 +6,7 @@ import {
     ProductAttributeValueRequest,
     ProductAttributeValueResponse,
 } from '@/types/product-attribute';
-import { apiFetch } from '@/services/api-client';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+import { API_BASE_URL, apiFetch } from '@/services/api-client';
 
 function headers(token: string): HeadersInit {
     return {

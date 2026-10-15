@@ -1,4 +1,4 @@
-import { apiFetch } from '@/services/api-client';
+import { API_BASE_URL, apiFetch } from '@/services/api-client';
 import { CustomerServiceError } from '@/services/customer-service';
 import {
     AccountTransaction,
@@ -11,8 +11,6 @@ import {
     CustomerPendingOrderResponse,
 } from '@/types/customer-account';
 import { PageResponse } from '@/types/order';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 async function handleResponse<T>(
     response: Response,

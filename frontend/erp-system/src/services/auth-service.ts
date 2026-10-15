@@ -1,7 +1,5 @@
 import { ChangePasswordRequest, CurrentUserResponse, LoginResponse, TokenResponse } from '@/types/auth';
-import { apiFetch } from '@/services/api-client';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+import { API_BASE_URL, apiFetch } from '@/services/api-client';
 
 type ErrorPayload = {
     message?: string;

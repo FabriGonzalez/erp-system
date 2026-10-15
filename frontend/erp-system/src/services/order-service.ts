@@ -1,4 +1,4 @@
-import { apiFetch } from '@/services/api-client';
+import { API_BASE_URL, apiFetch } from '@/services/api-client';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import {
     Order,
@@ -13,8 +13,6 @@ import {
     RefundAction,
     ShipmentResponse,
 } from '@/types/order';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 const ERROR_MESSAGES_BY_CODE: Record<string, string> = {
     INSUFFICIENT_STOCK: 'No hay stock suficiente para completar la operación.',

@@ -1,3 +1,30 @@
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
+
+const DEFAULT_API_PORT = '8080';
+
+/**
+ * URL del backend. EXPO_PUBLIC_API_URL la fija explícitamente (builds o un backend remoto).
+ * Sin ella, en desarrollo se usa el mismo host que sirve la app: la página en web y el
+ * servidor de Metro en el dispositivo. Así no hay que editar la IP cada vez que cambia la red.
+ */
+function resolveApiBaseUrl(): string {
+    const configured = process.env.EXPO_PUBLIC_API_URL;
+    if (configured) return configured.replace(/\/+$/, '');
+
+    const port = process.env.EXPO_PUBLIC_API_PORT ?? DEFAULT_API_PORT;
+    // En web, Expo también renderiza en el servidor (Node), donde no hay window: ahí no se
+    // hacen requests, y en el navegador el módulo se vuelve a evaluar con window.
+    const host = Platform.OS === 'web'
+        ? (typeof window !== 'undefined' ? window.location.hostname : undefined)
+        // hostUri es "IP:puerto" del servidor de Metro, p. ej. "192.168.80.31:8081".
+        : Constants.expoConfig?.hostUri?.split(':')[0];
+
+    return `http://${host || 'localhost'}:${port}`;
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
+
 type ApiFetchOptions = {
     ignoreUnauthorized?: boolean;
 };

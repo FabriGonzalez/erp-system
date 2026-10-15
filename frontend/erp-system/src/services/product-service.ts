@@ -5,9 +5,7 @@ import {
     ProductVariant,
     ProductUpdateRequest,
 } from '@/types/product';
-import { apiFetch } from '@/services/api-client';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+import { API_BASE_URL, apiFetch } from '@/services/api-client';
 
 async function handleResponse<T>(
     response: Response,
