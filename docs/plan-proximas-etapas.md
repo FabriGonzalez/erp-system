@@ -1,6 +1,6 @@
 # Plan de las etapas que quedan
 
-Estado al 2026-10-14, rama `feature/customer-payments`. Para retomar: pasarle este archivo a Claude y
+Estado al 2026-10-17, rama `feature/users-roles`. Para retomar: pasarle este archivo a Claude y
 elegir la etapa.
 
 ## Cómo se trabaja (vale para todas las etapas)
@@ -23,13 +23,18 @@ elegir la etapa.
 - **Etapa 6 — Cuenta corriente y pagos reales** (`feature/customer-payments`, e5c7337 y aa4f843):
   resumen, pendientes, movimientos, deudores, registrar y anular pagos. Se borraron
   `customer-account-store`, `utils/customer-account.ts` y `data/mock-orders.ts`.
-- **Etapa 7 — Permisos reales** (`feature/real-permissions`, implementada el 2026-10-14, **falta
-  commitear**): `Permission` = enum del backend, `GET /api/v1/auth/me` con refresco al hidratar y al
-  volver al frente, acciones y accesos ocultos según el permiso real.
+- **Etapa 7 — Permisos reales** (`feature/real-permissions`, 556a420 y 980359b): `Permission` = enum
+  del backend, `GET /api/v1/auth/me` con refresco al hidratar y al volver al frente, acciones y
+  accesos ocultos según el permiso real.
+- **Etapa 8 — Transferencias** (`feature/stock-transfers`, cf53090 y f1336af; 604c0df aparte: URL del
+  backend deducida del host).
+- **Etapa 9 — Usuarios y roles** (`feature/users-roles`, 0187b05 y 55ec5a9): ABM de usuarios y roles,
+  `GET /roles/permissions`, el admin elige la contraseña al crear/resetear, las cuentas creadas por
+  el admin no cambian su contraseña (`passwordManagedByAdmin`), código de rol como texto libre.
 
 ---
 
-## Mapa de integración (relevado el 2026-10-14)
+## Mapa de integración (relevado el 2026-10-14; transferencias, usuarios y roles ya conectados en las etapas 8 y 9)
 
 | Módulo | Backend | Frontend |
 |---|---|---|
@@ -199,10 +204,114 @@ el backend (recomendado: evita que el enum se vuelva a desincronizar).
 
 ## Etapa 10 — Historial de movimientos de stock
 
-- Backend: `StockMovementResponse` solo trae `stockId`; agregar variante y sucursal, y paginación, antes
-  de exponer el listado general.
-- Frontend: historial por stock (`/inventory/movements/stock/{stockId}`) desde inventario, con tipo
-  (venta, ajuste, transferencia entrada/salida, devolución), cantidades y motivo.
+Plan detallado el 2026-10-17, relevado contra el código y la base `erp_db`.
+
+**Arranque.** Crear `feature/stock-movements` desde `feature/users-roles` (la etapa 9 ya está
+commiteada).
+
+**Decisiones del usuario (2026-10-17).**
+- Guardar qué usuario generó cada movimiento.
+- Registrar el stock que cambian el alta y la edición de producto, como `ADJUSTMENT` (sin tipo nuevo).
+- Frontend: solo historial por stock, desde Inventario. Sin listado general por ahora.
+
+**Lo que hay hoy** (`modules/inventory`, `/api/v1/inventory/movements`, lectura con `CONSULTAR_STOCK`,
+`AJUSTAR_STOCK` o `VER_REPORTES`):
+- `GET` (todo, sin paginar), `GET /{id}`, `GET /stock/{stockId}`, `GET /type/{type}`. Ninguno lo usa
+  el frontend. `/stock/{stockId}` con un id de otra empresa o inexistente devuelve `[]`, no 404.
+- `StockMovementResponse{id, stockId, type, quantity, previousQuantity, newQuantity, reason,
+  referenceId, referenceType, createdAt, updatedAt}`: sin producto, variante, sucursal ni usuario.
+- `quantity` es el delta con signo (venta −n, devolución +n, ajuste `nuevo − anterior`, transferencia
+  salida −n / entrada +n). Al anular una transferencia se registra el inverso: el origen recibe
+  `TRANSFER_IN` +n y el destino `TRANSFER_OUT` −n, con `referenceType = STOCK_TRANSFER`.
+- Quién crea movimientos: `StockServiceImpl.adjustStock` (`ADJUSTMENT`, motivo del usuario, sin
+  referencia), `OrderServiceImpl.saveMovement` (`SALE`/`RETURN`, `ORDER`) y
+  `StockTransferServiceImpl` (`saveMovement` + dos builders sueltos en la anulación, `STOCK_TRANSFER`).
+- **Huecos:** `StockServiceImpl.createInitialStock` (alta de producto) y
+  `ProductServiceImpl.updateVariantStock` (edición de producto) cambian la cantidad sin registrar
+  movimiento.
+- La base tiene `stock_movements_type_check` con los 5 tipos actuales: un valor nuevo del enum
+  rompería los inserts porque `ddl-auto: update` no toca el CHECK. Por eso no se agrega tipo.
+- En `erp_db`, 12 de 19 stocks no tienen ningún movimiento: el historial previo no se puede
+  reconstruir; la UI lo tiene que mostrar como vacío sin parecer un error.
+
+### Backend
+
+1. **Usuario en el movimiento.** `StockMovement.createdBy` → `@ManyToOne(fetch = LAZY)` a `User`,
+   columna `created_by_id` **nullable** (las filas existentes quedan en null).
+2. **Un solo lugar para crear movimientos.** `StockMovementRecorder` (componente en
+   `modules/inventory/service`) con
+   `record(Stock stock, StockMovementType type, int quantity, int previousQuantity, String reason,
+   String referenceType, Long referenceId)`: arma el builder, `newQuantity = stock.getQuantity()`,
+   `createdBy = userRepository.getReferenceById(SecurityUtils.getCurrentUserId())` y guarda.
+   Reemplaza el builder de `adjustStock`, los `saveMovement` privados de órdenes y transferencias y
+   los dos builders sueltos de la anulación de transferencias. Sin cambios de comportamiento: mismos
+   tipos, signos y referencias (los tests existentes de órdenes tienen que seguir pasando).
+3. **Movimientos del producto.** Constantes `PRODUCT_CREATION` y `PRODUCT_UPDATE` como
+   `referenceType`, `referenceId = productId`, tipo `ADJUSTMENT`, `reason = null`:
+   - `createInitialStock`: registrar solo si `quantity > 0` (previous 0). Recibe el `productId`
+     (hoy solo recibe la variante) o se registra desde `ProductServiceImpl.createInitialStock`.
+   - `updateVariantStock`: guardar la cantidad anterior antes de `setQuantity` y registrar solo si
+     cambió (incluye llevarla a 0).
+4. **Respuesta enriquecida.** `StockMovementResponse` suma `productId`, `productName`,
+   `productVariantId`, `productVariantSku`, `branchId`, `branchName`, `createdById`,
+   `createdByUsername` (los dos últimos null en movimientos viejos). Quitar `updatedAt` no hace falta.
+5. **Listado paginado con filtros.** `GET /api/v1/inventory/movements?stockId=&branchId=
+   &productVariantId=&type=&page=0&size=20` (máx. 100, validado como `PaymentController`) →
+   `PageResponse<StockMovementResponse>`, orden `createdAt DESC, id DESC`. Consulta JPQL con
+   `(:x IS NULL OR …)` como `OrderRepository`, `countQuery` aparte y `JOIN FETCH` solo de relaciones
+   a-uno (`stock`, `stock.productVariant`, `productVariant.product`, `stock.branch`, `LEFT createdBy`),
+   que se pueden paginar en la base. Si viene `stockId` y no es de la empresa → 404 (`StockNotFound`
+   o `ResourceNotFoundException`). Se borran `GET /stock/{stockId}` y `GET /type/{type}` y sus métodos
+   de repositorio/servicio (nadie los consume); `GET /{id}` queda con la respuesta nueva.
+6. **Tests unitarios** (Mockito, `-Dtest=!BackendApplicationTests`): el recorder setea el usuario;
+   ajuste registra delta y usuario; edición de producto registra solo si la cantidad cambia; alta con
+   stock 0 no registra; listado con `stockId` ajeno da 404.
+
+### Frontend (módulo nuevo → TanStack Query; el stock sigue en Zustand)
+
+1. **Tipos y servicio.** `types/stock-movement.ts`: `StockMovementResponse` (API) y `StockMovement`
+   (dominio, ids string, `type: 'SALE' | 'ADJUSTMENT' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'RETURN'`).
+   `services/stock-movement-service.ts` con el patrón de `transfer-service.ts` (`apiFetch`, error con
+   `status`, mensajes en español): `getStockMovements({stockId, page, size})`.
+2. **Hooks** `hooks/use-stock-movement-queries.ts`: `stockMovementKeys` (`all`,
+   `byStock(stockId, pageSize)`), `useStockMovements(stockId)` con `usePagedList`
+   (`hooks/use-paged-list.ts`). Deshabilitada sin token y sin permiso de lectura.
+3. **Invalidar** `stockMovementKeys.all` después de lo que crea movimientos desde la app: ajuste
+   (`StockAdjustModal`, tras `adjustStock`), `refreshStockAfterTransfer`, alta/edición de producto y
+   alta/edición/cancelación de pedido. Lo que no se invalide se refresca solo por `staleTime` (30 s) y
+   el pull to refresh.
+4. **Etiquetas** `utils/stock-movement-labels.ts`: tipo → "Venta", "Ajuste", "Transferencia
+   recibida", "Transferencia enviada", "Devolución"; referencia → "Pedido", "Transferencia", "Alta
+   de producto", "Edición de producto". Un `ADJUSTMENT` con `PRODUCT_*` se muestra con la etiqueta de
+   la referencia, no como "Ajuste".
+5. **Pantalla** `src/app/(app)/inventory/[stockId].tsx` (+ `inventory/_layout.tsx` como
+   `transfers/_layout.tsx`): encabezado con producto, SKU, sucursal y cantidad actual (desde
+   `stock-store`; si no está cargado, `fetchStockById`); botón "Ajustar" con `AJUSTAR_STOCK` que abre
+   el `StockAdjustModal` existente; lista infinita de movimientos (etiqueta, `+n`/`−n` con color,
+   `anterior → nuevo`, motivo si hay, usuario y fecha), pull to refresh y `EmptyState` "Sin
+   movimientos registrados" que aclara que el historial empieza a contar desde que existe el registro.
+6. **Acceso.** `STOCK_MOVEMENT_READ_PERMISSIONS = ['CONSULTAR_STOCK', 'AJUSTAR_STOCK',
+   'VER_REPORTES']` en `utils/permissions.ts`. En `inventory/index.tsx`, tocar un ítem navega al
+   detalle si tiene permiso de movimientos o de ajuste (hoy solo abre el modal con `AJUSTAR_STOCK`).
+   Quien entra a Inventario con `TRANSFERIR_STOCK` o `CREAR_PEDIDOS` y nada más sigue sin poder tocar
+   el ítem.
+
+### Validación
+
+- Backend: `mvnw test -Dtest=!BackendApplicationTests`; levantar en 8082 contra `erp_qa` (avisar
+  antes: compilar reinicia el backend de IntelliJ) y probar con curl: paginación, filtros, 404 con
+  `stockId` ajeno, `createdByUsername` en movimientos nuevos y null en viejos.
+- Frontend: `npx tsc --noEmit`, eslint de los archivos tocados, `git diff --check`.
+
+**Pruebas manuales.** Ajustar stock y verlo arriba del historial con el usuario y el motivo; vender,
+editar y cancelar un pedido (venta y devoluciones); transferir y anular (entrada/salida en ambas
+sucursales); crear un producto con stock inicial y editar su stock, también a 0 (aparecen como "Alta
+de producto"/"Edición de producto"); editar un producto sin tocar el stock (no aparece nada); stock sin
+movimientos (vacío); usuario con solo `CONSULTAR_STOCK` (ve el historial, no el botón Ajustar);
+usuario con solo `CREAR_PEDIDOS` (no entra al detalle).
+
+**Fuera de alcance.** Listado general de movimientos con filtros en el frontend (el endpoint queda
+listo); exportar; reconstruir historial de stocks viejos.
 
 ---
 
