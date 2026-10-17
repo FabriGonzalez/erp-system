@@ -68,7 +68,8 @@ public class AuthServiceImpl implements AuthService {
                 userDetails.getPermissions(),
                 userDetails.isPlatformAdmin(),
                 userDetails.getCompanyId(),
-                userDetails.getCompanyName()
+                userDetails.getCompanyName(),
+                !userDetails.isPasswordManagedByAdmin()
         );
     }
 
@@ -82,6 +83,9 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findById(current.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
+        if (user.isPasswordManagedByAdmin()) {
+            throw InvalidPasswordChangeException.managedByAdmin();
+        }
         if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
             loginAttemptService.recordFailure(current.getUsername(), clientIp);
             throw InvalidPasswordChangeException.wrongCurrentPassword();
@@ -114,7 +118,8 @@ public class AuthServiceImpl implements AuthService {
                 current.getPermissions(),
                 current.isPlatformAdmin(),
                 current.getCompanyId(),
-                current.getCompanyName()
+                current.getCompanyName(),
+                !current.isPasswordManagedByAdmin()
         );
     }
 }

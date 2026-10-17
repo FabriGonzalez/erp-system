@@ -30,19 +30,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findByCompanyIdAndActive(Long companyId, boolean active);
 
-    boolean existsByEmailAndCompanyId(String email, Long companyId);
+    // Usuario y email son únicos en toda la plataforma: no se filtra por empresa.
+    boolean existsByEmailAndIdNot(String email, Long id);
 
-    boolean existsByUsernameAndCompanyId(String username, Long companyId);
-
-    boolean existsByEmailAndCompanyIdAndIdNot(
-            String email,
-            Long companyId,
-            Long id
-    );
-
-    boolean existsByUsernameAndCompanyIdAndIdNot(
-            String username,
-            Long companyId,
-            Long id
-    );
+    boolean existsByUsernameAndIdNot(String username, Long id);
 }

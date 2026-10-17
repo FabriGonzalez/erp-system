@@ -51,6 +51,15 @@ public class User extends BaseEntity {
     @Builder.Default
     private boolean active = true;
 
+    /**
+     * Cuenta creada por un administrador de la empresa: solo él define la contraseña y el
+     * usuario no puede cambiarla. El default de la columna deja como estaban las cuentas previas.
+     */
+    @Column(name = "password_managed_by_admin", nullable = false,
+            columnDefinition = "boolean not null default false")
+    @Builder.Default
+    private boolean passwordManagedByAdmin = false;
+
     /** Los JWT emitidos antes de este instante dejan de ser válidos. */
     @Column(name = "password_changed_at")
     private Instant passwordChangedAt;

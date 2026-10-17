@@ -9,8 +9,9 @@ import com.gonzalez.erp.modules.roles.entity.Permission;
 import com.gonzalez.erp.modules.roles.entity.Role;
 import com.gonzalez.erp.modules.roles.repository.RoleRepository;
 import com.gonzalez.erp.modules.users.dto.request.UserRequest;
-import com.gonzalez.erp.modules.users.dto.response.PasswordResetResponse;
+import com.gonzalez.erp.modules.users.dto.request.UserUpdateRequest;
 import com.gonzalez.erp.modules.users.entity.User;
+import com.gonzalez.erp.modules.users.exception.UserUsernameAlreadyExistsException;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -100,6 +101,50 @@ class UserServiceImplTest {
     }
 
     @Test
+    void createdUserCannotChangeItsOwnPassword() {
+        when(roleRepository.findByIdAndCompanyId(ROLE_ID, COMPANY_ID)).thenReturn(Optional.of(adminRole));
+        when(companyRepository.getReferenceById(COMPANY_ID)).thenReturn(company);
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        userService.create(request(ROLE_ID));
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().isPasswordManagedByAdmin()).isTrue();
+    }
+
+    @Test
+    void usernameTakenInAnotherCompanyIsRejected() {
+        // La validación es global: el login es por usuario y la columna es única en toda la base.
+        when(userRepository.existsByUsername("nuevo")).thenReturn(true);
+
+        assertThatThrownBy(() -> userService.create(request(ROLE_ID)))
+                .isInstanceOf(UserUsernameAlreadyExistsException.class);
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void cannotChangeOwnRole() {
+        Long sellerRoleId = 20L;
+        when(userRepository.findById(1L)).thenReturn(Optional.of(tenantAdmin));
+
+        UserUpdateRequest update = new UserUpdateRequest("admin", "admin@acme.com", "Ad", "Min", sellerRoleId);
+        assertThatThrownBy(() -> userService.update(1L, update))
+                .isInstanceOf(AccessDeniedException.class);
+        assertThat(tenantAdmin.getRole()).isEqualTo(adminRole);
+    }
+
+    @Test
+    void canEditOwnDataKeepingTheRole() {
+        when(userRepository.findById(1L)).thenReturn(Optional.of(tenantAdmin));
+        when(roleRepository.findByIdAndCompanyId(ROLE_ID, COMPANY_ID)).thenReturn(Optional.of(adminRole));
+
+        userService.update(1L, new UserUpdateRequest("admin", "admin@acme.com", "Nuevo", "Nombre", ROLE_ID));
+
+        assertThat(tenantAdmin.getFirstName()).isEqualTo("Nuevo");
+    }
+
+    @Test
     void cannotAssignRoleFromAnotherCompany() {
         Long foreignRoleId = 99L;
         when(roleRepository.findByIdAndCompanyId(foreignRoleId, COMPANY_ID)).thenReturn(Optional.empty());
@@ -110,7 +155,7 @@ class UserServiceImplTest {
     }
 
     @Test
-    void resetPasswordReturnsTemporaryPasswordAndRevokesSessions() {
+    void resetPasswordSetsTheChosenPasswordAndRevokesSessions() {
         User employee = User.builder()
                 .username("vendedor")
                 .email("vendedor@acme.com")
@@ -124,10 +169,9 @@ class UserServiceImplTest {
         when(userRepository.findById(2L)).thenReturn(Optional.of(employee));
         when(passwordEncoder.encode(any())).thenAnswer(inv -> "hash:" + inv.getArgument(0));
 
-        PasswordResetResponse response = userService.resetPassword(2L);
+        userService.resetPassword(2L, "nueva123");
 
-        assertThat(response.temporaryPassword()).isNotBlank();
-        assertThat(employee.getPassword()).isEqualTo("hash:" + response.temporaryPassword());
+        assertThat(employee.getPassword()).isEqualTo("hash:nueva123");
         assertThat(employee.getPasswordChangedAt()).isNotNull();
         verify(loginAttemptService).recordSuccess("vendedor");
     }
@@ -136,7 +180,7 @@ class UserServiceImplTest {
     void cannotResetOwnPassword() {
         when(userRepository.findById(1L)).thenReturn(Optional.of(tenantAdmin));
 
-        assertThatThrownBy(() -> userService.resetPassword(1L))
+        assertThatThrownBy(() -> userService.resetPassword(1L, "nueva123"))
                 .isInstanceOf(AccessDeniedException.class);
         assertThat(tenantAdmin.getPasswordChangedAt()).isNull();
     }
@@ -156,7 +200,7 @@ class UserServiceImplTest {
         foreign.setId(3L);
         when(userRepository.findById(3L)).thenReturn(Optional.of(foreign));
 
-        assertThatThrownBy(() -> userService.resetPassword(3L))
+        assertThatThrownBy(() -> userService.resetPassword(3L, "nueva123"))
                 .isInstanceOf(ResourceNotFoundException.class);
         assertThat(foreign.getPasswordChangedAt()).isNull();
     }

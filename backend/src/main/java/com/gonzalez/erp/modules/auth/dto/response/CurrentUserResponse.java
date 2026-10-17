@@ -15,5 +15,7 @@ public record CurrentUserResponse(
         Set<Permission> permissions,
         boolean platformAdmin,
         Long companyId,
-        String companyName
+        String companyName,
+        /** False en las cuentas cuya contraseña administra la empresa. */
+        boolean canChangePassword
 ) {}

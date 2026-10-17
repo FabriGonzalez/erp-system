@@ -166,6 +166,48 @@ class AuthServiceImplTest {
     }
 
     @Test
+    void accountManagedByAdminCannotChangeItsPassword() {
+        User managed = User.builder()
+                .username("cajero")
+                .email("cajero@acme.com")
+                .password("hash-actual")
+                .firstName("Ca")
+                .lastName("Jero")
+                .company(company)
+                .passwordManagedByAdmin(true)
+                .build();
+        managed.setId(7L);
+        authenticate(managed);
+        when(userRepository.findById(7L)).thenReturn(Optional.of(managed));
+
+        assertThatThrownBy(() -> authService.changePassword(changeRequest("Actual123", "Nueva1234"), IP))
+                .isInstanceOfSatisfying(InvalidPasswordChangeException.class,
+                        e -> assertThat(e.getCode()).isEqualTo("PASSWORD_MANAGED_BY_ADMIN"));
+        assertThat(managed.getPassword()).isEqualTo("hash-actual");
+        // No cuenta como intento fallido: no se llegó a comparar la contraseña.
+        verify(loginAttemptService, never()).recordFailure(any(), any());
+    }
+
+    @Test
+    void currentUserTellsWhetherThePasswordCanBeChanged() {
+        authenticate(user);
+        assertThat(authService.currentUser().canChangePassword()).isTrue();
+
+        User managed = User.builder()
+                .username("cajero")
+                .email("cajero@acme.com")
+                .password("hash")
+                .firstName("Ca")
+                .lastName("Jero")
+                .company(company)
+                .passwordManagedByAdmin(true)
+                .build();
+        managed.setId(7L);
+        authenticate(managed);
+        assertThat(authService.currentUser().canChangePassword()).isFalse();
+    }
+
+    @Test
     void currentUserHasNoPermissionsWhenRoleIsInactive() {
         authenticate(userWithRole(role(false, EnumSet.of(Permission.CREAR_PEDIDOS))));
 

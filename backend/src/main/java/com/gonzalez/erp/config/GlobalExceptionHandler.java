@@ -156,10 +156,6 @@ public class GlobalExceptionHandler {
             CompanyNameAlreadyExistsException.class,
             BranchNameAlreadyExistsException.class,
             CategoryNameAlreadyExistsException.class,
-            RoleNameAlreadyExistsException.class,
-            RoleCodeAlreadyExistsException.class,
-            UserEmailAlreadyExistsException.class,
-            UserUsernameAlreadyExistsException.class,
             ProductSkuAlreadyExistsException.class,
             ProductVariantSkuAlreadyExistsException.class,
             ProductAttributeNameAlreadyExistsException.class,
@@ -176,6 +172,32 @@ public class GlobalExceptionHandler {
                         HttpStatus.CONFLICT.getReasonPhrase(),
                         ex.getMessage(),
                         request.getRequestURI()
+                ));
+    }
+
+    /** Duplicados de usuarios y roles, con code para que el frontend diga qué campo se repite. */
+    @ExceptionHandler({
+            UserUsernameAlreadyExistsException.class,
+            UserEmailAlreadyExistsException.class,
+            RoleNameAlreadyExistsException.class,
+            RoleCodeAlreadyExistsException.class
+    })
+    public ResponseEntity<ErrorResponse> handleUserOrRoleConflict(
+            RuntimeException ex, HttpServletRequest request) {
+        String code = switch (ex) {
+            case UserUsernameAlreadyExistsException e -> "USERNAME_ALREADY_EXISTS";
+            case UserEmailAlreadyExistsException e -> "EMAIL_ALREADY_EXISTS";
+            case RoleNameAlreadyExistsException e -> "ROLE_NAME_ALREADY_EXISTS";
+            default -> "ROLE_CODE_ALREADY_EXISTS";
+        };
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(
+                        HttpStatus.CONFLICT.value(),
+                        HttpStatus.CONFLICT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        code
                 ));
     }
 

@@ -37,6 +37,7 @@ public class CustomUserDetails implements UserDetails {
     /** Null solo para administradores de plataforma, que no pertenecen a una empresa. */
     private final CompanyStatus companyStatus;
     private final Instant passwordChangedAt;
+    private final boolean passwordManagedByAdmin;
 
     public CustomUserDetails(User user) {
         this.userId = user.getId();
@@ -50,6 +51,7 @@ public class CustomUserDetails implements UserDetails {
         this.companyName = user.getCompany() != null ? user.getCompany().getName() : null;
         this.companyStatus = user.getCompany() != null ? user.getCompany().getStatus() : null;
         this.passwordChangedAt = user.getPasswordChangedAt();
+        this.passwordManagedByAdmin = user.isPasswordManagedByAdmin();
 
         Role role = user.getRole();
         this.roleName = role != null ? role.getName() : null;
