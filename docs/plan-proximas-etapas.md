@@ -1,6 +1,6 @@
 # Plan de las etapas que quedan
 
-Estado al 2026-10-17, rama `feature/users-roles`. Para retomar: pasarle este archivo a Claude y
+Estado al 2026-10-17, rama `feature/stock-movements`. Para retomar: pasarle este archivo a Claude y
 elegir la etapa.
 
 ## Cómo se trabaja (vale para todas las etapas)
@@ -31,10 +31,13 @@ elegir la etapa.
 - **Etapa 9 — Usuarios y roles** (`feature/users-roles`, 0187b05 y 55ec5a9): ABM de usuarios y roles,
   `GET /roles/permissions`, el admin elige la contraseña al crear/resetear, las cuentas creadas por
   el admin no cambian su contraseña (`passwordManagedByAdmin`), código de rol como texto libre.
+- **Etapa 10 — Movimientos de stock** (`feature/stock-movements`, c760d7d y b3a8b42): usuario en cada
+  movimiento, alta/edición de producto registradas como ajuste, `GET /inventory/movements` paginado
+  con filtros, detalle de stock con historial; Inventario muestra solo la sucursal activa.
 
 ---
 
-## Mapa de integración (relevado el 2026-10-14; transferencias, usuarios y roles ya conectados en las etapas 8 y 9)
+## Mapa de integración (relevado el 2026-10-14; transferencias, usuarios, roles y movimientos ya conectados en las etapas 8 a 10)
 
 | Módulo | Backend | Frontend |
 |---|---|---|
@@ -317,13 +320,109 @@ listo); exportar; reconstruir historial de stocks viejos.
 
 ## Etapa 11 — Errores en español y robustez del backend
 
-- Frontend: branch, category, product, product-attribute y stock-service muestran el `message` del
-  backend en inglés. Mapear por `code` como `order-service` (y revisar el fallback de `order-service`,
-  que también lo muestra). Evaluar un helper común en `api-client.ts`.
-- Backend:
-  - `CompanyTaxIdAlreadyExistsException` no está en `GlobalExceptionHandler` → 500 en vez de 409.
-  - Sin handler para `MethodArgumentTypeMismatchException`: `?status=FOO` da 500 en vez de 400.
-  - Sin `code`: los `*AlreadyExists` (409), los 404 y `ProductCategoryNotActiveException`.
+Plan detallado el 2026-10-17, relevado contra el código.
+
+**Arranque.** Crear `feature/error-handling` desde `feature/stock-movements`.
+
+**Decisiones del usuario (2026-10-17).**
+- Backend: el `code` de cada error de negocio se asigna con un `switch` en `GlobalExceptionHandler`,
+  como los duplicados de usuarios y roles (sin clase base de excepciones).
+- Frontend: un helper común de errores y se migran **todos** los servicios, también los que ya
+  mapeaban por `code`, para que quede un solo patrón.
+
+**Lo que hay hoy.**
+- Backend (`config/GlobalExceptionHandler.java`):
+  - `CompanyTaxIdAlreadyExistsException` no tiene handler → 500 (alta de empresa en provisioning).
+  - Excepciones de Spring MVC sin handler caen en el catch-all como 500:
+    `MethodArgumentTypeMismatchException` (`?type=FOO`, `/movements/stock/1`),
+    `HttpRequestMethodNotSupportedException` (un `PUT` a `/products/{id}`),
+    `MissingServletRequestParameterException`, `HttpMediaTypeNotSupportedException`,
+    `NoResourceFoundException`.
+  - El catch-all devuelve `ex.getMessage()` (expone detalles internos) y no loguea nada.
+  - `ProductServiceImpl` lanza `IllegalArgumentException` por sucursal repetida en `initialStock` y en
+    `stock` → 500 en vez de 400.
+  - Sin `code`: el grupo de 409 de `handleConflict` (sucursal, categoría, SKU de producto y de
+    variante, atributo, valor de atributo, documento de cliente, nombre de empresa y
+    `ProductCategoryNotActiveException`), `ResourceNotFoundException`, `StockNotFoundException`,
+    `StockAlreadyExistsException`, `AccessDeniedException`, `OrderAlreadyHasShipmentException`,
+    `InvalidCustomerDocumentException`, validación (`MethodArgumentNotValidException`) y
+    `DataIntegrityViolationException`.
+- Frontend (`src/services`, 15 servicios):
+  - `branch`, `category`, `product`, `product-attribute` y `stock-service` muestran
+    `payload.message` (inglés) cuando viene; `order-service` también, en el fallback de los códigos
+    que no conoce.
+  - `customer`, `customer-account`, `payment`, `transfer`, `user`, `role` y `stock-movement` ya
+    mapean por `status`/`code`, cada uno con su propia clase de error (`CustomerServiceError`, …)
+    que solo se usa para exponer `status` a `query-client`. Ninguna pantalla las importa.
+  - `auth-service` tiene su propio `readErrorPayload`; `api-client` tiene `readErrorCode`.
+  - Un fallo de red llega como `TypeError: Network request failed` (inglés) a todas las pantallas
+    salvo login y cambio de contraseña, que lo detectan comparando el texto.
+
+### Backend
+
+1. **Codes en los errores de negocio** (mismo status que hoy):
+   - 409 de `handleConflict` → `switch`: `BRANCH_NAME_ALREADY_EXISTS`, `CATEGORY_NAME_ALREADY_EXISTS`,
+     `PRODUCT_SKU_ALREADY_EXISTS`, `VARIANT_SKU_ALREADY_EXISTS`, `ATTRIBUTE_NAME_ALREADY_EXISTS`,
+     `ATTRIBUTE_VALUE_ALREADY_EXISTS`, `CUSTOMER_DOCUMENT_ALREADY_EXISTS`,
+     `COMPANY_NAME_ALREADY_EXISTS`, `CATEGORY_INACTIVE`; sumar `CompanyTaxIdAlreadyExistsException`
+     → 409 `COMPANY_TAX_ID_ALREADY_EXISTS`.
+   - `STOCK_ALREADY_EXISTS` (409), `ORDER_ALREADY_HAS_SHIPMENT` (409), `INVALID_CUSTOMER_DOCUMENT`
+     (400), `STOCK_NOT_FOUND` y `NOT_FOUND` (404), `FORBIDDEN` (403), `VALIDATION_ERROR` (400),
+     `DATA_INTEGRITY_VIOLATION` (409).
+   - Los codes que ya existen no cambian (el frontend los usa).
+2. **Errores del framework** (handlers nuevos, mensaje genérico en inglés, como los demás):
+   `MethodArgumentTypeMismatchException` y `MissingServletRequestParameterException` → 400
+   `INVALID_PARAMETER`; `HttpRequestMethodNotSupportedException` → 405 `METHOD_NOT_ALLOWED`;
+   `HttpMediaTypeNotSupportedException` → 415 `UNSUPPORTED_MEDIA_TYPE`;
+   `NoResourceFoundException` → 404 `NOT_FOUND`. No se devuelve el detalle de Spring (como hoy con
+   `MALFORMED_REQUEST`).
+3. **Catch-all**: loguear la excepción con stack trace (`@Slf4j`/`LoggerFactory`) y responder
+   `"Internal server error"` con `INTERNAL_ERROR`, sin `ex.getMessage()`.
+4. **`IllegalArgumentException` de `ProductServiceImpl`** (sucursal repetida) →
+   `InvalidProductVariantsException` (400 `INVALID_PRODUCT_VARIANTS`, ya existe). Los
+   `IllegalArgumentException` de `CustomerAccountServiceImpl` son guardas de programación: quedan.
+5. **Tests**: `GlobalExceptionHandlerTest` con `MockMvcBuilders.standaloneSetup` sobre un controller
+   de prueba + el advice: parámetro con tipo inválido (400), método no soportado (405), excepción de
+   negocio con su code, catch-all sin el mensaje interno. Más el caso de sucursal repetida en
+   producto. Correr con `-Dtest=!BackendApplicationTests` en la copia del scratchpad.
+
+### Frontend
+
+1. **`src/services/api-error.ts`**:
+   - `ApiError extends Error` con `status` (0 = sin conexión) y `code`.
+   - `readErrorPayload(response)` (mueve el de `auth-service`; `readErrorCode` de `api-client` pasa
+     a usarlo).
+   - `toApiError(response, { byCode?, byStatus?, fallback })`: elige el mensaje por `code`, después
+     por `status` y si no el `fallback`; **nunca** usa `payload.message`. Mensajes comunes por
+     defecto: 403 "No tenés permisos para realizar esta acción.", ≥500 "Error del servidor. Intentá
+     de nuevo más tarde.", `VALIDATION_ERROR`/400 "Revisá los datos ingresados.".
+2. **Sin conexión**: `apiFetch` atrapa el `TypeError` de `fetch` y lanza
+   `ApiError(…, 0, 'NETWORK_ERROR')` con "No se pudo conectar con el servidor. Revisá tu conexión.".
+   `login.tsx` y `change-password.tsx` pasan a chequear `code === 'NETWORK_ERROR'` en lugar del texto.
+3. **Migrar los 15 servicios** a `toApiError` con sus mensajes por `code` (los textos actuales se
+   conservan; se suman los codes nuevos: "Ya existe una sucursal con ese nombre.", "Ya existe un
+   producto/variante con ese SKU.", "La categoría está inactiva.", …). Se borran las clases
+   `*ServiceError` y los `handleResponse` duplicados; `query-client.statusOf` sigue funcionando
+   porque `ApiError` tiene `status`. Respetar las respuestas sin body (`201`/`204`) que hoy
+   devuelven `null` (asignación de sucursales, reset de contraseña, etc.).
+4. Revisar las pantallas que arman su propio texto con `err.message` en inglés (no debería quedar
+   ninguna: todas reciben el mensaje del servicio).
+
+### Validación
+
+- Backend: tests unitarios en la copia del scratchpad; instancia QA en 8082 contra `erp_qa` y curl
+  de: `?type=FOO` (400), `PUT /products/1` (405), ruta inexistente (404), SKU repetido (409 con
+  code), sucursal repetida en `stock` (400).
+- Frontend: `npx tsc --noEmit`, eslint de los archivos tocados, `git diff --check`.
+
+**Pruebas manuales.** Duplicar nombre de sucursal, categoría, atributo y valor; SKU repetido al crear
+y al editar producto; producto con categoría inactiva; documento de cliente repetido; anular
+transferencia sin stock en destino; usuario/email repetidos; backend apagado (mensaje de conexión en
+login y en cualquier listado); sesión expirada sigue mostrando el overlay; asignar/quitar sucursal a
+un usuario (respuesta sin body) sigue sin rollback.
+
+**Fuera de alcance.** Traducir los `message` del backend (siguen en inglés, solo para logs/Swagger);
+detalle por campo de los errores de validación en la UI.
 
 ---
 
