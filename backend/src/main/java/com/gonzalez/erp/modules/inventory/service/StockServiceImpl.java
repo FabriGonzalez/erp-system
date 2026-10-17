@@ -6,12 +6,10 @@ import com.gonzalez.erp.modules.branches.repository.BranchRepository;
 import com.gonzalez.erp.modules.inventory.dto.request.StockAdjustRequest;
 import com.gonzalez.erp.modules.inventory.dto.response.StockResponse;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
-import com.gonzalez.erp.modules.inventory.entity.StockMovement;
 import com.gonzalez.erp.modules.inventory.entity.StockMovementType;
 import com.gonzalez.erp.modules.inventory.exception.StockAlreadyExistsException;
 import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
 import com.gonzalez.erp.modules.inventory.mapper.StockMapper;
-import com.gonzalez.erp.modules.inventory.repository.StockMovementRepository;
 import com.gonzalez.erp.modules.inventory.repository.StockRepository;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
@@ -28,7 +26,7 @@ import java.util.List;
 public class StockServiceImpl implements StockService {
 
     private final StockRepository stockRepository;
-    private final StockMovementRepository stockMovementRepository;
+    private final StockMovementRecorder stockMovementRecorder;
     private final ProductVariantRepository productVariantRepository;
     private final BranchRepository branchRepository;
 
@@ -85,7 +83,7 @@ public class StockServiceImpl implements StockService {
     public void createInitialStock(Long productVariantId, Long branchId, Integer quantity) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
-        validateProductVariantBelongsToCurrentCompany(productVariantId);
+        ProductVariant variant = validateProductVariantBelongsToCurrentCompany(productVariantId);
         validateBranchBelongsToCurrentCompany(branchId);
 
         int inserted = stockRepository.insertIfAbsent(
@@ -113,6 +111,12 @@ public class StockServiceImpl implements StockService {
 
         stock.setQuantity(quantity);
         stockRepository.save(stock);
+
+        // El registro nace en 0: un stock inicial en 0 no es un movimiento.
+        if (quantity > 0) {
+            stockMovementRecorder.record(stock, StockMovementType.ADJUSTMENT, quantity, 0, null,
+                    StockMovementRecorder.PRODUCT_CREATION, variant.getProduct().getId());
+        }
     }
 
     @Override
@@ -142,18 +146,8 @@ public class StockServiceImpl implements StockService {
         stock.setQuantity(newQuantity);
         stockRepository.save(stock);
 
-        StockMovement movement = StockMovement.builder()
-                .stock(stock)
-                .type(StockMovementType.ADJUSTMENT)
-                .quantity(delta)
-                .previousQuantity(previousQuantity)
-                .newQuantity(newQuantity)
-                .reason(request.reason())
-                .referenceId(null)
-                .referenceType(null)
-                .build();
-
-        stockMovementRepository.save(movement);
+        stockMovementRecorder.record(stock, StockMovementType.ADJUSTMENT, delta, previousQuantity,
+                request.reason(), null, null);
 
         return StockMapper.toResponse(stock);
     }
@@ -171,10 +165,10 @@ public class StockServiceImpl implements StockService {
         }
     }
 
-    private void validateProductVariantBelongsToCurrentCompany(Long variantId) {
+    private ProductVariant validateProductVariantBelongsToCurrentCompany(Long variantId) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
-        productVariantRepository.findById(variantId)
+        return productVariantRepository.findById(variantId)
                 .filter(variant -> variant.getCompany() != null
                         && companyId.equals(variant.getCompany().getId()))
                 .orElseThrow(() ->

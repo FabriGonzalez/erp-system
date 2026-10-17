@@ -14,6 +14,7 @@ import com.gonzalez.erp.modules.inventory.exception.InsufficientStockException;
 import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
 import com.gonzalez.erp.modules.inventory.repository.StockMovementRepository;
 import com.gonzalez.erp.modules.inventory.repository.StockRepository;
+import com.gonzalez.erp.modules.inventory.service.StockMovementRecorder;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
 import com.gonzalez.erp.modules.transfers.dto.request.StockTransferItemRequest;
@@ -55,6 +56,7 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final StockTransferItemRepository stockTransferItemRepository;
     private final StockRepository stockRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final StockMovementRecorder stockMovementRecorder;
     private final BranchRepository branchRepository;
     private final ProductVariantRepository productVariantRepository;
     private final UserRepository userRepository;
@@ -181,27 +183,11 @@ public class StockTransferServiceImpl implements StockTransferService {
             stockRepository.save(originStock);
             stockRepository.save(destinationStock);
 
-            stockMovementRepository.save(StockMovement.builder()
-                .stock(originStock)
-                .type(StockMovementType.TRANSFER_IN)
-                .quantity(item.getQuantity())
-                .previousQuantity(originPrevious)
-                .newQuantity(originStock.getQuantity())
-                .reason(null)
-                .referenceId(transfer.getId())
-                .referenceType(REFERENCE_TYPE)
-                .build());
-
-            stockMovementRepository.save(StockMovement.builder()
-                .stock(destinationStock)
-                .type(StockMovementType.TRANSFER_OUT)
-                .quantity(-item.getQuantity())
-                .previousQuantity(destinationPrevious)
-                .newQuantity(destinationStock.getQuantity())
-                .reason(null)
-                .referenceId(transfer.getId())
-                .referenceType(REFERENCE_TYPE)
-                .build());
+            // La anulación registra el inverso: el origen recibe y el destino entrega.
+            saveMovement(originStock, StockMovementType.TRANSFER_IN,
+                    item.getQuantity(), originPrevious, transfer);
+            saveMovement(destinationStock, StockMovementType.TRANSFER_OUT,
+                    -item.getQuantity(), destinationPrevious, transfer);
         }
 
         transfer.cancel();
@@ -365,17 +351,9 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     private void saveMovement(Stock stock, StockMovementType type, int quantity, int previousQuantity, StockTransfer transfer) {
-        stockMovementRepository.save(StockMovement.builder()
-            .stock(stock)
-            .type(type)
-            .quantity(quantity)
-            .previousQuantity(previousQuantity)
-            .newQuantity(stock.getQuantity())
-            .reason(null)
-            .referenceId(transfer.getId())
-            .referenceType(REFERENCE_TYPE)
-            .build());
-        }
+        stockMovementRecorder.record(stock, type, quantity, previousQuantity, null,
+                REFERENCE_TYPE, transfer.getId());
+    }
 
     private Stock lockStock(StockKey key, Long companyId) {
         return stockRepository.findByProductVariantIdAndBranchIdForUpdate(

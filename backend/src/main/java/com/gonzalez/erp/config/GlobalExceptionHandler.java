@@ -15,6 +15,7 @@ import com.gonzalez.erp.modules.customers.exception.InvalidCustomerDocumentExcep
 import com.gonzalez.erp.modules.customers.exception.InvalidCustomerRequestException;
 import com.gonzalez.erp.modules.inventory.exception.InsufficientStockException;
 import com.gonzalez.erp.modules.inventory.exception.StockAlreadyExistsException;
+import com.gonzalez.erp.modules.inventory.exception.InvalidStockMovementQueryException;
 import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
 import com.gonzalez.erp.modules.orders.exception.InactiveOrderCustomerException;
 import com.gonzalez.erp.modules.orders.exception.InsufficientStockForEditException;
@@ -298,6 +299,20 @@ public class GlobalExceptionHandler {
                         ex.getMessage(),
                         request.getRequestURI(),
                         "INVALID_STOCK_TRANSFER"
+                ));
+    }
+
+    @ExceptionHandler(InvalidStockMovementQueryException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidStockMovementQuery(
+            InvalidStockMovementQueryException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "INVALID_STOCK_MOVEMENT_QUERY"
                 ));
     }
 

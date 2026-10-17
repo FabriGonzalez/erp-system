@@ -13,6 +13,7 @@ import com.gonzalez.erp.modules.customers.service.CustomerAccountService;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
 import com.gonzalez.erp.modules.inventory.repository.StockMovementRepository;
 import com.gonzalez.erp.modules.inventory.repository.StockRepository;
+import com.gonzalez.erp.modules.inventory.service.StockMovementRecorder;
 import com.gonzalez.erp.modules.orders.dto.request.OrderItemRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderUpdateRequest;
@@ -74,6 +75,7 @@ class OrderShippingAddressTest {
     @Mock private OrderNumberCounterRepository orderNumberCounterRepository;
     @Mock private StockRepository stockRepository;
     @Mock private StockMovementRepository stockMovementRepository;
+    @Mock private StockMovementRecorder stockMovementRecorder;
     @Mock private BranchRepository branchRepository;
     @Mock private ProductVariantRepository productVariantRepository;
     @Mock private CustomerRepository customerRepository;

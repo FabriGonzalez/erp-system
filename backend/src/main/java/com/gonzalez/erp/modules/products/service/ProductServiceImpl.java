@@ -9,7 +9,9 @@ import com.gonzalez.erp.modules.branches.repository.BranchRepository;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
+import com.gonzalez.erp.modules.inventory.entity.StockMovementType;
 import com.gonzalez.erp.modules.inventory.repository.StockRepository;
+import com.gonzalez.erp.modules.inventory.service.StockMovementRecorder;
 import com.gonzalez.erp.modules.inventory.service.StockService;
 import com.gonzalez.erp.modules.products.dto.request.InitialStockRequest;
 import com.gonzalez.erp.modules.products.dto.request.ProductRequest;
@@ -51,6 +53,7 @@ public class ProductServiceImpl implements ProductService {
     private final CompanyRepository companyRepository;
     private final StockRepository stockRepository;
     private final StockService stockService;
+    private final StockMovementRecorder stockMovementRecorder;
 
     @Override
     public List<ProductResponse> findAll(Boolean active) {
@@ -459,8 +462,16 @@ public class ProductServiceImpl implements ProductService {
                                     + branch.getId()
                     ));
 
+            int previousQuantity = stock.getQuantity();
             stock.setQuantity(request.quantity());
             stockRepository.save(stock);
+
+            // Editar el producto sin tocar el stock no deja movimiento.
+            if (previousQuantity != request.quantity()) {
+                stockMovementRecorder.record(stock, StockMovementType.ADJUSTMENT,
+                        request.quantity() - previousQuantity, previousQuantity, null,
+                        StockMovementRecorder.PRODUCT_UPDATE, variant.getProduct().getId());
+            }
         }
     }
 

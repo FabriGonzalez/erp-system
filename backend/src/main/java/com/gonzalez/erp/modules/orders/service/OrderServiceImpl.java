@@ -18,6 +18,7 @@ import com.gonzalez.erp.modules.inventory.entity.StockMovementType;
 import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
 import com.gonzalez.erp.modules.inventory.repository.StockMovementRepository;
 import com.gonzalez.erp.modules.inventory.repository.StockRepository;
+import com.gonzalez.erp.modules.inventory.service.StockMovementRecorder;
 import com.gonzalez.erp.modules.orders.dto.request.OrderItemRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderUpdateRequest;
@@ -79,6 +80,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderNumberCounterRepository orderNumberCounterRepository;
     private final StockRepository stockRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final StockMovementRecorder stockMovementRecorder;
     private final BranchRepository branchRepository;
     private final ProductVariantRepository productVariantRepository;
     private final CustomerRepository customerRepository;
@@ -731,16 +733,8 @@ public class OrderServiceImpl implements OrderService {
 
     private void saveMovement(Stock stock, StockMovementType type, int quantity,
                               int previousQuantity, Long referenceId) {
-        stockMovementRepository.save(StockMovement.builder()
-                .stock(stock)
-                .type(type)
-                .quantity(quantity)
-                .previousQuantity(previousQuantity)
-                .newQuantity(stock.getQuantity())
-                .reason(null)
-                .referenceId(referenceId)
-                .referenceType(REFERENCE_TYPE)
-                .build());
+        stockMovementRecorder.record(stock, type, quantity, previousQuantity, null,
+                REFERENCE_TYPE, referenceId);
     }
 
     @Transactional

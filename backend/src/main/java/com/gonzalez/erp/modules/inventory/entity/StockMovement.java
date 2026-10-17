@@ -1,6 +1,7 @@
 package com.gonzalez.erp.modules.inventory.entity;
 
 import com.gonzalez.erp.common.entity.BaseEntity;
+import com.gonzalez.erp.modules.users.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -44,4 +45,9 @@ public class StockMovement extends BaseEntity {
 
     @Column(name = "reference_type")
     private String referenceType;
+
+    /** Quién generó el movimiento. Null en los registrados antes de que existiera la columna. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by_id")
+    private User createdBy;
 }

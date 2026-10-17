@@ -12,6 +12,7 @@ import com.gonzalez.erp.modules.inventory.entity.StockMovementType;
 import com.gonzalez.erp.modules.inventory.exception.InsufficientStockException;
 import com.gonzalez.erp.modules.inventory.repository.StockMovementRepository;
 import com.gonzalez.erp.modules.inventory.repository.StockRepository;
+import com.gonzalez.erp.modules.inventory.service.StockMovementRecorder;
 import com.gonzalez.erp.modules.products.entity.Product;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
@@ -47,9 +48,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -68,6 +69,7 @@ class StockTransferServiceImplTest {
     @Mock private StockTransferItemRepository stockTransferItemRepository;
     @Mock private StockRepository stockRepository;
     @Mock private StockMovementRepository stockMovementRepository;
+    @Mock private StockMovementRecorder stockMovementRecorder;
     @Mock private BranchRepository branchRepository;
     @Mock private ProductVariantRepository productVariantRepository;
     @Mock private UserRepository userRepository;
@@ -146,7 +148,10 @@ class StockTransferServiceImplTest {
         assertThat(response.items())
                 .extracting(StockTransferItemResponse::productVariantId, StockTransferItemResponse::quantity)
                 .containsExactly(org.assertj.core.groups.Tuple.tuple(VARIANT_ID, 5));
-        verify(stockMovementRepository, times(2)).save(any(StockMovement.class));
+        verify(stockMovementRecorder).record(
+                originStock, StockMovementType.TRANSFER_OUT, -5, 8, null, REFERENCE_TYPE, TRANSFER_ID);
+        verify(stockMovementRecorder).record(
+                destinationStock, StockMovementType.TRANSFER_IN, 5, 0, null, REFERENCE_TYPE, TRANSFER_ID);
     }
 
     @Test
@@ -159,7 +164,7 @@ class StockTransferServiceImplTest {
                 .isInstanceOf(InsufficientStockException.class);
         assertThat(originStock.getQuantity()).isEqualTo(2);
         verify(stockRepository, never()).save(any());
-        verify(stockMovementRepository, never()).save(any());
+        verify(stockMovementRecorder, never()).record(any(), any(), anyInt(), anyInt(), any(), any(), any());
     }
 
     @Test
@@ -198,7 +203,11 @@ class StockTransferServiceImplTest {
         assertThat(originStock.getQuantity()).isEqualTo(8);
         assertThat(destinationStock.getQuantity()).isZero();
         assertThat(response.status()).isEqualTo(StockTransferStatus.CANCELLED);
-        verify(stockMovementRepository, times(2)).save(any(StockMovement.class));
+        // El inverso de la transferencia: el origen recibe y el destino entrega.
+        verify(stockMovementRecorder).record(
+                originStock, StockMovementType.TRANSFER_IN, 5, 3, null, REFERENCE_TYPE, TRANSFER_ID);
+        verify(stockMovementRecorder).record(
+                destinationStock, StockMovementType.TRANSFER_OUT, -5, 5, null, REFERENCE_TYPE, TRANSFER_ID);
     }
 
     @Test
