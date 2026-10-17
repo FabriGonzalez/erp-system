@@ -12,6 +12,7 @@ import { useProductStore } from '@/stores/product-store';
 import { StockTransfer } from '@/types/transfer';
 
 import { errorText, requireToken, usePagedList } from './use-paged-list';
+import { invalidateStockMovements } from './use-stock-movement-queries';
 
 const PAGE_SIZE = 20;
 
@@ -61,6 +62,7 @@ export function useTransfer(id: string | undefined) {
 function refreshAfterTransfer(transfer: StockTransfer) {
     queryClient.setQueryData(transferKeys.detail(transfer.id), transfer);
     void queryClient.invalidateQueries({ queryKey: transferKeys.lists() });
+    invalidateStockMovements();
 
     const token = useAuthStore.getState().token;
     if (token && useProductStore.getState().products.length > 0) {

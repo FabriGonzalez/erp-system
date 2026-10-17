@@ -23,6 +23,7 @@ export function usePagedList<T>(
     fetchPage: (page: number) => Promise<PageResponse<T>>,
     enabled: boolean,
     idOf: (item: T) => string,
+    options?: { staleTime?: number },
 ) {
     const hasSession = useAuthStore((state) => Boolean(state.token));
     const result = useInfiniteQuery({
@@ -32,6 +33,7 @@ export function usePagedList<T>(
         getNextPageParam: (lastPage) =>
             lastPage.page + 1 < lastPage.totalPages ? lastPage.page + 1 : undefined,
         enabled: hasSession && enabled,
+        staleTime: options?.staleTime,
     });
 
     // Si entre páginas entró un elemento nuevo, el siguiente puede repetirse.

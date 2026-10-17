@@ -26,6 +26,13 @@ export const STOCK_READ_PERMISSIONS = [
     'CREAR_PEDIDOS',
 ] as const satisfies readonly Permission[];
 
+/** GET /api/v1/inventory/movements. */
+export const STOCK_MOVEMENT_READ_PERMISSIONS = [
+    'CONSULTAR_STOCK',
+    'AJUSTAR_STOCK',
+    'VER_REPORTES',
+] as const satisfies readonly Permission[];
+
 /** GET /api/v1/inventory/transfers y /transfers/{id}. */
 export const TRANSFER_READ_PERMISSIONS = ['TRANSFERIR_STOCK', 'CONSULTAR_STOCK'] as const satisfies readonly Permission[];
 

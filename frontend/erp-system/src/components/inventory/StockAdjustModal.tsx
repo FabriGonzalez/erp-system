@@ -18,6 +18,8 @@ type StockAdjustModalProps = {
     products: Product[];
     token: string | null;
     onClose: () => void;
+    /** Después de guardar, antes de cerrar. */
+    onSaved?: (stock: Stock) => void;
 };
 
 type VariantOption = {
@@ -33,6 +35,7 @@ export function StockAdjustModal({
     products,
     token,
     onClose,
+    onSaved,
 }: StockAdjustModalProps) {
     const adjustStock = useStockStore((state) => state.adjustStock);
     const [branchId, setBranchId] = useState('');
@@ -88,12 +91,13 @@ export function StockAdjustModal({
 
         setIsSubmitting(true);
         try {
-            await adjustStock({
+            const adjusted = await adjustStock({
                 productVariantId: parsedVariantId,
                 branchId: parsedBranchId,
                 newQuantity: parsedQuantity,
                 reason: reason.trim(),
             }, token);
+            onSaved?.(adjusted);
             onClose();
         } catch (requestError) {
             setError(requestError instanceof Error ? requestError.message : 'No se pudo ajustar el stock.');
