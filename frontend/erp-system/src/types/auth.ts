@@ -34,6 +34,8 @@ export type User = {
     company: Company;
     branches: Branch[];
     permissions: Permission[];
+    /** False en las cuentas creadas por un administrador: solo él define su contraseña. */
+    canChangePassword: boolean;
 };
 
 /** GET /api/v1/auth/me: rol y permisos vigentes del usuario de la sesión. */
@@ -48,6 +50,7 @@ export type CurrentUserResponse = {
     platformAdmin: boolean;
     companyId: number;
     companyName: string;
+    canChangePassword: boolean;
 };
 
 export type LoginResponse = CurrentUserResponse & {

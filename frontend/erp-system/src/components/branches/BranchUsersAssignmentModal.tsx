@@ -17,14 +17,12 @@ import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import {
-    BackendUserResponse,
-    getBranchUsers,
-    getCompanyUsers,
-} from '@/services/branch-service';
+import { invalidateUserBranches } from '@/hooks/user-keys';
+import { getBranchUsers, getCompanyUsers } from '@/services/user-service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
 import { Branch } from '@/types/branch';
+import { CompanyUser } from '@/types/user';
 import { getInitials } from '@/utils/format';
 
 type BranchUsersAssignmentModalProps = {
@@ -41,7 +39,7 @@ export function BranchUsersAssignmentModal({
     const { token, user: currentUser } = useAuthStore();
     const { assignBranchToUser, removeBranchFromUser } = useBranchStore();
 
-    const [users, setUsers] = useState<BackendUserResponse[]>([]);
+    const [users, setUsers] = useState<CompanyUser[]>([]);
     const [assignedUserIds, setAssignedUserIds] = useState<Set<string>>(new Set());
     const [isLoading, setIsLoading] = useState(false);
     const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
@@ -82,7 +80,7 @@ export function BranchUsersAssignmentModal({
         }
     }, [loadData, visible]);
 
-    async function handleToggleUser(targetUser: BackendUserResponse) {
+    async function handleToggleUser(targetUser: CompanyUser) {
         if (!branch || !token) return;
 
         const targetUserId = String(targetUser.id);
@@ -108,6 +106,8 @@ export function BranchUsersAssignmentModal({
             } else {
                 await assignBranchToUser(targetUserId, branch, token, isCurrentAuthUser);
             }
+            // La ficha del usuario muestra sus sucursales desde la caché.
+            invalidateUserBranches(targetUserId);
         } catch (err: any) {
             // Revertir optimismo en caso de error
             setAssignedUserIds((prev) => {

@@ -45,6 +45,7 @@ function validate(current: string, next: string, confirmation: string): string |
 export default function ChangePasswordScreen() {
     const token = useAuthStore((state) => state.token);
     const replaceToken = useAuthStore((state) => state.replaceToken);
+    const canChangePassword = useAuthStore((state) => state.user?.canChangePassword !== false);
 
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -112,7 +113,15 @@ export default function ChangePasswordScreen() {
             </View>
 
             <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-                {isDone ? (
+                {!canChangePassword ? (
+                    <View style={styles.form}>
+                        <Text style={styles.description}>
+                            La contraseña de tu cuenta la administra la empresa. Si necesitás
+                            cambiarla, pedíselo a un administrador.
+                        </Text>
+                        <AppButton title="Volver" onPress={() => router.back()} />
+                    </View>
+                ) : isDone ? (
                     <View style={styles.form}>
                         <View style={styles.successContainer}>
                             <Text style={styles.successText}>

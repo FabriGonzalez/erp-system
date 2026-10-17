@@ -147,10 +147,9 @@ export default function MoreScreen() {
                             {canManageUsers && (
                                 <MenuListItem
                                     title="Usuarios"
-                                    subtitle="Administrar empleados y permisos"
+                                    subtitle="Administrar empleados, roles y permisos"
                                     iconName={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
-                                    onPress={() => { }}
-                                    showChevron={false}
+                                    onPress={() => router.push('/users' as any)}
                                 />
                             )}
                             {canManageBranches && (
@@ -180,12 +179,15 @@ export default function MoreScreen() {
                 {/* Sección Sesión */}
                 <Text style={styles.sectionTitle}>Sesión</Text>
                 <View style={styles.section}>
-                    <MenuListItem
-                        title="Cambiar contraseña"
-                        subtitle="Actualizá la contraseña de tu cuenta"
-                        iconName={{ ios: 'lock.fill', android: 'lock', web: 'lock' }}
-                        onPress={() => router.push('/settings/change-password')}
-                    />
+                    {/* Las cuentas creadas por un administrador no cambian su propia contraseña. */}
+                    {user?.canChangePassword !== false && (
+                        <MenuListItem
+                            title="Cambiar contraseña"
+                            subtitle="Actualizá la contraseña de tu cuenta"
+                            iconName={{ ios: 'lock.fill', android: 'lock', web: 'lock' }}
+                            onPress={() => router.push('/settings/change-password')}
+                        />
+                    )}
                     <MenuListItem
                         title="Cerrar sesión"
                         iconName={{ ios: 'arrow.right.to.line.compact', android: 'logout', web: 'logout' }}

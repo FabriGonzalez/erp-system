@@ -11,7 +11,7 @@ import {
     removeUserFromBranch,
     updateBranch,
 } from '@/services/branch-service';
-import type { BackendUserResponse } from '@/services/branch-service';
+import type { UserResponse } from '@/types/user';
 import { Branch, BranchRequest } from '@/types/branch';
 
 const ACTIVE_BRANCH_STORAGE_KEY = '@erp/active-branch';
@@ -41,8 +41,8 @@ type BranchState = {
     setActiveBranch: (branch: Branch) => Promise<void>;
     clearActiveBranch: () => Promise<void>;
     selectAndEnsureAssigned: (branch: Branch, userId: string, token: string) => Promise<void>;
-    assignBranchToUser: (userId: string, branch: Branch, token: string, isCurrentAuthUser?: boolean) => Promise<BackendUserResponse | null>;
-    removeBranchFromUser: (userId: string, branchId: string, token: string, isCurrentAuthUser?: boolean) => Promise<BackendUserResponse | null>;
+    assignBranchToUser: (userId: string, branch: Branch, token: string, isCurrentAuthUser?: boolean) => Promise<UserResponse | null>;
+    removeBranchFromUser: (userId: string, branchId: string, token: string, isCurrentAuthUser?: boolean) => Promise<UserResponse | null>;
     fetchUserBranches: (userId: string, token: string) => Promise<Branch[]>;
     fetchAllBranches: (token: string, active?: boolean) => Promise<Branch[]>;
     createBranch: (data: BranchRequest, token: string) => Promise<Branch>;

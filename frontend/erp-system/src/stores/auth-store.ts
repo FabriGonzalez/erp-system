@@ -25,6 +25,8 @@ function userFromSession(data: CurrentUserResponse, branches: User['branches']):
         },
         branches,
         permissions: data.permissions,
+        // Un backend anterior no manda el campo: se asume que sí puede.
+        canChangePassword: data.canChangePassword ?? true,
     };
 }
 
@@ -122,7 +124,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
             set({
                 token: session.token,
-                user: session.user,
+                // Las sesiones guardadas antes de que existiera el campo no lo traen.
+                user: { ...session.user, canChangePassword: session.user.canChangePassword ?? true },
                 isHydrated: true,
                 sessionExpired: false,
                 isLoggingOut: false,

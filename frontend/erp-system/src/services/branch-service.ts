@@ -1,5 +1,6 @@
 import { Branch, BranchRequest } from '@/types/branch';
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { UserResponse } from '@/types/user';
 
 type BackendBranchResponse = {
     id: number | string;
@@ -261,7 +262,7 @@ export async function assignUserToBranch(
     userId: string,
     branchId: string,
     token: string
-): Promise<BackendUserResponse | null> {
+): Promise<UserResponse | null> {
     const response = await apiFetch(
         `${API_BASE_URL}/api/v1/users/${userId}/branches/${branchId}`,
         {
@@ -277,7 +278,7 @@ export async function assignUserToBranch(
         return null;
     }
 
-    const result = await handleResponse<BackendUserResponse | null>(
+    const result = await handleResponse<UserResponse | null>(
         response,
         'No se pudo asignar el usuario a la sucursal.'
     );
@@ -292,7 +293,7 @@ export async function removeUserFromBranch(
     userId: string,
     branchId: string,
     token: string
-): Promise<BackendUserResponse | null> {
+): Promise<UserResponse | null> {
     const response = await apiFetch(
         `${API_BASE_URL}/api/v1/users/${userId}/branches/${branchId}`,
         {
@@ -308,68 +309,9 @@ export async function removeUserFromBranch(
         return null;
     }
 
-    const result = await handleResponse<BackendUserResponse | null>(
+    const result = await handleResponse<UserResponse | null>(
         response,
         'No se pudo remover la asignación del usuario a la sucursal.'
     );
     return result ?? null;
-}
-
-export type BackendUserResponse = {
-    id: number | string;
-    username: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    roleId?: number | string | null;
-    roleName: string;
-    companyId?: number | string | null;
-    companyName?: string | null;
-    active: boolean;
-};
-
-/**
- * Obtiene los usuarios asignados a una sucursal.
- * Endpoint: GET /api/v1/branches/{branchId}/users
- */
-export async function getBranchUsers(
-    branchId: string,
-    token: string
-): Promise<BackendUserResponse[]> {
-    const response = await apiFetch(
-        `${API_BASE_URL}/api/v1/branches/${branchId}/users`,
-        {
-            method: 'GET',
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-        }
-    );
-
-    return handleResponse<BackendUserResponse[]>(
-        response,
-        'No se pudieron obtener los usuarios de la sucursal.'
-    );
-}
-
-/**
- * Obtiene todos los usuarios de la empresa del usuario autenticado.
- * Endpoint: GET /api/v1/users
- */
-export async function getCompanyUsers(
-    token: string
-): Promise<BackendUserResponse[]> {
-    const response = await apiFetch(`${API_BASE_URL}/api/v1/users`, {
-        method: 'GET',
-        headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        },
-    });
-
-    return handleResponse<BackendUserResponse[]>(
-        response,
-        'No se pudieron obtener los usuarios de la empresa.'
-    );
 }
