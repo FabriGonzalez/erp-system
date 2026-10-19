@@ -1,6 +1,6 @@
 # Plan de las etapas que quedan
 
-Estado al 2026-10-17, rama `feature/stock-movements`. Para retomar: pasarle este archivo a Claude y
+Estado al 2026-10-19, rama `feature/error-handling`. Para retomar: pasarle este archivo a Claude y
 elegir la etapa.
 
 ## Cómo se trabaja (vale para todas las etapas)
@@ -34,6 +34,10 @@ elegir la etapa.
 - **Etapa 10 — Movimientos de stock** (`feature/stock-movements`, c760d7d y b3a8b42): usuario en cada
   movimiento, alta/edición de producto registradas como ajuste, `GET /inventory/movements` paginado
   con filtros, detalle de stock con historial; Inventario muestra solo la sucursal activa.
+- **Etapa 11 — Errores en español** (`feature/error-handling`, 12f7868 y 5cb7c5b): `code` en todos los
+  errores de negocio, handlers para los errores de Spring MVC (400/404/405/415 en vez de 500),
+  catch-all que loguea sin exponer el detalle; en el frontend `api-error.ts` (`ApiError`,
+  `toApiError`, `NETWORK_ERROR`) y los 15 servicios migrados a un solo patrón.
 
 ---
 
@@ -428,9 +432,160 @@ detalle por campo de los errores de validación en la UI.
 
 ## Etapa 12 — Dashboard / reportes
 
-No hay nada en ningún lado. Antes de codear, definir las métricas (ventas por período y sucursal, deuda
-total, stock bajo, ...). Después: endpoints con `VER_REPORTES` y pantalla. Borrar
-`src/data/mock-dashboard.ts` (sin uso).
+Plan detallado el 2026-10-19, relevado contra el código.
+
+**Arranque.** Crear `feature/reports` desde `feature/error-handling` (la etapa 11 ya está commiteada).
+
+**Decisiones del usuario (2026-10-19).**
+- Métricas: ventas del período (con comparación y por sucursal), cobranzas y deuda, top productos y
+  pedidos pendientes, stock bajo.
+- Ubicación: ítem "Reportes" en Más (reemplaza "Analytics – Próximamente"), stack propio. Las
+  pestañas no cambian.
+- Alcance: las sucursales **asignadas al usuario** (mismo criterio que `GET /orders`), con filtro
+  opcional por una de ellas.
+- Stock bajo: umbral fijo, enviado como parámetro (sin cambios en la base).
+- Vista "todas las sucursales" = la unión de las sucursales asignadas, además del filtro por una.
+- **Mandan las asignaciones**: el acceso a una sucursal sale siempre de `user_branches`, también para
+  el admin, y el toggle de `BranchUsersAssignmentModal` se respeta. `ACCEDER_TODAS_SUCURSALES` no
+  abre sucursales no asignadas: significa "se asigna solo a las sucursales nuevas".
+- Al crear una sucursal, el backend asigna en la misma transacción al creador y a todos los usuarios
+  de la empresa cuyo rol tiene `ACCEDER_TODAS_SUCURSALES` (el admin lo tiene desde su creación).
+  Después cada uno se puede desasignar con el toggle.
+
+**Lo que hay hoy.**
+- `VER_REPORTES` existe en el enum y solo abre lecturas sueltas (deudores, pagos, movimientos). No hay
+  ningún endpoint de reportes ni consultas de agregación.
+- Ventas = `orders`: `total` (para `QUICK_SALE` es `quickSaleAmount`), `status`
+  (`CONFIRMED` = retiro en local, `TO_PREPARE` = envío por despachar, `SHIPPED`, `CANCELLED`),
+  `branch`, `customer` (opcional), `createdAt` (`Instant`, la base guarda UTC). Ítems en
+  `order_items` (`quantity`, `unitPrice`, variante); las ventas rápidas no tienen ítems.
+- Cobro: las ventas **sin cliente** se consideran cobradas al crearse y no generan `Payment`, así que
+  no tienen medio de pago. Las de cliente se cobran con `payments` (`amount`, `method`: `CASH`,
+  `TRANSFER`, `DEBIT_CARD`, `CREDIT_CARD`; `status` `ACTIVE`/`CANCELLED`; `branch`; `createdAt`).
+- Deuda: `CustomerBalanceServiceImpl` la calcula desde `orderRepository.findPendingBalances`
+  (saldo pendiente de cada pedido de cliente); es lo que muestra Cuentas corrientes.
+- Stock: `stocks.quantity` por variante y sucursal, sin mínimo. `Product.active` y
+  `ProductVariant.active` existen.
+- `ACCEDER_TODAS_SUCURSALES` existe en el enum desde 2d0c4f9 y el backend nunca lo chequea
+  (`permission-labels.ts` lo marca "Todavía sin efecto en la app."). El rol "Administrador" que crea
+  `ProvisioningServiceImpl.createAdminRole` ya lo trae (`EnumSet.allOf(Permission.class)`) y es
+  `system_role` (no editable). En `erp_db` (2026-10-19): ADMIN con los 17 permisos; el rol `123` sin él.
+- **Hoy crear una sucursal no asigna a nadie**: ni `BranchServiceImpl.create` ni
+  `branch-store.createBranch`/`BranchFormModal`. Lo único que asigna solo es
+  `selectAndEnsureAssigned` (elegir una sucursal como activa desde Sucursales). En `erp_db`
+  `adminYuyei` está asignado a las dos sucursales y `empleadoYuyei` a Gral. Pico: no hace falta
+  migrar datos.
+- La asignación se chequea con `userBranchRepository` en `OrderServiceImpl`, `PaymentServiceImpl` y
+  `ShipmentServiceImpl`; esos chequeos no cambian.
+- Frontend: sin librería de gráficos (no hace falta: barras con `View` y ancho en %).
+  `src/data/mock-dashboard.ts` sin uso. Etiquetas de medio de pago en `types/order.ts`.
+
+### Backend (módulo nuevo `modules/reports`)
+
+0. **Autoasignación al crear una sucursal** (`BranchServiceImpl.create`, ya `@Transactional`):
+   después de guardar la sucursal, crear las `UserBranch` del creador (`SecurityUtils.getCurrentUserId()`)
+   y de los usuarios de la empresa con `ACCEDER_TODAS_SUCURSALES`, sin duplicados (el creador suele
+   ser uno de ellos). Consulta nueva en `UserRepository`:
+   `SELECT u FROM User u JOIN u.role r JOIN r.permissions p WHERE u.company.id = :companyId AND
+   p = :permission` (activos o no: la asignación no le da acceso a un usuario inactivo y así no
+   queda sin la sucursal si lo reactivan). Se guardan con `saveAll`, una sola vez por usuario.
+   Si falla, no se crea la sucursal. La respuesta `BranchResponse` no cambia. Las sucursales
+   existentes no se tocan.
+1. **Endpoint** `GET /api/v1/reports/dashboard?from=&to=&branchId=&lowStockThreshold=5` con
+   `@PreAuthorize("hasAuthority('VER_REPORTES')")` → `DashboardResponse`. Uno solo para que la
+   pantalla haga una request.
+   - `from`/`to`: `Instant` ISO (`@DateTimeFormat(iso = DATE_TIME)`), `from` inclusivo y `to`
+     exclusivo. El frontend los calcula con la hora del dispositivo, así el backend no necesita zona
+     horaria. Período anterior = la misma duración inmediatamente antes (`[from − (to − from), from)`).
+   - Validación: `from < to`, rango ≤ 366 días, `lowStockThreshold` entre 0 y 1000 →
+     `InvalidReportRangeException`, 400 `INVALID_REPORT_RANGE` (handler propio, como la etapa 11).
+   - Sucursales: las asignadas (`userBranchRepository.findByUserId`, como `OrderServiceImpl.findAll`).
+     Sin `branchId` → la unión de todas (cada bloque suma todas; `salesByBranch` trae además el
+     desglose). Con `branchId` → solo esa. Es el valor por defecto de la pantalla. Sin asignaciones
+     → todo en cero/vacío. `branchId` de otra empresa → 404; no asignada → 403.
+2. **Contenido de `DashboardResponse`** (montos `BigDecimal`, cantidades `long`):
+   - `sales {orderCount, total, averageTicket}` y `previousSales` (mismo formato): pedidos no
+     `CANCELLED` con `createdAt` en el rango.
+   - `salesByBranch [{branchId, branchName, orderCount, total}]`, orden `total DESC`.
+   - `collections {byMethod [{method, total}], walkInSalesTotal}`: pagos `ACTIVE` del rango por
+     medio, y aparte el total de ventas sin cliente (cobradas sin medio registrado). Un pago anulado
+     después deja de contar (se reporta lo vigente).
+   - `debt {totalDebt, debtorCount}`: método nuevo en `CustomerBalanceService` que reutiliza
+     `findPendingBalances` (misma cifra que Cuentas corrientes). Es de toda la empresa: no depende del
+     rango ni de la sucursal (aclararlo en la UI).
+   - `topProducts [{productVariantId, productName, sku, quantity, total}]`: 10 variantes con más
+     unidades en pedidos no cancelados del rango (`SUM(quantity)`, `SUM(quantity * unitPrice)`).
+   - `pendingOrders {count, oldestCreatedAt}`: pedidos `TO_PREPARE` de las sucursales (foto actual,
+     no depende del rango).
+   - `lowStock {threshold, count, items [{stockId, productName, sku, branchName, quantity}]}`:
+     stocks con `quantity <= threshold` de productos y variantes activos, orden `quantity ASC`,
+     máximo 20 ítems más el total.
+3. **Consultas** JPQL de agregación en los repositorios de cada módulo (`OrderRepository`,
+   `PaymentRepository`, `StockRepository`), filtrando siempre por `companyId` y la lista de
+   sucursales. Una consulta por bloque, ninguna por fila. Top productos y stock bajo con `Pageable`
+   (`PageRequest.of(0, n)`) para el límite. Si hace falta, índice en `orders(company_id, created_at)`.
+4. **Tests unitarios** (Mockito, `-Dtest=!BackendApplicationTests`): rango inválido (`from >= to`,
+   más de 366 días), cálculo del período anterior, `branchId` no asignado (403), usuario sin
+   sucursales (todo en cero sin consultar), ticket promedio con 0 pedidos (0, sin dividir por cero).
+   Alta de sucursal: asigna al creador y a los usuarios con el permiso, sin duplicar al creador;
+   creador sin el permiso igual queda asignado; usuario de otra empresa nunca se asigna.
+
+### Frontend (módulo nuevo → TanStack Query)
+
+1. **Tipos y servicio.** `types/report.ts`: `DashboardResponse` (API) y `Dashboard` (dominio, ids
+   string, montos `number`). `services/report-service.ts` con `apiFetch` y `toApiError`
+   (`INVALID_REPORT_RANGE` → "El período elegido no es válido."; 403 y 5xx por defecto):
+   `getDashboard({from, to, branchId, lowStockThreshold})`.
+2. **Hooks** `hooks/use-report-queries.ts`: `reportKeys` (`all`, `dashboard(period, branchId)`),
+   `useDashboard(period, branchId)` con `useQuery`. La clave lleva el período (`'today' | '7d' |
+   '30d'`), no las fechas: `from`/`to` se calculan dentro del `queryFn`, así cada refetch usa la hora
+   actual. Deshabilitada sin token y sin `VER_REPORTES`. Sin invalidaciones desde otras pantallas: se
+   refresca por `staleTime` y pull to refresh.
+3. **Períodos** (`utils/report-periods.ts`): Hoy = desde las 00:00 locales hasta ahora; 7 y 30 días =
+   desde las 00:00 de hace 6/29 días hasta ahora. La comparación muestra la variación % contra el
+   período anterior; si el anterior es 0, "Sin datos del período anterior" en lugar de un %.
+4. **Pantalla** `src/app/(app)/reports/_layout.tsx` (como `transfers/_layout.tsx`) e `index.tsx`:
+   - Arriba: chips de período y selector de sucursal ("Todas las sucursales" por defecto +
+     `availableBranches` de `branch-store`).
+   - Tarjetas: **Ventas** (total, pedidos, ticket promedio, variación); **Por sucursal** (barras con
+     `View`, solo si hay más de una); **Cobranzas** (por medio con las etiquetas de `types/order.ts`,
+     más "Ventas sin cliente"); **Deuda de clientes** (total y cantidad de deudores, con la nota "de
+     toda la empresa"); **Más vendidos** (nombre, SKU, unidades, total); **Pedidos por despachar**
+     (cantidad y antigüedad del más viejo); **Stock bajo** (cantidad y lista, umbral visible).
+   - Pull to refresh, `LoadingState`/error con reintento, y `EmptyState` si el usuario no tiene
+     sucursales asignadas.
+   - Sin enlaces a otros stacks (deudores, envíos, inventario): ya están en Más.
+5. **Acceso.** En `(tabs)/more.tsx`, "Analytics – Próximamente" pasa a "Reportes" → `/reports`, solo
+   con `VER_REPORTES`. `LOW_STOCK_THRESHOLD = 5` como constante del módulo.
+6. **Alta de sucursal.** `branch-store.createBranch` suma la sucursal nueva también a
+   `availableBranches` (el creador siempre queda asignado), así aparece en el selector de sucursal
+   activa y en el reporte sin recargar. El modal de usuarios ya la muestra asignada porque relee las
+   asignaciones al abrirse. En `permission-labels.ts` la etiqueta de `ACCEDER_TODAS_SUCURSALES`
+   **no cambia** ("Acceder a todas las sucursales", decisión del usuario); el hint "Todavía sin
+   efecto en la app." pasa a "Se asigna automáticamente a cada sucursal nueva.".
+7. **Limpieza.** Borrar `src/data/mock-dashboard.ts`.
+
+### Validación
+
+- Backend: `mvnw test -Dtest=!BackendApplicationTests`; levantar en 8082 contra `erp_qa` (avisar
+  antes: compilar reinicia el backend de IntelliJ). Cargar pedidos (con y sin cliente, uno
+  cancelado, uno de envío), pagos (uno anulado) y stock bajo, y comparar con curl cada bloque contra
+  lo esperado; rango inválido (400), sucursal no asignada (403), usuario sin `VER_REPORTES` (403).
+  Crear una sucursal y comprobar en `user_branches` al creador y a los usuarios con el permiso.
+- Frontend: `npx tsc --noEmit`, eslint de los archivos tocados, `git diff --check`.
+
+**Pruebas manuales.** Vender y ver el total del día subir tras pull to refresh; cancelar un pedido y
+verlo salir; venta rápida (cuenta en ventas, no en más vendidos); venta sin cliente (aparece en
+"Ventas sin cliente", no en cobranzas por medio); registrar y anular un pago; filtrar por sucursal y
+por período; usuario asignado a una sola sucursal (no ve las demás); usuario sin `VER_REPORTES` (no ve
+el ítem); llevar un stock a 0 y verlo en stock bajo. Crear una sucursal como admin: aparece asignada
+en el modal de usuarios y en el selector de sucursal activa sin recargar; desasignarse con el toggle:
+desaparece del reporte ("Todas") y del selector. Un rol con `ACCEDER_TODAS_SUCURSALES` queda asignado a
+la sucursal nueva; uno sin el permiso, no.
+
+**Fuera de alcance.** Mínimo de stock por variante; gráficos por día y librería de gráficos;
+exportar; rangos de fecha libres; contar como stock 0 las variantes sin fila de stock en una
+sucursal; chequear la asignación en stock y transferencias (hoy no la chequean, sigue en pendientes).
 
 ---
 
@@ -451,7 +606,8 @@ total, stock bajo, ...). Después: endpoints con `VER_REPORTES` y pantalla. Borr
   `getStockById`, `getStocksByVariant`); "Mi Perfil" sin acción en `more.tsx`.
 - Migrar los demás módulos a TanStack Query, de a uno y con decisión explícita (pedidos primero).
 - Precio al editar un pedido: los ítems toman el precio actual de la variante. Confirmar si es lo deseado.
-- Permisos que el backend nunca chequea: `ADMINISTRAR_PRECIOS` y `ACCEDER_TODAS_SUCURSALES`.
+- Permiso que el backend nunca chequea: `ADMINISTRAR_PRECIOS` (`ACCEDER_TODAS_SUCURSALES` toma
+  sentido en la etapa 12: autoasignación a sucursales nuevas).
 - Transferencias: el backend no valida que el usuario esté asignado a la sucursal de origen ni que
   origen/destino estén activas.
 - `BackendApplicationTests` (test de contexto) falla desde 2026-10-06; los unitarios se corren con
