@@ -6,7 +6,6 @@ import {
     getProductById,
     updateProduct as updateProductRequest,
 } from '@/services/product-service';
-import { getAllStocks } from '@/services/stock-service';
 import {
     Product,
     ProductRequest,
@@ -14,8 +13,10 @@ import {
     StatusFilter,
     StockFilter,
 } from '@/types/product';
-import { Stock } from '@/types/stock';
 import { create } from 'zustand';
+
+// Todas las respuestas de producto del backend traen el stock por sucursal de cada variante,
+// así que no hace falta pedir /inventory/stocks aparte ni conservar el stock anterior.
 
 type ProductState = {
     products: Product[];
@@ -57,56 +58,6 @@ function replaceProduct(products: Product[], updated: Product): Product[] {
     );
 }
 
-function mergeProductStocks(products: Product[], stocks: Stock[]): Product[] {
-    const stocksByVariant = new Map<string, Stock[]>();
-
-    for (const stock of stocks) {
-        const variantStocks = stocksByVariant.get(stock.productVariantId) ?? [];
-        variantStocks.push(stock);
-        stocksByVariant.set(stock.productVariantId, variantStocks);
-    }
-
-    return products.map((product) => ({
-        ...product,
-        variants: product.variants.map((variant) => {
-            const variantStocks = stocksByVariant.get(variant.id) ?? [];
-            const stockByBranch: Record<string, number> = {};
-
-            for (const stock of variantStocks) {
-                stockByBranch[stock.branchId] = stock.quantity;
-            }
-
-            return { ...variant, stockByBranch };
-        }),
-    }));
-}
-
-function preserveExistingProductStocks(
-    product: Product,
-    existingProduct: Product | undefined
-): Product {
-    if (!existingProduct) {
-        return product;
-    }
-
-    const existingStocksByVariant = new Map(
-        existingProduct.variants.map((variant) => [
-            variant.id,
-            variant.stockByBranch,
-        ])
-    );
-
-    return {
-        ...product,
-        variants: product.variants.map((variant) => ({
-            ...variant,
-            stockByBranch:
-                existingStocksByVariant.get(variant.id) ??
-                variant.stockByBranch,
-        })),
-    };
-}
-
 export const useProductStore = create<ProductState>((set) => ({
     products: [],
     searchQuery: '',
@@ -138,13 +89,9 @@ export const useProductStore = create<ProductState>((set) => ({
     fetchProducts: async (token) => {
         set({ isLoading: true, isError: false, errorMessage: null });
         try {
-            const [products, stocks] = await Promise.all([
-                getAllProducts(token),
-                getAllStocks(token),
-            ]);
-            const productsWithStock = mergeProductStocks(products, stocks);
-            set({ products: productsWithStock, isLoading: false });
-            return productsWithStock;
+            const products = await getAllProducts(token);
+            set({ products, isLoading: false });
+            return products;
         } catch (error: unknown) {
             const message = getErrorMessage(
                 error,
@@ -158,20 +105,14 @@ export const useProductStore = create<ProductState>((set) => ({
     fetchProductById: async (id, token) => {
         set({ isLoading: true, isError: false, errorMessage: null });
         try {
-            const [product, stocks] = await Promise.all([
-                getProductById(id, token),
-                getAllStocks(token),
-            ]);
-            const productWithStock = mergeProductStocks([product], stocks)[0];
+            const product = await getProductById(id, token);
             set((state) => ({
-                products: state.products.some(
-                    (item) => item.id === productWithStock.id
-                )
-                    ? replaceProduct(state.products, productWithStock)
-                    : [...state.products, productWithStock],
+                products: state.products.some((item) => item.id === product.id)
+                    ? replaceProduct(state.products, product)
+                    : [...state.products, product],
                 isLoading: false,
             }));
-            return productWithStock;
+            return product;
         } catch (error: unknown) {
             const message = getErrorMessage(
                 error,
@@ -186,13 +127,11 @@ export const useProductStore = create<ProductState>((set) => ({
         set({ isLoading: true, isError: false, errorMessage: null });
         try {
             const product = await createProductRequest(data, token);
-            const stocks = await getAllStocks(token);
-            const productWithStock = mergeProductStocks([product], stocks)[0];
             set((state) => ({
-                products: [productWithStock, ...state.products],
+                products: [product, ...state.products],
                 isLoading: false,
             }));
-            return productWithStock;
+            return product;
         } catch (error: unknown) {
             const message = getErrorMessage(
                 error,
@@ -226,18 +165,11 @@ export const useProductStore = create<ProductState>((set) => ({
         set({ isLoading: true, isError: false, errorMessage: null });
         try {
             const product = await activateProductRequest(id, token);
-            const existingProduct = useProductStore
-                .getState()
-                .products.find((item) => item.id === product.id);
-            const productWithStock = preserveExistingProductStocks(
-                product,
-                existingProduct
-            );
             set((state) => ({
-                products: replaceProduct(state.products, productWithStock),
+                products: replaceProduct(state.products, product),
                 isLoading: false,
             }));
-            return productWithStock;
+            return product;
         } catch (error: unknown) {
             const message = getErrorMessage(
                 error,
@@ -252,18 +184,11 @@ export const useProductStore = create<ProductState>((set) => ({
         set({ isLoading: true, isError: false, errorMessage: null });
         try {
             const product = await deactivateProductRequest(id, token);
-            const existingProduct = useProductStore
-                .getState()
-                .products.find((item) => item.id === product.id);
-            const productWithStock = preserveExistingProductStocks(
-                product,
-                existingProduct
-            );
             set((state) => ({
-                products: replaceProduct(state.products, productWithStock),
+                products: replaceProduct(state.products, product),
                 isLoading: false,
             }));
-            return productWithStock;
+            return product;
         } catch (error: unknown) {
             const message = getErrorMessage(
                 error,

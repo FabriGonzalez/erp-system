@@ -15,7 +15,6 @@ import { Spacing } from '@/constants/spacing';
 import { useCreateTransfer } from '@/hooks/use-transfer-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
-import { useProductAttributeStore } from '@/stores/product-attribute-store';
 import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
 import { Product } from '@/types/product';
@@ -48,10 +47,6 @@ export default function NewTransferScreen() {
     const isLoadingProducts = useProductStore((state) => state.isLoading);
     const isProductsError = useProductStore((state) => state.isError);
     const productsErrorMessage = useProductStore((state) => state.errorMessage);
-    const attributes = useProductAttributeStore((state) => state.attributes);
-    const attributeValues = useProductAttributeStore((state) => state.attributeValues);
-    const fetchAttributes = useProductAttributeStore((state) => state.fetchAttributes);
-    const hasAttributes = attributes.length > 0;
     const createTransfer = useCreateTransfer();
 
     const originId = origin?.id ?? '';
@@ -90,17 +85,9 @@ export default function NewTransferScreen() {
         [allBranches, originId],
     );
 
-    // Los nombres de atributos y valores vienen del store de atributos: la variante solo guarda ids.
-    useEffect(() => {
-        if (token && !hasAttributes) {
-            fetchAttributes(token).catch(() => {});
-        }
-    }, [token, hasAttributes, fetchAttributes]);
-
     // Stock en origen y atributos ("Color: Rojo · Talle: M") por variante, según la última carga.
+    // Los nombres vienen en el producto: no hace falta cargar el store de atributos.
     const { originStockByVariant, attributesByVariant } = useMemo(() => {
-        const attributeNames = new Map(attributes.map((attribute) => [attribute.id, attribute.name]));
-        const valueNames = new Map(attributeValues.map((value) => [value.id, value.name]));
         const stock = new Map<string, number>();
         const labels = new Map<string, string>();
 
@@ -108,18 +95,15 @@ export default function NewTransferScreen() {
             for (const variant of product.variants) {
                 stock.set(variant.id, variant.stockByBranch[originId] ?? 0);
                 const label = variant.attributes
-                    .map(({ attributeId, attributeValueId }) => {
-                        const attributeName = attributeNames.get(attributeId);
-                        const valueName = valueNames.get(attributeValueId);
-                        return attributeName && valueName ? `${attributeName}: ${valueName}` : null;
-                    })
+                    .map(({ attributeName, valueName }) =>
+                        attributeName && valueName ? `${attributeName}: ${valueName}` : null)
                     .filter(Boolean)
                     .join(' · ');
                 if (label) labels.set(variant.id, label);
             }
         }
         return { originStockByVariant: stock, attributesByVariant: labels };
-    }, [products, originId, attributes, attributeValues]);
+    }, [products, originId]);
 
     const exceedsStock = (item: DraftItem) => item.quantity > (originStockByVariant.get(item.variantId) ?? 0);
     const hasStockProblems = items.some(exceedsStock);

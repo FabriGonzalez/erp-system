@@ -12,7 +12,6 @@ import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useBranchStore } from '@/stores/branch-store';
 import { useAuthStore } from '@/stores/auth-store';
-import { useProductAttributeStore } from '@/stores/product-attribute-store';
 import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
 import { hasPermission } from '@/utils/permissions';
@@ -31,7 +30,6 @@ export default function ProductDetailScreen() {
         activateProduct,
         deactivateProduct,
     } = useProductStore();
-    const attributeValues = useProductAttributeStore((state) => state.attributeValues);
     const [isToggling, setIsToggling] = useState(false);
 
     const product = products.find((p) => p.id === id);
@@ -143,7 +141,7 @@ export default function ProductDetailScreen() {
                                 <Text style={styles.variantAttributes}>
                                     {variant.attributes.length
                                         ? variant.attributes
-                                            .map((attribute) => attributeValues.find((value) => value.id === attribute.attributeValueId)?.name ?? attribute.attributeValueId)
+                                            .map((attribute) => attribute.valueName)
                                             .filter(Boolean)
                                             .join(' / ')
                                         : 'Variante única'}

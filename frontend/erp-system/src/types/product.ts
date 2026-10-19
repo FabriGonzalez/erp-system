@@ -26,6 +26,9 @@ export type {
 export type ProductVariantAttribute = {
     attributeId: string;
     attributeValueId: string;
+    // Vienen en el producto del backend; las variantes que arma el formulario solo tienen ids.
+    attributeName?: string;
+    valueName?: string;
 };
 
 export type ProductUpdateRequest = {

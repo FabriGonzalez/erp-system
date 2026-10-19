@@ -89,6 +89,18 @@ export async function getAttributeValues(
     return data.map(normalizeValue);
 }
 
+/** Valores de todos los atributos de la empresa, en una sola request. */
+export async function getAllAttributeValues(token: string): Promise<ProductAttributeValue[]> {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/product-attributes/values`, {
+        headers: headers(token),
+    });
+    const data = await responseData<ProductAttributeValueResponse[]>(
+        response,
+        'No se pudieron obtener los valores de los atributos.'
+    );
+    return data.map(normalizeValue);
+}
+
 async function mutateAttribute(
     path: string,
     method: 'POST' | 'PATCH',

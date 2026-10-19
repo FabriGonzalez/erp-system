@@ -8,6 +8,7 @@ import {
     deactivateAttribute,
     deactivateAttributeValue,
     getAllAttributes,
+    getAllAttributeValues,
     getAttributeById as getAttributeByIdFromApi,
     getAttributeValues,
     updateAttribute,
@@ -56,10 +57,11 @@ export const useProductAttributeStore = create<ProductAttributeState>((set, get)
     fetchAttributes: async (token) => {
         set({ isLoading: true, error: null });
         try {
-            const attributes = await getAllAttributes(token);
-            const values = (await Promise.all(
-                attributes.map((attribute) => getAttributeValues(attribute.id, token))
-            )).flat();
+            // Dos requests en paralelo, no una por atributo.
+            const [attributes, values] = await Promise.all([
+                getAllAttributes(token),
+                getAllAttributeValues(token),
+            ]);
             set({ attributes, attributeValues: values, isLoading: false });
         } catch (error) {
             set({ isLoading: false, error: error instanceof Error ? error.message : 'No se pudieron cargar los atributos.' });
