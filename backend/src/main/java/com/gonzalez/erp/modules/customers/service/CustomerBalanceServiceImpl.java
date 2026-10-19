@@ -5,6 +5,7 @@ import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.customers.dto.response.AccountTransactionResponse;
 import com.gonzalez.erp.modules.customers.dto.response.CustomerAccountSummaryResponse;
+import com.gonzalez.erp.modules.customers.dto.response.CustomerDebtSummaryResponse;
 import com.gonzalez.erp.modules.customers.dto.response.CustomerDebtorResponse;
 import com.gonzalez.erp.modules.customers.dto.response.CustomerPendingOrderResponse;
 import com.gonzalez.erp.modules.customers.entity.Customer;
@@ -132,6 +133,13 @@ public class CustomerBalanceServiceImpl implements CustomerBalanceService {
                 debtors.size(),
                 totalPages
         );
+    }
+
+    @Override
+    public CustomerDebtSummaryResponse getDebtSummary(Long companyId) {
+        List<Object[]> rows = orderRepository.findPendingBalances(companyId, null);
+        long debtorCount = rows.stream().map(row -> (Long) row[0]).distinct().count();
+        return new CustomerDebtSummaryResponse(sumPending(rows), debtorCount);
     }
 
     @Override

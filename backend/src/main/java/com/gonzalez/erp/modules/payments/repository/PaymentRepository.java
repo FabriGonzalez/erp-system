@@ -10,12 +10,34 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     Optional<Payment> findByIdAndCompanyId(Long id, Long companyId);
+
+    /**
+     * Pagos vigentes por medio, con createdAt en [from, to). Un pago anulado deja de contar.
+     * Cada fila es [method (PaymentMethod), total (BigDecimal)].
+     */
+    @Query("""
+            SELECT p.method, COALESCE(SUM(p.amount), 0)
+            FROM Payment p
+            WHERE p.company.id = :companyId
+            AND p.branch.id IN :branchIds
+            AND p.status = com.gonzalez.erp.modules.payments.entity.PaymentStatus.ACTIVE
+            AND p.createdAt >= :from AND p.createdAt < :to
+            GROUP BY p.method
+            """)
+    List<Object[]> sumActiveByMethod(
+            @Param("companyId") Long companyId,
+            @Param("branchIds") Collection<Long> branchIds,
+            @Param("from") Instant from,
+            @Param("to") Instant to
+    );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM Payment p WHERE p.id = :id AND p.company.id = :companyId")

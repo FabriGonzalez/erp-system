@@ -12,6 +12,8 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -95,6 +97,83 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     @Query("SELECT COALESCE(MAX(CAST(SUBSTRING(o.orderNumber, 5) AS INTEGER)), 0) FROM Order o WHERE o.company.id = :companyId")
     Long getMaxOrderNumberForCompany(@Param("companyId") Long companyId);
+
+    // --- Reportes: pedidos no cancelados con createdAt en [from, to) ---
+
+    /** Ventas por sucursal. Cada fila es [branchId (Long), branchName (String), count (Long), total (BigDecimal)]. */
+    @Query("""
+            SELECT b.id, b.name, COUNT(o), COALESCE(SUM(o.total), 0)
+            FROM Order o
+            JOIN o.branch b
+            WHERE o.company.id = :companyId
+            AND b.id IN :branchIds
+            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.createdAt >= :from AND o.createdAt < :to
+            GROUP BY b.id, b.name
+            ORDER BY COALESCE(SUM(o.total), 0) DESC, b.id ASC
+            """)
+    List<Object[]> sumSalesByBranch(
+            @Param("companyId") Long companyId,
+            @Param("branchIds") Collection<Long> branchIds,
+            @Param("from") Instant from,
+            @Param("to") Instant to
+    );
+
+    /** Total de las ventas sin cliente: se cobran al crearse y no generan un pago. */
+    @Query("""
+            SELECT COALESCE(SUM(o.total), 0)
+            FROM Order o
+            WHERE o.company.id = :companyId
+            AND o.branch.id IN :branchIds
+            AND o.customer IS NULL
+            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.createdAt >= :from AND o.createdAt < :to
+            """)
+    BigDecimal sumWalkInSales(
+            @Param("companyId") Long companyId,
+            @Param("branchIds") Collection<Long> branchIds,
+            @Param("from") Instant from,
+            @Param("to") Instant to
+    );
+
+    /**
+     * Variantes más vendidas por unidades. Cada fila es
+     * [variantId (Long), productName (String), sku (String), quantity (Long), total (BigDecimal)].
+     * El límite sale del Pageable.
+     */
+    @Query("""
+            SELECT v.id, p.name, v.sku, SUM(i.quantity), SUM(i.unitPrice * i.quantity)
+            FROM OrderItem i
+            JOIN i.order o
+            JOIN i.productVariant v
+            JOIN v.product p
+            WHERE o.company.id = :companyId
+            AND o.branch.id IN :branchIds
+            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.createdAt >= :from AND o.createdAt < :to
+            GROUP BY v.id, p.name, v.sku
+            ORDER BY SUM(i.quantity) DESC, v.id ASC
+            """)
+    List<Object[]> findTopSellingVariants(
+            @Param("companyId") Long companyId,
+            @Param("branchIds") Collection<Long> branchIds,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            Pageable pageable
+    );
+
+    /** Pedidos por despachar (foto actual). Una sola fila: [count (Long), oldestCreatedAt (Instant o null)]. */
+    @Query("""
+            SELECT COUNT(o), MIN(o.createdAt)
+            FROM Order o
+            WHERE o.company.id = :companyId
+            AND o.branch.id IN :branchIds
+            AND o.status = com.gonzalez.erp.modules.orders.entity.OrderStatus.TO_PREPARE
+            """)
+    List<Object[]> summarizeOrdersToPrepare(
+            @Param("companyId") Long companyId,
+            @Param("branchIds") Collection<Long> branchIds
+    );
 
     // Las ventas sin cliente se cobran al crearse, por eso cuentan siempre como pagadas.
     @Query(value = """

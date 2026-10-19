@@ -10,11 +10,17 @@ import com.gonzalez.erp.modules.branches.mapper.BranchMapper;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
+import com.gonzalez.erp.modules.roles.entity.Permission;
+import com.gonzalez.erp.modules.users.entity.UserBranch;
+import com.gonzalez.erp.modules.users.repository.UserBranchRepository;
+import com.gonzalez.erp.modules.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +29,8 @@ public class BranchServiceImpl implements BranchService {
 
     private final BranchRepository branchRepository;
     private final CompanyRepository companyRepository;
+    private final UserRepository userRepository;
+    private final UserBranchRepository userBranchRepository;
 
     @Override
     public List<BranchResponse> findAll(Boolean active) {
@@ -52,7 +60,28 @@ public class BranchServiceImpl implements BranchService {
                 .phone(request.phone())
                 .company(company)
                 .build();
-        return BranchMapper.toResponse(branchRepository.save(branch));
+        Branch saved = branchRepository.save(branch);
+        assignToCreatorAndAllBranchesUsers(saved, companyId);
+        return BranchMapper.toResponse(saved);
+    }
+
+    /*
+     * El acceso a una sucursal sale siempre de user_branches. Quien la crea y los usuarios con
+     * ACCEDER_TODAS_SUCURSALES quedan asignados; después cada uno se puede quitar desde Sucursales.
+     */
+    private void assignToCreatorAndAllBranchesUsers(Branch branch, Long companyId) {
+        Set<Long> userIds = new LinkedHashSet<>();
+        userIds.add(SecurityUtils.getCurrentUserId());
+        userRepository.findByCompanyIdAndRolePermission(companyId, Permission.ACCEDER_TODAS_SUCURSALES)
+                .forEach(user -> userIds.add(user.getId()));
+
+        List<UserBranch> assignments = userIds.stream()
+                .map(userId -> UserBranch.builder()
+                        .user(userRepository.getReferenceById(userId))
+                        .branch(branch)
+                        .build())
+                .toList();
+        userBranchRepository.saveAll(assignments);
     }
 
     @Override

@@ -2,18 +2,49 @@ package com.gonzalez.erp.modules.inventory.repository;
 
 import com.gonzalez.erp.modules.inventory.entity.Stock;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 public interface StockRepository extends JpaRepository<Stock, Long> {
 
     Optional<Stock> findByProductVariantIdAndBranchId(Long productVariantId, Long branchId);
+
+    /** Stock bajo (cantidad <= umbral) de productos y variantes activos, de menor a mayor. */
+    @Query(value = """
+            SELECT s FROM Stock s
+            JOIN FETCH s.productVariant pv
+            JOIN FETCH pv.product p
+            JOIN FETCH s.branch b
+            WHERE s.company.id = :companyId
+            AND b.id IN :branchIds
+            AND s.quantity <= :threshold
+            AND pv.active = true AND p.active = true
+            ORDER BY s.quantity ASC, s.id ASC
+            """,
+            countQuery = """
+            SELECT COUNT(s) FROM Stock s
+            JOIN s.productVariant pv
+            JOIN pv.product p
+            WHERE s.company.id = :companyId
+            AND s.branch.id IN :branchIds
+            AND s.quantity <= :threshold
+            AND pv.active = true AND p.active = true
+            """)
+    Page<Stock> findLowStock(
+            @Param("companyId") Long companyId,
+            @Param("branchIds") Collection<Long> branchIds,
+            @Param("threshold") int threshold,
+            Pageable pageable
+    );
 
     boolean existsByProductVariantIdAndBranchId(Long productVariantId, Long branchId);
 

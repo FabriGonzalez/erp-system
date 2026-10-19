@@ -31,6 +31,7 @@ import com.gonzalez.erp.modules.products.exception.ProductAttributeValueAlreadyE
 import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveException;
 import com.gonzalez.erp.modules.products.exception.ProductSkuAlreadyExistsException;
 import com.gonzalez.erp.modules.products.exception.ProductVariantSkuAlreadyExistsException;
+import com.gonzalez.erp.modules.reports.exception.InvalidReportRangeException;
 import com.gonzalez.erp.modules.roles.exception.RoleCodeAlreadyExistsException;
 import com.gonzalez.erp.modules.roles.exception.RoleNameAlreadyExistsException;
 import com.gonzalez.erp.modules.shipments.exception.InvalidShipmentException;
@@ -330,6 +331,20 @@ public class GlobalExceptionHandler {
                         ex.getMessage(),
                         request.getRequestURI(),
                         "INVALID_STOCK_TRANSFER"
+                ));
+    }
+
+    @ExceptionHandler(InvalidReportRangeException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidReportRange(
+            InvalidReportRangeException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "INVALID_REPORT_RANGE"
                 ));
     }
 

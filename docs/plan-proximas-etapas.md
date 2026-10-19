@@ -494,9 +494,12 @@ Plan detallado el 2026-10-19, relevado contra el código.
 1. **Endpoint** `GET /api/v1/reports/dashboard?from=&to=&branchId=&lowStockThreshold=5` con
    `@PreAuthorize("hasAuthority('VER_REPORTES')")` → `DashboardResponse`. Uno solo para que la
    pantalla haga una request.
-   - `from`/`to`: `Instant` ISO (`@DateTimeFormat(iso = DATE_TIME)`), `from` inclusivo y `to`
-     exclusivo. El frontend los calcula con la hora del dispositivo, así el backend no necesita zona
-     horaria. Período anterior = la misma duración inmediatamente antes (`[from − (to − from), from)`).
+   - `from`/`to`: `Instant` ISO, `from` inclusivo y `to` exclusivo. El frontend los calcula con la
+     hora del dispositivo, así el backend no necesita zona horaria.
+   - Período anterior: `previousFrom` opcional → `[previousFrom, previousFrom + (to − from))`; sin
+     él, el inmediatamente anterior. *Ajuste al implementar:* con "Hoy" a las 15 h, el
+     inmediatamente anterior serían las 15 h previas a la medianoche; el frontend manda el mismo
+     tramo corrido 1/7/30 días (ayer hasta las 15 h). Si se superpone con el actual → 400.
    - Validación: `from < to`, rango ≤ 366 días, `lowStockThreshold` entre 0 y 1000 →
      `InvalidReportRangeException`, 400 `INVALID_REPORT_RANGE` (handler propio, como la etapa 11).
    - Sucursales: las asignadas (`userBranchRepository.findByUserId`, como `OrderServiceImpl.findAll`).
