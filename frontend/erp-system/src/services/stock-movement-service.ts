@@ -1,9 +1,10 @@
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
-import { parseResponse } from '@/services/api-error';
+import { BRANCH_ACCESS_ERRORS, parseResponse } from '@/services/api-error';
 import { PageResponse } from '@/types/order';
 import { StockMovement, StockMovementResponse } from '@/types/stock-movement';
 
 const STOCK_MOVEMENT_ERRORS = {
+    byCode: BRANCH_ACCESS_ERRORS,
     byStatus: {
         400: 'No se pudo consultar el historial.',
         403: 'No tenés permisos para ver el historial de stock.',

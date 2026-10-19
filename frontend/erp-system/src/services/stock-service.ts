@@ -1,6 +1,6 @@
 import { Stock, StockAdjustRequest, StockResponse } from '@/types/stock';
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
-import { parseResponse } from '@/services/api-error';
+import { BRANCH_ACCESS_ERRORS, parseResponse } from '@/services/api-error';
 
 function authHeaders(token: string): HeadersInit {
     return {
@@ -11,6 +11,7 @@ function authHeaders(token: string): HeadersInit {
 
 const STOCK_ERRORS = {
     byCode: {
+        ...BRANCH_ACCESS_ERRORS,
         STOCK_NOT_FOUND: 'Stock no encontrado.',
         STOCK_ALREADY_EXISTS: 'Ese producto ya tiene stock registrado en la sucursal.',
         INSUFFICIENT_STOCK: 'No hay stock suficiente.',

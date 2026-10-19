@@ -18,11 +18,17 @@ export default function AppLayout() {
         }
     }, [user, token, hasFetchedUserBranches, fetchUserBranches]);
 
-    // Al volver al frente se releen rol y permisos: un admin pudo cambiarlos mientras tanto.
+    // Al volver al frente se releen rol, permisos y sucursales: un admin pudo cambiarlos
+    // (o desactivar/desasignar la sucursal activa) mientras tanto.
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (state) => {
-            if (state === 'active') {
-                void useAuthStore.getState().refreshUser();
+            if (state !== 'active') {
+                return;
+            }
+            const { user: currentUser, token: currentToken } = useAuthStore.getState();
+            void useAuthStore.getState().refreshUser();
+            if (currentUser && currentToken && useBranchStore.getState().hasFetchedUserBranches) {
+                useBranchStore.getState().fetchUserBranches(currentUser.id, currentToken).catch(() => {});
             }
         });
         return () => subscription.remove();

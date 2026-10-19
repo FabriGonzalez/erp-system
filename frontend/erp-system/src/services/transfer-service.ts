@@ -1,15 +1,17 @@
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
-import { parseResponse } from '@/services/api-error';
+import { BRANCH_ACCESS_ERRORS, parseResponse } from '@/services/api-error';
 import { PageResponse } from '@/types/order';
 import { StockTransfer, StockTransferRequest, StockTransferResponse } from '@/types/transfer';
 
 const TRANSFER_ERRORS = {
     byCode: {
+        ...BRANCH_ACCESS_ERRORS,
         INVALID_STOCK_TRANSFER:
             'La transferencia no es válida: revisá que las sucursales sean distintas, que no haya productos repetidos y que no esté anulada.',
         INSUFFICIENT_STOCK:
             'No hay stock suficiente. Al anular, la sucursal de destino tiene que tener todavía las unidades transferidas.',
         STOCK_NOT_FOUND: 'Uno de los productos no tiene stock en la sucursal de origen.',
+        BRANCH_INACTIVE: 'La sucursal de destino está inactiva.',
     },
     byStatus: {
         400: 'Revisá los datos de la transferencia.',

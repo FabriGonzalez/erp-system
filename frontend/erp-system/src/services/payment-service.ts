@@ -1,5 +1,5 @@
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
-import { parseResponse } from '@/services/api-error';
+import { BRANCH_ACCESS_ERRORS, parseResponse } from '@/services/api-error';
 import { PageResponse } from '@/types/order';
 import {
     Payment,
@@ -10,6 +10,7 @@ import {
 
 const PAYMENT_ERRORS = {
     byCode: {
+        ...BRANCH_ACCESS_ERRORS,
         INVALID_PAYMENT: 'El pago no es válido o ya fue anulado.',
     },
     byStatus: {

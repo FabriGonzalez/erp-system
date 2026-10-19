@@ -62,6 +62,14 @@ const DEFAULT_BY_STATUS: Record<number, string> = {
     429: 'Demasiados intentos. Esperá unos minutos e intentá de nuevo.',
 };
 
+/**
+ * 403 de una sucursal no asignada o inactiva. Va en el `byCode` de cada servicio que opera sobre
+ * sucursales, porque el 403 propio del servicio le ganaría a un code común.
+ */
+export const BRANCH_ACCESS_ERRORS: Record<string, string> = {
+    BRANCH_ACCESS_DENIED: 'No tenés asignada esta sucursal o está inactiva.',
+};
+
 /** Lo propio del servicio (code, después status) le gana a los textos comunes. */
 export function errorMessageFor(status: number, code: string | null, messages: ErrorMessages): string {
     const serviceByCode = code ? messages.byCode?.[code] : undefined;

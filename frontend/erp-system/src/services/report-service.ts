@@ -1,9 +1,10 @@
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
-import { parseResponse } from '@/services/api-error';
+import { BRANCH_ACCESS_ERRORS, parseResponse } from '@/services/api-error';
 import { Dashboard, DashboardResponse } from '@/types/report';
 
 const REPORT_ERRORS = {
     byCode: {
+        ...BRANCH_ACCESS_ERRORS,
         INVALID_REPORT_RANGE: 'El período elegido no es válido.',
     },
     byStatus: {

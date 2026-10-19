@@ -6,10 +6,11 @@ import {
     ProductUpdateRequest,
 } from '@/types/product';
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
-import { parseResponse } from '@/services/api-error';
+import { BRANCH_ACCESS_ERRORS, parseResponse } from '@/services/api-error';
 
 const PRODUCT_ERRORS = {
     byCode: {
+        ...BRANCH_ACCESS_ERRORS,
         PRODUCT_SKU_ALREADY_EXISTS: 'Ya existe un producto con ese SKU.',
         VARIANT_SKU_ALREADY_EXISTS: 'Ya existe una variante con ese SKU. Cada variante necesita un SKU único.',
         CATEGORY_INACTIVE: 'La categoría está inactiva. Elegí otra o activala antes de guardar.',

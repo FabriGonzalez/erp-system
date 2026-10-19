@@ -1,5 +1,5 @@
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
-import { parseResponse } from '@/services/api-error';
+import { BRANCH_ACCESS_ERRORS, parseResponse } from '@/services/api-error';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import {
     Order,
@@ -17,6 +17,7 @@ import {
 
 const ORDER_ERRORS = {
     byCode: {
+        ...BRANCH_ACCESS_ERRORS,
         INSUFFICIENT_STOCK: 'No hay stock suficiente para completar la operación.',
         INVALID_STATUS_TRANSITION: 'La orden no está en un estado que permita esta operación.',
         QUICK_SALE_INVALID:

@@ -8,7 +8,6 @@ import {
     Pressable,
     RefreshControl,
     StyleSheet,
-    Switch,
     Text,
     View,
 } from 'react-native';
@@ -24,6 +23,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
 import { SharedStyles } from '@/styles/shared';
 import { Branch } from '@/types/branch';
+import { confirmAction } from '@/utils/confirm';
 import { hasPermission } from '@/utils/permissions';
 
 export default function BranchesListScreen() {
@@ -47,6 +47,7 @@ export default function BranchesListScreen() {
     const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
     const [assigningBranch, setAssigningBranch] = useState<Branch | null>(null);
     const [selectingBranchId, setSelectingBranchId] = useState<string | null>(null);
+    const [togglingBranchId, setTogglingBranchId] = useState<string | null>(null);
 
     useEffect(() => {
         if (token) {
@@ -91,7 +92,20 @@ export default function BranchesListScreen() {
     }
 
     async function handleToggleActive(branch: Branch) {
-        if (!token) return;
+        if (!token || togglingBranchId) return;
+        if (branch.active) {
+            // Inactiva = no asignada para todos: conviene que quede claro antes de hacerlo.
+            const confirmed = await confirmAction({
+                title: `Desactivar ${branch.name}`,
+                message:
+                    'Mientras esté inactiva nadie va a poder vender, cobrar, ajustar stock ni transferir en ella, ' +
+                    'y sus pedidos dejan de verse en Pedidos, Envíos y Reportes. Podés reactivarla cuando quieras.',
+                confirmLabel: 'Desactivar',
+                destructive: true,
+            });
+            if (!confirmed) return;
+        }
+        setTogglingBranchId(branch.id);
         try {
             await toggleBranchActive(branch.id, Boolean(branch.active), token);
         } catch (err: any) {
@@ -99,12 +113,15 @@ export default function BranchesListScreen() {
                 'Error',
                 err?.message || 'No se pudo cambiar el estado de la sucursal.'
             );
+        } finally {
+            setTogglingBranchId(null);
         }
     }
 
     function renderItem({ item }: { item: Branch }) {
         const isActiveBranch = activeBranch?.id === item.id;
         const isSelectingThis = selectingBranchId === item.id;
+        const isTogglingThis = togglingBranchId === item.id;
         // Elegir una sucursal no asignada la asigna al usuario, y eso exige ADMINISTRAR_USUARIOS.
         const canSelect = canManageUsers || availableBranches.some((branch) => branch.id === item.id);
 
@@ -165,9 +182,9 @@ export default function BranchesListScreen() {
                         </View>
                     ) : null}
 
-                    {item.active && (canSelect || canManageUsers) && (
+                    {((item.active && (canSelect || canManageUsers)) || canManageBranches) && (
                         <View style={styles.cardBottomActions}>
-                            {canSelect && (
+                            {item.active && canSelect && (
                                 <Pressable
                                     style={({ pressed }) => [
                                         styles.activeSelectButton,
@@ -201,7 +218,7 @@ export default function BranchesListScreen() {
                                 </Pressable>
                             )}
 
-                            {canManageUsers && (
+                            {item.active && canManageUsers && (
                                 <Pressable
                                     style={({ pressed }) => [styles.usersButton, pressed && SharedStyles.pressed]}
                                     onPress={() => handleOpenUsersAssignment(item)}
@@ -214,21 +231,47 @@ export default function BranchesListScreen() {
                                     <Text style={styles.usersButtonText}>Usuarios</Text>
                                 </Pressable>
                             )}
+
+                            {canManageBranches && (
+                                <Pressable
+                                    style={({ pressed }) => [
+                                        styles.toggleButton,
+                                        item.active ? styles.deactivateButton : styles.activateButton,
+                                        pressed && SharedStyles.pressed,
+                                    ]}
+                                    onPress={() => handleToggleActive(item)}
+                                    disabled={isTogglingThis}
+                                >
+                                    {isTogglingThis ? (
+                                        <ActivityIndicator
+                                            size="small"
+                                            color={item.active ? Colors.error : Colors.success}
+                                        />
+                                    ) : (
+                                        <SymbolView
+                                            name={item.active
+                                                ? { ios: 'pause.circle', android: 'block', web: 'block' }
+                                                : { ios: 'play.circle', android: 'check_circle', web: 'check_circle' }}
+                                            size={15}
+                                            tintColor={item.active ? Colors.error : Colors.success}
+                                        />
+                                    )}
+                                    <Text
+                                        style={[
+                                            styles.toggleButtonText,
+                                            { color: item.active ? Colors.error : Colors.success },
+                                        ]}
+                                    >
+                                        {item.active ? 'Desactivar' : 'Activar'}
+                                    </Text>
+                                </Pressable>
+                            )}
                         </View>
                     )}
                 </View>
 
                 {canManageBranches && (
                     <View style={styles.actionsRow}>
-                        <View style={styles.switchContainer}>
-                            <Switch
-                                value={item.active}
-                                onValueChange={() => handleToggleActive(item)}
-                                trackColor={{ false: Colors.track, true: Colors.primary }}
-                                thumbColor={Colors.white}
-                            />
-                        </View>
-
                         <Pressable
                             style={({ pressed }) => [styles.iconButton, pressed && SharedStyles.pressed]}
                             onPress={() => handleOpenEdit(item)}
@@ -509,13 +552,28 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: Colors.primary,
     },
+    toggleButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 6,
+    },
+    deactivateButton: {
+        backgroundColor: Colors.errorLight,
+    },
+    activateButton: {
+        backgroundColor: Colors.successSoft,
+    },
+    toggleButtonText: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
     actionsRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.sm,
-    },
-    switchContainer: {
-        transform: [{ scale: 0.85 }],
     },
     iconButton: {
         padding: 6,

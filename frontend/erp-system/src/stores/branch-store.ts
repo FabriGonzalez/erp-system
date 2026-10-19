@@ -140,7 +140,8 @@ export const useBranchStore = create<BranchState>((set, get) => ({
         try {
             const assignedUser = await assignUserToBranch(userId, branch.id, token);
 
-            if (isCurrentAuthUser) {
+            // Una sucursal inactiva no es elegible aunque quede asignada.
+            if (isCurrentAuthUser && branch.active !== false) {
                 const current = get().availableBranches;
                 if (!current.some((b) => b.id === branch.id)) {
                     set({ availableBranches: [...current, branch] });
@@ -253,17 +254,31 @@ export const useBranchStore = create<BranchState>((set, get) => ({
     },
 
     fetchUserBranches: async (userId, token) => {
+        const context = get().sessionContext;
+        const version = get().activeBranchVersion;
         set({ isLoading: true, error: null });
         try {
-            const branches = await getUserBranches(userId, token);
+            const response = await getUserBranches(userId, token);
+            // Se vuelve a pedir al volver al frente: una respuesta de otra sesión no se aplica.
+            if (get().sessionContext !== context) {
+                return get().availableBranches;
+            }
+            // Una sucursal inactiva cuenta como no asignada (el backend tampoco deja operar en ella).
+            const branches = response.filter((branch) => branch.active !== false);
             set({
                 availableBranches: branches,
                 hasFetchedUserBranches: true,
                 isLoading: false,
             });
-            await get().hydrateActiveBranch(branches);
+            // Si el usuario eligió otra sucursal mientras tanto, su selección manda.
+            if (get().activeBranchVersion === version) {
+                await get().hydrateActiveBranch(branches);
+            }
             return branches;
         } catch (err: any) {
+            if (get().sessionContext !== context) {
+                throw err;
+            }
             const message = err?.message || 'Error al obtener sucursales del usuario.';
             set({ error: message, isLoading: false, hasFetchedUserBranches: true });
             throw err;
@@ -349,9 +364,10 @@ export const useBranchStore = create<BranchState>((set, get) => ({
             const currentAll = get().allBranches.map((b) =>
                 b.id === id ? updated : b
             );
-            const currentAvailable = get().availableBranches.map((b) =>
-                b.id === id ? updated : b
-            );
+            // Inactiva = no asignada: deja de ser elegible como sucursal activa.
+            const currentAvailable = get().availableBranches
+                .map((b) => (b.id === id ? updated : b))
+                .filter((b) => b.active !== false);
 
             let newActive = get().activeBranch;
             if (newActive?.id === id && !updated.active) {
@@ -370,6 +386,13 @@ export const useBranchStore = create<BranchState>((set, get) => ({
                 activeBranch: newActive,
                 isLoading: false,
             });
+
+            // Al reactivarla vuelve a ser elegible solo si el usuario la tiene asignada:
+            // eso lo sabe el backend, así que se releen sus sucursales.
+            const context = get().sessionContext;
+            if (updated.active && context) {
+                get().fetchUserBranches(context.userId, token).catch(() => {});
+            }
         } catch (err: any) {
             const message = err?.message || 'Error al cambiar estado de la sucursal.';
             set({ error: message, isLoading: false });
