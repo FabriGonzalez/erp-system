@@ -1,7 +1,7 @@
 # Plan de las etapas que quedan
 
-Estado al 2026-10-19, rama `feature/branch-access`. Para retomar: pasarle este archivo a Claude y
-elegir la etapa.
+Estado al 2026-10-19, rama `feature/products-attributes`. Para retomar: pasarle este archivo a
+Claude y elegir la etapa (la próxima planificada es la 15).
 
 ## Cómo se trabaja (vale para todas las etapas)
 
@@ -14,6 +14,11 @@ elegir la etapa.
 - Estado del servidor → TanStack Query (`src/hooks/use-*-queries.ts`); estado del cliente → Zustand.
   No mezclar los dos esquemas para la misma entidad.
 - No navegar entre stacks de Expo Router: reutilizar componentes o re-exportar pantallas.
+- React Compiler activo (`app.json`): no llamar en el render funciones del store que lean `get()`
+  (se memorizan y no ven los cambios); derivar del estado seleccionado.
+- Cada stack declara `unstable_settings = { anchor: 'index' }` para que F5 en web no rompa la
+  flecha atrás; un stack nuevo lo tiene que declarar también.
+- Las pruebas de UI las hace el usuario; no automatizar navegador.
 
 ## Hecho
 
@@ -47,6 +52,10 @@ elegir la etapa.
   `BRANCH_INACTIVE`) en pedidos, pagos, envíos, reportes, ajuste, transferencias, movimientos y
   stock de producto; sucursal inactiva = no asignada; botón Desactivar/Activar con confirmación.
   Aparte (f955655): login sin distinguir mayúsculas en el usuario.
+- **Etapa 14 — Productos y atributos** (`feature/products-attributes`, 1833340 y 2622638): el
+  producto trae su stock (una consulta), `GET /product-attributes/values`, nombres de atributo en
+  el detalle. Aparte: c680f4e anclas de navegación (F5 en web), d9a2d74 categoría en la consulta
+  del listado (9 → 4 consultas), de4b3bb detalle de atributo tras F5 (React Compiler).
 
 ---
 
@@ -804,18 +813,106 @@ los nombres del producto en lugar del store (necesita todos los valores para ele
 
 ---
 
+## Etapa 15 — Pedidos a TanStack Query
+
+Plan detallado el 2026-10-19, relevado contra el código.
+
+**Arranque.** Crear `feature/orders-query` desde `feature/products-attributes` (la etapa 14 ya
+está commiteada).
+
+**Decisiones del usuario (2026-10-19).**
+- Al editar un envío, los productos que ya estaban **conservan el precio con que se vendieron**;
+  solo los agregados en la edición toman el precio actual.
+- Listado de Operaciones: badge Pagado / Parcial / Pendiente y saldo, con el dato del backend. Sin
+  filtro por estado de pago.
+- Se descarta la transición CONFIRMED → TO_PREPARE (retiro → envío): se cancela y se crea otro.
+- El importe de la venta rápida no se edita: la venta rápida es siempre retiro (`CONFIRMED`) y solo
+  se editan pedidos `TO_PREPARE`. La rama QUICK_SALE de `OrderServiceImpl.update` no se alcanza
+  (se deja; no es parte de esta etapa).
+
+**Lo que hay hoy.**
+- `stores/order-store.ts` (Zustand) guarda **una sola lista** `orders` + paginación. La usan
+  `operations/index.tsx` (todos, retiros o envíos de la sucursal activa) y
+  `(tabs)/shipments/to-prepare.tsx` (`TO_PREPARE` + `SHIPPING`): cada carga pisa la de la otra, y
+  "por preparar" filtra en memoria para no mostrar pedidos ajenos. El detalle sale de la misma
+  lista (`hooks/use-order-detail.ts` + `fetchOrderById` con `upsertOrder`).
+- Mutaciones en el store: `createOrder` (`orders/new.tsx`, `shipments/new.tsx`), `updateOrder`
+  (`shipments/[id]/edit.tsx`), `cancelOrder`/`dispatchOrder` (`hooks/use-order-actions.ts`, desde
+  `operations/[id].tsx` y `shipments/[id]/index.tsx`). Sincronizan la cuenta del cliente con
+  `invalidateCustomerAccount`. **No refrescan** el stock de `product-store` ni el historial de
+  movimientos, aunque mueven stock.
+- `use-customer-account-queries.refreshAfterPayment` relee con `fetchOrderById` las órdenes que
+  toca un pago, si están en el store.
+- `normalizeOrder` descarta `paymentStatus` y `balance`; `OrderInfoCard` los recalcula con
+  `getPaymentStatus`/`getBalanceDue`. `OrderCard` (listados) no muestra el pago.
+- Filtros sin uso en el store: `searchQuery`, `statusFilter`, `deliveryTypeFilter`,
+  `shipmentsSearchQuery`, `shipmentsStatusFilter` y sus setters (ninguna pantalla los lee).
+- Backend: `buildItemsFromRequest` arma cada ítem con `variant.getPrice()`, también en la edición.
+- `order-draft-store` (borrador de la orden en curso) es estado del cliente: **queda en Zustand**.
+
+### Backend
+
+1. **Precio al editar.** En `OrderServiceImpl.update`, mapa `variantId → unitPrice` de los ítems
+   actuales antes de reemplazarlos; `buildItemsFromRequest` recibe ese mapa (vacío en el alta) y
+   usa el precio guardado si la variante ya estaba, o `variant.getPrice()` si es nueva. El total se
+   recalcula igual que hoy. Cambiar la cantidad de un producto existente mantiene su precio.
+2. **Tests** (Mockito, `-Dtest=!BackendApplicationTests`): editar un envío con una variante cuyo
+   precio cambió conserva el precio viejo; un producto agregado toma el actual; quitar y volver a
+   agregar en la misma edición no aplica (es la misma variante: conserva).
+
+### Frontend
+
+1. **Tipos.** `Order` suma `paymentStatus: PaymentStatus` y `balance: number`; `normalizeOrder` los
+   toma del backend (pedidos sin cliente: `PAID` y 0, como ya calcula el backend).
+2. **`hooks/use-order-queries.ts`:** `orderKeys` (`all`, `lists()`, `list(params)`, `detail(id)`).
+   - `useOrders(params)` con `usePagedList` (tamaño 20, `sort=createdAt,desc`); la clave lleva los
+     filtros, así Operaciones y "por preparar" tienen cachés separadas. Deshabilitada sin token.
+   - `useOrder(id)` con `useQuery`; si la orden está en alguna página cargada, se usa como
+     `placeholderData` para no mostrar un spinner.
+   - Mutaciones `useCreateOrder`, `useUpdateOrder`, `useCancelOrder`, `useDispatchOrder`: sembrar
+     `detail(id)` con la respuesta, invalidar `lists()`, `invalidateCustomerAccount` si tiene
+     cliente, e invalidar movimientos de stock y releer `product-store` si está cargado (sacar de
+     `use-transfer-queries` un `refreshStockAfterChange()` compartido y usarlo en los dos).
+3. **Pantallas:** `operations/index.tsx` y `shipments/to-prepare.tsx` con `useOrders` (se borra el
+   filtro en memoria de "por preparar"); detalles y edición con `useOrder`; `use-order-actions` con
+   las mutaciones (misma interfaz para las pantallas); `orders/new` y `shipments/new` con
+   `useCreateOrder`. El detalle muestra 404/errores como hoy.
+4. **Pagos:** `refreshAfterPayment` invalida `orderKeys.detail` de las órdenes afectadas y
+   `orderKeys.lists()` en lugar de `fetchOrderById`.
+5. **`OrderCard`:** badge Pagado / Parcial / Pendiente (colores de `OrderInfoCard`) y "Saldo $X"
+   si debe. `OrderInfoCard` usa `order.paymentStatus`/`order.balance`; si `getPaymentStatus` y
+   `getBalanceDue` quedan sin uso, se borran.
+6. **Limpieza:** borrar `stores/order-store.ts`, `hooks/use-order-detail.ts` y los filtros sin
+   uso. `clearServerCache()` ya vacía la caché al cambiar de sesión.
+
+### Validación
+
+- Backend: tests unitarios en la copia del scratchpad; QA en 8082 contra `erp_qa`: subir el precio
+  de una variante y editar un envío que la tiene (conserva), agregar otra (precio nuevo).
+- Frontend: `npx tsc --noEmit`, eslint de los archivos tocados, `git diff --check`.
+
+**Pruebas manuales (las hace el usuario).** Operaciones: filtros Todos/Ventas/Envíos, scroll
+infinito, badge de pago y saldo. Envíos por preparar: solo los `TO_PREPARE` de la sucursal activa,
+también después de pasar por Operaciones. Crear venta con y sin cliente, crear envío, editar envío
+(precio conservado, producto nuevo con precio actual), despachar y cancelar (con y sin pagos): el
+listado y el detalle se actualizan sin recargar, y el stock del catálogo también. Registrar un pago
+desde la cuenta del cliente y ver el pedido pasar a Parcial/Pagado. F5 en un detalle de pedido.
+
+**Fuera de alcance.** Filtro por estado de pago; transición retiro → envío; editar ventas
+confirmadas; migrar productos y stock a TanStack.
+
+---
+
 ## Pendientes chicos (sin orden; sumar a la etapa afín)
 
 - Redirección inicial inconsistente: `index.tsx` y `login.tsx` van a `/orders`, `_layout.tsx:45` a
   `/shipments`.
 - `customers/[id]/debts.tsx` solo se abre desde `debtors.tsx`; evaluar acceso desde el detalle del cliente.
-- Pedidos: `normalizeOrder` descarta `paymentStatus` y `balance` (útiles en el listado); `quickSaleAmount`
-  no se puede editar; no hay transición CONFIRMED → TO_PREPARE en el backend.
 - Limpieza: `FRONTEND_DOCS.md` desactualizado (describe dashboard y login mock); clave huérfana
   `@erp/active-branch-id` en AsyncStorage; funciones sin uso (`getBranchById`, `getCategoryById`,
   `getStockById`, `getStocksByVariant`); "Mi Perfil" sin acción en `more.tsx`.
-- Migrar los demás módulos a TanStack Query, de a uno y con decisión explícita (pedidos primero).
-- Precio al editar un pedido: los ítems toman el precio actual de la variante. Confirmar si es lo deseado.
+- Migrar los demás módulos a TanStack Query, de a uno y con decisión explícita (pedidos en la
+  etapa 15; después productos/atributos, categorías, sucursales, stock).
 - Permiso que el backend nunca chequea: `ADMINISTRAR_PRECIOS` (`ACCEDER_TODAS_SUCURSALES` toma
   sentido en la etapa 12: autoasignación a sucursales nuevas).
 - `BackendApplicationTests` (test de contexto) falla desde 2026-10-06; los unitarios se corren con
