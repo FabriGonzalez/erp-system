@@ -1,7 +1,7 @@
 # Plan de las etapas que quedan
 
-Estado al 2026-10-19, rama `feature/error-handling`. Para retomar: pasarle este archivo a Claude y
-elegir la etapa.
+Estado al 2026-10-19, rama `feature/reports`. Para retomar: pasarle este archivo a Claude y
+elegir la etapa (la próxima planificada es la 13).
 
 ## Cómo se trabaja (vale para todas las etapas)
 
@@ -38,6 +38,10 @@ elegir la etapa.
   errores de negocio, handlers para los errores de Spring MVC (400/404/405/415 en vez de 500),
   catch-all que loguea sin exponer el detalle; en el frontend `api-error.ts` (`ApiError`,
   `toApiError`, `NETWORK_ERROR`) y los 15 servicios migrados a un solo patrón.
+- **Etapa 12 — Dashboard / reportes** (`feature/reports`, b61995b y 90e99cb):
+  `GET /reports/dashboard` (ventas con comparación y por sucursal, cobranzas, deuda, más vendidos,
+  pedidos por despachar, stock bajo) sobre las sucursales asignadas; pantalla Reportes en Más.
+  Alta de sucursal asigna al creador y a los usuarios con `ACCEDER_TODAS_SUCURSALES`.
 
 ---
 
@@ -592,6 +596,124 @@ sucursal; chequear la asignación en stock y transferencias (hoy no la chequean,
 
 ---
 
+## Etapa 13 — Asignaciones en stock y transferencias; sucursales inactivas
+
+Plan detallado el 2026-10-19, relevado contra el código.
+
+**Arranque.** Crear `feature/branch-access` desde `feature/reports` (la etapa 12 ya está commiteada).
+
+**Objetivo.** Completar la regla de la etapa 12 (*mandan las asignaciones*) en lo que todavía no la
+cumple —stock, transferencias, movimientos, stock de productos— y que una sucursal inactiva cuente
+como no asignada en todos lados.
+
+**Decisiones del usuario (2026-10-19).**
+- **Escrituras** de stock: ajustar y transferir exigen tener asignada la sucursal (en la
+  transferencia, el origen). El destino puede ser cualquier sucursal activa de la empresa.
+- **Anular una transferencia**: alcanza con `TRANSFERIR_STOCK` (ya es lo que pide hoy); no se
+  chequea asignación. No se crea permiso nuevo.
+- **Lecturas**: las cantidades de stock siguen siendo de toda la empresa (sirve para saber si otra
+  sucursal tiene un producto antes de pedir una transferencia). Movimientos y transferencias, solo
+  de las sucursales accesibles: una transferencia se ve si el origen **o** el destino lo es.
+- **Producto**: el alta y la edición solo pueden cambiar el stock de sucursales accesibles. Se
+  chequea solo donde la cantidad cambia (la edición reenvía todas las sucursales con su valor).
+- **Inactiva = no asignada**: desactivar una sucursal no borra sus asignaciones, así que el chequeo
+  común exige asignada **y** activa. "Es como si estuviera eliminada, pero se puede reactivar": al
+  reactivarla todo vuelve como estaba.
+
+**Lo que hay hoy.**
+- Chequean la asignación (sin mirar `active`): `OrderServiceImpl` (`validateBranchAccess`, listado y
+  detalle con `isUserAssignedToBranch`), `PaymentServiceImpl` (alta y anulación),
+  `ShipmentServiceImpl.findOrderOrThrow` y `ReportServiceImpl.resolveBranchIds`. Cada uno con su
+  propia copia y `AccessDeniedException` → 403 `FORBIDDEN`.
+- No la chequean: `StockServiceImpl.adjustStock` (solo `AJUSTAR_STOCK` y empresa),
+  `StockTransferServiceImpl.create` (solo empresa; origen y destino pueden estar inactivos), el
+  listado y el detalle de transferencias (`findAllByCompanyId`), `StockMovementServiceImpl` (filtra
+  por `branchId` opcional de toda la empresa), `ProductServiceImpl.createInitialStock` y
+  `updateVariantStock`.
+- Ninguna operación mira `Branch.active`. Solo el frontend oculta las inactivas
+  (`hydrateActiveBranch` filtra `active !== false`; `transfers/new.tsx` también en el destino).
+  `availableBranches` (de `GET /users/{id}/branches`) puede traer inactivas: el selector de
+  sucursal de Reportes las mostraría.
+- Frontend: `errorMessageFor` da prioridad al 403 de cada servicio sobre los codes comunes, así que
+  un code nuevo hay que sumarlo en el `byCode` de cada servicio afectado.
+
+### Backend
+
+1. **Un solo chequeo** `BranchAccessService` (componente en `modules/branches/service`):
+   - `List<Long> accessibleBranchIds()`: asignadas al usuario actual, de su empresa y activas
+     (consulta nueva en `UserBranchRepository` con `JOIN ub.branch b WHERE b.active = true`).
+   - `Branch requireAccessible(Long branchId)`: 404 si no es de la empresa; si no está asignada o
+     está inactiva → `BranchAccessDeniedException`, 403 `BRANCH_ACCESS_DENIED` (handler propio).
+   - `Branch requireActive(Long branchId)`: para el destino de una transferencia (sin asignación):
+     404 si no es de la empresa, inactiva → `BranchInactiveException`, 409 `BRANCH_INACTIVE`.
+   - `boolean isAccessible(Long branchId)` para los filtros de detalle.
+2. **Reemplazar las copias** en pedidos, pagos, envíos y reportes por el servicio (mismo
+   comportamiento + el chequeo de `active`; el 403 pasa de `FORBIDDEN` a `BRANCH_ACCESS_DENIED`).
+   Consecuencia de "inactiva = no asignada": los pedidos de una sucursal inactiva dejan de verse en
+   Pedidos/Envíos/Reportes y no se pueden editar, cancelar ni cobrar hasta reactivarla. La deuda de
+   Cuentas corrientes sigue siendo de toda la empresa (no cambia). Confirmado por el usuario
+   (2026-10-19).
+3. **Stock**: `adjustStock` → `requireAccessible(branchId)`. Las lecturas de `StockController` no
+   cambian.
+4. **Transferencias**:
+   - `create`: `requireAccessible(origin)` y `requireActive(destination)`.
+   - `cancel`: sin cambios (solo `TRANSFERIR_STOCK`).
+   - Listado: `findAllByAccessibleBranches(companyId, branchIds, pageable)` —
+     `origin.id IN :ids OR destination.id IN :ids`—, misma `@EntityGraph` y carga de ítems; sin
+     sucursales accesibles → página vacía sin consultar. Detalle: 404 si ninguna punta es
+     accesible. Queda la asimetría aceptada: por la API se puede anular una transferencia que no
+     se ve (en la app no se llega).
+5. **Movimientos**: `search` recibe la lista de accesibles (`s.branch.id IN :branchIds`); `branchId`
+   o `stockId` de una sucursal no accesible → 403 `BRANCH_ACCESS_DENIED` (de otra empresa sigue 404).
+   `GET /{id}` igual.
+6. **Producto**: en `createInitialStock` (cantidad > 0) y `updateVariantStock` (cantidad distinta
+   de la anterior) → `requireAccessible(branchId)`. Una sucursal con cantidad 0 en el alta, o igual
+   a la actual en la edición, no se chequea.
+7. **Tests unitarios** (Mockito, `-Dtest=!BackendApplicationTests`): `BranchAccessService` (no
+   asignada, inactiva, otra empresa, accesible); ajuste en sucursal no asignada; transferencia con
+   origen no asignado, origen inactivo y destino inactivo; listado de transferencias filtrado;
+   movimientos con `branchId` no accesible; edición de producto que cambia el stock de una sucursal
+   no asignada (403) y que la reenvía igual (ok). Ajustar los tests existentes de pedidos, pagos y
+   reportes que mockean `userBranchRepository`.
+
+### Frontend
+
+1. **Mensajes**: `BRANCH_ACCESS_DENIED` → "No tenés asignada esta sucursal o está inactiva." y
+   `BRANCH_INACTIVE` → "La sucursal de destino está inactiva." en el `byCode` de los servicios
+   afectados (`stock`, `transfer`, `order`, `payment`, `shipment`, `report`, `stock-movement`,
+   `product`).
+2. **Sucursales inactivas fuera de la UI**: `availableBranches` excluye las inactivas al cargarse
+   (`fetchUserBranches`), así no aparecen en el selector de sucursal activa ni en el de Reportes.
+   Revisar que `branches/index.tsx` (que usa `availableBranches` para `canSelect`) siga bien.
+3. **Sucursal activa desactivada o desasignada en plena sesión**: el backend ya la rechaza. Hoy
+   `(app)/_layout.tsx` llama a `fetchUserBranches` una sola vez; sumarlo al listener de `AppState`
+   que ya llama a `refreshUser()` al volver al frente, respetando `sessionContext` y la versión de
+   la sucursal activa (una respuesta vieja no pisa una selección nueva). Verificar que, si la activa
+   ya no está entre las accesibles, se limpie (`activeBranch` y AsyncStorage). No agregar timers.
+4. Sin pantallas nuevas. El listado de transferencias muestra lo que devuelva el backend.
+
+### Validación
+
+- Backend: tests unitarios; instancia QA en 8082 contra `erp_qa` (avisar antes: compilar reinicia
+  el backend de IntelliJ). Con un usuario asignado a una sola sucursal, curl de: ajuste en otra
+  (403), transferencia desde otra (403), hacia una inactiva (409), listado de transferencias y
+  movimientos filtrados, anulación de una transferencia ajena con `TRANSFERIR_STOCK` (200). Desactivar
+  una sucursal asignada: pedidos, ajuste y reportes la tratan como no asignada; reactivarla vuelve
+  todo.
+- Frontend: `npx tsc --noEmit`, eslint de los archivos tocados, `git diff --check`.
+
+**Pruebas manuales.** Empleado con una sola sucursal: ajusta y transfiere desde la suya; solo ve
+transferencias donde participa su sucursal; el historial de stock sigue andando. Admin: desactivar
+una sucursal → desaparece del selector de sucursal activa y de Reportes; vender en ella da el mensaje
+de sucursal inactiva; reactivarla → vuelve. Editar un producto cambiando solo el stock de la sucursal
+activa (ok) con el usuario desasignado de otra sucursal que tiene stock (no debe dar 403). Alta y
+edición de pedido, cobro y despacho siguen funcionando.
+
+**Fuera de alcance.** Borrar asignaciones al desactivar; flujo de transferencia en dos pasos;
+restringir las lecturas de stock por sucursal.
+
+---
+
 ## Pendientes chicos (sin orden; sumar a la etapa afín)
 
 - **Bug:** `products/[id]/index.tsx:32,142` lee `attributeValues` del store sin cargarlos; si no se
@@ -611,7 +733,5 @@ sucursal; chequear la asignación en stock y transferencias (hoy no la chequean,
 - Precio al editar un pedido: los ítems toman el precio actual de la variante. Confirmar si es lo deseado.
 - Permiso que el backend nunca chequea: `ADMINISTRAR_PRECIOS` (`ACCEDER_TODAS_SUCURSALES` toma
   sentido en la etapa 12: autoasignación a sucursales nuevas).
-- Transferencias: el backend no valida que el usuario esté asignado a la sucursal de origen ni que
-  origen/destino estén activas.
 - `BackendApplicationTests` (test de contexto) falla desde 2026-10-06; los unitarios se corren con
   `-Dtest=!BackendApplicationTests`.
