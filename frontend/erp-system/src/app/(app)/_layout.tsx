@@ -8,6 +8,10 @@ import { Colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
 
+// Al recargar (F5) o entrar por link a una pantalla fuera de las pestañas, las pestañas quedan
+// debajo: la flecha vuelve a ellas en lugar de quedar sin historial.
+export const unstable_settings = { anchor: '(tabs)' };
+
 export default function AppLayout() {
     const { user, token } = useAuthStore();
     const { fetchUserBranches, hasFetchedUserBranches } = useBranchStore();
