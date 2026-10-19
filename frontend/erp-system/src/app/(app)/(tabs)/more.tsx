@@ -32,6 +32,7 @@ export default function MoreScreen() {
     const canSeeDebtors = hasAnyPermission(user, DEBTORS_READ_PERMISSIONS);
     const canSeeOrders = hasAnyPermission(user, ORDER_READ_PERMISSIONS);
     const canSeeTransfers = hasAnyPermission(user, TRANSFER_READ_PERMISSIONS);
+    const canSeeReports = hasPermission(user, 'VER_REPORTES');
     const canManageAttributes = hasPermission(user, 'ADMINISTRAR_PRODUCTOS');
     const canManageUsers = hasPermission(user, 'ADMINISTRAR_USUARIOS');
     // La pantalla de sucursales también asigna usuarios.
@@ -122,13 +123,14 @@ export default function MoreScreen() {
                             onPress={() => router.push('/transfers' as any)}
                         />
                     )}
-                    <MenuListItem
-                        title="Analytics"
-                        subtitle="Próximamente"
-                        iconName={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
-                        onPress={() => { }}
-                        showChevron={false}
-                    />
+                    {canSeeReports && (
+                        <MenuListItem
+                            title="Reportes"
+                            subtitle="Ventas, cobranzas, más vendidos y stock bajo"
+                            iconName={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
+                            onPress={() => router.push('/reports' as any)}
+                        />
+                    )}
                 </View>
 
                 {/* Sección Administración: cada ítem según su permiso */}

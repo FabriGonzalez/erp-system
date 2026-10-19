@@ -22,7 +22,7 @@ export const PERMISSION_INFO: Record<Permission, PermissionInfo> = {
     TRANSFERIR_STOCK: { label: 'Transferir stock entre sucursales' },
     ADMINISTRAR_USUARIOS: { label: 'Administrar usuarios y roles' },
     ADMINISTRAR_SUCURSALES: { label: 'Administrar sucursales' },
-    ACCEDER_TODAS_SUCURSALES: { label: 'Acceder a todas las sucursales', hint: 'Todavía sin efecto en la app.' },
+    ACCEDER_TODAS_SUCURSALES: { label: 'Acceder a todas las sucursales', hint: 'Se asigna automáticamente a cada sucursal nueva.' },
     VER_REPORTES: { label: 'Ver reportes y deudores' },
 };
 

@@ -285,11 +285,19 @@ export const useBranchStore = create<BranchState>((set, get) => ({
 
     createBranch: async (data, token) => {
         set({ isLoading: true, error: null });
+        const context = get().sessionContext;
         try {
             const newBranch = await createBranch(data, token);
             const currentAll = get().allBranches;
+            // El backend asigna la sucursal nueva a quien la crea: ya es elegible como activa.
+            // Si mientras tanto cambió la sesión, la lista es de otro usuario y no se toca.
+            const sameSession = get().sessionContext === context;
+            const currentAvailable = get().availableBranches;
             set({
                 allBranches: [...currentAll, newBranch],
+                ...(sameSession && !currentAvailable.some((b) => b.id === newBranch.id)
+                    ? { availableBranches: [...currentAvailable, newBranch] }
+                    : {}),
                 isLoading: false,
             });
             return newBranch;
