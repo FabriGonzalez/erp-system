@@ -3,6 +3,7 @@ package com.gonzalez.erp.modules.inventory.service;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.inventory.dto.request.StockAdjustRequest;
 import com.gonzalez.erp.modules.inventory.dto.response.StockResponse;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
@@ -29,6 +30,7 @@ public class StockServiceImpl implements StockService {
     private final StockMovementRecorder stockMovementRecorder;
     private final ProductVariantRepository productVariantRepository;
     private final BranchRepository branchRepository;
+    private final BranchAccessService branchAccessService;
 
     @Override
     public List<StockResponse> findAll() {
@@ -84,7 +86,12 @@ public class StockServiceImpl implements StockService {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
         ProductVariant variant = validateProductVariantBelongsToCurrentCompany(productVariantId);
-        validateBranchBelongsToCurrentCompany(branchId);
+        // Un stock inicial en 0 no cambia nada: solo se exige acceso a la sucursal si carga cantidad.
+        if (quantity > 0) {
+            branchAccessService.requireAccessible(branchId);
+        } else {
+            validateBranchBelongsToCurrentCompany(branchId);
+        }
 
         int inserted = stockRepository.insertIfAbsent(
                 productVariantId,
@@ -126,7 +133,7 @@ public class StockServiceImpl implements StockService {
 
         Long companyId = SecurityUtils.requireCurrentCompanyId();
         validateProductVariantBelongsToCurrentCompany(request.productVariantId());
-        validateBranchBelongsToCurrentCompany(request.branchId());
+        branchAccessService.requireAccessible(request.branchId());
 
         stockRepository.insertIfAbsent(
                 request.productVariantId(),

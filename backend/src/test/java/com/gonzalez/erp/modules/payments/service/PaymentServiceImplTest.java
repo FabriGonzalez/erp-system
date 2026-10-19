@@ -2,7 +2,6 @@ package com.gonzalez.erp.modules.payments.service;
 
 import com.gonzalez.erp.config.security.CustomUserDetails;
 import com.gonzalez.erp.modules.branches.entity.Branch;
-import com.gonzalez.erp.modules.branches.repository.BranchRepository;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.customers.entity.Customer;
 import com.gonzalez.erp.modules.customers.entity.TransactionType;
@@ -20,7 +19,7 @@ import com.gonzalez.erp.modules.payments.entity.PaymentStatus;
 import com.gonzalez.erp.modules.payments.repository.PaymentAllocationRepository;
 import com.gonzalez.erp.modules.payments.repository.PaymentRepository;
 import com.gonzalez.erp.modules.users.entity.User;
-import com.gonzalez.erp.modules.users.repository.UserBranchRepository;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,8 +57,7 @@ class PaymentServiceImplTest {
     @Mock private PaymentAllocationRepository paymentAllocationRepository;
     @Mock private OrderRepository orderRepository;
     @Mock private CustomerRepository customerRepository;
-    @Mock private BranchRepository branchRepository;
-    @Mock private UserBranchRepository userBranchRepository;
+    @Mock private BranchAccessService branchAccessService;
     @Mock private UserRepository userRepository;
     @Mock private CustomerAccountService customerAccountService;
 
@@ -145,7 +143,6 @@ class PaymentServiceImplTest {
         when(paymentRepository.findByIdAndCompanyIdForUpdate(PAYMENT_ID, COMPANY_ID))
                 .thenReturn(Optional.of(payment));
         when(userRepository.getReferenceById(USER_ID)).thenReturn(user);
-        when(userBranchRepository.existsByUserIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(true);
         when(paymentRepository.save(payment)).thenReturn(payment);
 
         PaymentResponse response = paymentService.cancelPayment(PAYMENT_ID);
@@ -161,8 +158,7 @@ class PaymentServiceImplTest {
     }
 
     private void stubCreate(List<Order> candidates) {
-        when(branchRepository.findByIdAndCompanyId(BRANCH_ID, COMPANY_ID)).thenReturn(Optional.of(branch));
-        when(userBranchRepository.existsByUserIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(true);
+        when(branchAccessService.requireAccessible(BRANCH_ID)).thenReturn(branch);
         when(customerRepository.findByIdAndCompanyId(CUSTOMER_ID, COMPANY_ID)).thenReturn(Optional.of(customer));
         when(userRepository.getReferenceById(USER_ID)).thenReturn(user);
         when(orderRepository.findCandidateOrdersForUpdate(CUSTOMER_ID, COMPANY_ID)).thenReturn(candidates);

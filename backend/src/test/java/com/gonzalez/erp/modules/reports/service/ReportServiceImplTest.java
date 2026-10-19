@@ -3,7 +3,8 @@ package com.gonzalez.erp.modules.reports.service;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.CustomUserDetails;
 import com.gonzalez.erp.modules.branches.entity.Branch;
-import com.gonzalez.erp.modules.branches.repository.BranchRepository;
+import com.gonzalez.erp.modules.branches.exception.BranchAccessDeniedException;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.customers.dto.response.CustomerDebtSummaryResponse;
 import com.gonzalez.erp.modules.customers.service.CustomerBalanceService;
@@ -15,8 +16,6 @@ import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse;
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.MethodTotal;
 import com.gonzalez.erp.modules.reports.exception.InvalidReportRangeException;
 import com.gonzalez.erp.modules.users.entity.User;
-import com.gonzalez.erp.modules.users.entity.UserBranch;
-import com.gonzalez.erp.modules.users.repository.UserBranchRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,7 +32,6 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -59,8 +57,7 @@ class ReportServiceImplTest {
     @Mock private OrderRepository orderRepository;
     @Mock private PaymentRepository paymentRepository;
     @Mock private StockRepository stockRepository;
-    @Mock private BranchRepository branchRepository;
-    @Mock private UserBranchRepository userBranchRepository;
+    @Mock private BranchAccessService branchAccessService;
     @Mock private CustomerBalanceService customerBalanceService;
 
     @InjectMocks private ReportServiceImpl reportService;
@@ -120,8 +117,7 @@ class ReportServiceImplTest {
 
     @Test
     void branchNotAssignedToTheUserIsForbidden() {
-        when(userBranchRepository.findByUserId(USER_ID)).thenReturn(List.of(assignment(centro)));
-        when(branchRepository.findByIdAndCompanyId(NORTE_ID, COMPANY_ID)).thenReturn(Optional.of(norte));
+        when(branchAccessService.requireAccessible(NORTE_ID)).thenThrow(new BranchAccessDeniedException(NORTE_ID));
 
         assertThatThrownBy(() -> reportService.getDashboard(FROM, TO, null, NORTE_ID, 5))
                 .isInstanceOf(AccessDeniedException.class);
@@ -130,8 +126,7 @@ class ReportServiceImplTest {
 
     @Test
     void branchOfAnotherCompanyIsNotFound() {
-        when(userBranchRepository.findByUserId(USER_ID)).thenReturn(List.of(assignment(centro)));
-        when(branchRepository.findByIdAndCompanyId(99L, COMPANY_ID)).thenReturn(Optional.empty());
+        when(branchAccessService.requireAccessible(99L)).thenThrow(new ResourceNotFoundException("Branch not found"));
 
         assertThatThrownBy(() -> reportService.getDashboard(FROM, TO, null, 99L, 5))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -139,7 +134,7 @@ class ReportServiceImplTest {
 
     @Test
     void userWithoutBranchesGetsZerosWithoutQuerying() {
-        when(userBranchRepository.findByUserId(USER_ID)).thenReturn(List.of());
+        when(branchAccessService.accessibleBranchIds()).thenReturn(List.of());
         when(customerBalanceService.getDebtSummary(COMPANY_ID))
                 .thenReturn(new CustomerDebtSummaryResponse(new BigDecimal("1500"), 2));
 
@@ -156,8 +151,7 @@ class ReportServiceImplTest {
     @Test
     void allBranchesAreSummedAndComparedWithThePreviousPeriodOfTheSameLength() {
         List<Long> branchIds = List.of(CENTRO_ID, NORTE_ID);
-        when(userBranchRepository.findByUserId(USER_ID))
-                .thenReturn(List.of(assignment(centro), assignment(norte)));
+        when(branchAccessService.accessibleBranchIds()).thenReturn(branchIds);
         when(customerBalanceService.getDebtSummary(COMPANY_ID))
                 .thenReturn(new CustomerDebtSummaryResponse(BigDecimal.ZERO, 0));
         when(orderRepository.sumSalesByBranch(COMPANY_ID, branchIds, FROM, TO)).thenReturn(List.of(
@@ -198,9 +192,7 @@ class ReportServiceImplTest {
 
     @Test
     void oneBranchOnlyQueriesThatBranch() {
-        when(userBranchRepository.findByUserId(USER_ID))
-                .thenReturn(List.of(assignment(centro), assignment(norte)));
-        when(branchRepository.findByIdAndCompanyId(NORTE_ID, COMPANY_ID)).thenReturn(Optional.of(norte));
+        when(branchAccessService.requireAccessible(NORTE_ID)).thenReturn(norte);
         when(customerBalanceService.getDebtSummary(COMPANY_ID))
                 .thenReturn(new CustomerDebtSummaryResponse(BigDecimal.ZERO, 0));
         when(orderRepository.summarizeOrdersToPrepare(COMPANY_ID, List.of(NORTE_ID)))
@@ -220,7 +212,7 @@ class ReportServiceImplTest {
         // Hoy hasta las 15 h contra ayer hasta las 15 h, no contra las 15 horas antes de la medianoche.
         Instant to = Instant.parse("2026-10-19T18:00:00Z");
         Instant previousTo = Instant.parse("2026-10-18T18:00:00Z");
-        when(userBranchRepository.findByUserId(USER_ID)).thenReturn(List.of(assignment(centro)));
+        when(branchAccessService.accessibleBranchIds()).thenReturn(List.of(CENTRO_ID));
         when(customerBalanceService.getDebtSummary(COMPANY_ID))
                 .thenReturn(new CustomerDebtSummaryResponse(BigDecimal.ZERO, 0));
         when(orderRepository.summarizeOrdersToPrepare(COMPANY_ID, List.of(CENTRO_ID)))
@@ -247,9 +239,5 @@ class ReportServiceImplTest {
         Branch branch = Branch.builder().name(name).company(company).build();
         branch.setId(id);
         return branch;
-    }
-
-    private UserBranch assignment(Branch branch) {
-        return UserBranch.builder().user(user).branch(branch).build();
     }
 }

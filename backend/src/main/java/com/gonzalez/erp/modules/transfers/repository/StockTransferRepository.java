@@ -10,16 +10,27 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.Optional;
 
 public interface StockTransferRepository extends JpaRepository<StockTransfer, Long> {
 
     // Las relaciones a uno se traen en la misma consulta; los ítems, aparte y por página.
+    // Una transferencia se ve si el origen o el destino es una sucursal accesible.
     @EntityGraph(attributePaths = {"originBranch", "destinationBranch", "createdBy"})
-    @Query(value = "SELECT t FROM StockTransfer t WHERE t.company.id = :companyId",
-        countQuery = "SELECT COUNT(t) FROM StockTransfer t WHERE t.company.id = :companyId")
-    Page<StockTransfer> findAllByCompanyId(
+    @Query(value = """
+            SELECT t FROM StockTransfer t
+            WHERE t.company.id = :companyId
+            AND (t.originBranch.id IN :branchIds OR t.destinationBranch.id IN :branchIds)
+            """,
+        countQuery = """
+            SELECT COUNT(t) FROM StockTransfer t
+            WHERE t.company.id = :companyId
+            AND (t.originBranch.id IN :branchIds OR t.destinationBranch.id IN :branchIds)
+            """)
+    Page<StockTransfer> findAllByCompanyIdAndBranchIds(
         @Param("companyId") Long companyId,
+        @Param("branchIds") Collection<Long> branchIds,
         Pageable pageable
     );
 

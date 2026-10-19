@@ -2,7 +2,9 @@ package com.gonzalez.erp.modules.inventory.service;
 
 import com.gonzalez.erp.config.security.CustomUserDetails;
 import com.gonzalez.erp.modules.branches.entity.Branch;
+import com.gonzalez.erp.modules.branches.exception.BranchAccessDeniedException;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.inventory.dto.request.StockAdjustRequest;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
@@ -27,6 +29,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import java.util.EnumSet;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
@@ -45,6 +48,7 @@ class StockServiceImplTest {
     @Mock private StockMovementRecorder stockMovementRecorder;
     @Mock private ProductVariantRepository productVariantRepository;
     @Mock private BranchRepository branchRepository;
+    @Mock private BranchAccessService branchAccessService;
 
     @InjectMocks private StockServiceImpl stockService;
 
@@ -81,7 +85,6 @@ class StockServiceImplTest {
                 new UsernamePasswordAuthenticationToken(details, null, details.getAuthorities()));
 
         when(productVariantRepository.findById(VARIANT_ID)).thenReturn(Optional.of(variant));
-        when(branchRepository.findById(BRANCH_ID)).thenReturn(Optional.of(branch));
     }
 
     @AfterEach
@@ -115,6 +118,7 @@ class StockServiceImplTest {
 
     @Test
     void initialStockOfZeroIsNotAMovement() {
+        when(branchRepository.findById(BRANCH_ID)).thenReturn(Optional.of(branch));
         when(stockRepository.insertIfAbsent(VARIANT_ID, BRANCH_ID, COMPANY_ID)).thenReturn(1);
         when(stockRepository.findByProductVariantIdAndBranchIdForUpdate(VARIANT_ID, BRANCH_ID, COMPANY_ID))
                 .thenReturn(Optional.of(stock(0)));
@@ -122,6 +126,26 @@ class StockServiceImplTest {
         stockService.createInitialStock(VARIANT_ID, BRANCH_ID, 0);
 
         verify(stockMovementRecorder, never()).record(any(), any(), anyInt(), anyInt(), any(), any(), any());
+        // Un stock en 0 no cambia nada: no exige tener la sucursal asignada.
+        verify(branchAccessService, never()).requireAccessible(BRANCH_ID);
+    }
+
+    @Test
+    void adjustInABranchTheUserCannotAccessIsForbidden() {
+        when(branchAccessService.requireAccessible(BRANCH_ID)).thenThrow(new BranchAccessDeniedException(BRANCH_ID));
+
+        assertThatThrownBy(() -> stockService.adjustStock(new StockAdjustRequest(VARIANT_ID, BRANCH_ID, 5, "Rotura")))
+                .isInstanceOf(BranchAccessDeniedException.class);
+        verify(stockRepository, never()).save(any());
+    }
+
+    @Test
+    void initialStockInABranchTheUserCannotAccessIsForbidden() {
+        when(branchAccessService.requireAccessible(BRANCH_ID)).thenThrow(new BranchAccessDeniedException(BRANCH_ID));
+
+        assertThatThrownBy(() -> stockService.createInitialStock(VARIANT_ID, BRANCH_ID, 6))
+                .isInstanceOf(BranchAccessDeniedException.class);
+        verify(stockRepository, never()).insertIfAbsent(any(), any(), any());
     }
 
     private Stock stock(int quantity) {

@@ -6,6 +6,7 @@ import com.gonzalez.erp.modules.categories.entity.Category;
 import com.gonzalez.erp.modules.categories.repository.CategoryRepository;
 import com.gonzalez.erp.modules.branches.entity.Branch;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
@@ -50,6 +51,7 @@ public class ProductServiceImpl implements ProductService {
     private final ProductAttributeValueRepository attributeValueRepository;
     private final CategoryRepository categoryRepository;
     private final BranchRepository branchRepository;
+    private final BranchAccessService branchAccessService;
     private final CompanyRepository companyRepository;
     private final StockRepository stockRepository;
     private final StockService stockService;
@@ -463,6 +465,10 @@ public class ProductServiceImpl implements ProductService {
                     ));
 
             int previousQuantity = stock.getQuantity();
+            // La edición reenvía todas las sucursales: solo se exige acceso donde la cantidad cambia.
+            if (previousQuantity != request.quantity()) {
+                branchAccessService.requireAccessible(branch);
+            }
             stock.setQuantity(request.quantity());
             stockRepository.save(stock);
 

@@ -4,6 +4,7 @@ import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.customers.entity.Address;
@@ -46,13 +47,11 @@ import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
 import com.gonzalez.erp.modules.shipments.entity.Shipment;
 import com.gonzalez.erp.modules.shipments.repository.ShipmentRepository;
-import com.gonzalez.erp.modules.users.repository.UserBranchRepository;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import com.gonzalez.erp.modules.orders.entity.PaymentStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -87,7 +86,7 @@ public class OrderServiceImpl implements OrderService {
     private final CustomerAccountService customerAccountService;
     private final PaymentAllocationRepository paymentAllocationRepository;
     private final UserRepository userRepository;
-    private final UserBranchRepository userBranchRepository;
+    private final BranchAccessService branchAccessService;
     private final CompanyRepository companyRepository;
     private final OrderPaymentService orderPaymentService;
     private final AddressRepository addressRepository;
@@ -98,11 +97,8 @@ public class OrderServiceImpl implements OrderService {
                                                DeliveryType deliveryType, Long customerId,
                                                PaymentStatus paymentStatus, String query, Pageable pageable) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
-        Long userId = SecurityUtils.getCurrentUserId();
 
-        List<Long> accessibleBranchIds = userBranchRepository.findByUserId(userId).stream()
-                .map(ub -> ub.getBranch().getId())
-                .toList();
+        List<Long> accessibleBranchIds = branchAccessService.accessibleBranchIds();
 
         if (accessibleBranchIds.isEmpty()) {
             return new PageResponse<>(List.of(), pageable.getPageNumber(), pageable.getPageSize(), 0, 0);
@@ -145,7 +141,7 @@ public class OrderServiceImpl implements OrderService {
         Long userId = SecurityUtils.getCurrentUserId();
         Company company = companyRepository.getReferenceById(companyId);
 
-        validateBranchAccess(request.branchId());
+        branchAccessService.requireAccessible(request.branchId());
         validateSalesType(request.salesType(), request.deliveryType(), request.items(),
                 request.customerId(), request.quickSaleAmount());
         validatePaymentOptions(request);
@@ -286,10 +282,9 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public OrderResponse update(Long id, OrderUpdateRequest request) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
-        Long userId = SecurityUtils.getCurrentUserId();
 
         Order order = orderRepository.findByIdAndCompanyIdForUpdate(id, companyId)
-                .filter(o -> o.getBranch() != null && isUserAssignedToBranch(userId, o.getBranch().getId()))
+                .filter(o -> branchAccessService.isAccessible(o.getBranch()))
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
 
         if (!order.isEditable()) {
@@ -441,11 +436,9 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public OrderResponse dispatch(Long id) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
-        Long userId = SecurityUtils.getCurrentUserId();
 
         Order order = orderRepository.findByIdAndCompanyIdForUpdate(id, companyId)
-                .filter(o -> o.getBranch() != null
-                        && isUserAssignedToBranch(userId, o.getBranch().getId()))
+                .filter(o -> branchAccessService.isAccessible(o.getBranch()))
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Order not found with id: " + id));
 
@@ -468,10 +461,9 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public OrderResponse cancel(Long id, OrderCancelRequest request) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
-        Long userId = SecurityUtils.getCurrentUserId();
 
         Order order = orderRepository.findByIdAndCompanyIdForUpdate(id, companyId)
-                .filter(o -> o.getBranch() != null && isUserAssignedToBranch(userId, o.getBranch().getId()))
+                .filter(o -> branchAccessService.isAccessible(o.getBranch()))
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
 
         if (!order.canCancel()) {
@@ -558,11 +550,9 @@ public class OrderServiceImpl implements OrderService {
 
     private Order findOrderAndValidateAccess(Long id) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
-        Long userId = SecurityUtils.getCurrentUserId();
 
         return orderRepository.findByIdAndCompanyId(id, companyId)
-                .filter(order -> order.getBranch() != null
-                        && isUserAssignedToBranch(userId, order.getBranch().getId()))
+                .filter(order -> branchAccessService.isAccessible(order.getBranch()))
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
     }
 
@@ -601,23 +591,6 @@ public class OrderServiceImpl implements OrderService {
                 paymentStatus,
                 balance
         );
-    }
-
-    private void validateBranchAccess(Long branchId) {
-        Long companyId = SecurityUtils.requireCurrentCompanyId();
-        Long userId = SecurityUtils.getCurrentUserId();
-
-        branchRepository.findByIdAndCompanyId(branchId, companyId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Branch not found with id: " + branchId + " in the current company"));
-
-        if (!isUserAssignedToBranch(userId, branchId)) {
-            throw new AccessDeniedException("User is not assigned to branch: " + branchId);
-        }
-    }
-
-    private boolean isUserAssignedToBranch(Long userId, Long branchId) {
-        return userBranchRepository.existsByUserIdAndBranchId(userId, branchId);
     }
 
     private Customer resolveCustomerOrNull(Long customerId, Long companyId) {

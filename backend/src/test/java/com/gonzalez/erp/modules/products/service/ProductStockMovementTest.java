@@ -2,7 +2,9 @@ package com.gonzalez.erp.modules.products.service;
 
 import com.gonzalez.erp.config.security.CustomUserDetails;
 import com.gonzalez.erp.modules.branches.entity.Branch;
+import com.gonzalez.erp.modules.branches.exception.BranchAccessDeniedException;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.categories.entity.Category;
 import com.gonzalez.erp.modules.categories.repository.CategoryRepository;
 import com.gonzalez.erp.modules.companies.entity.Company;
@@ -41,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -61,6 +64,7 @@ class ProductStockMovementTest {
     @Mock private ProductAttributeValueRepository attributeValueRepository;
     @Mock private CategoryRepository categoryRepository;
     @Mock private BranchRepository branchRepository;
+    @Mock private BranchAccessService branchAccessService;
     @Mock private CompanyRepository companyRepository;
     @Mock private StockRepository stockRepository;
     @Mock private StockService stockService;
@@ -134,6 +138,32 @@ class ProductStockMovementTest {
                 new ProductVariantStockRequest(CENTRO_ID, 1),
                 new ProductVariantStockRequest(CENTRO_ID, 2))))
                 .isInstanceOf(InvalidProductVariantsException.class);
+    }
+
+    @Test
+    void changingTheStockOfABranchTheUserCannotAccessIsForbidden() {
+        Stock norte = stockIn(NORTE_ID, 3);
+        doThrow(new BranchAccessDeniedException(NORTE_ID)).when(branchAccessService).requireAccessible(norte.getBranch());
+
+        assertThatThrownBy(() -> productService.update(PRODUCT_ID, request(
+                new ProductVariantStockRequest(NORTE_ID, 7))))
+                .isInstanceOf(BranchAccessDeniedException.class);
+        assertThat(norte.getQuantity()).isEqualTo(3);
+        verify(stockMovementRecorder, never()).record(any(), any(), anyInt(), anyInt(), any(), any(), any());
+    }
+
+    @Test
+    void resendingTheSameQuantityDoesNotRequireAccessToTheBranch() {
+        // La edición reenvía todas las sucursales: solo se chequea donde la cantidad cambia.
+        Stock centro = stockIn(CENTRO_ID, 5);
+        Stock norte = stockIn(NORTE_ID, 3);
+
+        productService.update(PRODUCT_ID, request(
+                new ProductVariantStockRequest(CENTRO_ID, 4),
+                new ProductVariantStockRequest(NORTE_ID, 3)));
+
+        verify(branchAccessService).requireAccessible(centro.getBranch());
+        verify(branchAccessService, never()).requireAccessible(norte.getBranch());
     }
 
     private Stock stockIn(Long branchId, int quantity) {

@@ -2,6 +2,7 @@ package com.gonzalez.erp.modules.shipments.service;
 
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.SecurityUtils;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.orders.entity.Order;
 import com.gonzalez.erp.modules.orders.repository.OrderRepository;
 import com.gonzalez.erp.modules.shipments.dto.request.ShipmentRequest;
@@ -11,7 +12,6 @@ import com.gonzalez.erp.modules.shipments.exception.InvalidShipmentException;
 import com.gonzalez.erp.modules.shipments.exception.OrderAlreadyHasShipmentException;
 import com.gonzalez.erp.modules.shipments.mapper.ShipmentMapper;
 import com.gonzalez.erp.modules.shipments.repository.ShipmentRepository;
-import com.gonzalez.erp.modules.users.repository.UserBranchRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,7 +23,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     private final ShipmentRepository shipmentRepository;
     private final OrderRepository orderRepository;
-    private final UserBranchRepository userBranchRepository;
+    private final BranchAccessService branchAccessService;
 
     @Override
     @Transactional
@@ -99,14 +99,12 @@ public class ShipmentServiceImpl implements ShipmentService {
     }
 
     // Mismo criterio que OrderServiceImpl: la orden tiene que ser de la empresa y de una
-    // sucursal asignada al usuario.
+    // sucursal accesible (asignada y activa).
     private Order findOrderOrThrow(Long orderId) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
-        Long userId = SecurityUtils.getCurrentUserId();
 
         return orderRepository.findByIdAndCompanyId(orderId, companyId)
-                .filter(order -> order.getBranch() != null
-                        && userBranchRepository.existsByUserIdAndBranchId(userId, order.getBranch().getId()))
+                .filter(order -> branchAccessService.isAccessible(order.getBranch()))
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
                                 "Order not found with id: " + orderId));

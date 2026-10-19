@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,7 +35,8 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, Lo
             @Param("id") Long id, @Param("companyId") Long companyId);
 
         /**
-         * Filtros opcionales (null = sin filtrar). Solo se traen relaciones a uno, así la
+         * Siempre dentro de branchIds (las sucursales accesibles); el resto son filtros opcionales
+         * (null = sin filtrar). Solo se traen relaciones a uno, así la
          * paginación se resuelve en la base; el orden lo define el Pageable.
          */
         @Query(value = """
@@ -46,6 +48,7 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, Lo
                 LEFT JOIN FETCH m.createdBy
                 WHERE s.company.id = :companyId
                 AND (:stockId IS NULL OR s.id = :stockId)
+                AND b.id IN :branchIds
                 AND (:branchId IS NULL OR b.id = :branchId)
                 AND (:productVariantId IS NULL OR v.id = :productVariantId)
                 AND (:type IS NULL OR m.type = :type)
@@ -55,12 +58,14 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, Lo
                 JOIN m.stock s
                 WHERE s.company.id = :companyId
                 AND (:stockId IS NULL OR s.id = :stockId)
+                AND s.branch.id IN :branchIds
                 AND (:branchId IS NULL OR s.branch.id = :branchId)
                 AND (:productVariantId IS NULL OR s.productVariant.id = :productVariantId)
                 AND (:type IS NULL OR m.type = :type)
                 """)
         Page<StockMovement> search(
             @Param("companyId") Long companyId,
+            @Param("branchIds") Collection<Long> branchIds,
             @Param("stockId") Long stockId,
             @Param("branchId") Long branchId,
             @Param("productVariantId") Long productVariantId,

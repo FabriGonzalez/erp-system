@@ -3,7 +3,9 @@ package com.gonzalez.erp.modules.inventory.service;
 import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.SecurityUtils;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.inventory.dto.response.StockMovementResponse;
+import com.gonzalez.erp.modules.inventory.entity.Stock;
 import com.gonzalez.erp.modules.inventory.entity.StockMovement;
 import com.gonzalez.erp.modules.inventory.entity.StockMovementType;
 import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
@@ -15,6 +17,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -22,6 +26,7 @@ public class StockMovementServiceImpl implements StockMovementService {
 
     private final StockMovementRepository stockMovementRepository;
     private final StockRepository stockRepository;
+    private final BranchAccessService branchAccessService;
 
     @Override
     public PageResponse<StockMovementResponse> search(
@@ -33,18 +38,29 @@ public class StockMovementServiceImpl implements StockMovementService {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
         // Sin esto, un stock de otra empresa respondería como uno sin movimientos.
-        if (stockId != null && stockRepository.findByIdAndCompanyId(stockId, companyId).isEmpty()) {
-            throw new StockNotFoundException(stockId);
+        if (stockId != null) {
+            Stock stock = stockRepository.findByIdAndCompanyId(stockId, companyId)
+                    .orElseThrow(() -> new StockNotFoundException(stockId));
+            branchAccessService.requireAccessible(stock.getBranch());
+        }
+        if (branchId != null) {
+            branchAccessService.requireAccessible(branchId);
+        }
+
+        List<Long> branchIds = branchAccessService.accessibleBranchIds();
+        if (branchIds.isEmpty()) {
+            return new PageResponse<>(List.of(), pageable.getPageNumber(), pageable.getPageSize(), 0, 0);
         }
 
         return PageResponse.of(
-                stockMovementRepository.search(companyId, stockId, branchId, productVariantId, type, pageable),
+                stockMovementRepository.search(companyId, branchIds, stockId, branchId, productVariantId, type, pageable),
                 StockMovementMapper::toResponse);
     }
 
     @Override
     public StockMovementResponse findById(Long id) {
         StockMovement movement = findMovementOrThrow(id);
+        branchAccessService.requireAccessible(movement.getStock().getBranch());
         return StockMovementMapper.toResponse(movement);
     }
 

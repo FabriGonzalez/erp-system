@@ -1,9 +1,13 @@
 package com.gonzalez.erp.modules.transfers.service;
 
 import com.gonzalez.erp.common.dto.PageResponse;
+import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.CustomUserDetails;
 import com.gonzalez.erp.modules.branches.entity.Branch;
+import com.gonzalez.erp.modules.branches.exception.BranchAccessDeniedException;
+import com.gonzalez.erp.modules.branches.exception.BranchInactiveException;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
@@ -71,6 +75,7 @@ class StockTransferServiceImplTest {
     @Mock private StockMovementRepository stockMovementRepository;
     @Mock private StockMovementRecorder stockMovementRecorder;
     @Mock private BranchRepository branchRepository;
+    @Mock private BranchAccessService branchAccessService;
     @Mock private ProductVariantRepository productVariantRepository;
     @Mock private UserRepository userRepository;
     @Mock private CompanyRepository companyRepository;
@@ -216,7 +221,8 @@ class StockTransferServiceImplTest {
         StockTransfer second = transfer(StockTransferStatus.CANCELLED, 2);
         second.setId(TRANSFER_ID + 1);
         Pageable pageable = PageRequest.of(0, 20);
-        when(stockTransferRepository.findAllByCompanyId(COMPANY_ID, pageable))
+        when(branchAccessService.accessibleBranchIds()).thenReturn(List.of(ORIGIN_ID));
+        when(stockTransferRepository.findAllByCompanyIdAndBranchIds(COMPANY_ID, List.of(ORIGIN_ID), pageable))
                 .thenReturn(new PageImpl<>(List.of(first, second), pageable, 2));
         when(stockTransferItemRepository.findByTransferIdInWithVariant(anyList()))
                 .thenReturn(List.of(first.getItems().get(0), second.getItems().get(0)));
@@ -226,6 +232,74 @@ class StockTransferServiceImplTest {
         assertThat(page.totalElements()).isEqualTo(2);
         assertThat(page.content()).extracting(response -> response.items().get(0).quantity())
                 .containsExactly(5, 2);
+    }
+
+    @Test
+    void createRejectsAnOriginTheUserCannotAccess() {
+        when(companyRepository.getReferenceById(COMPANY_ID)).thenReturn(company);
+        when(branchAccessService.requireAccessible(ORIGIN_ID))
+                .thenThrow(new BranchAccessDeniedException(ORIGIN_ID));
+
+        assertThatThrownBy(() -> stockTransferService.create(request(1)))
+                .isInstanceOf(BranchAccessDeniedException.class);
+        verify(stockTransferRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void createRejectsAnInactiveDestination() {
+        when(companyRepository.getReferenceById(COMPANY_ID)).thenReturn(company);
+        when(branchAccessService.requireAccessible(ORIGIN_ID)).thenReturn(origin);
+        when(branchAccessService.requireActive(DESTINATION_ID))
+                .thenThrow(new BranchInactiveException(DESTINATION_ID));
+
+        assertThatThrownBy(() -> stockTransferService.create(request(1)))
+                .isInstanceOf(BranchInactiveException.class);
+        verify(stockTransferRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void cancelDoesNotCheckBranchAccess() {
+        // Decisión: anular solo pide TRANSFERIR_STOCK (lo controla el @PreAuthorize).
+        StockTransfer transfer = transfer(StockTransferStatus.CONFIRMED, 5);
+        stubCancel(transfer, stock(100L, origin, 3), stock(101L, destination, 5));
+
+        stockTransferService.cancel(TRANSFER_ID);
+
+        verify(branchAccessService, never()).isAccessible(any());
+    }
+
+    @Test
+    void findAllWithoutAccessibleBranchesIsEmptyWithoutQuerying() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(branchAccessService.accessibleBranchIds()).thenReturn(List.of());
+
+        PageResponse<StockTransferResponse> page = stockTransferService.findAll(pageable);
+
+        assertThat(page.content()).isEmpty();
+        verify(stockTransferRepository, never()).findAllByCompanyIdAndBranchIds(any(), any(), any());
+    }
+
+    @Test
+    void findByIdOfATransferBetweenOtherBranchesIsNotFound() {
+        StockTransfer transfer = transfer(StockTransferStatus.CONFIRMED, 5);
+        when(stockTransferRepository.findByIdAndCompanyId(TRANSFER_ID, COMPANY_ID))
+                .thenReturn(Optional.of(transfer));
+        when(branchAccessService.isAccessible(origin)).thenReturn(false);
+        when(branchAccessService.isAccessible(destination)).thenReturn(false);
+
+        assertThatThrownBy(() -> stockTransferService.findById(TRANSFER_ID))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void findByIdIsVisibleFromTheDestination() {
+        StockTransfer transfer = transfer(StockTransferStatus.CONFIRMED, 5);
+        when(stockTransferRepository.findByIdAndCompanyId(TRANSFER_ID, COMPANY_ID))
+                .thenReturn(Optional.of(transfer));
+        when(branchAccessService.isAccessible(origin)).thenReturn(false);
+        when(branchAccessService.isAccessible(destination)).thenReturn(true);
+
+        assertThat(stockTransferService.findById(TRANSFER_ID).id()).isEqualTo(TRANSFER_ID);
     }
 
     private StockTransferRequest request(int quantity) {
@@ -276,8 +350,8 @@ class StockTransferServiceImplTest {
 
     private void stubCreate(Stock originStock, Stock destinationStock) {
         when(companyRepository.getReferenceById(COMPANY_ID)).thenReturn(company);
-        when(branchRepository.findByIdAndCompanyId(ORIGIN_ID, COMPANY_ID)).thenReturn(Optional.of(origin));
-        when(branchRepository.findByIdAndCompanyId(DESTINATION_ID, COMPANY_ID)).thenReturn(Optional.of(destination));
+        when(branchAccessService.requireAccessible(ORIGIN_ID)).thenReturn(origin);
+        when(branchAccessService.requireActive(DESTINATION_ID)).thenReturn(destination);
         when(userRepository.getReferenceById(USER_ID)).thenReturn(user);
         when(productVariantRepository.findByIdWithProductAndCompany(VARIANT_ID)).thenReturn(Optional.of(variant));
         when(stockTransferRepository.saveAndFlush(any(StockTransfer.class))).thenAnswer(invocation -> {

@@ -36,7 +36,7 @@ import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
 import com.gonzalez.erp.modules.shipments.entity.Shipment;
 import com.gonzalez.erp.modules.shipments.repository.ShipmentRepository;
 import com.gonzalez.erp.modules.users.entity.User;
-import com.gonzalez.erp.modules.users.repository.UserBranchRepository;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -82,7 +82,7 @@ class OrderShippingAddressTest {
     @Mock private CustomerAccountService customerAccountService;
     @Mock private PaymentAllocationRepository paymentAllocationRepository;
     @Mock private UserRepository userRepository;
-    @Mock private UserBranchRepository userBranchRepository;
+    @Mock private BranchAccessService branchAccessService;
     @Mock private CompanyRepository companyRepository;
     @Mock private OrderPaymentService orderPaymentService;
     @Mock private AddressRepository addressRepository;
@@ -137,8 +137,7 @@ class OrderShippingAddressTest {
     void quickSaleCannotBeShipped() {
         OrderRequest request = new OrderRequest(BRANCH_ID, CUSTOMER_ID, SalesType.QUICK_SALE,
                 new BigDecimal("1000"), DeliveryType.SHIPPING, ADDRESS_ID, null, null, null);
-        when(branchRepository.findByIdAndCompanyId(BRANCH_ID, COMPANY_ID)).thenReturn(Optional.of(branch));
-        when(userBranchRepository.existsByUserIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(true);
+        when(branchAccessService.requireAccessible(BRANCH_ID)).thenReturn(branch);
 
         assertThatThrownBy(() -> orderService.create(request))
                 .isInstanceOf(QuickSaleValidationException.class);
@@ -219,7 +218,7 @@ class OrderShippingAddressTest {
     void updateCreatesShipmentWhenOrderHadNone() {
         Order order = shippingOrder();
         when(orderRepository.findByIdAndCompanyIdForUpdate(ORDER_ID, COMPANY_ID)).thenReturn(Optional.of(order));
-        when(userBranchRepository.existsByUserIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(true);
+        when(branchAccessService.isAccessible(branch)).thenReturn(true);
         when(customerRepository.findByIdAndCompanyId(CUSTOMER_ID, COMPANY_ID)).thenReturn(Optional.of(customer));
         when(addressRepository.findByIdAndCustomerId(ADDRESS_ID, CUSTOMER_ID))
                 .thenReturn(Optional.of(address("Uruguay")));
@@ -242,7 +241,7 @@ class OrderShippingAddressTest {
         Address address = address(null);
         address.setActive(false);
         when(orderRepository.findByIdAndCompanyIdForUpdate(ORDER_ID, COMPANY_ID)).thenReturn(Optional.of(order));
-        when(userBranchRepository.existsByUserIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(true);
+        when(branchAccessService.isAccessible(branch)).thenReturn(true);
         when(customerRepository.findByIdAndCompanyId(CUSTOMER_ID, COMPANY_ID)).thenReturn(Optional.of(customer));
         when(addressRepository.findByIdAndCustomerId(ADDRESS_ID, CUSTOMER_ID)).thenReturn(Optional.of(address));
 
@@ -266,8 +265,7 @@ class OrderShippingAddressTest {
     }
 
     private void stubCreateAccess() {
-        when(branchRepository.findByIdAndCompanyId(BRANCH_ID, COMPANY_ID)).thenReturn(Optional.of(branch));
-        when(userBranchRepository.existsByUserIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(true);
+        when(branchAccessService.requireAccessible(BRANCH_ID)).thenReturn(branch);
         when(customerRepository.findByIdAndCompanyId(CUSTOMER_ID, COMPANY_ID)).thenReturn(Optional.of(customer));
     }
 

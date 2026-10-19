@@ -8,6 +8,8 @@ import com.gonzalez.erp.modules.companies.exception.CompanyNameAlreadyExistsExce
 import com.gonzalez.erp.modules.companies.exception.CompanyNotActiveException;
 import com.gonzalez.erp.modules.companies.exception.CompanyTaxIdAlreadyExistsException;
 import com.gonzalez.erp.modules.companies.exception.InvalidCompanyStatusTransitionException;
+import com.gonzalez.erp.modules.branches.exception.BranchAccessDeniedException;
+import com.gonzalez.erp.modules.branches.exception.BranchInactiveException;
 import com.gonzalez.erp.modules.branches.exception.BranchNameAlreadyExistsException;
 import com.gonzalez.erp.modules.categories.exception.CategoryNameAlreadyExistsException;
 import com.gonzalez.erp.modules.customers.exception.CustomerDocumentAlreadyExistsException;
@@ -64,6 +66,35 @@ import java.util.List;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    // Más específico que AccessDeniedException: el frontend distingue "sucursal no accesible" de "sin permiso".
+    @ExceptionHandler(BranchAccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleBranchAccessDenied(
+            BranchAccessDeniedException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of(
+                        HttpStatus.FORBIDDEN.value(),
+                        HttpStatus.FORBIDDEN.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "BRANCH_ACCESS_DENIED"
+                ));
+    }
+
+    @ExceptionHandler(BranchInactiveException.class)
+    public ResponseEntity<ErrorResponse> handleBranchInactive(
+            BranchInactiveException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(
+                        HttpStatus.CONFLICT.value(),
+                        HttpStatus.CONFLICT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "BRANCH_INACTIVE"
+                ));
+    }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(

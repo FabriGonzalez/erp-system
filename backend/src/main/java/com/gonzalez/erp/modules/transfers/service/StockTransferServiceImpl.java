@@ -5,6 +5,7 @@ import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.CustomUserDetails;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
@@ -58,6 +59,7 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final StockMovementRepository stockMovementRepository;
     private final StockMovementRecorder stockMovementRecorder;
     private final BranchRepository branchRepository;
+    private final BranchAccessService branchAccessService;
     private final ProductVariantRepository productVariantRepository;
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
@@ -65,7 +67,12 @@ public class StockTransferServiceImpl implements StockTransferService {
     @Override
     public PageResponse<StockTransferResponse> findAll(Pageable pageable) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
-        Page<StockTransfer> transfers = stockTransferRepository.findAllByCompanyId(companyId, pageable);
+        List<Long> branchIds = branchAccessService.accessibleBranchIds();
+        if (branchIds.isEmpty()) {
+            return new PageResponse<>(List.of(), pageable.getPageNumber(), pageable.getPageSize(), 0, 0);
+        }
+        Page<StockTransfer> transfers = stockTransferRepository.findAllByCompanyIdAndBranchIds(
+                companyId, branchIds, pageable);
 
         List<Long> transferIds = transfers.getContent().stream().map(StockTransfer::getId).toList();
         Map<Long, List<StockTransferItem>> itemsByTransfer = transferIds.isEmpty()
@@ -102,14 +109,9 @@ public class StockTransferServiceImpl implements StockTransferService {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
         Company company = companyRepository.getReferenceById(companyId);
 
-        var originBranch = branchRepository.findByIdAndCompanyId(
-                request.originBranchId(), companyId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Origin branch not found with id: " + request.originBranchId()));
-        var destinationBranch = branchRepository.findByIdAndCompanyId(
-                request.destinationBranchId(), companyId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Destination branch not found with id: " + request.destinationBranchId()));
+        // Se envía desde una sucursal propia hacia cualquier sucursal activa de la empresa.
+        var originBranch = branchAccessService.requireAccessible(request.originBranchId());
+        var destinationBranch = branchAccessService.requireActive(request.destinationBranchId());
 
         StockTransfer transfer = StockTransfer.builder()
             .originBranch(originBranch)
@@ -240,7 +242,10 @@ public class StockTransferServiceImpl implements StockTransferService {
     private StockTransfer findTransferOrThrow(Long id) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
+        // Mismo criterio que el listado. La anulación no pasa por acá: solo pide TRANSFERIR_STOCK.
         return stockTransferRepository.findByIdAndCompanyId(id, companyId)
+                .filter(transfer -> branchAccessService.isAccessible(transfer.getOriginBranch())
+                        || branchAccessService.isAccessible(transfer.getDestinationBranch()))
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Stock transfer not found with id: " + id));
     }

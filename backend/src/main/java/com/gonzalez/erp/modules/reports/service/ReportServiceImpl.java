@@ -1,8 +1,7 @@
 package com.gonzalez.erp.modules.reports.service;
 
-import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.SecurityUtils;
-import com.gonzalez.erp.modules.branches.repository.BranchRepository;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.customers.dto.response.CustomerDebtSummaryResponse;
 import com.gonzalez.erp.modules.customers.service.CustomerBalanceService;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
@@ -21,11 +20,9 @@ import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.PendingOr
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.SalesSummary;
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.TopProduct;
 import com.gonzalez.erp.modules.reports.exception.InvalidReportRangeException;
-import com.gonzalez.erp.modules.users.repository.UserBranchRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,8 +48,7 @@ public class ReportServiceImpl implements ReportService {
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final StockRepository stockRepository;
-    private final BranchRepository branchRepository;
-    private final UserBranchRepository userBranchRepository;
+    private final BranchAccessService branchAccessService;
     private final CustomerBalanceService customerBalanceService;
 
     @Override
@@ -66,9 +62,11 @@ public class ReportServiceImpl implements ReportService {
             throw new InvalidReportRangeException("The previous period cannot overlap the current one");
         }
         Long companyId = SecurityUtils.requireCurrentCompanyId();
-        Long userId = SecurityUtils.getCurrentUserId();
 
-        List<Long> branchIds = resolveBranchIds(companyId, userId, branchId);
+        // Mismo alcance que el listado de pedidos: las sucursales accesibles del usuario.
+        List<Long> branchIds = branchId == null
+                ? branchAccessService.accessibleBranchIds()
+                : List.of(branchAccessService.requireAccessible(branchId).getId());
 
         // La deuda es del cliente, no de la sucursal: se informa igual aunque no haya sucursales.
         CustomerDebtSummaryResponse debt = customerBalanceService.getDebtSummary(companyId);
@@ -132,23 +130,6 @@ public class ReportServiceImpl implements ReportService {
             throw new InvalidReportRangeException(
                     "lowStockThreshold must be between 0 and " + MAX_LOW_STOCK_THRESHOLD);
         }
-    }
-
-    // Mismo alcance que el listado de pedidos: las sucursales asignadas al usuario.
-    private List<Long> resolveBranchIds(Long companyId, Long userId, Long branchId) {
-        List<Long> assigned = userBranchRepository.findByUserId(userId).stream()
-                .map(userBranch -> userBranch.getBranch().getId())
-                .toList();
-        if (branchId == null) {
-            return assigned;
-        }
-        branchRepository.findByIdAndCompanyId(branchId, companyId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Branch not found with id: " + branchId + " in the current company"));
-        if (!assigned.contains(branchId)) {
-            throw new AccessDeniedException("User is not assigned to branch: " + branchId);
-        }
-        return List.of(branchId);
     }
 
     private static SalesSummary summarize(List<BranchSales> byBranch) {
