@@ -37,6 +37,17 @@ public class ProductAttributeController {
         return ResponseEntity.ok(attributeService.findAll(active));
     }
 
+    // Antes que /{id}: el literal "values" gana sobre la variable.
+    @GetMapping("/values")
+    @Operation(summary = "Listar valores de todos los atributos",
+            description = "Obtiene los valores de todos los atributos de la empresa en una sola consulta, "
+                    + "ordenados por atributo y valor. Opcionalmente filtrar por estado del valor.")
+    public ResponseEntity<List<ProductAttributeValueResponse>> findAllValues(
+            @Parameter(description = "Filtrar por estado del valor: true (activos) o false (inactivos)")
+            @RequestParam(required = false) Boolean active) {
+        return ResponseEntity.ok(attributeService.findAllValues(active));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Obtener atributo por ID", description = "Busca y retorna un atributo por su ID.")
     public ResponseEntity<ProductAttributeResponse> findById(

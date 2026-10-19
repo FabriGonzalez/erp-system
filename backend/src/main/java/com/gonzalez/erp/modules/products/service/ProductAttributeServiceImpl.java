@@ -56,6 +56,14 @@ public class ProductAttributeServiceImpl implements ProductAttributeService {
     }
 
     @Override
+    public List<ProductAttributeValueResponse> findAllValues(Boolean active) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+        return attributeValueRepository.findAllByCompanyIdWithAttribute(companyId, active).stream()
+                .map(this::toValueResponse)
+                .toList();
+    }
+
+    @Override
     @Transactional
     public ProductAttributeResponse create(ProductAttributeRequest request) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();

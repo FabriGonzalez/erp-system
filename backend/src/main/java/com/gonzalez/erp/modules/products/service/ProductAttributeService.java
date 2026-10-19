@@ -15,6 +15,9 @@ public interface ProductAttributeService {
 
     List<ProductAttributeValueResponse> findValues(Long attributeId);
 
+    /** Valores de todos los atributos de la empresa, en una consulta. */
+    List<ProductAttributeValueResponse> findAllValues(Boolean active);
+
     ProductAttributeResponse create(ProductAttributeRequest request);
 
     ProductAttributeResponse update(Long id, ProductAttributeRequest request);

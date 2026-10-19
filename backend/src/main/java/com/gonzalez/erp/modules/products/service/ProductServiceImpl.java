@@ -73,16 +73,21 @@ public class ProductServiceImpl implements ProductService {
                 .map(Product::getId)
                 .toList();
 
-        Map<Long, List<ProductVariantResponse>> variantsByProduct =
-                variantRepository.findByProductIdInWithAttributes(productIds)
-                        .stream()
-                        .collect(Collectors.groupingBy(
-                                pv -> pv.getProduct().getId(),
-                                Collectors.mapping(
-                                        ProductVariantMapper::toResponse,
-                                        Collectors.toList()
-                                )
-                        ));
+        List<ProductVariant> variants =
+                variantRepository.findByProductIdInWithAttributes(productIds);
+        Map<Long, List<Stock>> stocksByVariant = loadStocksByVariant(variants, companyId);
+
+        Map<Long, List<ProductVariantResponse>> variantsByProduct = variants.stream()
+                .collect(Collectors.groupingBy(
+                        pv -> pv.getProduct().getId(),
+                        Collectors.mapping(
+                                pv -> ProductVariantMapper.toResponse(
+                                        pv,
+                                        stocksByVariant.getOrDefault(pv.getId(), List.of())
+                                ),
+                                Collectors.toList()
+                        )
+                ));
 
         return products.stream()
                 .map(product -> ProductMapper.toResponse(
@@ -236,7 +241,7 @@ public class ProductServiceImpl implements ProductService {
             );
         }
 
-        List<ProductVariantResponse> responses = new ArrayList<>();
+        List<ProductVariant> savedVariants = new ArrayList<>();
 
         for (ProductVariantRequest vr : variantRequests) {
             ProductVariant variant = ProductVariant.builder()
@@ -256,12 +261,10 @@ public class ProductServiceImpl implements ProductService {
 
             createInitialStock(savedVariant, vr.initialStock());
 
-            responses.add(
-                    ProductVariantMapper.toResponse(savedVariant)
-            );
+            savedVariants.add(savedVariant);
         }
 
-        return responses;
+        return toVariantResponses(savedVariants, companyId);
     }
 
     private void createInitialStock(
@@ -345,7 +348,7 @@ public class ProductServiceImpl implements ProductService {
             );
         }
 
-        List<ProductVariantResponse> responses = new ArrayList<>();
+        List<ProductVariant> savedVariants = new ArrayList<>();
 
         for (ProductVariantUpdateRequest vr : variantRequests) {
             Optional<ProductVariant> existingOpt =
@@ -392,16 +395,42 @@ public class ProductServiceImpl implements ProductService {
                     companyId
             );
 
-            responses.add(ProductVariantMapper.toResponse(
-                    savedVariant,
-                    stockRepository.findByProductVariantIdAndCompanyId(
-                            savedVariant.getId(),
-                            companyId
-                    )
-            ));
+            savedVariants.add(savedVariant);
         }
 
-        return responses;
+        return toVariantResponses(savedVariants, companyId);
+    }
+
+    /** Variantes con su stock por sucursal: una sola consulta de stocks para todas. */
+    private List<ProductVariantResponse> toVariantResponses(
+            List<ProductVariant> variants,
+            Long companyId
+    ) {
+        Map<Long, List<Stock>> stocksByVariant = loadStocksByVariant(variants, companyId);
+
+        return variants.stream()
+                .map(variant -> ProductVariantMapper.toResponse(
+                        variant,
+                        stocksByVariant.getOrDefault(variant.getId(), List.of())
+                ))
+                .toList();
+    }
+
+    private Map<Long, List<Stock>> loadStocksByVariant(
+            List<ProductVariant> variants,
+            Long companyId
+    ) {
+        if (variants.isEmpty()) {
+            return Map.of();
+        }
+
+        List<Long> variantIds = variants.stream()
+                .map(ProductVariant::getId)
+                .toList();
+
+        return stockRepository.findByProductVariantIdInAndCompanyId(variantIds, companyId)
+                .stream()
+                .collect(Collectors.groupingBy(stock -> stock.getProductVariant().getId()));
     }
 
     private void createVariantAttributes(
@@ -489,9 +518,7 @@ public class ProductServiceImpl implements ProductService {
                         List.of(productId)
                 );
 
-        return variants.stream()
-                .map(ProductVariantMapper::toResponse)
-                .toList();
+        return toVariantResponses(variants, SecurityUtils.requireCurrentCompanyId());
     }
 
     private void validateSkuUnique(

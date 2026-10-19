@@ -54,6 +54,18 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
 
     List<Stock> findByCompanyId(Long companyId);
 
+    /** Stock de varias variantes en una consulta (respuestas de producto). Solo usa ids de variante y sucursal. */
+    @Query("""
+            SELECT s FROM Stock s
+            WHERE s.productVariant.id IN :variantIds
+            AND s.company.id = :companyId
+            ORDER BY s.branch.id ASC
+            """)
+    List<Stock> findByProductVariantIdInAndCompanyId(
+            @Param("variantIds") Collection<Long> variantIds,
+            @Param("companyId") Long companyId
+    );
+
         @Query("SELECT s FROM Stock s " +
             "JOIN FETCH s.productVariant pv " +
             "JOIN FETCH pv.product " +
