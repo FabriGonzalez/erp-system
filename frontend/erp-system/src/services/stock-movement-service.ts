@@ -1,35 +1,18 @@
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { parseResponse } from '@/services/api-error';
 import { PageResponse } from '@/types/order';
 import { StockMovement, StockMovementResponse } from '@/types/stock-movement';
 
-/** Error con el status HTTP: la caché no reintenta los 4xx (ver query-client). */
-export class StockMovementServiceError extends Error {
-    readonly status: number;
+const STOCK_MOVEMENT_ERRORS = {
+    byStatus: {
+        400: 'No se pudo consultar el historial.',
+        403: 'No tenés permisos para ver el historial de stock.',
+        404: 'No se encontró el registro de stock.',
+    },
+};
 
-    constructor(message: string, status: number) {
-        super(message);
-        this.status = status;
-    }
-}
-
-function errorMessageFor(status: number, fallback: string): string {
-    // Los mensajes del backend están en inglés: se muestran textos propios.
-    if (status === 400) return 'No se pudo consultar el historial.';
-    if (status === 403) return 'No tenés permisos para ver el historial de stock.';
-    if (status === 404) return 'No se encontró el registro de stock.';
-    if (status >= 500) return 'Error del servidor. Intentá de nuevo más tarde.';
-    return fallback;
-}
-
-async function handleResponse<T>(response: Response, defaultErrorMessage: string): Promise<T> {
-    if (!response.ok) {
-        throw new StockMovementServiceError(
-            errorMessageFor(response.status, defaultErrorMessage),
-            response.status,
-        );
-    }
-
-    return response.json();
+function handleResponse<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...STOCK_MOVEMENT_ERRORS, fallback });
 }
 
 function normalizeMovement(data: StockMovementResponse): StockMovement {

@@ -1,5 +1,6 @@
 import { Category, CategoryRequest } from '@/types/category';
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { parseResponse } from '@/services/api-error';
 
 type BackendCategoryResponse = {
     id: number | string;
@@ -23,42 +24,18 @@ function normalizeCategory(data: BackendCategoryResponse): Category {
     };
 }
 
-async function handleResponse<T>(
-    response: Response,
-    defaultErrorMessage: string
-): Promise<T> {
-    if (!response.ok) {
-        let errorMessage = '';
+const CATEGORY_ERRORS = {
+    byCode: {
+        CATEGORY_NAME_ALREADY_EXISTS: 'Ya existe una categoría con ese nombre.',
+    },
+    byStatus: {
+        404: 'Categoría no encontrada.',
+        409: 'Ya existe una categoría con ese nombre.',
+    },
+};
 
-        try {
-            const errorPayload = await response.json();
-            errorMessage = errorPayload?.message ?? '';
-        } catch {
-            // El backend puede no devolver JSON.
-        }
-
-        if (response.status === 404) {
-            throw new Error(errorMessage || 'Categoría no encontrada.');
-        }
-
-        if (response.status === 409) {
-            throw new Error(errorMessage || 'Ya existe una categoría con ese nombre.');
-        }
-
-        if (response.status >= 500) {
-            throw new Error(
-                errorMessage || 'Error del servidor. Intentá de nuevo más tarde.'
-            );
-        }
-
-        throw new Error(errorMessage || defaultErrorMessage);
-    }
-
-    if (response.status === 204) {
-        return undefined as unknown as T;
-    }
-
-    return response.json();
+function handleResponse<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...CATEGORY_ERRORS, fallback });
 }
 
 function authHeaders(token: string): HeadersInit {

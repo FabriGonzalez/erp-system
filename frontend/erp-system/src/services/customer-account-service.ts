@@ -1,5 +1,5 @@
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
-import { CustomerServiceError } from '@/services/customer-service';
+import { parseResponse } from '@/services/api-error';
 import {
     AccountTransaction,
     AccountTransactionResponse,
@@ -12,25 +12,15 @@ import {
 } from '@/types/customer-account';
 import { PageResponse } from '@/types/order';
 
-async function handleResponse<T>(
-    response: Response,
-    defaultErrorMessage: string
-): Promise<T> {
-    if (!response.ok) {
-        // Con el status, la caché no reintenta un 403/404 (ver query-client).
-        const message =
-            response.status === 403 ? 'No tenés permisos para ver esta información.'
-                : response.status === 404 ? 'Cliente no encontrado.'
-                    : response.status >= 500 ? 'Error del servidor. Intentá de nuevo más tarde.'
-                        : defaultErrorMessage;
-        throw new CustomerServiceError(message, response.status);
-    }
+const ACCOUNT_ERRORS = {
+    byStatus: {
+        403: 'No tenés permisos para ver esta información.',
+        404: 'Cliente no encontrado.',
+    },
+};
 
-    if (response.status === 204) {
-        return undefined as unknown as T;
-    }
-
-    return response.json();
+function handleResponse<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...ACCOUNT_ERRORS, fallback });
 }
 
 function authHeaders(token: string): HeadersInit {

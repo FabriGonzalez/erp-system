@@ -83,13 +83,8 @@ export default function ChangePasswordScreen() {
             setConfirmPassword('');
             setIsDone(true);
         } catch (error: unknown) {
-            if (error instanceof TypeError && error.message === 'Network request failed') {
-                setErrorMsg('Error de red. Verificá tu conexión e intentá de nuevo.');
-            } else if (error instanceof Error) {
-                setErrorMsg(error.message);
-            } else {
-                setErrorMsg('Ocurrió un error inesperado.');
-            }
+            // Los servicios ya devuelven el mensaje en español, también sin conexión.
+            setErrorMsg(error instanceof Error ? error.message : 'Ocurrió un error inesperado.');
         } finally {
             setIsSubmitting(false);
         }

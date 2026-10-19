@@ -1,49 +1,21 @@
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { parseResponse } from '@/services/api-error';
 import { Role, RoleRequest, RoleResponse } from '@/types/role';
 
-type ErrorPayload = {
-    message?: string;
-    code?: string;
+const ROLE_ERRORS = {
+    byCode: {
+        ROLE_NAME_ALREADY_EXISTS: 'Ya existe un rol con ese nombre.',
+        ROLE_CODE_ALREADY_EXISTS: 'Ya existe un rol con ese código.',
+    },
+    byStatus: {
+        400: 'Revisá los datos del rol.',
+        403: 'Los roles del sistema no se pueden modificar, o no tenés permisos.',
+        404: 'Rol no encontrado.',
+    },
 };
 
-/** Error con el status HTTP: la caché no reintenta los 4xx (ver query-client). */
-export class RoleServiceError extends Error {
-    readonly status: number;
-
-    constructor(message: string, status: number) {
-        super(message);
-        this.status = status;
-    }
-}
-
-function errorMessageFor(status: number, payload: ErrorPayload, fallback: string): string {
-    // Los mensajes del backend están en inglés: se muestran textos propios.
-    if (payload.code === 'ROLE_NAME_ALREADY_EXISTS') return 'Ya existe un rol con ese nombre.';
-    if (payload.code === 'ROLE_CODE_ALREADY_EXISTS') return 'Ya existe un rol con ese código.';
-    if (status === 400) return 'Revisá los datos del rol.';
-    if (status === 403) return 'Los roles del sistema no se pueden modificar, o no tenés permisos.';
-    if (status === 404) return 'Rol no encontrado.';
-    if (status >= 500) return 'Error del servidor. Intentá de nuevo más tarde.';
-    return fallback;
-}
-
-async function handleResponse<T>(response: Response, defaultErrorMessage: string): Promise<T> {
-    if (!response.ok) {
-        let payload: ErrorPayload = {};
-
-        try {
-            payload = (await response.json()) ?? {};
-        } catch {
-            // El backend puede no devolver JSON.
-        }
-
-        throw new RoleServiceError(
-            errorMessageFor(response.status, payload, defaultErrorMessage),
-            response.status,
-        );
-    }
-
-    return response.json();
+function handleResponse<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...ROLE_ERRORS, fallback });
 }
 
 function authHeaders(token: string): HeadersInit {

@@ -1,5 +1,6 @@
 import { Stock, StockAdjustRequest, StockResponse } from '@/types/stock';
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { parseResponse } from '@/services/api-error';
 
 function authHeaders(token: string): HeadersInit {
     return {
@@ -8,26 +9,21 @@ function authHeaders(token: string): HeadersInit {
     };
 }
 
-async function handleResponse<T>(response: Response, fallback: string): Promise<T> {
-    if (!response.ok) {
-        let message = '';
-        try {
-            const payload = await response.json();
-            message = payload?.message ?? '';
-        } catch {
-            // Some backend errors do not include a JSON body.
-        }
-        if (response.status === 403) {
-            throw new Error(message || 'No tenés permiso para ajustar el stock.');
-        }
-        if (response.status === 404) throw new Error(message || 'Stock no encontrado.');
-        if (response.status === 409) throw new Error(message || 'No se pudo ajustar el stock.');
-        if (response.status >= 500) {
-            throw new Error(message || 'Error del servidor. Intentá de nuevo más tarde.');
-        }
-        throw new Error(message || fallback);
-    }
-    return response.json();
+const STOCK_ERRORS = {
+    byCode: {
+        STOCK_NOT_FOUND: 'Stock no encontrado.',
+        STOCK_ALREADY_EXISTS: 'Ese producto ya tiene stock registrado en la sucursal.',
+        INSUFFICIENT_STOCK: 'No hay stock suficiente.',
+    },
+    byStatus: {
+        403: 'No tenés permiso para ajustar el stock.',
+        404: 'Stock, producto o sucursal no encontrados.',
+        409: 'No se pudo ajustar el stock.',
+    },
+};
+
+function handleResponse<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...STOCK_ERRORS, fallback });
 }
 
 function normalizeStock(data: StockResponse): Stock {

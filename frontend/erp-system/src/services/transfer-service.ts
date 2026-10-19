@@ -1,54 +1,25 @@
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { parseResponse } from '@/services/api-error';
 import { PageResponse } from '@/types/order';
 import { StockTransfer, StockTransferRequest, StockTransferResponse } from '@/types/transfer';
 
-type ErrorPayload = {
-    message?: string;
-    code?: string;
+const TRANSFER_ERRORS = {
+    byCode: {
+        INVALID_STOCK_TRANSFER:
+            'La transferencia no es válida: revisá que las sucursales sean distintas, que no haya productos repetidos y que no esté anulada.',
+        INSUFFICIENT_STOCK:
+            'No hay stock suficiente. Al anular, la sucursal de destino tiene que tener todavía las unidades transferidas.',
+        STOCK_NOT_FOUND: 'Uno de los productos no tiene stock en la sucursal de origen.',
+    },
+    byStatus: {
+        400: 'Revisá los datos de la transferencia.',
+        403: 'No tenés permisos para transferir stock.',
+        404: 'Transferencia, sucursal o producto no encontrados, o el producto no tiene stock en el origen.',
+    },
 };
 
-/** Error con el status HTTP: la caché no reintenta los 4xx (ver query-client). */
-export class TransferServiceError extends Error {
-    readonly status: number;
-
-    constructor(message: string, status: number) {
-        super(message);
-        this.status = status;
-    }
-}
-
-function errorMessageFor(status: number, payload: ErrorPayload, fallback: string): string {
-    // Los mensajes del backend están en inglés: se muestran textos propios.
-    if (payload.code === 'INVALID_STOCK_TRANSFER') {
-        return 'La transferencia no es válida: revisá que las sucursales sean distintas, que no haya productos repetidos y que no esté anulada.';
-    }
-    if (payload.code === 'INSUFFICIENT_STOCK') {
-        return 'No hay stock suficiente. Al anular, la sucursal de destino tiene que tener todavía las unidades transferidas.';
-    }
-    if (status === 400) return 'Revisá los datos de la transferencia.';
-    if (status === 403) return 'No tenés permisos para transferir stock.';
-    if (status === 404) return 'Transferencia, sucursal o producto no encontrados, o el producto no tiene stock en el origen.';
-    if (status >= 500) return 'Error del servidor. Intentá de nuevo más tarde.';
-    return fallback;
-}
-
-async function handleResponse<T>(response: Response, defaultErrorMessage: string): Promise<T> {
-    if (!response.ok) {
-        let payload: ErrorPayload = {};
-
-        try {
-            payload = (await response.json()) ?? {};
-        } catch {
-            // El backend puede no devolver JSON.
-        }
-
-        throw new TransferServiceError(
-            errorMessageFor(response.status, payload, defaultErrorMessage),
-            response.status,
-        );
-    }
-
-    return response.json();
+function handleResponse<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...TRANSFER_ERRORS, fallback });
 }
 
 function authHeaders(token: string): HeadersInit {

@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { parseResponse } from '@/services/api-error';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import {
     Order,
@@ -14,57 +15,28 @@ import {
     ShipmentResponse,
 } from '@/types/order';
 
-const ERROR_MESSAGES_BY_CODE: Record<string, string> = {
-    INSUFFICIENT_STOCK: 'No hay stock suficiente para completar la operación.',
-    INVALID_STATUS_TRANSITION: 'La orden no está en un estado que permita esta operación.',
-    QUICK_SALE_INVALID:
-        'La venta rápida es solo con retiro en el local y requiere un cliente registrado y un importe válido.',
-    CUSTOMER_INACTIVE: 'El cliente está inactivo y no puede recibir pedidos nuevos.',
-    // En el alta: el pago inicial no puede superar el saldo del pedido.
-    INVALID_PAYMENT: 'El pago inicial no es válido: no puede superar el total del pedido.',
-    INVALID_SHIPPING_ADDRESS:
-        'La dirección de envío no es válida: tiene que ser una dirección activa del cliente, con calle y ciudad.',
+const ORDER_ERRORS = {
+    byCode: {
+        INSUFFICIENT_STOCK: 'No hay stock suficiente para completar la operación.',
+        INVALID_STATUS_TRANSITION: 'La orden no está en un estado que permita esta operación.',
+        QUICK_SALE_INVALID:
+            'La venta rápida es solo con retiro en el local y requiere un cliente registrado y un importe válido.',
+        CUSTOMER_INACTIVE: 'El cliente está inactivo y no puede recibir pedidos nuevos.',
+        // En el alta: el pago inicial no puede superar el saldo del pedido.
+        INVALID_PAYMENT: 'El pago inicial no es válido: no puede superar el total del pedido.',
+        INVALID_SHIPPING_ADDRESS:
+            'La dirección de envío no es válida: tiene que ser una dirección activa del cliente, con calle y ciudad.',
+        INVALID_SHIPMENT: 'El envío no se puede actualizar en el estado actual.',
+        ORDER_ALREADY_HAS_SHIPMENT: 'La orden ya tiene un envío registrado.',
+        STOCK_NOT_FOUND: 'Uno de los productos no tiene stock en la sucursal.',
+    },
+    byStatus: {
+        404: 'Orden no encontrada.',
+    },
 };
 
-async function handleResponse<T>(
-    response: Response,
-    defaultErrorMessage: string
-): Promise<T> {
-    if (!response.ok) {
-        let errorMessage = '';
-        let errorCode = '';
-
-        try {
-            const errorPayload = await response.json();
-            errorMessage = errorPayload?.message ?? '';
-            errorCode = errorPayload?.code ?? '';
-        } catch {
-            // El backend puede no devolver JSON.
-        }
-
-        const knownMessage = ERROR_MESSAGES_BY_CODE[errorCode];
-        if (knownMessage) {
-            throw new Error(knownMessage);
-        }
-
-        if (response.status === 404) {
-            throw new Error(errorMessage || 'Orden no encontrada.');
-        }
-
-        if (response.status >= 500) {
-            throw new Error(
-                errorMessage || 'Error del servidor. Intentá de nuevo más tarde.'
-            );
-        }
-
-        throw new Error(errorMessage || defaultErrorMessage);
-    }
-
-    if (response.status === 204) {
-        return undefined as unknown as T;
-    }
-
-    return response.json();
+function handleResponse<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...ORDER_ERRORS, fallback });
 }
 
 function authHeaders(token: string): HeadersInit {

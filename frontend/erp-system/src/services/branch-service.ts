@@ -1,5 +1,6 @@
 import { Branch, BranchRequest } from '@/types/branch';
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { parseResponse } from '@/services/api-error';
 import { UserResponse } from '@/types/user';
 
 type BackendBranchResponse = {
@@ -26,39 +27,17 @@ function normalizeBranch(data: BackendBranchResponse): Branch {
     };
 }
 
-async function handleResponse<T>(response: Response, defaultErrorMessage: string): Promise<T> {
-    if (!response.ok) {
-        let errorMessage = '';
+const BRANCH_ERRORS = {
+    byCode: {
+        BRANCH_NAME_ALREADY_EXISTS: 'Ya existe una sucursal con ese nombre.',
+    },
+    byStatus: {
+        404: 'Sucursal o usuario no encontrados.',
+    },
+};
 
-        try {
-            const errorPayload = await response.json();
-            errorMessage = errorPayload?.message ?? '';
-        } catch {
-            // El backend puede no devolver JSON.
-        }
-
-        if (response.status === 404) {
-            throw new Error(errorMessage || 'Sucursal no encontrada.');
-        }
-
-        if (response.status === 409) {
-            throw new Error(errorMessage || 'Ya existe una sucursal con ese nombre.');
-        }
-
-        if (response.status >= 500) {
-            throw new Error(
-                errorMessage || 'Error del servidor. Intentá de nuevo más tarde.'
-            );
-        }
-
-        throw new Error(errorMessage || defaultErrorMessage);
-    }
-
-    if (response.status === 204) {
-        return undefined as unknown as T;
-    }
-
-    return response.json();
+function handleResponse<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...BRANCH_ERRORS, fallback });
 }
 
 /**

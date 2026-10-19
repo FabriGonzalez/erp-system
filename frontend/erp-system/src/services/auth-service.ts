@@ -1,19 +1,6 @@
 import { ChangePasswordRequest, CurrentUserResponse, LoginResponse, TokenResponse } from '@/types/auth';
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
-
-type ErrorPayload = {
-    message?: string;
-    code?: string;
-};
-
-async function readErrorPayload(response: Response): Promise<ErrorPayload> {
-    try {
-        return (await response.json()) ?? {};
-    } catch {
-        // El backend puede no devolver JSON.
-        return {};
-    }
-}
+import { ApiError, ErrorMessages, toApiError } from '@/services/api-error';
 
 function tooManyAttemptsMessage(response: Response): string {
     const seconds = Number(response.headers.get('Retry-After'));
@@ -22,6 +9,14 @@ function tooManyAttemptsMessage(response: Response): string {
     }
     const minutes = Math.ceil(seconds / 60);
     return `Demasiados intentos fallidos. Intentá de nuevo en ${minutes} ${minutes === 1 ? 'minuto' : 'minutos'}.`;
+}
+
+/** El 429 depende del header Retry-After; el resto sale de la tabla de mensajes. */
+async function authError(response: Response, messages: ErrorMessages): Promise<ApiError> {
+    if (response.status === 429) {
+        return new ApiError(tooManyAttemptsMessage(response), 429, 'TOO_MANY_LOGIN_ATTEMPTS');
+    }
+    return toApiError(response, messages);
 }
 
 /**
@@ -39,24 +34,16 @@ export async function login(username: string, password: string): Promise<LoginRe
     }, { ignoreUnauthorized: true });
 
     if (!response.ok) {
-        const { code } = await readErrorPayload(response);
-
-        if (response.status === 401) {
-            throw new Error('Usuario o contraseña incorrectos.');
-        }
-        if (response.status === 429) {
-            throw new Error(tooManyAttemptsMessage(response));
-        }
-        if (code === 'COMPANY_SUSPENDED') {
-            throw new Error('El acceso de tu empresa está suspendido. Contactá al soporte.');
-        }
-        if (code === 'COMPANY_CANCELLED') {
-            throw new Error('La cuenta de tu empresa fue dada de baja.');
-        }
-        if (response.status >= 500) {
-            throw new Error('Error del servidor. Intentá de nuevo más tarde.');
-        }
-        throw new Error('Error de autenticación.');
+        throw await authError(response, {
+            byCode: {
+                COMPANY_SUSPENDED: 'El acceso de tu empresa está suspendido. Contactá al soporte.',
+                COMPANY_CANCELLED: 'La cuenta de tu empresa fue dada de baja.',
+            },
+            byStatus: {
+                401: 'Usuario o contraseña incorrectos.',
+            },
+            fallback: 'Error de autenticación.',
+        });
     }
 
     const data: LoginResponse = await response.json();
@@ -81,25 +68,20 @@ export async function changePassword(
     });
 
     if (!response.ok) {
-        const { code } = await readErrorPayload(response);
-
-        if (code === 'INVALID_CURRENT_PASSWORD') {
-            throw new Error('La contraseña actual es incorrecta.');
-        }
-        if (code === 'PASSWORD_UNCHANGED') {
-            throw new Error('La nueva contraseña debe ser distinta de la actual.');
-        }
-        if (response.status === 429) {
-            throw new Error(tooManyAttemptsMessage(response));
-        }
-        if (response.status === 400) {
-            throw new Error('La nueva contraseña no cumple los requisitos.');
-        }
-        if (response.status === 401) {
-            // apiFetch ya disparó el overlay de sesión expirada.
-            throw new Error('Tu sesión expiró.');
-        }
-        throw new Error('No se pudo cambiar la contraseña. Intentá de nuevo más tarde.');
+        throw await authError(response, {
+            byCode: {
+                INVALID_CURRENT_PASSWORD: 'La contraseña actual es incorrecta.',
+                PASSWORD_UNCHANGED: 'La nueva contraseña debe ser distinta de la actual.',
+                PASSWORD_MANAGED_BY_ADMIN:
+                    'La contraseña de tu cuenta la administra la empresa. Pedíselo a un administrador.',
+            },
+            byStatus: {
+                400: 'La nueva contraseña no cumple los requisitos.',
+                // apiFetch ya disparó el overlay de sesión expirada.
+                401: 'Tu sesión expiró.',
+            },
+            fallback: 'No se pudo cambiar la contraseña. Intentá de nuevo más tarde.',
+        });
     }
 
     return response.json();
@@ -118,7 +100,7 @@ export async function getCurrentUser(token: string): Promise<CurrentUserResponse
     });
 
     if (!response.ok) {
-        throw new Error('No se pudieron actualizar los permisos.');
+        throw await toApiError(response, { fallback: 'No se pudieron actualizar los permisos.' });
     }
 
     return response.json();

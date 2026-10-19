@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { parseResponse } from '@/services/api-error';
 import {
     CompanyUser,
     CreateUserRequest,
@@ -6,49 +7,20 @@ import {
     UserResponse,
 } from '@/types/user';
 
-type ErrorPayload = {
-    message?: string;
-    code?: string;
+const USER_ERRORS = {
+    byCode: {
+        USERNAME_ALREADY_EXISTS: 'Ese nombre de usuario ya está en uso.',
+        EMAIL_ALREADY_EXISTS: 'Ese email ya está en uso.',
+    },
+    byStatus: {
+        400: 'Revisá los datos del usuario.',
+        403: 'No se puede hacer esta operación sobre tu propio usuario, o no tenés permisos.',
+        404: 'Usuario o rol no encontrado. El rol tiene que estar activo.',
+    },
 };
 
-/** Error con el status HTTP: la caché no reintenta los 4xx (ver query-client). */
-export class UserServiceError extends Error {
-    readonly status: number;
-
-    constructor(message: string, status: number) {
-        super(message);
-        this.status = status;
-    }
-}
-
-function errorMessageFor(status: number, payload: ErrorPayload, fallback: string): string {
-    // Los mensajes del backend están en inglés: se muestran textos propios.
-    if (payload.code === 'USERNAME_ALREADY_EXISTS') return 'Ese nombre de usuario ya está en uso.';
-    if (payload.code === 'EMAIL_ALREADY_EXISTS') return 'Ese email ya está en uso.';
-    if (status === 400) return 'Revisá los datos del usuario.';
-    if (status === 403) return 'No se puede hacer esta operación sobre tu propio usuario, o no tenés permisos.';
-    if (status === 404) return 'Usuario o rol no encontrado. El rol tiene que estar activo.';
-    if (status >= 500) return 'Error del servidor. Intentá de nuevo más tarde.';
-    return fallback;
-}
-
-async function handleResponse<T>(response: Response, defaultErrorMessage: string): Promise<T> {
-    if (!response.ok) {
-        let payload: ErrorPayload = {};
-
-        try {
-            payload = (await response.json()) ?? {};
-        } catch {
-            // El backend puede no devolver JSON.
-        }
-
-        throw new UserServiceError(
-            errorMessageFor(response.status, payload, defaultErrorMessage),
-            response.status,
-        );
-    }
-
-    return response.json();
+function handleResponse<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...USER_ERRORS, fallback });
 }
 
 function authHeaders(token: string): HeadersInit {

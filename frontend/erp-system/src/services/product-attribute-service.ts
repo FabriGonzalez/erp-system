@@ -7,6 +7,7 @@ import {
     ProductAttributeValueResponse,
 } from '@/types/product-attribute';
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { parseResponse } from '@/services/api-error';
 
 function headers(token: string): HeadersInit {
     return {
@@ -15,23 +16,19 @@ function headers(token: string): HeadersInit {
     };
 }
 
-async function responseData<T>(response: Response, fallback: string): Promise<T> {
-    if (!response.ok) {
-        let message = '';
-        try {
-            const payload = await response.json();
-            message = payload?.message ?? '';
-        } catch {
-            // Some backend errors do not include a JSON body.
-        }
-        if (response.status === 404) throw new Error(message || 'Recurso no encontrado.');
-        if (response.status === 409) throw new Error(message || 'El recurso ya existe.');
-        if (response.status >= 500) {
-            throw new Error(message || 'Error del servidor. Intentá de nuevo más tarde.');
-        }
-        throw new Error(message || fallback);
-    }
-    return response.json();
+const ATTRIBUTE_ERRORS = {
+    byCode: {
+        ATTRIBUTE_NAME_ALREADY_EXISTS: 'Ya existe un atributo con ese nombre.',
+        ATTRIBUTE_VALUE_ALREADY_EXISTS: 'Ese atributo ya tiene un valor con ese nombre.',
+    },
+    byStatus: {
+        404: 'Atributo o valor no encontrado.',
+        409: 'El atributo o valor ya existe.',
+    },
+};
+
+function responseData<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...ATTRIBUTE_ERRORS, fallback });
 }
 
 function normalizeAttribute(data: ProductAttributeResponse): ProductAttribute {

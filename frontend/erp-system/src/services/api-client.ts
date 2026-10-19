@@ -1,6 +1,8 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+import { networkError, readErrorPayload } from '@/services/api-error';
+
 const DEFAULT_API_PORT = '8080';
 
 /**
@@ -45,7 +47,15 @@ export async function apiFetch(
     init?: RequestInit,
     options?: ApiFetchOptions
 ): Promise<Response> {
-    const response = await fetch(input, init);
+    let response: Response;
+    try {
+        response = await fetch(input, init);
+    } catch (error) {
+        // fetch rechaza con TypeError ("Network request failed" / "Failed to fetch") cuando
+        // no llega al servidor: se convierte en un error con mensaje en español.
+        if (error instanceof TypeError) throw networkError();
+        throw error;
+    }
 
     if (response.status === 401 && !options?.ignoreUnauthorized) {
         unauthorizedHandler?.(await readErrorCode(response));
@@ -56,11 +66,6 @@ export async function apiFetch(
 
 /** Lee el campo code del ErrorResponse sin consumir el body que usa el llamador. */
 export async function readErrorCode(response: Response): Promise<string | null> {
-    try {
-        const payload = await response.clone().json();
-        return typeof payload?.code === 'string' ? payload.code : null;
-    } catch {
-        // Body vacío o no JSON.
-        return null;
-    }
+    const payload = await readErrorPayload(response.clone());
+    return typeof payload.code === 'string' ? payload.code : null;
 }

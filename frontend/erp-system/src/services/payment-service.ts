@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { parseResponse } from '@/services/api-error';
 import { PageResponse } from '@/types/order';
 import {
     Payment,
@@ -7,50 +8,19 @@ import {
     PaymentResponse,
 } from '@/types/payment';
 
-type ErrorPayload = {
-    message?: string;
-    code?: string;
+const PAYMENT_ERRORS = {
+    byCode: {
+        INVALID_PAYMENT: 'El pago no es válido o ya fue anulado.',
+    },
+    byStatus: {
+        400: 'Revisá los datos del pago.',
+        403: 'No tenés permisos para esta operación o no estás asignado a la sucursal del pago.',
+        404: 'Pago, cliente o sucursal no encontrados.',
+    },
 };
 
-/** Error con el status HTTP: la caché no reintenta los 4xx (ver query-client). */
-export class PaymentServiceError extends Error {
-    readonly status: number;
-
-    constructor(message: string, status: number) {
-        super(message);
-        this.status = status;
-    }
-}
-
-function errorMessageFor(status: number, payload: ErrorPayload, fallback: string): string {
-    // Los mensajes del backend están en inglés: se muestran textos propios.
-    if (payload.code === 'INVALID_PAYMENT') {
-        return 'El pago no es válido o ya fue anulado.';
-    }
-    if (status === 400) return 'Revisá los datos del pago.';
-    if (status === 403) return 'No tenés permisos para esta operación o no estás asignado a la sucursal del pago.';
-    if (status === 404) return 'Pago, cliente o sucursal no encontrados.';
-    if (status >= 500) return 'Error del servidor. Intentá de nuevo más tarde.';
-    return fallback;
-}
-
-async function handleResponse<T>(response: Response, defaultErrorMessage: string): Promise<T> {
-    if (!response.ok) {
-        let payload: ErrorPayload = {};
-
-        try {
-            payload = (await response.json()) ?? {};
-        } catch {
-            // El backend puede no devolver JSON.
-        }
-
-        throw new PaymentServiceError(
-            errorMessageFor(response.status, payload, defaultErrorMessage),
-            response.status,
-        );
-    }
-
-    return response.json();
+function handleResponse<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...PAYMENT_ERRORS, fallback });
 }
 
 function authHeaders(token: string): HeadersInit {

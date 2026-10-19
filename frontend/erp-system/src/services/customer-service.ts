@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { parseResponse } from '@/services/api-error';
 import {
     AddressRequest,
     AddressResponse,
@@ -11,58 +12,21 @@ import {
 } from '@/types/customer';
 import { PageResponse } from '@/types/order';
 
-type ErrorPayload = {
-    message?: string;
-    code?: string;
+const CUSTOMER_ERRORS = {
+    byCode: {
+        INVALID_CUSTOMER_ADDRESS: 'Una dirección inactiva no puede ser la principal.',
+        CUSTOMER_DOCUMENT_ALREADY_EXISTS: 'Ya existe un cliente con ese tipo y número de documento.',
+        INVALID_CUSTOMER_DOCUMENT: 'El número de documento no es válido para el tipo elegido.',
+    },
+    byStatus: {
+        400: 'Revisá los datos ingresados.',
+        404: 'Cliente o dirección no encontrados.',
+        409: 'Ya existe un cliente con ese tipo y número de documento.',
+    },
 };
 
-/** Error con el status HTTP, para distinguir p. ej. "no existe" (404) de un fallo. */
-export class CustomerServiceError extends Error {
-    readonly status: number;
-
-    constructor(message: string, status: number) {
-        super(message);
-        this.status = status;
-    }
-}
-
-function errorMessageFor(status: number, payload: ErrorPayload, fallback: string): string {
-    // Los mensajes del backend están en inglés: se muestran textos propios.
-    if (payload.code === 'INVALID_CUSTOMER_ADDRESS') {
-        return 'Una dirección inactiva no puede ser la principal.';
-    }
-    if (status === 400) return 'Revisá los datos ingresados.';
-    if (status === 403) return 'No tenés permisos para realizar esta acción.';
-    if (status === 404) return 'Cliente o dirección no encontrados.';
-    if (status === 409) return 'Ya existe un cliente con ese tipo y número de documento.';
-    if (status >= 500) return 'Error del servidor. Intentá de nuevo más tarde.';
-    return fallback;
-}
-
-async function handleResponse<T>(
-    response: Response,
-    defaultErrorMessage: string
-): Promise<T> {
-    if (!response.ok) {
-        let payload: ErrorPayload = {};
-
-        try {
-            payload = (await response.json()) ?? {};
-        } catch {
-            // El backend puede no devolver JSON.
-        }
-
-        throw new CustomerServiceError(
-            errorMessageFor(response.status, payload, defaultErrorMessage),
-            response.status,
-        );
-    }
-
-    if (response.status === 204) {
-        return undefined as unknown as T;
-    }
-
-    return response.json();
+function handleResponse<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...CUSTOMER_ERRORS, fallback });
 }
 
 function authHeaders(token: string): HeadersInit {

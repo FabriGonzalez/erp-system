@@ -6,43 +6,25 @@ import {
     ProductUpdateRequest,
 } from '@/types/product';
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { parseResponse } from '@/services/api-error';
 
-async function handleResponse<T>(
-    response: Response,
-    defaultErrorMessage: string
-): Promise<T> {
-    if (!response.ok) {
-        let errorMessage = '';
+const PRODUCT_ERRORS = {
+    byCode: {
+        PRODUCT_SKU_ALREADY_EXISTS: 'Ya existe un producto con ese SKU.',
+        VARIANT_SKU_ALREADY_EXISTS: 'Ya existe una variante con ese SKU. Cada variante necesita un SKU único.',
+        CATEGORY_INACTIVE: 'La categoría está inactiva. Elegí otra o activala antes de guardar.',
+        INVALID_PRODUCT_VARIANTS:
+            'Las variantes no son válidas: una variante sin atributos tiene que ser la única del producto, cada variante lleva un solo valor por atributo y una sucursal no se puede repetir en el stock.',
+        ATTRIBUTE_VALUE_ALREADY_EXISTS: 'Ese valor de atributo ya existe.',
+    },
+    byStatus: {
+        404: 'Producto, categoría, sucursal o atributo no encontrados.',
+        409: 'El producto ya existe.',
+    },
+};
 
-        try {
-            const errorPayload = await response.json();
-            errorMessage = errorPayload?.message ?? '';
-        } catch {
-            // El backend puede no devolver JSON.
-        }
-
-        if (response.status === 404) {
-            throw new Error(errorMessage || 'Producto no encontrado.');
-        }
-
-        if (response.status === 409) {
-            throw new Error(errorMessage || 'El producto ya existe.');
-        }
-
-        if (response.status >= 500) {
-            throw new Error(
-                errorMessage || 'Error del servidor. Intentá de nuevo más tarde.'
-            );
-        }
-
-        throw new Error(errorMessage || defaultErrorMessage);
-    }
-
-    if (response.status === 204) {
-        return undefined as unknown as T;
-    }
-
-    return response.json();
+function handleResponse<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...PRODUCT_ERRORS, fallback });
 }
 
 function authHeaders(token: string): HeadersInit {
