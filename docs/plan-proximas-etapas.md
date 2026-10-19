@@ -1,7 +1,7 @@
 # Plan de las etapas que quedan
 
-Estado al 2026-10-19, rama `feature/reports`. Para retomar: pasarle este archivo a Claude y
-elegir la etapa (la próxima planificada es la 13).
+Estado al 2026-10-19, rama `feature/branch-access`. Para retomar: pasarle este archivo a Claude y
+elegir la etapa.
 
 ## Cómo se trabaja (vale para todas las etapas)
 
@@ -42,6 +42,11 @@ elegir la etapa (la próxima planificada es la 13).
   `GET /reports/dashboard` (ventas con comparación y por sucursal, cobranzas, deuda, más vendidos,
   pedidos por despachar, stock bajo) sobre las sucursales asignadas; pantalla Reportes en Más.
   Alta de sucursal asigna al creador y a los usuarios con `ACCEDER_TODAS_SUCURSALES`.
+- **Etapa 13 — Asignaciones en stock y transferencias** (`feature/branch-access`, 6fb8fac y
+  ea8166d): `BranchAccessService` (asignada + activa; 403 `BRANCH_ACCESS_DENIED`, 409
+  `BRANCH_INACTIVE`) en pedidos, pagos, envíos, reportes, ajuste, transferencias, movimientos y
+  stock de producto; sucursal inactiva = no asignada; botón Desactivar/Activar con confirmación.
+  Aparte (f955655): login sin distinguir mayúsculas en el usuario.
 
 ---
 
@@ -714,13 +719,93 @@ restringir las lecturas de stock por sucursal.
 
 ---
 
+## Etapa 14 — Productos y atributos
+
+Plan detallado el 2026-10-19, relevado contra el código. El bug del detalle lo confirmó el usuario
+en la app.
+
+**Arranque.** Crear `feature/products-attributes` desde `feature/branch-access` (la etapa 13 ya
+está commiteada).
+
+**Decisiones del usuario (2026-10-19).**
+- Bug del detalle: usar los nombres de atributo y valor que el backend ya manda en el producto.
+- N+1 de atributos: endpoint nuevo con todos los valores de la empresa.
+- El producto trae su propio stock por sucursal en todas las respuestas.
+- Productos y atributos siguen en Zustand (la migración a TanStack es otra etapa).
+
+**Lo que hay hoy.**
+- **Bug:** `(tabs)/products/[id]/index.tsx:146` arma el nombre de cada valor con
+  `product-attribute-store.attributeValues`, que esa pantalla nunca carga; si no se pasó antes por
+  Atributos, el formulario de producto, el catálogo de pedidos o Nueva transferencia, muestra el id.
+  El backend ya manda `attributes: [{id, attributeId, attributeName, value, ...}]` en cada variante
+  (`ProductVariantMapper`), pero `normalizeProduct` (`services/product-service.ts`) se queda solo
+  con `attributeId` y `attributeValueId`.
+- **N+1:** `product-attribute-store.fetchAttributes` pide `GET /product-attributes` y un
+  `GET /product-attributes/{id}/values` por atributo. La consultan Atributos, `ProductForm`,
+  `VariantCatalog` y `transfers/new.tsx` (este último solo para armar etiquetas "Color: Rojo").
+- **Stock:** `GET /products` y `/products/{id}` devuelven `stock: []` (los arman con
+  `ProductVariantMapper.toResponse(variant)` sin stocks); solo la edición devuelve el stock real.
+  Por eso `product-store` pide `GET /inventory/stocks` entero en `fetchProducts`,
+  `fetchProductById` y `createProduct` y lo mezcla con `mergeProductStocks`; activar/desactivar
+  conservan el stock anterior con `preserveExistingProductStocks`. No es N+1 (una request), pero
+  trae el stock de todos los productos para mostrar uno.
+- La lectura de stock es de toda la empresa (decisión de la etapa 13), así que traerlo en el producto
+  no cambia qué ve cada usuario.
+
+### Backend
+
+1. **Stock en las respuestas de producto.** `StockRepository.findByProductVariantIdInAndCompanyId
+   (Collection<Long>, Long)` (una consulta para todas las variantes). En `ProductServiceImpl`, un
+   helper que arma las respuestas con variantes + stocks agrupados por variante, usado por `findAll`,
+   `findById`, `create`, `activate` y `deactivate` (la edición ya lo hace; unificarla con el mismo
+   helper). `ProductVariantMapper.toResponse(variant, stocks)` ya existe. Sin consultas por variante:
+   `stock.getBranch().getId()` no inicializa la sucursal.
+2. **`GET /api/v1/product-attributes/values?active=`** → `List<ProductAttributeValueResponse>` de
+   toda la empresa, una consulta con `JOIN FETCH v.attribute` (el mapper usa el nombre del
+   atributo), orden por atributo y valor. Mismo permiso que `GET /{id}/values` (lectura). El literal
+   `/values` no choca con `/{id}`. `GET /{id}/values` queda (lo usa el detalle de un atributo).
+3. **Tests unitarios** (Mockito, `-Dtest=!BackendApplicationTests`): `findAll` de productos pide
+   los stocks una sola vez con todas las variantes y los asigna a cada una; activar/desactivar
+   devuelven el stock; valores de atributos filtrados por empresa (y por `active` si viene).
+
+### Frontend
+
+1. **Nombres en el producto.** `ProductVariantAttribute` suma `attributeName` y `valueName`
+   (opcionales: `ProductForm` arma variantes nuevas solo con ids). `normalizeProduct` los conserva.
+2. **Detalle de producto:** muestra `valueName` (o "Atributo: valor") desde el producto y deja de
+   leer `product-attribute-store`. Sin request extra.
+3. **`transfers/new.tsx`:** las etiquetas "Color: Rojo · Talle: M" salen del producto; se borra su
+   `fetchAttributes` propio (el catálogo del modal sigue cargando los atributos al abrirse).
+4. **`fetchAttributes`:** `GET /product-attributes` y `GET /product-attributes/values` en paralelo
+   (2 requests en total). Función nueva `getAllAttributeValues` en `product-attribute-service`.
+5. **`product-store` sin `/inventory/stocks`:** `fetchProducts`, `fetchProductById`,
+   `createProduct`, `activateProduct` y `deactivateProduct` usan el stock que viene en la respuesta;
+   se borran `mergeProductStocks`, `preserveExistingProductStocks` y el import de `getAllStocks`.
+   `stock-store` (Inventario) no cambia. Revisar que `refreshStockAfterTransfer` y el ajuste de
+   stock sigan refrescando lo que se ve (relee productos con `fetchProducts`).
+
+### Validación
+
+- Backend: tests unitarios en la copia del scratchpad; QA en 8082 contra `erp_qa` (env
+  `JWT_SECRET`; base armada con `pg_dump`). Curl: `/products` con stock por sucursal y igual a
+  `/inventory/stocks`; `/product-attributes/values` de la empresa; con `show-sql`, una sola consulta
+  de stocks por listado de productos.
+- Frontend: `npx tsc --noEmit`, eslint de los archivos tocados, `git diff --check`.
+
+**Pruebas manuales.** Recargar la app y abrir el detalle de un producto con atributos sin pasar por
+otra pantalla: muestra nombres. Atributos y Nuevo producto: en Network, 2 requests de atributos.
+Productos: sin `/inventory/stocks`; stock correcto en lista, detalle y catálogo de pedidos. Crear un
+producto con stock inicial, editar su stock (también a 0), activarlo/desactivarlo: el stock no se
+pierde. Transferir y ajustar: el stock del producto se actualiza. Nueva transferencia muestra las
+etiquetas de variantes.
+
+**Fuera de alcance.** Migrar productos/atributos a TanStack Query; que el catálogo de pedidos use
+los nombres del producto en lugar del store (necesita todos los valores para elegir).
+
+---
+
 ## Pendientes chicos (sin orden; sumar a la etapa afín)
 
-- **Bug:** `products/[id]/index.tsx:32,142` lee `attributeValues` del store sin cargarlos; si no se
-  cargaron en otra pantalla, muestra el id del valor en lugar del nombre.
-- `fetchAttributes` hace una request de valores por atributo (N+1).
-- `product-store` pide todo `/inventory/stocks` y pisa `variant.stock`, que ya viene en el producto.
-  Verificar antes de cambiar la estrategia.
 - Redirección inicial inconsistente: `index.tsx` y `login.tsx` van a `/orders`, `_layout.tsx:45` a
   `/shipments`.
 - `customers/[id]/debts.tsx` solo se abre desde `debtors.tsx`; evaluar acceso desde el detalle del cliente.
@@ -735,3 +820,9 @@ restringir las lecturas de stock por sucursal.
   sentido en la etapa 12: autoasignación a sucursales nuevas).
 - `BackendApplicationTests` (test de contexto) falla desde 2026-10-06; los unitarios se corren con
   `-Dtest=!BackendApplicationTests`.
+- En web, `Alert.alert` no muestra nada: los errores de las pantallas que lo usan (6 archivos, p. ej.
+  Sucursales) quedan mudos. `utils/confirm.ts` ya resuelve la confirmación; falta lo mismo para avisos.
+- Unicidad de usuario sin distinguir mayúsculas: hoy solo en el servicio; con migraciones, índice
+  único sobre `lower(username)`.
+- Sin migraciones (`ddl-auto: update`): no crea índices funcionales ni actualiza los CHECK de los
+  enums (por eso la etapa 10 no pudo sumar un tipo de movimiento).
