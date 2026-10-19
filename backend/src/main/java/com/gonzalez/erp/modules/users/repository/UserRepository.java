@@ -16,14 +16,16 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByEmail(String email);
 
+    // El usuario se compara sin distinguir mayúsculas: "Juan" y "juan" son el mismo para el
+    // login, así que tampoco pueden existir los dos.
     @EntityGraph(attributePaths = {
             "role",
             "role.permissions",
             "company"
     })
-    Optional<User> findByUsername(String username);
+    Optional<User> findByUsernameIgnoreCase(String username);
 
-    boolean existsByUsername(String username);
+    boolean existsByUsernameIgnoreCase(String username);
 
     List<User> findByActive(boolean active);
 
@@ -46,5 +48,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // Usuario y email son únicos en toda la plataforma: no se filtra por empresa.
     boolean existsByEmailAndIdNot(String email, Long id);
 
-    boolean existsByUsernameAndIdNot(String username, Long id);
+    boolean existsByUsernameIgnoreCaseAndIdNot(String username, Long id);
 }

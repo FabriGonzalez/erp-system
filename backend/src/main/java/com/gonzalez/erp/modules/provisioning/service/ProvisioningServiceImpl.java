@@ -113,7 +113,7 @@ public class ProvisioningServiceImpl implements ProvisioningService {
             throw new CompanyNameAlreadyExistsException(
                     request.companyName());
         }
-        if (userRepository.existsByUsername(request.adminUsername())) {
+        if (userRepository.existsByUsernameIgnoreCase(request.adminUsername())) {
             throw new UserUsernameAlreadyExistsException(
                     request.adminUsername());
         }

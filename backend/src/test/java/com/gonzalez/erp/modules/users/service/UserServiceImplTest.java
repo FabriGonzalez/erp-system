@@ -116,11 +116,33 @@ class UserServiceImplTest {
     @Test
     void usernameTakenInAnotherCompanyIsRejected() {
         // La validación es global: el login es por usuario y la columna es única en toda la base.
-        when(userRepository.existsByUsername("nuevo")).thenReturn(true);
+        when(userRepository.existsByUsernameIgnoreCase("nuevo")).thenReturn(true);
 
         assertThatThrownBy(() -> userService.create(request(ROLE_ID)))
                 .isInstanceOf(UserUsernameAlreadyExistsException.class);
         verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void usernameThatOnlyDiffersInCaseIsTaken() {
+        // El login no distingue mayúsculas: "Vendedor" chocaría con "vendedor".
+        when(userRepository.findById(1L)).thenReturn(Optional.of(tenantAdmin));
+        when(userRepository.existsByUsernameIgnoreCaseAndIdNot("Vendedor", 1L)).thenReturn(true);
+
+        UserUpdateRequest update = new UserUpdateRequest("Vendedor", "admin@acme.com", "Ad", "Min", ROLE_ID);
+        assertThatThrownBy(() -> userService.update(1L, update))
+                .isInstanceOf(UserUsernameAlreadyExistsException.class);
+    }
+
+    @Test
+    void changingOnlyTheCaseOfTheOwnUsernameIsAllowed() {
+        when(userRepository.findById(1L)).thenReturn(Optional.of(tenantAdmin));
+        when(roleRepository.findByIdAndCompanyId(ROLE_ID, COMPANY_ID)).thenReturn(Optional.of(adminRole));
+
+        userService.update(1L, new UserUpdateRequest("Admin", "admin@acme.com", "Ad", "Min", ROLE_ID));
+
+        assertThat(tenantAdmin.getUsername()).isEqualTo("Admin");
+        verify(userRepository, never()).existsByUsernameIgnoreCaseAndIdNot(any(), any());
     }
 
     @Test

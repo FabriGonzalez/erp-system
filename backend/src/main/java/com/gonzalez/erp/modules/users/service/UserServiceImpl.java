@@ -58,7 +58,7 @@ public class UserServiceImpl implements UserService {
         if (userRepository.existsByEmail(request.email())) {
             throw new UserEmailAlreadyExistsException(request.email());
         }
-        if (userRepository.existsByUsername(request.username())) {
+        if (userRepository.existsByUsernameIgnoreCase(request.username())) {
             throw new UserUsernameAlreadyExistsException(request.username());
         }
         Role role = findAssignableRoleOrThrow(request.roleId(), companyId);
@@ -93,8 +93,8 @@ public class UserServiceImpl implements UserService {
                 && userRepository.existsByEmailAndIdNot(request.email(), id)) {
             throw new UserEmailAlreadyExistsException(request.email());
         }
-        if (!user.getUsername().equals(request.username())
-                && userRepository.existsByUsernameAndIdNot(request.username(), id)) {
+        if (!user.getUsername().equalsIgnoreCase(request.username())
+                && userRepository.existsByUsernameIgnoreCaseAndIdNot(request.username(), id)) {
             throw new UserUsernameAlreadyExistsException(request.username());
         }
         Role role = findAssignableRoleOrThrow(request.roleId(), companyId);
