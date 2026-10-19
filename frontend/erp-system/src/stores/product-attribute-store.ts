@@ -36,11 +36,8 @@ type ProductAttributeState = {
     updateAttributeValue: (id: string, data: ProductAttributeValueRequest, token: string) => Promise<ProductAttributeValue>;
     activateAttributeValue: (id: string, token: string) => Promise<ProductAttributeValue>;
     deactivateAttributeValue: (id: string, token: string) => Promise<ProductAttributeValue>;
-    getActiveAttributes: () => ProductAttribute[];
-    getActiveAttributeValues: (attributeId?: string) => ProductAttributeValue[];
-    getAttributeById: (id: string) => ProductAttribute | undefined;
-    getAttributeValueById: (id: string) => ProductAttributeValue | undefined;
-    getAttributeValuesByAttributeId: (attributeId: string) => ProductAttributeValue[];
+    // Sin getters que lean get(): con el React Compiler, llamados durante el render se memorizan
+    // y no ven los cambios del store. Las pantallas derivan de `attributes`/`attributeValues`.
 };
 
 function replaceById<T extends { id: string }>(items: T[], item: T): T[] {
@@ -48,7 +45,7 @@ function replaceById<T extends { id: string }>(items: T[], item: T): T[] {
     return exists ? items.map((current) => current.id === item.id ? item : current) : [...items, item];
 }
 
-export const useProductAttributeStore = create<ProductAttributeState>((set, get) => ({
+export const useProductAttributeStore = create<ProductAttributeState>((set) => ({
     attributes: [],
     attributeValues: [],
     isLoading: false,
@@ -131,14 +128,4 @@ export const useProductAttributeStore = create<ProductAttributeState>((set, get)
         set((state) => ({ attributeValues: replaceById(state.attributeValues, value), error: null }));
         return value;
     },
-
-    getActiveAttributes: () => get().attributes.filter((attribute) => attribute.active),
-    getActiveAttributeValues: (attributeId) => get().attributeValues.filter(
-        (value) => value.active && (!attributeId || value.attributeId === attributeId)
-    ),
-    getAttributeById: (id) => get().attributes.find((attribute) => attribute.id === id),
-    getAttributeValueById: (id) => get().attributeValues.find((value) => value.id === id),
-    getAttributeValuesByAttributeId: (attributeId) => get().attributeValues.filter(
-        (value) => value.attributeId === attributeId
-    ),
 }));

@@ -29,8 +29,8 @@ export default function AttributeDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
 
     const {
-        getAttributeById,
-        getAttributeValuesByAttributeId,
+        attributes,
+        attributeValues,
         fetchAttributeById,
         activateAttribute,
         deactivateAttribute,
@@ -47,8 +47,13 @@ export default function AttributeDetailScreen() {
         }
     }, [id, token, fetchAttributeById]);
 
-    const attribute = getAttributeById(id ?? '');
-    const values = attribute ? getAttributeValuesByAttributeId(attribute.id) : [];
+    // Se derivan del estado, no de getters del store que leen get(): con el React Compiler,
+    // una función estable con los mismos argumentos se memoriza y, al recargar (F5), quedaba
+    // fijo el primer resultado (store vacío) aunque los datos llegaran después.
+    const attribute = attributes.find((item) => item.id === id);
+    const values = attribute
+        ? attributeValues.filter((value) => value.attributeId === attribute.id)
+        : [];
 
     const [isAttributeModalVisible, setIsAttributeModalVisible] = useState(false);
     const [isValueModalVisible, setIsValueModalVisible] = useState(false);
