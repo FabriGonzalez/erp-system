@@ -273,7 +273,7 @@ public class ProductServiceImpl implements ProductService {
         Set<Long> branchIds = new HashSet<>();
         for (InitialStockRequest stockRequest : initialStock) {
             if (!branchIds.add(stockRequest.branchId())) {
-                throw new IllegalArgumentException(
+                throw new InvalidProductVariantsException(
                         "Initial stock contains duplicate branch id: "
                                 + stockRequest.branchId()
                 );
@@ -432,7 +432,7 @@ public class ProductServiceImpl implements ProductService {
         Set<Long> branchIds = new HashSet<>();
         for (ProductVariantStockRequest request : stockRequests) {
             if (!branchIds.add(request.branchId())) {
-                throw new IllegalArgumentException(
+                throw new InvalidProductVariantsException(
                         "Stock contains duplicate branch id: " + request.branchId()
                 );
             }

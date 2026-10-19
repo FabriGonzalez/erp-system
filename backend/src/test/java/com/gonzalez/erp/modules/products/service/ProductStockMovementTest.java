@@ -17,6 +17,7 @@ import com.gonzalez.erp.modules.products.dto.request.ProductVariantStockRequest;
 import com.gonzalez.erp.modules.products.dto.request.ProductVariantUpdateRequest;
 import com.gonzalez.erp.modules.products.entity.Product;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
+import com.gonzalez.erp.modules.products.exception.InvalidProductVariantsException;
 import com.gonzalez.erp.modules.products.repository.ProductAttributeValueRepository;
 import com.gonzalez.erp.modules.products.repository.ProductRepository;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -121,6 +123,17 @@ class ProductStockMovementTest {
         verify(stockMovementRecorder).record(centro, StockMovementType.ADJUSTMENT, -5, 5, null,
                 StockMovementRecorder.PRODUCT_UPDATE, PRODUCT_ID);
         verify(stockMovementRecorder, never()).record(eq(norte), any(), anyInt(), anyInt(), any(), any(), any());
+    }
+
+    @Test
+    void repeatedBranchInTheStockIsAnInvalidRequest() {
+        stockIn(CENTRO_ID, 5);
+
+        // Antes era IllegalArgumentException y el handler lo devolvía como 500.
+        assertThatThrownBy(() -> productService.update(PRODUCT_ID, request(
+                new ProductVariantStockRequest(CENTRO_ID, 1),
+                new ProductVariantStockRequest(CENTRO_ID, 2))))
+                .isInstanceOf(InvalidProductVariantsException.class);
     }
 
     private Stock stockIn(Long branchId, int quantity) {

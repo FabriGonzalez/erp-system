@@ -6,6 +6,7 @@ import com.gonzalez.erp.modules.auth.exception.InvalidPasswordChangeException;
 import com.gonzalez.erp.modules.auth.exception.TooManyLoginAttemptsException;
 import com.gonzalez.erp.modules.companies.exception.CompanyNameAlreadyExistsException;
 import com.gonzalez.erp.modules.companies.exception.CompanyNotActiveException;
+import com.gonzalez.erp.modules.companies.exception.CompanyTaxIdAlreadyExistsException;
 import com.gonzalez.erp.modules.companies.exception.InvalidCompanyStatusTransitionException;
 import com.gonzalez.erp.modules.branches.exception.BranchNameAlreadyExistsException;
 import com.gonzalez.erp.modules.categories.exception.CategoryNameAlreadyExistsException;
@@ -38,6 +39,8 @@ import com.gonzalez.erp.modules.transfers.exception.InvalidStockTransferExceptio
 import com.gonzalez.erp.modules.users.exception.UserEmailAlreadyExistsException;
 import com.gonzalez.erp.modules.users.exception.UserUsernameAlreadyExistsException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -45,27 +48,35 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-        @ExceptionHandler(AccessDeniedException.class)
-        public ResponseEntity<ErrorResponse> handleAccessDenied(
-                        AccessDeniedException ex, HttpServletRequest request) {
-                return ResponseEntity
-                                .status(HttpStatus.FORBIDDEN)
-                                .body(ErrorResponse.of(
-                                                HttpStatus.FORBIDDEN.value(),
-                                                HttpStatus.FORBIDDEN.getReasonPhrase(),
-                                                ex.getMessage(),
-                                                request.getRequestURI()
-                                ));
-        }
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(
+            AccessDeniedException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of(
+                        HttpStatus.FORBIDDEN.value(),
+                        HttpStatus.FORBIDDEN.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "FORBIDDEN"
+                ));
+    }
 
     // Sin este handler el catch-all de Exception devolvía 500 ante credenciales inválidas.
     // El mensaje es siempre el mismo para no revelar si el usuario existe o está deshabilitado.
@@ -149,12 +160,15 @@ public class GlobalExceptionHandler {
                         HttpStatus.NOT_FOUND.value(),
                         HttpStatus.NOT_FOUND.getReasonPhrase(),
                         ex.getMessage(),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        "NOT_FOUND"
                 ));
     }
 
+    /** Duplicados y categoría inactiva, con code para que el frontend diga qué pasó. */
     @ExceptionHandler({
             CompanyNameAlreadyExistsException.class,
+            CompanyTaxIdAlreadyExistsException.class,
             BranchNameAlreadyExistsException.class,
             CategoryNameAlreadyExistsException.class,
             ProductSkuAlreadyExistsException.class,
@@ -166,13 +180,26 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<ErrorResponse> handleConflict(
             RuntimeException ex, HttpServletRequest request) {
+        String code = switch (ex) {
+            case CompanyNameAlreadyExistsException e -> "COMPANY_NAME_ALREADY_EXISTS";
+            case CompanyTaxIdAlreadyExistsException e -> "COMPANY_TAX_ID_ALREADY_EXISTS";
+            case BranchNameAlreadyExistsException e -> "BRANCH_NAME_ALREADY_EXISTS";
+            case CategoryNameAlreadyExistsException e -> "CATEGORY_NAME_ALREADY_EXISTS";
+            case ProductSkuAlreadyExistsException e -> "PRODUCT_SKU_ALREADY_EXISTS";
+            case ProductVariantSkuAlreadyExistsException e -> "VARIANT_SKU_ALREADY_EXISTS";
+            case ProductAttributeNameAlreadyExistsException e -> "ATTRIBUTE_NAME_ALREADY_EXISTS";
+            case ProductAttributeValueAlreadyExistsException e -> "ATTRIBUTE_VALUE_ALREADY_EXISTS";
+            case ProductCategoryNotActiveException e -> "CATEGORY_INACTIVE";
+            default -> "CUSTOMER_DOCUMENT_ALREADY_EXISTS";
+        };
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of(
                         HttpStatus.CONFLICT.value(),
                         HttpStatus.CONFLICT.getReasonPhrase(),
                         ex.getMessage(),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        code
                 ));
     }
 
@@ -211,7 +238,8 @@ public class GlobalExceptionHandler {
                         HttpStatus.CONFLICT.value(),
                         HttpStatus.CONFLICT.getReasonPhrase(),
                         ex.getMessage(),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        "ORDER_ALREADY_HAS_SHIPMENT"
                 ));
     }
 
@@ -244,7 +272,8 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_REQUEST.value(),
                         HttpStatus.BAD_REQUEST.getReasonPhrase(),
                         ex.getMessage(),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        "INVALID_CUSTOMER_DOCUMENT"
                 ));
     }
 
@@ -271,7 +300,8 @@ public class GlobalExceptionHandler {
                         HttpStatus.NOT_FOUND.value(),
                         HttpStatus.NOT_FOUND.getReasonPhrase(),
                         ex.getMessage(),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        "STOCK_NOT_FOUND"
                 ));
     }
 
@@ -284,7 +314,8 @@ public class GlobalExceptionHandler {
                         HttpStatus.CONFLICT.value(),
                         HttpStatus.CONFLICT.getReasonPhrase(),
                         ex.getMessage(),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        "STOCK_ALREADY_EXISTS"
                 ));
     }
 
@@ -394,7 +425,8 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_REQUEST.value(),
                         HttpStatus.BAD_REQUEST.getReasonPhrase(),
                         String.join("; ", errors),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        "VALIDATION_ERROR"
                 ));
     }
 
@@ -407,20 +439,87 @@ public class GlobalExceptionHandler {
                         HttpStatus.CONFLICT.value(),
                         HttpStatus.CONFLICT.getReasonPhrase(),
                         "Resource already exists or violates a data constraint",
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        "DATA_INTEGRITY_VIOLATION"
                 ));
     }
 
+    // Errores de Spring MVC: antes caían en el catch-all como 500. Como con el JSON mal formado,
+    // no se devuelve el detalle del framework.
+
+    /** ?type=FOO o un id no numérico en la ruta (p. ej. /movements/stock/1 contra /{id}). */
+    @ExceptionHandler({
+            MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class
+    })
+    public ResponseEntity<ErrorResponse> handleInvalidParameter(
+            Exception ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        "Invalid or missing request parameter",
+                        request.getRequestURI(),
+                        "INVALID_PARAMETER"
+                ));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(
+            HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(ErrorResponse.of(
+                        HttpStatus.METHOD_NOT_ALLOWED.value(),
+                        HttpStatus.METHOD_NOT_ALLOWED.getReasonPhrase(),
+                        "HTTP method not supported for this endpoint",
+                        request.getRequestURI(),
+                        "METHOD_NOT_ALLOWED"
+                ));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(
+            HttpMediaTypeNotSupportedException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(ErrorResponse.of(
+                        HttpStatus.UNSUPPORTED_MEDIA_TYPE.value(),
+                        HttpStatus.UNSUPPORTED_MEDIA_TYPE.getReasonPhrase(),
+                        "Unsupported content type",
+                        request.getRequestURI(),
+                        "UNSUPPORTED_MEDIA_TYPE"
+                ));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResource(
+            NoResourceFoundException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(
+                        HttpStatus.NOT_FOUND.value(),
+                        HttpStatus.NOT_FOUND.getReasonPhrase(),
+                        "Endpoint not found",
+                        request.getRequestURI(),
+                        "NOT_FOUND"
+                ));
+    }
+
+    /** Lo inesperado se loguea completo y no se le muestra el detalle interno al cliente. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(
             Exception ex, HttpServletRequest request) {
+        log.error("Unhandled exception on {} {}", request.getMethod(), request.getRequestURI(), ex);
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of(
                         HttpStatus.INTERNAL_SERVER_ERROR.value(),
                         HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(),
-                        ex.getMessage(),
-                        request.getRequestURI()
+                        "Internal server error",
+                        request.getRequestURI(),
+                        "INTERNAL_ERROR"
                 ));
     }
 }
