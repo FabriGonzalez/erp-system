@@ -1397,6 +1397,114 @@ corren con el usuario y los permisos de quien envía el audio; arrancar solo con
 deuda de un cliente); lo que escribe (ventas, pagos, ajustes) llega como borrador que el usuario
 confirma, nunca se ejecuta directo.
 
+## Etapa 22 — Backend para una tienda web
+
+Plan general el 2026-10-20, relevado contra el código. Es grande: se divide en cuatro partes que
+se implementan y commitean por separado (22A a 22D), cada una con su plan detallado al arrancarla.
+La tienda en sí (el sitio web) es otro proyecto y queda fuera; esta etapa deja el backend listo
+para que la consuma, más lo mínimo en el ERP para atender los pedidos web.
+
+**Decisiones del usuario (2026-10-20).**
+- El comprador compra **solo con cuenta** (registro e inicio de sesión antes de comprar).
+- Pago con **Mercado Pago** (checkout + webhook).
+- La tienda muestra el **stock sumado de todas las sucursales**; al confirmar, el backend asigna
+  el pedido **automáticamente a una sucursal que tenga todos los ítems** (orden de prioridad que
+  configura la empresa); si ninguna sola alcanza aunque la suma sí, el pedido queda "a asignar"
+  y se resuelve desde el ERP (con una transferencia).
+- Cada tienda se identifica por **dominio propio** de la empresa.
+- Imágenes de producto en **almacenamiento S3-compatible** (MinIO en docker-compose para
+  desarrollo).
+- **Envío de mails** con un proveedor (MailHog en desarrollo): verificar el email, recuperar la
+  contraseña y avisar el pedido confirmado.
+
+**Lo que hay hoy (relevamiento).**
+- `SecurityConfig`: solo `/auth/login` es público; todo lo demás exige el JWT de empleado. CORS
+  acepta cualquier origen (`setAllowedOriginPatterns("*")` con credenciales).
+- La empresa y el usuario salen del token (`SecurityUtils`), usado en 21 servicios (84 llamadas):
+  los servicios actuales no se pueden llamar desde un pedido web sin empleado.
+- `Order.branch` y `Order.createdBy` (un `User`) son obligatorios; `Payment.createdBy` también;
+  `StockMovementRecorder` registra el usuario actual.
+- `Customer` no tiene credenciales; su email no es único. `Company` no tiene dominio ni datos de
+  tienda. `SalesType` = `WITH_PRODUCTS`, `QUICK_SALE`; `OrderStatus` sin "pendiente de pago";
+  `PaymentMethod` sin Mercado Pago. Productos sin imágenes. No hay `@Scheduled`, mail ni S3.
+- Esquema con `ddl-auto: update`, que no cambia columnas a nullable ni los CHECK de los enums:
+  **esta etapa requiere recrear la base de desarrollo** (o adelantar las migraciones).
+
+**Criterios comunes.**
+- Endpoints públicos separados bajo `/api/v1/store/**`; nunca se exponen los del ERP. Respuestas
+  propias (sin costos, sin datos de otros clientes, sin ids internos innecesarios).
+- Token de comprador distinto del de empleado (otro emisor/claim `type=customer`): un token de
+  comprador nunca entra al ERP y viceversa.
+- Precio, stock, total y empresa se calculan siempre en el servidor.
+- Límite de pedidos por IP en login, registro, recuperación y checkout.
+
+### 22A — Fundamentos: tienda, catálogo público e imágenes
+
+1. **Tienda por dominio:** `Company` suma `storeDomain` (único) y `storeEnabled`. Un filtro de
+   `/store/**` resuelve la empresa por el `Origin` (o un header `X-Store-Domain` para la tienda
+   renderizada en servidor) y la deja en un contexto propio; empresa inexistente, deshabilitada o
+   suspendida → 404. CORS: `/store/**` solo admite los dominios registrados; el ERP, los orígenes
+   configurados (deja de ser `*`).
+2. **Imágenes:** entidad `ProductImage` (producto o variante, orden, clave en el almacenamiento).
+   Subida con URL firmada (S3-compatible, MinIO en docker-compose) desde el ERP con
+   `ADMINISTRAR_PRODUCTOS`; validación de tipo y tamaño; borrado.
+3. **Producto en la tienda:** `Product.publishedOnline` (y descripción ya existente). Solo se
+   muestran productos activos, publicados, de categorías activas, con precio.
+4. **Catálogo público:** `GET /store/categories`, `GET /store/products` (paginado, búsqueda,
+   categoría, orden por precio/nombre), `GET /store/products/{id}` con variantes, atributos,
+   imágenes y disponibilidad sumada de todas las sucursales activas (cantidad o "sin stock").
+5. **ERP (frontend):** dominio y habilitación de la tienda en la configuración de la empresa;
+   imágenes y "publicar en la tienda" en el formulario de producto.
+
+### 22B — Cuentas de comprador y mails
+
+1. **Credenciales:** `CustomerAccountCredential` (cliente, email único por empresa, hash,
+   email verificado, último acceso). Registro crea el `Customer` de esa empresa (o lo vincula si
+   ya existe uno con ese email y sin cuenta, previa verificación).
+2. **Auth:** `POST /store/auth/register`, `login`, `verify-email`, `forgot-password`,
+   `reset-password` (tokens de un solo uso con vencimiento), `GET/PATCH /store/me`, direcciones
+   propias (`/store/me/addresses`, reutiliza `Address`).
+3. **Mails:** servicio de mail con plantillas (proveedor configurable; MailHog en docker-compose).
+4. **Mis pedidos:** `GET /store/me/orders` y detalle (solo los propios).
+
+### 22C — Checkout, asignación de sucursal y Mercado Pago
+
+1. **Modelo:** `Order.channel` (`ERP`, `WEB`); `createdBy` pasa a opcional (los web no tienen
+   empleado; igual en `Payment` y `StockMovement`); estados nuevos `PENDING_PAYMENT` y
+   `TO_ASSIGN`; `PaymentMethod.MERCADO_PAGO`; prioridad de sucursal para la tienda (`Branch`).
+2. **Servicios sin token de empleado:** extraer de `OrderServiceImpl` / pagos / stock la lógica que
+   hoy lee `SecurityUtils` para que reciba empresa y autor explícitos; el ERP sigue pasando los del
+   token y la tienda los del contexto de tienda.
+3. **Checkout:** `POST /store/checkout` (ítems, retiro o envío a una dirección propia). El backend
+   valida precio y stock, elige la sucursal (la primera por prioridad con todos los ítems), crea
+   el pedido `PENDING_PAYMENT` descontando stock (reserva) y la preferencia de Mercado Pago;
+   devuelve la URL de pago. Si ninguna sucursal alcanza pero la suma sí: pedido `TO_ASSIGN` sin
+   descontar hasta asignarlo (se informa al comprador que puede demorar).
+4. **Mercado Pago:** credenciales por empresa (guardadas cifradas); webhook público
+   `POST /store/payments/mercadopago` con verificación de firma, idempotente; pago aprobado →
+   `Payment` en la cuenta del cliente, pedido pasa al estado normal (retiro/envío) y mail de
+   confirmación. Rechazado o vencido → se cancela y devuelve stock.
+5. **Vencimiento de reservas:** tarea `@Scheduled` que cancela pedidos `PENDING_PAYMENT` viejos
+   (p. ej. 30 min) y devuelve el stock.
+
+### 22D — Pedidos web en el ERP
+
+1. Listados con filtro por canal y marca "Web"; los `PENDING_PAYMENT` no cuentan como venta.
+2. Pedidos `TO_ASSIGN`: elegir sucursal (con transferencia previa si hace falta) y descontar.
+3. Reportes: las ventas web suman cuando están pagadas.
+
+### Validación (cada parte)
+
+- Backend: tests unitarios en la copia del scratchpad (resolución de tienda y CORS, aislamiento
+  entre empresas y entre tipos de token, catálogo sin datos privados, registro/recuperación,
+  checkout con asignación, webhook idempotente y firma inválida, vencimiento de reservas).
+- Frontend del ERP (22A y 22D): `npx tsc --noEmit`, eslint, `git diff --check`.
+- Manual: recrear la base de desarrollo; probar con Swagger/curl y MinIO/MailHog de
+  docker-compose; Mercado Pago con credenciales de prueba.
+
+**Fuera de alcance.** El sitio de la tienda, cupones, costo de envío calculado, facturación
+electrónica, compra como invitado.
+
 ---
 
 ## Pendientes chicos (sin orden; sumar a la etapa afín)
