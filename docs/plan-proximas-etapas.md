@@ -1,7 +1,7 @@
 # Plan de las etapas que quedan
 
-Estado al 2026-10-19, rama `feature/products-attributes`. Para retomar: pasarle este archivo a
-Claude y elegir la etapa (la próxima planificada es la 15).
+Estado al 2026-10-20, rama `feature/orders-query`. Para retomar: pasarle este archivo a
+Claude y elegir la etapa (la próxima planificada es la 16).
 
 ## Cómo se trabaja (vale para todas las etapas)
 
@@ -56,6 +56,11 @@ Claude y elegir la etapa (la próxima planificada es la 15).
   producto trae su stock (una consulta), `GET /product-attributes/values`, nombres de atributo en
   el detalle. Aparte: c680f4e anclas de navegación (F5 en web), d9a2d74 categoría en la consulta
   del listado (9 → 4 consultas), de4b3bb detalle de atributo tras F5 (React Compiler).
+- **Etapa 15 — Pedidos a TanStack Query** (`feature/orders-query`, 7b7a9fd y 2618b15): al editar,
+  lo que ya estaba conserva su precio; `use-order-queries` (caché por filtros, detalle con
+  placeholder, edición con datos frescos), badge de pago y saldo en el listado,
+  `refreshStockAfterChange` compartido. Operaciones con stack propio (ancla y edición dentro del
+  stack; rutas auxiliares del formulario por flujo en `utils/order-routes.ts`).
 
 ---
 
@@ -903,6 +908,115 @@ confirmadas; migrar productos y stock a TanStack.
 
 ---
 
+## Etapa 16 — Productos y stock a TanStack Query
+
+Plan detallado el 2026-10-20, relevado contra el código.
+
+**Arranque.** Crear `feature/products-query` desde `feature/orders-query` (la etapa 15 ya está
+commiteada).
+
+**Decisiones del usuario (2026-10-20).**
+- Alcance: productos y stock (`product-store` y `stock-store`) juntos, porque el stock viaja dentro
+  del producto. Categorías y atributos quedan para la 17; sucursales, después.
+- Listados como el resto de los módulos: **paginados y filtrados en el backend**, con scroll
+  infinito (`usePagedList`). Vale para Productos, los selectores de productos (pedidos y
+  transferencias) e Inventario.
+- Sin sucursal activa, Productos muestra el **stock total** (hoy usa la sucursal `'1'` fija).
+- `StockAdjustModal` ajusta solo el stock del detalle, y los límites del borrador salen de
+  `useVariantStock` (confirmado). Los bugs relevados abajo se corrigen en esta etapa.
+
+**Lo que hay hoy.**
+- `GET /products` devuelve la lista entera; Productos, el selector de pedidos y el alta de
+  transferencias filtran en memoria. Cuatro pantallas piden el catálogo completo al abrir.
+- `product-store` mezcla datos del servidor con filtros de pantalla: `searchQuery` lo comparten
+  Productos y el selector de pedidos (buscar en uno filtra el otro). `isLoading` es uno solo para
+  la carga y las mutaciones.
+- El detalle y la edición de producto solo piden el producto si no está en el store: la edición
+  puede partir de un stock viejo y, como manda cantidades finales, pisar una venta reciente.
+- `OrderForm` y el alta de transferencias toman el límite de stock de cada ítem del catálogo
+  cargado. **Bug:** si el catálogo no está cargado, o al editar un envío cuyo stock restante es 0,
+  tocar +/- **saca el ítem del pedido** (`updateItemQuantity` lo borra con `maxStock <= 0`). Al
+  editar, el límite tampoco suma lo que el propio pedido ya tiene reservado.
+- `stock-store`: Inventario pide `/inventory/stocks/branch/{id}` entero y busca en memoria. El
+  ajuste no refresca el catálogo ni el detalle de producto. `StockAdjustModal`, que se abre desde
+  el detalle de un stock, ofrece elegir **cualquier** variante del catálogo y cualquier sucursal.
+- `refreshStockAfterChange` relee `product-store` entero tras pedidos y transferencias.
+
+### Backend
+
+1. **`GET /api/v1/products` paginado** (`PageResponse<ProductResponse>`, como clientes):
+   `q` (nombre o SKU de alguna variante, sin distinguir mayúsculas ni tildes, con el mismo
+   `translate()` de `CustomerRepository`), `categoryId`, `active`, `stock` (`IN_STOCK` /
+   `OUT_OF_STOCK`) con `branchId` opcional (sin `branchId`, el total de las sucursales que trae la
+   respuesta), `page`, `size` (máx. 100), `sort` (`name,asc` por defecto). Categoría con
+   `@EntityGraph` y una consulta de variantes y otra de stocks **por página**, como hoy.
+2. **`GET /api/v1/inventory/stocks` paginado** con `branchId`, `q` (producto o SKU) y
+   `variantIds` (lista; para pedir el stock de los ítems de un borrador). Las rutas
+   `/branch/{id}` y `/variant/{id}` quedan sin uso en el frontend; se dejan.
+3. **Tests** (Mockito): validación de `page`/`size`/`sort`, armado de la página con stock; las
+   consultas se prueban en QA.
+
+### Frontend
+
+1. **`hooks/use-product-queries.ts`:** `productKeys` (`all`, `lists()`, `list(filters)`,
+   `detail(id)`).
+   - `useProducts(filters)` con `usePagedList`; búsqueda con `useDebouncedValue`. Deshabilitada sin
+     token.
+   - `useProduct(id, { fresh })` con placeholder desde los listados, como `useOrder`; la edición
+     usa `fresh`.
+   - Mutaciones: alta, edición, activar y desactivar. Siembran el detalle, invalidan listados,
+     stock y movimientos (la edición registra ajustes).
+2. **`hooks/use-stock-queries.ts`:** `stockKeys`; `useBranchStocks({ branchId, q })` (Inventario),
+   `useStock(id)` con placeholder, `useVariantStock(branchId, variantIds)` y `useAdjustStock`
+   (siembra el stock e invalida stock, productos y movimientos).
+3. **`refreshStockAfterChange`** pasa a invalidar `productKeys.all`, `stockKeys.all` y los
+   movimientos (deja de depender de `product-store`).
+4. **Pantallas:**
+   - Productos: filtros en estado local y en la query; stock de la sucursal activa o total.
+   - Detalle y edición de producto con `useProduct`; alta con la mutación.
+   - Inventario e historial con `useBranchStocks`/`useStock`.
+   - `VariantCatalog` recibe la página (`useProducts({ active: true, stock: 'IN_STOCK', branchId, q })`)
+     y scroll infinito; en el selector de pedidos y en transferencias se vuelve a pedir al abrir
+     (stock al día). La búsqueda pasa a estado local de cada pantalla.
+5. **Límites de stock del borrador:**
+   - `OrderForm` y el alta de transferencias usan `useVariantStock` para los ítems del borrador.
+   - Al editar, el límite es el stock de la sucursal más lo que el pedido ya tenía de esa
+     variante.
+   - `updateItemQuantity` deja de borrar el ítem cuando el límite es 0: solo lo saca la cantidad 0
+     o el botón quitar.
+6. **`StockAdjustModal`** ajusta el stock del detalle (variante y sucursal fijas, a la vista); deja
+   de recibir el catálogo y las sucursales.
+7. **Limpieza:** borrar `stores/product-store.ts`, `stores/stock-store.ts`, `getAllProducts`,
+   `getStocksByBranch`/`getStocksByVariant`/`getAllStocks` si quedan sin uso, y los tipos
+   `StockFilter`/`StatusFilter` si pasan a la pantalla.
+
+### Validación
+
+- Backend: tests unitarios en la copia del scratchpad. QA en 8082 contra `erp_qa`:
+  - filtros y paginación de `/products` y `/inventory/stocks`;
+  - cantidad de consultas por página (la de stocks es una sola).
+- Frontend: `npx tsc --noEmit`, eslint de los archivos tocados, `git diff --check`.
+
+**Pruebas manuales (las hace el usuario).**
+- Productos: búsqueda por nombre y por SKU, categoría, estado, con/sin stock, scroll infinito;
+  sin sucursal activa, el stock es el total.
+- Selectores: el de pedidos y el de transferencias no comparten la búsqueda con Productos.
+- Edición de producto: cambiar el stock después de una venta hecha en otra pestaña parte del
+  stock nuevo.
+- Formulario de pedido y transferencias:
+  - +/- respeta el stock;
+  - al editar un envío con stock restante 0 se puede bajar la cantidad sin que se borre el ítem;
+  - se puede volver a la cantidad original.
+- Inventario: búsqueda y scroll infinito; ajustar desde el detalle actualiza el listado, el
+  catálogo y el detalle de producto sin recargar.
+- Vender, transferir y cancelar: el stock de Productos e Inventario se actualiza.
+- F5 en el detalle de producto y de stock.
+
+**Fuera de alcance.** Categorías y atributos (etapa 17), sucursales, control de concurrencia en
+la edición de stock (versión u "esperado" en el request).
+
+---
+
 ## Pendientes chicos (sin orden; sumar a la etapa afín)
 
 - Redirección inicial inconsistente: `index.tsx` y `login.tsx` van a `/orders`, `_layout.tsx:45` a
@@ -911,8 +1025,11 @@ confirmadas; migrar productos y stock a TanStack.
 - Limpieza: `FRONTEND_DOCS.md` desactualizado (describe dashboard y login mock); clave huérfana
   `@erp/active-branch-id` en AsyncStorage; funciones sin uso (`getBranchById`, `getCategoryById`,
   `getStockById`, `getStocksByVariant`); "Mi Perfil" sin acción en `more.tsx`.
-- Migrar los demás módulos a TanStack Query, de a uno y con decisión explícita (pedidos en la
-  etapa 15; después productos/atributos, categorías, sucursales, stock).
+- Migrar los demás módulos a TanStack Query, de a uno y con decisión explícita (productos y stock
+  en la 16; después categorías y atributos, y sucursales).
+- `OrdersFilterList.tsx` no se usa en ninguna pantalla (y con él `OrderStatusFilter` /
+  `OrderDeliveryFilter`).
+- Un pedido con total 0 figura "Pendiente" (`OrderMapper.computePaymentStatus`).
 - Permiso que el backend nunca chequea: `ADMINISTRAR_PRECIOS` (`ACCEDER_TODAS_SUCURSALES` toma
   sentido en la etapa 12: autoasignación a sucursales nuevas).
 - `BackendApplicationTests` (test de contexto) falla desde 2026-10-06; los unitarios se corren con
