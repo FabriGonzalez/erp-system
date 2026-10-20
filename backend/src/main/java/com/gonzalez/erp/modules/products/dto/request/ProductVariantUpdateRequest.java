@@ -15,7 +15,7 @@ public record ProductVariantUpdateRequest(
         String sku,
 
         @NotNull(message = "Variant price is required")
-        @DecimalMin(value = "0.0", message = "Variant price cannot be negative")
+        @DecimalMin(value = "0.0", inclusive = false, message = "Variant price must be greater than 0")
         BigDecimal price,
 
         // Vacío = producto sin variantes (una sola variante sin atributos).

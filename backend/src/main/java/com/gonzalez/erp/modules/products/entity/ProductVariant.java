@@ -40,7 +40,7 @@ public class ProductVariant extends BaseEntity {
     private String sku;
 
     @NotNull(message = "Variant price is required")
-    @DecimalMin(value = "0.0", message = "Variant price cannot be negative")
+    @DecimalMin(value = "0.0", inclusive = false, message = "Variant price must be greater than 0")
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal price;
 
