@@ -1,7 +1,7 @@
 # Plan de las etapas que quedan
 
-Estado al 2026-10-20, rama `feature/orders-query`. Para retomar: pasarle este archivo a
-Claude y elegir la etapa (la próxima planificada es la 16).
+Estado al 2026-10-20, rama `feature/products-query`. Para retomar: pasarle este archivo a
+Claude y elegir la etapa (la próxima planificada es la 17).
 
 ## Cómo se trabaja (vale para todas las etapas)
 
@@ -61,6 +61,11 @@ Claude y elegir la etapa (la próxima planificada es la 16).
   placeholder, edición con datos frescos), badge de pago y saldo en el listado,
   `refreshStockAfterChange` compartido. Operaciones con stack propio (ancla y edición dentro del
   stack; rutas auxiliares del formulario por flujo en `utils/order-routes.ts`).
+- **Etapa 16 — Productos y stock a TanStack Query** (`feature/products-query`, fa48ff0 y 01ed9b3):
+  `GET /products` y `GET /inventory/stocks` paginados y filtrados en la base (búsqueda sin tildes,
+  stock por sucursal o total, `variantIds`); `use-product-queries`, `use-stock-queries` y
+  `catalog-keys`; límites del borrador con `useVariantStock` (bajar ya no borra el ítem, al editar
+  se suma lo reservado y se conserva el precio vendido); ajuste de stock solo del detalle.
 
 ---
 
@@ -1015,6 +1020,95 @@ commiteada).
 **Fuera de alcance.** Categorías y atributos (etapa 17), sucursales, control de concurrencia en
 la edición de stock (versión u "esperado" en el request).
 
+## Etapa 17 — Categorías y atributos a TanStack Query; avisos y confirmaciones propios
+
+Plan detallado el 2026-10-20, relevado contra el código.
+
+**Arranque.** Crear `feature/catalog-feedback` desde `feature/products-query` (la etapa 16 ya está
+commiteada).
+
+**Decisiones del usuario (2026-10-20).**
+- Categorías y atributos van como **lista completa** (una query por catálogo, sin paginar): son
+  catálogos chicos y los selectores los necesitan enteros. Mismo esquema TanStack que el resto.
+- Se cierra el pendiente de `Alert.alert` (mudo en web) **reemplazándolo en toda la app** por
+  componentes propios que se vean bien en web y en el celular: toasts para avisos y un diálogo para
+  confirmaciones.
+- El selector de categoría del formulario de producto **oculta las inactivas** (al editar, la
+  actual se sigue viendo, marcada como inactiva).
+
+**Lo que hay hoy.**
+- `category-store` y `product-attribute-store` (Zustand) con un `isLoading`/`error` compartido
+  entre la carga y las mutaciones. Renombrar una categoría o un atributo no refresca los productos
+  en caché (traen `categoryName`, `attributeName` y `valueName`).
+- Atributos: activar/desactivar **traga el error** (`catch {}` con un comentario que dice que lo
+  muestra el store, y no lo hace).
+- `ProductSelectionCard` (selectores de pedidos y transferencias) busca los nombres de atributo en
+  el store y, si no está cargado, muestra "Atributo" y el id del valor; el producto ya trae los
+  nombres. `VariantCatalog` pide los atributos solo para eso.
+- El selector de categoría (`CategoryModal`) lista también las inactivas; elegir una da
+  `CATEGORY_INACTIVE` al guardar.
+- `Alert.alert` para errores en 5 lugares (detalle de producto, Categorías, Sucursales ×2,
+  `BranchUsersAssignmentModal` ×2): en web no se ve nada.
+- Confirmaciones: `confirmAction` (7 pantallas) usa `window.confirm` en web; la cancelación de un
+  pedido con pagos usa `window.confirm` con "Aceptar = reembolsar, Cancelar = crédito".
+- Éxitos: Operaciones y Envíos muestran `SuccessBanner` y lo esconden con `setTimeout`; el alta y
+  la edición de producto guardan un mensaje de éxito justo antes de `router.back()` (nunca se ve).
+- `getCategoryById` y `fetchCategoryById` sin uso.
+
+### Backend
+
+Sin cambios: `GET /categories`, `GET /product-attributes` y `GET /product-attributes/values` ya
+devuelven las listas completas.
+
+### Frontend
+
+1. **`hooks/use-category-queries.ts`:** `categoryKeys` (`all`, `list()`); `useCategories()` con
+   todas (las pantallas filtran activas donde corresponde); mutaciones alta, edición y
+   activar/desactivar que actualizan la lista e invalidan `productKeys.all` (nombre de categoría en
+   los productos y filtro por categoría).
+2. **`hooks/use-attribute-queries.ts`:** `attributeKeys` (`all`, `list()`, `values()`); `useAttributes()`
+   (atributos y valores en paralelo, como hoy); el detalle deriva de esas listas. Mutaciones de
+   atributo y de valor (alta, edición, activar/desactivar) que actualizan las listas e invalidan
+   `productKeys.all`. Errores visibles (toast).
+3. **Pantallas:** Categorías, Atributos y detalle de atributo con los hooks; Productos (pastillas)
+   y `ProductForm` con `useCategories`/`useAttributes`; `CategoryModal` solo activas (más la actual
+   al editar). `ProductSelectionCard`/`VariantCatalog` usan los nombres que trae el producto y dejan
+   de pedir atributos.
+4. **Avisos (toasts):** `stores/toast-store.ts` (estado de la UI, Zustand) y `components/ui/ToastHost.tsx`
+   montado una vez en `src/app/_layout.tsx`; `showToast({ type: 'success' | 'error' | 'info', message })`.
+   Arriba, respetando el área segura; se apilan hasta 3; se cierran solos (éxito 3 s, error 5 s)
+   o al tocarlos; animación con Reanimated (ya instalado). Sin librerías nuevas, así se ve igual en
+   web, iOS y Android. Se vacían al cerrar o expirar la sesión.
+5. **Confirmaciones (diálogo):** `components/ui/DialogHost.tsx` + estado propio, también en el layout
+   raíz. `confirmAction` mantiene su firma (las 7 pantallas no cambian) y pasa a usar el diálogo en
+   todas las plataformas; `chooseAction({ title, message, options })` para la cancelación con pagos
+   (Volver / Dejar como crédito / Reembolsar). Uno a la vez; al expirar la sesión se resuelven como
+   cancelados. El overlay de sesión expirada queda siempre por encima.
+6. **Reemplazos:** los `Alert.alert` de error pasan a `showToast` (y Atributos deja de tragar el
+   error); `SuccessBanner` + `setTimeout` y los mensajes de éxito que nunca se veían pasan a
+   `showToast` de éxito; `use-order-actions` usa `chooseAction`. Se borran `SuccessBanner`,
+   `category-store`, `product-attribute-store` y `getCategoryById`.
+
+### Validación
+
+- Frontend: `npx tsc --noEmit`, eslint de los archivos tocados, `git diff --check`.
+- No hay cambios de backend.
+
+**Pruebas manuales (las hace el usuario), en web y en el celular.**
+- Categorías: crear, editar, activar/desactivar; el nuevo nombre aparece en Productos sin
+  recargar. El formulario de producto no ofrece inactivas (salvo la actual al editar).
+- Atributos: crear atributo y valor, renombrar, activar/desactivar (también con error: se ve el
+  aviso); F5 en el detalle.
+- Selectores de pedidos y transferencias: los atributos se ven con su nombre sin haber pasado por
+  Atributos.
+- Toasts: error al activar una sucursal o categoría, éxito al despachar/cancelar un pedido y al
+  guardar un producto; se apilan y se cierran solos o al tocarlos.
+- Diálogos: confirmar desactivar sucursal/usuario/rol, anular pago o transferencia; cancelar un
+  pedido con pagos (las tres opciones). Logout y sesión expirada con un diálogo o toast abierto.
+
+**Fuera de alcance.** Sucursales a TanStack (próxima migración), mensajes de éxito nuevos donde hoy
+no hay ninguno.
+
 ---
 
 ## Pendientes chicos (sin orden; sumar a la etapa afín)
@@ -1023,10 +1117,10 @@ la edición de stock (versión u "esperado" en el request).
   `/shipments`.
 - `customers/[id]/debts.tsx` solo se abre desde `debtors.tsx`; evaluar acceso desde el detalle del cliente.
 - Limpieza: `FRONTEND_DOCS.md` desactualizado (describe dashboard y login mock); clave huérfana
-  `@erp/active-branch-id` en AsyncStorage; funciones sin uso (`getBranchById`, `getCategoryById`,
-  `getStockById`, `getStocksByVariant`); "Mi Perfil" sin acción en `more.tsx`.
-- Migrar los demás módulos a TanStack Query, de a uno y con decisión explícita (productos y stock
-  en la 16; después categorías y atributos, y sucursales).
+  `@erp/active-branch-id` en AsyncStorage; funciones sin uso (`getBranchById`; `getCategoryById` se
+  borra en la 17); "Mi Perfil" sin acción en `more.tsx`.
+- Migrar los demás módulos a TanStack Query, de a uno y con decisión explícita (categorías y
+  atributos en la 17; después sucursales).
 - `OrdersFilterList.tsx` no se usa en ninguna pantalla (y con él `OrderStatusFilter` /
   `OrderDeliveryFilter`).
 - Un pedido con total 0 figura "Pendiente" (`OrderMapper.computePaymentStatus`).
@@ -1034,8 +1128,6 @@ la edición de stock (versión u "esperado" en el request).
   sentido en la etapa 12: autoasignación a sucursales nuevas).
 - `BackendApplicationTests` (test de contexto) falla desde 2026-10-06; los unitarios se corren con
   `-Dtest=!BackendApplicationTests`.
-- En web, `Alert.alert` no muestra nada: los errores de las pantallas que lo usan (6 archivos, p. ej.
-  Sucursales) quedan mudos. `utils/confirm.ts` ya resuelve la confirmación; falta lo mismo para avisos.
 - Unicidad de usuario sin distinguir mayúsculas: hoy solo en el servicio; con migraciones, índice
   único sobre `lower(username)`.
 - Sin migraciones (`ddl-auto: update`): no crea índices funcionales ni actualiza los CHECK de los
