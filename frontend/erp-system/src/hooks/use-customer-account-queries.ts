@@ -7,13 +7,14 @@ import {
     getDebtors,
 } from '@/services/customer-account-service';
 import { cancelPayment, createPayment, getCustomerPayments } from '@/services/payment-service';
+import { queryClient } from '@/services/query-client';
 import { useAuthStore } from '@/stores/auth-store';
-import { useOrderStore } from '@/stores/order-store';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import { PaymentMethod } from '@/types/order';
 import { Payment } from '@/types/payment';
 
 import { customerAccountKeys, invalidateCustomerAccount } from './customer-account-keys';
+import { orderKeys } from './use-order-queries';
 import { errorText, requireToken, usePagedList } from './use-paged-list';
 
 const PAGE_SIZE = 20;
@@ -85,22 +86,16 @@ export function useDebtors() {
 // --- Mutaciones ---
 
 /**
- * Un pago mueve la cuenta del cliente y lo pagado de las órdenes a las que se aplicó.
- * Las órdenes viven en order-store (Zustand): se releen las que ya estén cargadas.
+ * Un pago mueve la cuenta del cliente y lo pagado de las órdenes a las que se aplicó:
+ * cambian su detalle y su estado de pago en los listados.
  */
 function refreshAfterPayment(customerId: string, affectedOrderIds: string[]) {
     invalidateCustomerAccount(customerId);
 
-    const token = useAuthStore.getState().token;
-    if (!token) return;
-
-    const { orders, fetchOrderById } = useOrderStore.getState();
     for (const orderId of new Set(affectedOrderIds)) {
-        if (orders.some((order) => order.id === orderId)) {
-            // Si falla, el detalle se vuelve a pedir al abrirlo.
-            fetchOrderById(orderId, token).catch(() => undefined);
-        }
+        void queryClient.invalidateQueries({ queryKey: orderKeys.detail(orderId) });
     }
+    void queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
 }
 
 export type RegisterPaymentInput = {

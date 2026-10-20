@@ -8,10 +8,10 @@ import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useCreateOrder } from '@/hooks/use-order-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
-import { useOrderStore } from '@/stores/order-store';
 import { SharedStyles } from '@/styles/shared';
 import {
     toBackendCustomerId,
@@ -24,8 +24,7 @@ export default function NewOrderScreen() {
     const canAccess = useAuthStore((state) => hasPermission(state.user, 'CREAR_PEDIDOS'));
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const createOrder = useOrderStore((state) => state.createOrder);
-    const token = useAuthStore((state) => state.token);
+    const createOrder = useCreateOrder();
     const { salesType: salesTypeParam } = useLocalSearchParams<{
         salesType?: string;
     }>();
@@ -41,7 +40,7 @@ export default function NewOrderScreen() {
     const activeBranch = useBranchStore((state) => state.activeBranch);
 
     async function handleSubmitOrder() {
-        if (!token || isSubmitting) {
+        if (isSubmitting) {
             return;
         }
 
@@ -68,18 +67,15 @@ export default function NewOrderScreen() {
             // El resumen guarda el importe cobrado justo antes de enviar.
             const draft = useOrderDraftStore.getState();
 
-            await createOrder(
-                {
-                    branchId: Number(activeBranch.id),
-                    customerId: toBackendCustomerId(customer),
-                    salesType,
-                    quickSaleAmount: isQuickSale ? quickSaleAmount : undefined,
-                    deliveryType: 'LOCAL_PICKUP',
-                    items: isQuickSale ? undefined : toOrderItemRequests(items),
-                    ...toOrderPaymentOptions(draft),
-                },
-                token,
-            );
+            await createOrder.mutateAsync({
+                branchId: Number(activeBranch.id),
+                customerId: toBackendCustomerId(customer),
+                salesType,
+                quickSaleAmount: isQuickSale ? quickSaleAmount : undefined,
+                deliveryType: 'LOCAL_PICKUP',
+                items: isQuickSale ? undefined : toOrderItemRequests(items),
+                ...toOrderPaymentOptions(draft),
+            });
 
             resetDraft();
             router.back();

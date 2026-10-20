@@ -15,7 +15,7 @@ import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useOrderActions } from '@/hooks/use-order-actions';
-import { useOrderDetail } from '@/hooks/use-order-detail';
+import { useOrder } from '@/hooks/use-order-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
 import { hasPermission } from '@/utils/permissions';
@@ -23,7 +23,7 @@ import { hasPermission } from '@/utils/permissions';
 export default function ShipmentDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const user = useAuthStore((state) => state.user);
-    const { order: loadedOrder, isLoading, loadError } = useOrderDetail(id);
+    const { order: loadedOrder, isLoading, loadError } = useOrder(id);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const order = loadedOrder?.deliveryType === 'SHIPPING' ? loadedOrder : undefined;
 

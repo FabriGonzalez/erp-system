@@ -53,7 +53,10 @@ export type Order = {
     branchName: string;
     items: OrderItem[];
     total: number;
+    // Los tres los calcula el backend con los pagos asignados; sin cliente se cobra en el acto.
     amountPaid: number;
+    paymentStatus: PaymentStatus;
+    balance: number;
     status: OrderStatus;
     createdAt: string;
     updatedAt: string;
@@ -144,7 +147,7 @@ export type OrderResponse = {
     status: OrderStatus;
     total: number | string;
     amountPaid?: number | string | null;
-    paymentStatus?: PaymentStatus;
+    paymentStatus: PaymentStatus;
     balance?: number | string | null;
     createdAt: string;
     updatedAt: string;
@@ -188,16 +191,6 @@ export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
     PARTIAL: 'Pago parcial',
     PAID: 'Pagado',
 };
-
-export function getPaymentStatus(order: Pick<Order, 'total' | 'amountPaid'>): PaymentStatus {
-    if (order.amountPaid <= 0) return 'PENDING';
-    if (order.amountPaid >= order.total) return 'PAID';
-    return 'PARTIAL';
-}
-
-export function getBalanceDue(order: Pick<Order, 'total' | 'amountPaid'>): number {
-    return Math.max(0, order.total - order.amountPaid);
-}
 
 export const DELIVERY_TYPE_LABELS: Record<DeliveryType, string> = {
     LOCAL_PICKUP: 'Retiro',

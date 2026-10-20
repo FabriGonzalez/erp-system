@@ -12,11 +12,10 @@ import { useCustomerAddresses } from '@/hooks/use-customer-queries';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
 import { CustomerAddress } from '@/types/customer';
-
-type AddressFlow = 'orders' | 'shipments';
+import { ORDER_FORM_ROUTES, OrderFlow } from '@/utils/order-routes';
 
 type SelectAddressScreenProps = {
-    flow: AddressFlow;
+    flow: OrderFlow;
 };
 
 export function SelectAddressScreen({ flow }: SelectAddressScreenProps) {
@@ -25,9 +24,7 @@ export function SelectAddressScreen({ flow }: SelectAddressScreenProps) {
     const setDraftAddress = useOrderDraftStore((state) => state.setAddress);
     // Solo las activas: una inactiva no se puede elegir para un envío.
     const { addresses, error, isLoading, reload } = useCustomerAddresses(customer.id, { activeOnly: true });
-    const addAddressRoute = flow === 'shipments'
-        ? '/shipments/add-address'
-        : '/orders/add-address';
+    const addAddressRoute = ORDER_FORM_ROUTES[flow].addAddress;
 
     function handleSelectAddress(address: CustomerAddress) {
         setDraftAddress(address);

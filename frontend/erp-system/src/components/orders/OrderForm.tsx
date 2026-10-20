@@ -19,11 +19,14 @@ import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import { Order, OrderCreationMode } from '@/types/order';
+import { CUSTOMER_PICKER_ROUTES, ORDER_FORM_ROUTES, OrderFlow } from '@/utils/order-routes';
 
 const INACTIVE_CUSTOMER_MESSAGE = 'El cliente seleccionado está inactivo. Elegí otro cliente para continuar.';
 
 type OrderFormProps = {
     mode?: OrderCreationMode;
+    // Stack desde el que se abre; por defecto, el del modo (Ventas o Envíos).
+    flow?: OrderFlow;
     initialOrder?: Order;
     initialSalesType?: 'WITH_PRODUCTS' | 'QUICK_SALE';
     onSubmitOrder: () => void;
@@ -34,6 +37,7 @@ type OrderFormProps = {
 
 export function OrderForm({
     mode,
+    flow: flowProp,
     initialOrder,
     initialSalesType,
     onSubmitOrder,
@@ -121,6 +125,8 @@ export function OrderForm({
     }
 
     const isShipment = creationMode === 'SHIPMENT';
+    const flow: OrderFlow = flowProp ?? (isShipment ? 'shipments' : 'orders');
+    const routes = ORDER_FORM_ROUTES[flow];
     const effectiveDeliveryType = isShipment ? 'SHIPPING' : 'LOCAL_PICKUP';
     const effectiveSalesType = isShipment ? 'WITH_PRODUCTS' : salesType;
     const isShipping = effectiveDeliveryType === 'SHIPPING';
@@ -165,32 +171,29 @@ export function OrderForm({
         : 0;
 
     function handleSelectCustomer() {
+        // Solo en el alta: al editar el cliente queda fijo.
+        if (flow === 'operations') return;
+
         const requireRegisteredCustomer = isShipment || effectiveSalesType === 'QUICK_SALE';
-        const customerRoute = isShipment
-            ? '/shipments/select-customer'
-            : '/orders/select-customer';
         router.push({
-            pathname: customerRoute,
+            pathname: CUSTOMER_PICKER_ROUTES[flow].selectCustomer,
             params: requireRegisteredCustomer ? { allowAnonymous: 'false' } : undefined,
         });
     }
 
     function handleSelectAddress() {
-        router.push(isShipment ? '/shipments/select-address' : '/orders/select-address');
+        router.push(routes.selectAddress);
     }
 
     function handleAddCustomerAddress() {
-        const addressRoute = isShipment
-            ? '/shipments/add-address'
-            : '/orders/add-address';
         router.push({
-            pathname: addressRoute,
+            pathname: routes.addAddress,
             params: { id: customer.id },
         });
     }
 
     function handleAddProducts() {
-        router.push(isShipment ? '/shipments/select-products' : '/orders/select-products');
+        router.push(routes.selectProducts);
     }
 
     function handleUpdateQuantity(productId: string, variantId: string, newQty: number) {

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Alert, Platform } from 'react-native';
 
-import { useAuthStore } from '@/stores/auth-store';
-import { useOrderStore } from '@/stores/order-store';
 import { Order, RefundAction } from '@/types/order';
+
+import { useCancelOrder, useDispatchOrder } from './use-order-queries';
 
 function askRefundAction(): Promise<RefundAction | null> {
     if (Platform.OS === 'web') {
@@ -31,9 +31,8 @@ export function useOrderActions(
     onSuccess: (message: string) => void,
     successMessages: { cancel: string; dispatch: string }
 ) {
-    const token = useAuthStore((state) => state.token);
-    const cancelOrder = useOrderStore((state) => state.cancelOrder);
-    const dispatchOrder = useOrderStore((state) => state.dispatchOrder);
+    const cancelOrder = useCancelOrder();
+    const dispatchOrder = useDispatchOrder();
     const [isBusy, setIsBusy] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -54,7 +53,7 @@ export function useOrderActions(
     }
 
     async function handleCancel(order: Order) {
-        if (!token || isBusy) return;
+        if (isBusy) return;
 
         let refundAction: RefundAction | undefined;
 
@@ -65,15 +64,15 @@ export function useOrderActions(
         }
 
         await run(
-            () => cancelOrder(order.id, token, refundAction),
+            () => cancelOrder.mutateAsync({ id: order.id, refundAction }),
             successMessages.cancel
         );
     }
 
     async function handleDispatch(order: Order) {
-        if (!token || isBusy) return;
+        if (isBusy) return;
 
-        await run(() => dispatchOrder(order.id, token), successMessages.dispatch);
+        await run(() => dispatchOrder.mutateAsync(order.id), successMessages.dispatch);
     }
 
     return { isBusy, errorMessage, handleCancel, handleDispatch };

@@ -1,8 +1,8 @@
 import { queryClient } from '@/services/query-client';
 
 /**
- * Claves de caché de la cuenta corriente. Van aparte de los hooks para que order-store
- * (Zustand) pueda invalidarlas sin importar los hooks, que a su vez usan order-store.
+ * Claves de caché de la cuenta corriente. Van aparte de los hooks para que los de pedidos
+ * puedan invalidarlas sin importar los de la cuenta, que a su vez usan las claves de pedidos.
  */
 export const customerAccountKeys = {
     all: ['customer-account'] as const,

@@ -8,10 +8,10 @@ import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useCreateOrder } from '@/hooks/use-order-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
-import { useOrderStore } from '@/stores/order-store';
 import { SharedStyles } from '@/styles/shared';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import {
@@ -25,8 +25,7 @@ export default function NewShipmentScreen() {
     const canAccess = useAuthStore((state) => hasPermission(state.user, 'CREAR_PEDIDOS'));
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const createOrder = useOrderStore((state) => state.createOrder);
-    const token = useAuthStore((state) => state.token);
+    const createOrder = useCreateOrder();
     const customer = useOrderDraftStore((state) => state.customer);
     const address = useOrderDraftStore((state) => state.address);
     const items = useOrderDraftStore((state) => state.items);
@@ -35,7 +34,6 @@ export default function NewShipmentScreen() {
 
     async function handleSubmitOrder() {
         if (
-            !token ||
             isSubmitting ||
             !activeBranch ||
             customer.id === CUSTOMER_ANONYMOUS.id ||
@@ -53,18 +51,15 @@ export default function NewShipmentScreen() {
             const draft = useOrderDraftStore.getState();
 
             // El backend copia la dirección al envío en la misma transacción del alta.
-            await createOrder(
-                {
-                    branchId: Number(activeBranch.id),
-                    customerId: toBackendCustomerId(customer),
-                    salesType: 'WITH_PRODUCTS',
-                    deliveryType: 'SHIPPING',
-                    shippingAddressId: Number(address.id),
-                    items: toOrderItemRequests(items),
-                    ...toOrderPaymentOptions(draft),
-                },
-                token,
-            );
+            await createOrder.mutateAsync({
+                branchId: Number(activeBranch.id),
+                customerId: toBackendCustomerId(customer),
+                salesType: 'WITH_PRODUCTS',
+                deliveryType: 'SHIPPING',
+                shippingAddressId: Number(address.id),
+                items: toOrderItemRequests(items),
+                ...toOrderPaymentOptions(draft),
+            });
 
             resetDraft();
             router.back();

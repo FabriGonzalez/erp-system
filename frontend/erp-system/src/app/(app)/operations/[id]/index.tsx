@@ -14,14 +14,14 @@ import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useOrderActions } from '@/hooks/use-order-actions';
-import { useOrderDetail } from '@/hooks/use-order-detail';
+import { useOrder } from '@/hooks/use-order-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { hasPermission } from '@/utils/permissions';
 
 export default function OperationDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const user = useAuthStore((state) => state.user);
-    const { order, isLoading, loadError } = useOrderDetail(id);
+    const { order, isLoading, loadError } = useOrder(id);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
     function showSuccess(message: string) {
@@ -80,7 +80,7 @@ export default function OperationDetailScreen() {
                     canDispatch={canDispatch}
                     canCancel={canCancel}
                     isBusy={isBusy}
-                    onEdit={() => router.push(`/shipments/${currentOrder.id}/edit`)}
+                    onEdit={() => router.push({ pathname: '/operations/[id]/edit', params: { id: currentOrder.id } })}
                     onDispatch={() => void handleDispatch(currentOrder)}
                     onCancel={() => void handleCancel(currentOrder)}
                 />

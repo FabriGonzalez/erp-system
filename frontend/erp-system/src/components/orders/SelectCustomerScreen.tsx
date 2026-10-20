@@ -15,11 +15,10 @@ import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
 import { Customer, CUSTOMER_ANONYMOUS } from '@/types/customer';
 import { getInitials } from '@/utils/format';
-
-type CustomerFlow = 'orders' | 'shipments';
+import { CUSTOMER_PICKER_ROUTES, OrderCreationFlow } from '@/utils/order-routes';
 
 type SelectCustomerScreenProps = {
-    flow: CustomerFlow;
+    flow: OrderCreationFlow;
 };
 
 export function SelectCustomerScreen({ flow }: SelectCustomerScreenProps) {
@@ -37,9 +36,7 @@ export function SelectCustomerScreen({ flow }: SelectCustomerScreenProps) {
     } = useCustomerList({ query: searchQuery, status: 'active' });
     const setDraftCustomer = useOrderDraftStore((state) => state.setCustomer);
     const currentCustomer = useOrderDraftStore((state) => state.customer);
-    const newCustomerRoute = flow === 'shipments'
-        ? '/shipments/new-customers'
-        : '/orders/new-customer';
+    const newCustomerRoute = CUSTOMER_PICKER_ROUTES[flow].newCustomer;
 
     function handleSelectCustomer(customer: Customer) {
         setDraftCustomer(customer);

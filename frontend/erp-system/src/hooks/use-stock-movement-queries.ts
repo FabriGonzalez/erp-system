@@ -1,6 +1,7 @@
 import { queryClient } from '@/services/query-client';
 import { getStockMovements } from '@/services/stock-movement-service';
 import { useAuthStore } from '@/stores/auth-store';
+import { useProductStore } from '@/stores/product-store';
 import { STOCK_MOVEMENT_READ_PERMISSIONS, hasAnyPermission } from '@/utils/permissions';
 
 import { requireToken, usePagedList } from './use-paged-list';
@@ -32,4 +33,19 @@ export function useStockMovements(stockId: string | undefined) {
 /** Para las mutaciones que mueven stock con la pantalla de historial ya montada. */
 export function invalidateStockMovements() {
     void queryClient.invalidateQueries({ queryKey: stockMovementKeys.all });
+}
+
+/**
+ * Para pedidos y transferencias, que mueven stock desde otro módulo. El stock por variante
+ * vive en product-store (Zustand), que usan las pestañas siempre montadas: se relee si ya
+ * estaba cargado. Inventario (stock-store) vuelve a pedir el stock cada vez que se abre.
+ */
+export function refreshStockAfterChange() {
+    invalidateStockMovements();
+
+    const token = useAuthStore.getState().token;
+    if (token && useProductStore.getState().products.length > 0) {
+        // Si falla, el catálogo se vuelve a pedir al abrirlo.
+        useProductStore.getState().fetchProducts(token).catch(() => undefined);
+    }
 }

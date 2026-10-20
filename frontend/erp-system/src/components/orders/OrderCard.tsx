@@ -2,6 +2,7 @@ import { StyleSheet, Text, View, Pressable } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { PaymentStatusBadge } from '@/components/orders/PaymentStatusBadge';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Order, DELIVERY_TYPE_LABELS } from '@/types/order';
 
@@ -24,6 +25,9 @@ function formatDate(isoDate: string): string {
 }
 
 export function OrderCard({ order, onPress }: OrderCardProps) {
+    // Al cancelar se revierten los pagos: el estado de pago ya no dice nada.
+    const showPayment = order.status !== 'CANCELLED';
+
     return (
         <Pressable
             style={({ pressed }) => [styles.card, pressed && styles.pressed]}
@@ -43,6 +47,7 @@ export function OrderCard({ order, onPress }: OrderCardProps) {
                         {DELIVERY_TYPE_LABELS[order.deliveryType]}
                     </Text>
                 </View>
+                {showPayment && <PaymentStatusBadge status={order.paymentStatus} />}
             </View>
 
             <View style={styles.footerRow}>
@@ -53,6 +58,9 @@ export function OrderCard({ order, onPress }: OrderCardProps) {
                             : `${order.items.length} ${order.items.length === 1 ? 'producto' : 'productos'}`}
                     </Text>
                     <Text style={styles.total}>${order.total.toLocaleString('es-AR')}</Text>
+                    {showPayment && order.balance > 0 && (
+                        <Text style={styles.balance}>Saldo ${order.balance.toLocaleString('es-AR')}</Text>
+                    )}
                 </View>
                 <View style={styles.footerRight}>
                     <Text style={styles.date}>{formatDate(order.createdAt)}</Text>
@@ -138,6 +146,11 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '700',
         color: Colors.text,
+    },
+    balance: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: Colors.error,
     },
     footerRight: {
         flexDirection: 'row',

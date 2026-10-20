@@ -1,6 +1,5 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { OrderCard } from '@/components/orders/OrderCard';
@@ -10,63 +9,22 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useAuthStore } from '@/stores/auth-store';
+import { useOrders } from '@/hooks/use-order-queries';
 import { useBranchStore } from '@/stores/branch-store';
-import { useOrderStore } from '@/stores/order-store';
 import { SharedStyles } from '@/styles/shared';
 
 export default function ShipmentsToPrepareScreen() {
-    const token = useAuthStore((state) => state.token);
-    const activeBranch = useBranchStore((state) => state.activeBranch);
-    const orders = useOrderStore((state) => state.orders);
-    const totalElements = useOrderStore((state) => state.totalElements);
-    const isLoading = useOrderStore((state) => state.isLoading);
-    const isLoadingMore = useOrderStore((state) => state.isLoadingMore);
-    const isError = useOrderStore((state) => state.isError);
-    const errorMessage = useOrderStore((state) => state.errorMessage);
-    const fetchOrders = useOrderStore((state) => state.fetchOrders);
-
-    const activeBranchId = activeBranch?.id;
-
-    // Una orden despachada o cancelada deja de estar en TO_PREPARE aunque el
-    // store la conserve de una carga anterior.
-    const shipments = orders.filter(
-        (order) =>
-            order.deliveryType === 'SHIPPING' &&
-            order.status === 'TO_PREPARE' &&
-            (!activeBranchId || order.branchId === activeBranchId),
-    );
-
-    const loadShipments = useCallback(() => {
-        if (!token) return;
-
-        fetchOrders(
-            {
-                status: 'TO_PREPARE',
-                deliveryType: 'SHIPPING',
-                branchId: activeBranchId,
-            },
-            token,
-        ).catch(() => {});
-    }, [token, fetchOrders, activeBranchId]);
-
-    useEffect(() => {
-        loadShipments();
-    }, [loadShipments]);
-
-    function handleLoadMore() {
-        if (!token) return;
-
-        fetchOrders(
-            {
-                status: 'TO_PREPARE',
-                deliveryType: 'SHIPPING',
-                branchId: activeBranchId,
-            },
-            token,
-            { append: true },
-        ).catch(() => {});
-    }
+    const activeBranchId = useBranchStore((state) => state.activeBranch?.id);
+    const {
+        items: shipments,
+        totalElements,
+        isInitialLoading,
+        isRefreshing,
+        isLoadingMore,
+        error,
+        loadMore,
+        refresh,
+    } = useOrders({ status: 'TO_PREPARE', deliveryType: 'SHIPPING', branchId: activeBranchId });
 
     return (
         <Screen style={styles.screen}>
@@ -97,13 +55,10 @@ export default function ShipmentsToPrepareScreen() {
             </View>
 
             <View style={SharedStyles.content}>
-                {isLoading && shipments.length === 0 ? (
+                {isInitialLoading ? (
                     <LoadingState />
-                ) : isError && shipments.length === 0 ? (
-                    <ErrorState
-                        message={errorMessage ?? 'No se pudieron cargar los envíos.'}
-                        onRetry={loadShipments}
-                    />
+                ) : error && shipments.length === 0 ? (
+                    <ErrorState message={error} onRetry={refresh} />
                 ) : (
                     <>
                         <Text style={styles.resultsText}>
@@ -139,8 +94,8 @@ export default function ShipmentsToPrepareScreen() {
                                 />
                             }
                             ListFooterComponent={isLoadingMore ? <ActivityIndicator color={Colors.primary} /> : null}
-                            refreshControl={<RefreshControl refreshing={isLoading} onRefresh={loadShipments} />}
-                            onEndReached={handleLoadMore}
+                            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} />}
+                            onEndReached={loadMore}
                             onEndReachedThreshold={0.4}
                             showsVerticalScrollIndicator={false}
                         />

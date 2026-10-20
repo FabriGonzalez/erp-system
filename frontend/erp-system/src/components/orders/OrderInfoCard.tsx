@@ -1,14 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native';
 
+import { PaymentStatusBadge } from '@/components/orders/PaymentStatusBadge';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
-import {
-    DELIVERY_TYPE_LABELS,
-    Order,
-    getBalanceDue,
-    getPaymentStatus,
-} from '@/types/order';
+import { DELIVERY_TYPE_LABELS, Order } from '@/types/order';
 import { formatAddress } from '@/utils/address';
 import { formatDateTime } from '@/utils/format';
 
@@ -18,31 +14,6 @@ interface OrderInfoCardProps {
 
 export function OrderInfoCard({ order }: OrderInfoCardProps) {
     const isShipping = order.deliveryType === 'SHIPPING';
-    // amountPaid lo calcula el backend a partir de los pagos asignados a la orden.
-    const paidAmount = order.amountPaid;
-    const paymentStatus = getPaymentStatus({ total: order.total, amountPaid: paidAmount });
-    const balanceDue = getBalanceDue({ total: order.total, amountPaid: paidAmount });
-
-    const paymentStatusColor =
-        paymentStatus === 'PAID'
-            ? Colors.success
-            : paymentStatus === 'PARTIAL'
-              ? Colors.warningDark
-              : Colors.error;
-
-    const paymentStatusBg =
-        paymentStatus === 'PAID'
-            ? Colors.successLight
-            : paymentStatus === 'PARTIAL'
-              ? Colors.warningLight
-              : Colors.errorLight;
-
-    const paymentStatusLabel =
-        paymentStatus === 'PAID'
-            ? 'Pagado'
-            : paymentStatus === 'PARTIAL'
-              ? 'Pago parcial'
-              : 'Pendiente';
 
     return (
         <View style={SharedStyles.card}>
@@ -84,11 +55,7 @@ export function OrderInfoCard({ order }: OrderInfoCardProps) {
             <View style={styles.paymentSection}>
                 <View style={styles.paymentRow}>
                     <Text style={styles.label}>Cobro</Text>
-                    <View style={[styles.statusPill, { backgroundColor: paymentStatusBg }]}>
-                        <Text style={[styles.statusPillText, { color: paymentStatusColor }]}>
-                            {paymentStatusLabel}
-                        </Text>
-                    </View>
+                    <PaymentStatusBadge status={order.paymentStatus} />
                 </View>
 
                 <View style={styles.paymentAmounts}>
@@ -101,14 +68,14 @@ export function OrderInfoCard({ order }: OrderInfoCardProps) {
                     <View style={styles.amountItem}>
                         <Text style={styles.amountLabel}>Entregó</Text>
                         <Text style={[styles.amountValue, { color: Colors.success }]}>
-                            ${paidAmount.toLocaleString('es-AR')}
+                            ${order.amountPaid.toLocaleString('es-AR')}
                         </Text>
                     </View>
-                    {balanceDue > 0 && (
+                    {order.balance > 0 && (
                         <View style={styles.amountItem}>
                             <Text style={styles.amountLabel}>Debe</Text>
                             <Text style={[styles.amountValue, { color: Colors.error }]}>
-                                ${balanceDue.toLocaleString('es-AR')}
+                                ${order.balance.toLocaleString('es-AR')}
                             </Text>
                         </View>
                     )}
@@ -161,17 +128,6 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: Spacing.sm,
-    },
-
-    statusPill: {
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 3,
-        borderRadius: 20,
-    },
-
-    statusPillText: {
-        fontSize: 12,
-        fontWeight: '600',
     },
 
     paymentAmounts: {

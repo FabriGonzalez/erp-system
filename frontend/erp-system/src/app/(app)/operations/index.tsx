@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { OrderCard } from '@/components/orders/OrderCard';
@@ -10,9 +10,8 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useAuthStore } from '@/stores/auth-store';
+import { useOrders } from '@/hooks/use-order-queries';
 import { useBranchStore } from '@/stores/branch-store';
-import { useOrderStore } from '@/stores/order-store';
 import { SharedStyles } from '@/styles/shared';
 import { DeliveryType, Order } from '@/types/order';
 
@@ -31,46 +30,17 @@ const DELIVERY_TYPE_BY_FILTER: Record<OperationsFilter, DeliveryType | undefined
 };
 
 export default function OperationsScreen() {
-    const token = useAuthStore((state) => state.token);
-    const activeBranch = useBranchStore((state) => state.activeBranch);
-    const orders = useOrderStore((state) => state.orders);
-    const isLoading = useOrderStore((state) => state.isLoading);
-    const isLoadingMore = useOrderStore((state) => state.isLoadingMore);
-    const isError = useOrderStore((state) => state.isError);
-    const errorMessage = useOrderStore((state) => state.errorMessage);
-    const fetchOrders = useOrderStore((state) => state.fetchOrders);
+    const activeBranchId = useBranchStore((state) => state.activeBranch?.id);
     const [filter, setFilter] = useState<OperationsFilter>('ALL');
-
-    const activeBranchId = activeBranch?.id;
-
-    const loadOrders = useCallback(() => {
-        if (!token) return;
-
-        fetchOrders(
-            {
-                branchId: activeBranchId,
-                deliveryType: DELIVERY_TYPE_BY_FILTER[filter],
-            },
-            token,
-        ).catch(() => {});
-    }, [token, fetchOrders, activeBranchId, filter]);
-
-    useEffect(() => {
-        loadOrders();
-    }, [loadOrders]);
-
-    function handleLoadMore() {
-        if (!token) return;
-
-        fetchOrders(
-            {
-                branchId: activeBranchId,
-                deliveryType: DELIVERY_TYPE_BY_FILTER[filter],
-            },
-            token,
-            { append: true },
-        ).catch(() => {});
-    }
+    const {
+        items: orders,
+        isInitialLoading,
+        isRefreshing,
+        isLoadingMore,
+        error,
+        loadMore,
+        refresh,
+    } = useOrders({ branchId: activeBranchId, deliveryType: DELIVERY_TYPE_BY_FILTER[filter] });
 
     function handleOpen(order: Order) {
         router.push({ pathname: '/operations/[id]', params: { id: order.id } });
@@ -107,13 +77,10 @@ export default function OperationsScreen() {
                     ))}
                 </View>
 
-                {isLoading && orders.length === 0 ? (
+                {isInitialLoading ? (
                     <LoadingState />
-                ) : isError && orders.length === 0 ? (
-                    <ErrorState
-                        message={errorMessage ?? 'No se pudieron cargar las operaciones.'}
-                        onRetry={loadOrders}
-                    />
+                ) : error && orders.length === 0 ? (
+                    <ErrorState message={error} onRetry={refresh} />
                 ) : (
                     <FlatList
                         data={orders}
@@ -122,8 +89,8 @@ export default function OperationsScreen() {
                         contentContainerStyle={orders.length === 0 ? SharedStyles.listEmpty : styles.list}
                         ListEmptyComponent={<EmptyState title="No hay operaciones" description="No encontramos ventas ni envíos para este filtro." />}
                         ListFooterComponent={isLoadingMore ? <ActivityIndicator color={Colors.primary} /> : null}
-                        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={loadOrders} />}
-                        onEndReached={handleLoadMore}
+                        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} />}
+                        onEndReached={loadMore}
                         onEndReachedThreshold={0.4}
                         showsVerticalScrollIndicator={false}
                     />

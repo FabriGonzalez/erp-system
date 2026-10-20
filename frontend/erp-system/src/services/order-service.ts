@@ -100,6 +100,8 @@ function normalizeOrder(data: OrderResponse): Order {
         items: (data.items ?? []).map(normalizeOrderItem),
         total: Number(data.total),
         amountPaid: Number(data.amountPaid ?? 0),
+        paymentStatus: data.paymentStatus,
+        balance: Number(data.balance ?? 0),
         status: data.status,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,

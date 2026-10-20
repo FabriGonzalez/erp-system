@@ -1,5 +1,16 @@
 import { Colors } from '@/constants/colors';
-import { OrderStatus } from '@/types/order';
+import { OrderStatus, PaymentStatus } from '@/types/order';
+
+export function getPaymentStatusColor(status: PaymentStatus): { bg: string; text: string } {
+    switch (status) {
+        case 'PAID':
+            return { bg: Colors.successLight, text: Colors.success };
+        case 'PARTIAL':
+            return { bg: Colors.warningLight, text: Colors.warningDark };
+        default:
+            return { bg: Colors.errorLight, text: Colors.error };
+    }
+}
 
 export function getStatusBadgeColor(status: OrderStatus): {
     bg: string;
