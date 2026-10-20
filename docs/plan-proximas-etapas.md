@@ -1269,6 +1269,134 @@ commiteada: 46b45fa backend, 02adf93 frontend).
 **Fuera de alcance.** Migraciones, índice de `lower(username)` y test de contexto (antes de
 producción).
 
+## Etapa 20 — Promos (y código de barras)
+
+Plan detallado el 2026-10-20, relevado contra el código. Parte del relevamiento de pedidos; las
+decisiones de diseño marcadas "propuesta" las puede vetar el usuario antes de arrancar.
+
+**Arranque.** Crear `feature/promotions` desde `feature/prices-debts` (etapa 19 commiteada).
+
+**Decisiones del usuario (2026-10-20).**
+- Una promo es un conjunto de variantes, cada una con su cantidad (2 remeras + 1 gorra; cubre el
+  2x1), a un **precio fijo** menor que la suma de los precios sueltos.
+- Hay un apartado de promos con todas las promos y se vende desde ahí: no se aplican solas.
+- Tienen **vigencia con fechas desde/hasta**.
+- Son de toda la empresa; se pueden vender en una sucursal si cada variante tiene stock ahí.
+- Para armarla se usa el selector de productos existente y se elige el precio.
+- Código de barras: campo opcional en la variante, "por si en algún momento lo queremos"; sin
+  escaneo con cámara por ahora.
+
+**Lo que hay hoy (relevamiento).**
+- `OrderItem` = una variante por línea con `unitPrice` y `quantity`; el precio lo fija siempre el
+  servidor (`variant.getPrice()`); unique `(order_id, product_variant_id)`; `Order.updateItems`
+  reconcilia por variante.
+- Stock: `OrderServiceImpl.create` y `update` bloquean y descuentan por variante y registran
+  `SALE`/`RETURN` (referencia `ORDER`, id del pedido). `cancel` exige que el consumo neto de cada
+  ítem coincida con su cantidad: asume una línea por variante.
+- `recalculateTotal` suma `unitPrice * quantity`; reportes "más vendidos" agrupan `OrderItem` por
+  variante; ventas por sucursal usan `o.total`. Envíos y pagos no miran ítems.
+- Frontend: `order-draft-store` con ítems por `(productId, variantId)` y `originalItems` al editar;
+  límite de stock con `useVariantStock`; `select-products` (pedidos y envíos) sobre
+  `VariantCatalog`; `OrderProducts` lista las líneas del detalle.
+- `ProductVariant` no tiene barcode. `ddl-auto: update` no cambia constraints ya creadas.
+
+**Propuesta de diseño.** La promo **no se expande en `OrderItem`**: la unique de variante por pedido
+y `updateItems` no admiten una variante suelta y otra dentro de una promo, y `ddl-auto: update` no
+la cambiaría. Entidades nuevas:
+- `Promotion` (empresa, nombre, descripción, `price`, `startDate`, `endDate`, `active`) y
+  `PromotionItem` (promo, variante, cantidad). Nunca se borra, solo se desactiva.
+- `OrderPromo` (pedido, promo, nombre, `unitPrice` y `quantity` copiados al vender) y
+  `OrderPromoComponent` (variante, cantidad por promo, copiadas): lo vendido no cambia aunque la
+  promo se edite, venza o se desactive después.
+- Total = suma de ítems sueltos + `unitPrice * quantity` de cada `OrderPromo`.
+- Stock necesario por variante = cantidad suelta + Σ (cantidad del componente × cantidad de promos).
+
+### Backend
+
+1. **Código de barras:** `ProductVariant.barcode` (opcional, máx. 64, único por empresa cuando
+   existe), en alta y edición de producto y en `ProductVariantResponse`; `GET /products` también
+   busca por barcode (se suma a la búsqueda sin tildes existente) y `search` de stock también.
+2. **Módulo `modules/promotions`** (patrón de categorías): `GET /promotions` (paginado, filtros
+   `q`, `status` = vigente | programada | vencida | inactiva), `GET /promotions/{id}`, `POST`,
+   `PATCH /{id}`, `PATCH /{id}/activate|deactivate`. Escritura con `ADMINISTRAR_PRECIOS` (cambia
+   precios; sin permiso nuevo ni tocar roles); lectura con `CREAR_PEDIDOS` o `ADMINISTRAR_PRECIOS`.
+   Lo ya vendido se ve en el pedido (snapshot), no en este endpoint.
+   Validaciones: al menos una variante, sin variantes repetidas, cantidades ≥ 1, variantes activas
+   de la empresa, `price` > 0, `endDate` ≥ `startDate`; advertir (no bloquear) si el precio supera
+   la suma de los precios sueltos. Estado "vigente" = activa y fecha de hoy entre ambas, inclusive
+   (fecha del servidor). Respuesta con `status` calculado y la suma de precios sueltos.
+3. **Pedidos:** `OrderRequest` y `OrderUpdateRequest` suman `promos: [{promotionId, quantity}]`.
+   - Alta: cada promo debe estar vigente y con todas sus variantes activas; se copian precio y
+     componentes. Stock: se agrupa por variante (suelto + promos) y se bloquea y descuenta en el
+     orden por id que ya hay; un movimiento `SALE` por variante con el total.
+   - Se pide al menos un ítem o una promo; `validateSalesType` y `validateNoDuplicateVariants`
+     siguen valiendo para los sueltos; una promo no puede repetirse en el request.
+   - Edición (solo TO_PREPARE): las promos que el pedido ya tenía conservan su precio y sus
+     componentes aunque hayan vencido; solo se puede cambiar su cantidad o quitarlas; una promo
+     nueva exige estar vigente. El delta de stock se calcula por variante sobre el total
+     (sueltos + promos), con `SALE`/`RETURN` como hoy.
+   - Cancelación: la verificación de consumo neto compara contra la cantidad total por variante
+     (sueltos + promos), no contra el ítem.
+   - `OrderResponse` suma `promos` (id, promotionId, nombre, `unitPrice`, `quantity`,
+     `components`); el total sigue en `total`.
+4. **Reportes:** "más vendidos" suma los componentes de promos (unidades por variante; el ingreso
+   de esas unidades queda fuera de la facturación por variante, que sigue saliendo de `o.total`).
+   Se aclara con una nota en la pantalla.
+5. **Tests:** promos (validaciones, estados por fecha), pedido con promo (total, stock con la
+   misma variante suelta y en promo, stock insuficiente, edición, cancelación con devolución
+   exacta), barcode único.
+
+### Frontend
+
+1. **Barcode:** campo opcional en `ProductForm` (por variante) y se muestra en el detalle; la
+   búsqueda del catálogo y del selector ya manda el texto al backend.
+2. **`hooks/use-promotion-queries.ts`** (`promotionKeys`, `usePromotions` paginado con
+   `usePagedList`, `usePromotion`, `useSavePromotion`, `useSetPromotionActive`) y
+   `services/promotion-service.ts`, `types/promotion.ts`. Las mutaciones invalidan `promotionKeys`.
+3. **Administración de promos** (Más → Administración → Promociones, `ADMINISTRAR_PRECIOS`): lista
+   con filtro por estado y búsqueda, pantalla de alta/edición con nombre, precio, fechas y los
+   componentes elegidos con el **selector de productos existente** (cantidad por variante), muestra
+   la suma de precios sueltos y el ahorro. Ruta dentro de su propio stack.
+4. **Venta:** en `select-products` (pedidos y envíos) un conmutador **Productos | Promos**; la
+   pestaña Promos lista las vigentes con su precio, el ahorro y los componentes, y permite elegir
+   cantidad según el stock de la sucursal.
+   - `order-draft-store`: `promoItems` (promotionId, nombre, precio, cantidad, componentes) y
+     `originalPromoItems` al editar; mismo `nextQuantity`.
+   - Límite de stock: se piden los `variantIds` sueltos y de componentes; el máximo de cada ítem
+     suelto descuenta lo que consumen las promos del borrador y viceversa (helper en
+     `utils/product-stock.ts` o uno nuevo).
+   - `OrderForm`, `OrderCartSection`, `OrderProducts` y `OrderCard` muestran las promos como líneas
+     con sus componentes; el total las suma. `toOrderRequest` manda `promos`.
+5. **AGENTS.md:** promos, snapshot en el pedido y regla de stock por variante total.
+
+### Validación
+
+- Backend: tests unitarios en la copia del scratchpad.
+- Frontend: `npx tsc --noEmit`, eslint de los archivos tocados, `git diff --check`.
+
+**Pruebas manuales (las hace el usuario).**
+- Recrear la base de desarrollo si hace falta (tablas nuevas; sin migraciones) y reiniciar el
+  backend en IntelliJ (Rebuild).
+- Crear una promo, editarla, desactivarla y verla vencer cambiando las fechas.
+- Vender una promo y una variante suelta que también está en la promo: el stock baja la suma;
+  con stock justo, no deja pasarse.
+- Editar un pedido con promo (cambiar cantidad, quitarla, agregar otra) y cancelarlo: el stock
+  vuelve exacto. Editar o desactivar la promo después no cambia el pedido ya hecho.
+- Envío con promo. Reportes: más vendidos suma las unidades de la promo.
+- Producto con barcode: único por empresa; se encuentra buscando por el código.
+
+**Fuera de alcance.** Descuentos automáticos, promos por sucursal, escaneo con cámara, promos en
+transferencias.
+
+## Etapa 21 — Asistente de voz (idea; sin planear)
+
+Idea del usuario (2026-10-20): mandar un audio, transcribirlo con Whisper y que un modelo use tools
+que consumen la API existente. Antes de planear hay que decidir el canal (dentro de la app,
+WhatsApp o Telegram) y dónde corre Whisper (API o servidor propio). Criterios propuestos: las tools
+corren con el usuario y los permisos de quien envía el audio; arrancar solo con consultas (stock,
+deuda de un cliente); lo que escribe (ventas, pagos, ajustes) llega como borrador que el usuario
+confirma, nunca se ejecuta directo.
+
 ---
 
 ## Pendientes chicos (sin orden; sumar a la etapa afín)
