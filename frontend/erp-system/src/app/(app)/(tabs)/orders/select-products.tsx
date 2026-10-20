@@ -6,12 +6,12 @@ import { CartSummaryBar } from '@/components/products/CartSummaryBar';
 import { VariantCatalog } from '@/components/products/VariantCatalog';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
-import { useBranchStore } from '@/stores/branch-store';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
 
 export default function SelectProductsScreen() {
-    const activeBranch = useBranchStore((state) => state.activeBranch);
+    const activeBranch = useActiveBranch();
     const originalItems = useOrderDraftStore((state) => state.originalItems);
     const items = useOrderDraftStore((state) => state.items);
     const addItem = useOrderDraftStore((state) => state.addItem);

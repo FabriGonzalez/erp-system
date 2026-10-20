@@ -8,9 +8,9 @@ import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useCreateOrder } from '@/hooks/use-order-queries';
 import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { showToast } from '@/stores/toast-store';
 import { SharedStyles } from '@/styles/shared';
@@ -31,7 +31,7 @@ export default function NewShipmentScreen() {
     const address = useOrderDraftStore((state) => state.address);
     const items = useOrderDraftStore((state) => state.items);
     const resetDraft = useOrderDraftStore((state) => state.reset);
-    const activeBranch = useBranchStore((state) => state.activeBranch);
+    const activeBranch = useActiveBranch();
 
     async function handleSubmitOrder() {
         if (

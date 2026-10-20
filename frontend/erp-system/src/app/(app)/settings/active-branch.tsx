@@ -1,6 +1,5 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect } from 'react';
 import {
     ActivityIndicator,
     FlatList,
@@ -16,38 +15,25 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useAuthStore } from '@/stores/auth-store';
+import { useActiveBranch, useMyBranches } from '@/hooks/use-branch-queries';
 import { useBranchStore } from '@/stores/branch-store';
 import { SharedStyles } from '@/styles/shared';
 import { Branch } from '@/types/branch';
 
 export default function ActiveBranchScreen() {
-    const { user, token } = useAuthStore();
+    const activeBranch = useActiveBranch();
+    const selectActiveBranch = useBranchStore((state) => state.selectActiveBranch);
     const {
-        activeBranch,
-        availableBranches,
+        branches: availableBranches,
         isLoading,
-        hasFetchedUserBranches,
+        isRefreshing,
         error,
-        fetchUserBranches,
-        setActiveBranch,
-    } = useBranchStore();
-
-    useEffect(() => {
-        if (user && token && !hasFetchedUserBranches) {
-            fetchUserBranches(user.id, token).catch(() => {});
-        }
-    }, [user, token, hasFetchedUserBranches, fetchUserBranches]);
+        refresh: handleRefresh,
+    } = useMyBranches();
 
     async function handleSelectBranch(branch: Branch) {
-        await setActiveBranch(branch);
+        await selectActiveBranch(branch.id);
         router.back();
-    }
-
-    function handleRefresh() {
-        if (user && token) {
-            fetchUserBranches(user.id, token).catch(() => {});
-        }
     }
 
     return (
@@ -72,12 +58,12 @@ export default function ActiveBranchScreen() {
                 Seleccioná la sucursal activa en la que vas a operar. El inventario, pedidos y ventas se filtrarán para esta sucursal.
             </Text>
 
-            {isLoading && availableBranches.length === 0 ? (
+            {isLoading ? (
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={Colors.primary} />
                     <Text style={styles.loadingText}>Cargando sucursales...</Text>
                 </View>
-            ) : error && availableBranches.length === 0 ? (
+            ) : error ? (
                 <View style={styles.errorContainer}>
                     <Text style={styles.errorText}>{error}</Text>
                     <AppButton
@@ -95,7 +81,7 @@ export default function ActiveBranchScreen() {
                     }
                     refreshControl={
                         <RefreshControl
-                            refreshing={isLoading}
+                            refreshing={isRefreshing}
                             onRefresh={handleRefresh}
                             colors={[Colors.primary]}
                             tintColor={Colors.primary}

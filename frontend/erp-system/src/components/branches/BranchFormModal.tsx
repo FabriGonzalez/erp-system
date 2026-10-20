@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
     Modal,
     Pressable,
     StyleSheet,
@@ -12,8 +11,7 @@ import {
 import { AppButton } from '@/components/ui/AppButton';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
+import { useSaveBranch } from '@/hooks/use-branch-queries';
 import { Branch } from '@/types/branch';
 
 type BranchFormModalProps = {
@@ -27,8 +25,7 @@ export function BranchFormModal({
     branchToEdit,
     onClose,
 }: BranchFormModalProps) {
-    const token = useAuthStore((state) => state.token);
-    const { createBranch, updateBranch } = useBranchStore();
+    const saveBranch = useSaveBranch();
 
     const [name, setName] = useState('');
     const [address, setAddress] = useState('');
@@ -40,6 +37,8 @@ export function BranchFormModal({
 
     useEffect(() => {
         if (visible) {
+            // Reset the form when opening a different branch.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setName(branchToEdit?.name ?? '');
             setAddress(branchToEdit?.address ?? '');
             setPhone(branchToEdit?.phone ?? '');
@@ -53,39 +52,21 @@ export function BranchFormModal({
             return;
         }
 
-        if (!token) {
-            setErrorMessage('No hay sesión activa.');
-            return;
-        }
-
         setIsSubmitting(true);
         setErrorMessage(null);
 
         try {
-            if (isEdit && branchToEdit) {
-                await updateBranch(
-                    branchToEdit.id,
-                    {
-                        name: name.trim(),
-                        address: address.trim() || undefined,
-                        phone: phone.trim() || undefined,
-                    },
-                    token
-                );
-            } else {
-                await createBranch(
-                    {
-                        name: name.trim(),
-                        address: address.trim() || undefined,
-                        phone: phone.trim() || undefined,
-                    },
-                    token
-                );
-            }
-
+            await saveBranch.mutateAsync({
+                id: isEdit ? branchToEdit?.id : undefined,
+                data: {
+                    name: name.trim(),
+                    address: address.trim() || undefined,
+                    phone: phone.trim() || undefined,
+                },
+            });
             onClose();
-        } catch (err: any) {
-            setErrorMessage(err?.message || 'Error al guardar la sucursal.');
+        } catch (err: unknown) {
+            setErrorMessage(err instanceof Error && err.message ? err.message : 'Error al guardar la sucursal.');
         } finally {
             setIsSubmitting(false);
         }

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
@@ -17,19 +17,16 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useBranchStocks } from '@/hooks/use-stock-queries';
 import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
 import { SharedStyles } from '@/styles/shared';
 import { Stock } from '@/types/stock';
 import { STOCK_MOVEMENT_READ_PERMISSIONS, hasAnyPermission } from '@/utils/permissions';
 
 export default function InventoryScreen() {
-    const token = useAuthStore((state) => state.token);
     const user = useAuthStore((state) => state.user);
-    const activeBranch = useBranchStore((state) => state.activeBranch);
-    const fetchUserBranches = useBranchStore((state) => state.fetchUserBranches);
-    const hasFetchedUserBranches = useBranchStore((state) => state.hasFetchedUserBranches);
+    const activeBranch = useActiveBranch();
     // Se entra con cualquier permiso de lectura de stock; el detalle (historial y ajuste)
     // pide los permisos de movimientos, que incluyen AJUSTAR_STOCK.
     const canOpenDetail = hasAnyPermission(user, STOCK_MOVEMENT_READ_PERMISSIONS);
@@ -44,12 +41,6 @@ export default function InventoryScreen() {
         loadMore,
         refresh,
     } = useBranchStocks({ branchId: activeBranch?.id, q: query });
-
-    useEffect(() => {
-        if (token && user && !hasFetchedUserBranches) {
-            void fetchUserBranches(user.id, token);
-        }
-    }, [fetchUserBranches, hasFetchedUserBranches, token, user]);
 
     function renderItem({ item }: { item: Stock }) {
         return (

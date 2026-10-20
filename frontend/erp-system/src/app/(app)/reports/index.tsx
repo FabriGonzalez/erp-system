@@ -10,8 +10,8 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useMyBranches } from '@/hooks/use-branch-queries';
 import { useDashboard } from '@/hooks/use-report-queries';
-import { useBranchStore } from '@/stores/branch-store';
 import { SharedStyles } from '@/styles/shared';
 import { PAYMENT_METHOD_LABELS } from '@/types/order';
 import { Dashboard } from '@/types/report';
@@ -53,8 +53,8 @@ function formatChange(change: number | null, comparison: string): { text: string
 }
 
 export default function ReportsScreen() {
-    const availableBranches = useBranchStore((state) => state.availableBranches);
-    const hasFetchedUserBranches = useBranchStore((state) => state.hasFetchedUserBranches);
+    // El alcance de los reportes son las sucursales asignadas y activas del usuario.
+    const { branches: availableBranches, isFetched: hasFetchedUserBranches } = useMyBranches();
     const [period, setPeriod] = useState<ReportPeriod>('today');
     const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
     // Si al usuario le quitaron la sucursal elegida, se vuelve a "Todas".

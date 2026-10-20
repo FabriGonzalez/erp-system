@@ -10,7 +10,7 @@ import {
     useCustomerAccountSummaryQuery,
     useRegisterPayment,
 } from '@/hooks/use-customer-account-queries';
-import { useBranchStore } from '@/stores/branch-store';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { PAYMENT_METHOD_LABELS, PaymentMethod } from '@/types/order';
 import { Payment } from '@/types/payment';
 import { formatCurrency } from '@/utils/format';
@@ -33,7 +33,7 @@ export function RegisterCustomerPaymentModal({
     const [method, setMethod] = useState<PaymentMethod>('CASH');
     const [error, setError] = useState<string | null>(null);
     const [registered, setRegistered] = useState<Payment | null>(null);
-    const activeBranch = useBranchStore((state) => state.activeBranch);
+    const activeBranch = useActiveBranch();
     const { summary } = useCustomerAccountSummaryQuery(customerId);
     const registerPayment = useRegisterPayment(customerId);
     const isSubmitting = registerPayment.isPending;

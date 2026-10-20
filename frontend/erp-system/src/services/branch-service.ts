@@ -97,30 +97,6 @@ export async function getAllBranches(
 }
 
 /**
- * Obtiene el detalle de una sucursal por su ID.
- * Endpoint: GET /api/v1/branches/{id}
- */
-export async function getBranchById(
-    id: string,
-    token: string
-): Promise<Branch> {
-    const response = await apiFetch(`${API_BASE_URL}/api/v1/branches/${id}`, {
-        method: 'GET',
-        headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        },
-    });
-
-    const raw = await handleResponse<BackendBranchResponse>(
-        response,
-        'No se pudo obtener la sucursal.'
-    );
-
-    return normalizeBranch(raw);
-}
-
-/**
  * Crea una nueva sucursal para la empresa.
  * Endpoint: POST /api/v1/branches
  */

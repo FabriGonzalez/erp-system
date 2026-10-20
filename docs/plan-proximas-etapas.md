@@ -70,6 +70,11 @@ Claude y elegir la etapa (la próxima planificada es la 18).
   3f204f8): `use-category-queries` y `use-attribute-queries` (listas completas), toasts y diálogo
   propios en el layout raíz (sin `Alert.alert` ni `window.confirm`), confirmación al cancelar un
   pedido, toast al registrar una venta o un envío, selector de categoría sin inactivas.
+- **Etapa 18 — Sucursales a TanStack Query; Mi Perfil y limpieza** (`feature/branches-query`):
+  el store de sucursales guarda solo `activeBranchId`; `use-branch-queries` (`useMyBranches`,
+  `useActiveBranch` derivada por id, `useActiveBranchSync`), pantalla Mi Perfil, precio de variante
+  mayor a 0 (backend y formulario), borrado de `FRONTEND_DOCS.md`, `OrdersFilterList` y
+  `getBranchById`. Ya no queda ningún dato del servidor en Zustand.
 
 ---
 

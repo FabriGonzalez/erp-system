@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { queryClient } from '@/services/query-client';
-import { getUserBranches } from '@/services/branch-service';
+import { assignUserToBranch, getUserBranches, removeUserFromBranch } from '@/services/branch-service';
 import {
     createUser,
     getCompanyUsers,
@@ -11,12 +11,12 @@ import {
     updateUser,
 } from '@/services/user-service';
 import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
 import { Branch } from '@/types/branch';
 import { CompanyUser } from '@/types/user';
 
+import { invalidateBranchAssignment } from './use-branch-queries';
 import { errorText, requireToken } from './use-paged-list';
-import { invalidateUserBranches, userKeys } from './user-keys';
+import { userKeys } from './user-keys';
 
 function useHasSession() {
     return useAuthStore((state) => Boolean(state.token));
@@ -127,19 +127,15 @@ export function useResetUserPassword(id: string) {
 }
 
 /**
- * Asigna o quita una sucursal. Pasa por branch-store, que además ajusta las sucursales
- * de la sesión cuando el usuario es uno mismo.
+ * Asigna o quita una sucursal. Si el usuario es uno mismo, cambian sus sucursales
+ * disponibles (y, si le quitan la activa, la sincronización pasa a otra).
  */
 export function useToggleUserBranch(userId: string) {
     return useMutation({
-        mutationFn: ({ branch, assign }: { branch: Branch; assign: boolean }) => {
-            const token = requireToken();
-            const isCurrentAuthUser = useAuthStore.getState().user?.id === userId;
-            const store = useBranchStore.getState();
-            return assign
-                ? store.assignBranchToUser(userId, branch, token, isCurrentAuthUser)
-                : store.removeBranchFromUser(userId, branch.id, token, isCurrentAuthUser);
-        },
+        mutationFn: ({ branch, assign }: { branch: Branch; assign: boolean }) =>
+            assign
+                ? assignUserToBranch(userId, branch.id, requireToken())
+                : removeUserFromBranch(userId, branch.id, requireToken()),
         // Se refleja en la caché enseguida, así el switch no vuelve atrás mientras se relee.
         onSuccess: (_result, { branch, assign }) => {
             queryClient.setQueryData<Branch[]>(userKeys.branches(userId), (current = []) =>
@@ -147,6 +143,6 @@ export function useToggleUserBranch(userId: string) {
                     ? [...current.filter((item) => item.id !== branch.id), branch]
                     : current.filter((item) => item.id !== branch.id));
         },
-        onSettled: () => invalidateUserBranches(userId),
+        onSettled: (_result, _error, { branch }) => invalidateBranchAssignment(userId, branch.id),
     });
 }

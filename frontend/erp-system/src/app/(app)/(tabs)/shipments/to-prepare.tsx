@@ -9,12 +9,12 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useOrders } from '@/hooks/use-order-queries';
-import { useBranchStore } from '@/stores/branch-store';
 import { SharedStyles } from '@/styles/shared';
 
 export default function ShipmentsToPrepareScreen() {
-    const activeBranchId = useBranchStore((state) => state.activeBranch?.id);
+    const activeBranchId = useActiveBranch()?.id;
     const {
         items: shipments,
         totalElements,

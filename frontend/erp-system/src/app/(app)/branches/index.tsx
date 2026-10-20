@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
@@ -18,8 +18,14 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import {
+    useActiveBranch,
+    useBranches,
+    useMyBranches,
+    useSelectBranch,
+    useSetBranchActive,
+} from '@/hooks/use-branch-queries';
 import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
 import { showErrorToast } from '@/stores/toast-store';
 import { SharedStyles } from '@/styles/shared';
 import { Branch } from '@/types/branch';
@@ -27,17 +33,12 @@ import { confirmAction } from '@/utils/confirm';
 import { hasPermission } from '@/utils/permissions';
 
 export default function BranchesListScreen() {
-    const { token, user } = useAuthStore();
-    const {
-        allBranches,
-        isLoading,
-        error,
-        fetchAllBranches,
-        toggleBranchActive,
-        activeBranch,
-        availableBranches,
-        selectAndEnsureAssigned,
-    } = useBranchStore();
+    const user = useAuthStore((state) => state.user);
+    const { branches: allBranches, isLoading, isRefreshing, error, refresh: handleRefresh } = useBranches();
+    const { branches: availableBranches } = useMyBranches();
+    const activeBranch = useActiveBranch();
+    const selectBranch = useSelectBranch();
+    const setBranchActive = useSetBranchActive();
 
     // Se entra con cualquiera de los dos permisos; cada acción pide el suyo.
     const canManageBranches = hasPermission(user, 'ADMINISTRAR_SUCURSALES');
@@ -48,18 +49,6 @@ export default function BranchesListScreen() {
     const [assigningBranch, setAssigningBranch] = useState<Branch | null>(null);
     const [selectingBranchId, setSelectingBranchId] = useState<string | null>(null);
     const [togglingBranchId, setTogglingBranchId] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (token) {
-            fetchAllBranches(token).catch(() => {});
-        }
-    }, [token, fetchAllBranches]);
-
-    function handleRefresh() {
-        if (token) {
-            fetchAllBranches(token).catch(() => {});
-        }
-    }
 
     function handleOpenCreate() {
         setEditingBranch(null);
@@ -76,11 +65,10 @@ export default function BranchesListScreen() {
     }
 
     async function handleSelectActive(branch: Branch) {
-        if (!token || !user) return;
         if (activeBranch?.id === branch.id) return;
         setSelectingBranchId(branch.id);
         try {
-            await selectAndEnsureAssigned(branch, user.id, token);
+            await selectBranch.mutateAsync(branch);
         } catch (err: unknown) {
             showErrorToast(err, 'No se pudo seleccionar la sucursal como activa.');
         } finally {
@@ -89,7 +77,7 @@ export default function BranchesListScreen() {
     }
 
     async function handleToggleActive(branch: Branch) {
-        if (!token || togglingBranchId) return;
+        if (togglingBranchId) return;
         if (branch.active) {
             // Inactiva = no asignada para todos: conviene que quede claro antes de hacerlo.
             const confirmed = await confirmAction({
@@ -104,7 +92,7 @@ export default function BranchesListScreen() {
         }
         setTogglingBranchId(branch.id);
         try {
-            await toggleBranchActive(branch.id, Boolean(branch.active), token);
+            await setBranchActive.mutateAsync({ id: branch.id, active: !branch.active });
         } catch (err: unknown) {
             showErrorToast(err, 'No se pudo cambiar el estado de la sucursal.');
         } finally {
@@ -342,7 +330,7 @@ export default function BranchesListScreen() {
                     }
                     refreshControl={
                         <RefreshControl
-                            refreshing={isLoading}
+                            refreshing={isRefreshing}
                             onRefresh={handleRefresh}
                             colors={[Colors.primary]}
                             tintColor={Colors.primary}

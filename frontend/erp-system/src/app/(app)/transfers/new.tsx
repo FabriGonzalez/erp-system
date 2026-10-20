@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,10 +12,9 @@ import { FilterChip } from '@/components/ui/FilterChip';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useActiveBranch, useBranches } from '@/hooks/use-branch-queries';
 import { useVariantStock } from '@/hooks/use-stock-queries';
 import { useCreateTransfer } from '@/hooks/use-transfer-queries';
-import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
 import { SharedStyles } from '@/styles/shared';
 import { Product } from '@/types/product';
 
@@ -40,10 +39,9 @@ function emptyDraft(originId: string): Draft {
 }
 
 export default function NewTransferScreen() {
-    const token = useAuthStore((state) => state.token);
-    const origin = useBranchStore((state) => state.activeBranch);
-    const allBranches = useBranchStore((state) => state.allBranches);
-    const fetchAllBranches = useBranchStore((state) => state.fetchAllBranches);
+    const origin = useActiveBranch();
+    // El destino puede ser cualquier sucursal activa de la empresa, asignada o no.
+    const { branches: allBranches } = useBranches();
     const createTransfer = useCreateTransfer();
 
     const originId = origin?.id ?? '';
@@ -62,12 +60,6 @@ export default function NewTransferScreen() {
     function setItems(change: (current: DraftItem[]) => DraftItem[]) {
         updateDraft((current) => ({ ...current, items: change(current.items) }));
     }
-
-    useEffect(() => {
-        if (token) {
-            fetchAllBranches(token).catch(() => {});
-        }
-    }, [token, fetchAllBranches]);
 
     const destinations = useMemo(
         () => allBranches.filter((branch) => branch.active !== false && branch.id !== originId),

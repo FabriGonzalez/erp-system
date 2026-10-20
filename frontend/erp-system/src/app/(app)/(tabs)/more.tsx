@@ -6,8 +6,8 @@ import { MenuListItem } from '@/components/ui/MenuListItem';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
 import { getInitials } from '@/utils/format';
 import {
     DEBTORS_READ_PERMISSIONS,
@@ -20,7 +20,7 @@ import {
 
 export default function MoreScreen() {
     const { user, logout } = useAuthStore();
-    const { activeBranch } = useBranchStore();
+    const activeBranch = useActiveBranch();
 
     async function handleLogout() {
         await logout();
@@ -100,8 +100,7 @@ export default function MoreScreen() {
                         title="Mi Perfil"
                         subtitle="Detalles de tu cuenta"
                         iconName={{ ios: 'person.fill', android: 'person', web: 'person' }}
-                        onPress={() => { }}
-                        showChevron={false}
+                        onPress={() => router.push('/settings/profile')}
                     />
                 </View>
 

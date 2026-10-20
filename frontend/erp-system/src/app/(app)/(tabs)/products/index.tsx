@@ -21,10 +21,10 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useCategories } from '@/hooks/use-category-queries';
 import { useProducts } from '@/hooks/use-product-queries';
 import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
 import { SharedStyles } from '@/styles/shared';
 import { StatusFilter, StockFilter } from '@/types/product';
 import { hasPermission } from '@/utils/permissions';
@@ -32,7 +32,7 @@ import { productStock } from '@/utils/product-stock';
 
 export default function ProductsScreen() {
     const user = useAuthStore((state) => state.user);
-    const activeBranch = useBranchStore((state) => state.activeBranch);
+    const activeBranch = useActiveBranch();
     const { categories } = useCategories();
 
     // Filtros propios de esta pantalla: los selectores de productos tienen su propia búsqueda.

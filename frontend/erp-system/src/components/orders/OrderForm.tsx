@@ -11,10 +11,10 @@ import { OrderSummarySection } from './OrderSummarySection';
 import { AppInput } from '@/components/ui/AppInput';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useCustomerAccountSummary } from '@/hooks/use-customer-account-summary';
 import { useCustomer, useCustomerAddresses } from '@/hooks/use-customer-queries';
 import { useVariantStock } from '@/hooks/use-stock-queries';
-import { useBranchStore } from '@/stores/branch-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
@@ -45,7 +45,7 @@ export function OrderForm({
     isSubmitting = false,
     submitLabel = 'Crear Pedido',
 }: OrderFormProps) {
-    const activeBranch = useBranchStore((state) => state.activeBranch);
+    const activeBranch = useActiveBranch();
 
     const {
         customer,

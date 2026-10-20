@@ -1,20 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 
-import {
-    activateBranch,
-    assignUserToBranch,
-    createBranch,
-    deactivateBranch,
-    getAllBranches,
-    getUserBranches,
-    removeUserFromBranch,
-    updateBranch,
-} from '@/services/branch-service';
-import type { UserResponse } from '@/types/user';
-import { Branch, BranchRequest } from '@/types/branch';
+import { Branch } from '@/types/branch';
 
 const ACTIVE_BRANCH_STORAGE_KEY = '@erp/active-branch';
+// Formato anterior (solo el id, sin usuario ni empresa): se borra al restaurar.
+const LEGACY_ACTIVE_BRANCH_STORAGE_KEY = '@erp/active-branch-id';
 
 type BranchSessionContext = {
     userId: string;
@@ -27,377 +18,121 @@ type StoredActiveBranch = {
     companyId: string;
 };
 
+export type ReconcileResult =
+    | { kind: 'unchanged' }
+    | { kind: 'restored'; branch: Branch }
+    // La elegida dejó de estar disponible (desactivada o desasignada) y se pasó a otra.
+    | { kind: 'replaced'; previousId: string; branch: Branch | null };
+
 type BranchState = {
-    activeBranch: Branch | null;
-    availableBranches: Branch[];
-    allBranches: Branch[];
-    isLoading: boolean;
-    hasFetchedUserBranches: boolean;
-    error: string | null;
+    /**
+     * Sucursal en la que se opera. Es estado del cliente: la lista de sucursales viene del
+     * servidor (useMyBranches) y la sucursal se deriva de ella por id (useActiveBranch), así
+     * un renombre o una desactivación se ven sin copiar nada a mano.
+     */
+    activeBranchId: string | null;
     sessionContext: BranchSessionContext | null;
-    activeBranchVersion: number;
+    // Sube con cada selección o cambio de sesión: una restauración que termina tarde no pisa
+    // una selección más nueva ni escribe en la persistencia de otra sesión.
+    selectionVersion: number;
 
     setSessionContext: (context: BranchSessionContext) => void;
-    setActiveBranch: (branch: Branch) => Promise<void>;
+    selectActiveBranch: (branchId: string) => Promise<void>;
     clearActiveBranch: () => Promise<void>;
-    selectAndEnsureAssigned: (branch: Branch, userId: string, token: string) => Promise<void>;
-    assignBranchToUser: (userId: string, branch: Branch, token: string, isCurrentAuthUser?: boolean) => Promise<UserResponse | null>;
-    removeBranchFromUser: (userId: string, branchId: string, token: string, isCurrentAuthUser?: boolean) => Promise<UserResponse | null>;
-    fetchUserBranches: (userId: string, token: string) => Promise<Branch[]>;
-    fetchAllBranches: (token: string, active?: boolean) => Promise<Branch[]>;
-    createBranch: (data: BranchRequest, token: string) => Promise<Branch>;
-    updateBranch: (id: string, data: BranchRequest, token: string) => Promise<Branch>;
-    toggleBranchActive: (id: string, currentActive: boolean, token: string) => Promise<void>;
-    hydrateActiveBranch: (branches: Branch[]) => Promise<Branch | null>;
+    /** Ajusta la selección a las sucursales disponibles del usuario (asignadas y activas). */
+    reconcileActiveBranch: (branches: Branch[]) => Promise<ReconcileResult>;
 };
 
+async function persist(branchId: string, context: BranchSessionContext | null) {
+    if (!context) return;
+    try {
+        const stored: StoredActiveBranch = { branchId, ...context };
+        await AsyncStorage.setItem(ACTIVE_BRANCH_STORAGE_KEY, JSON.stringify(stored));
+    } catch {
+        // Sin persistencia la selección vale igual para esta sesión.
+    }
+}
+
+async function readStoredBranchId(context: BranchSessionContext | null): Promise<string | null> {
+    try {
+        const raw = await AsyncStorage.getItem(ACTIVE_BRANCH_STORAGE_KEY);
+        if (!raw || !context) return null;
+        const stored = JSON.parse(raw) as Partial<StoredActiveBranch>;
+        // Nunca se restaura la sucursal de otro usuario u otra empresa.
+        return stored.userId === context.userId && stored.companyId === context.companyId
+            ? stored.branchId ?? null
+            : null;
+    } catch {
+        return null;
+    }
+}
+
 export const useBranchStore = create<BranchState>((set, get) => ({
-    activeBranch: null,
-    availableBranches: [],
-    allBranches: [],
-    isLoading: false,
-    hasFetchedUserBranches: false,
-    error: null,
+    activeBranchId: null,
     sessionContext: null,
-    activeBranchVersion: 0,
+    selectionVersion: 0,
 
     setSessionContext: (context) => {
         set((state) => ({
             sessionContext: context,
-            activeBranch: null,
-            availableBranches: [],
-            allBranches: [],
-            hasFetchedUserBranches: false,
-            error: null,
-            activeBranchVersion: state.activeBranchVersion + 1,
+            activeBranchId: null,
+            selectionVersion: state.selectionVersion + 1,
         }));
     },
 
-    setActiveBranch: async (branch) => {
+    selectActiveBranch: async (branchId) => {
         set((state) => ({
-            activeBranch: branch,
-            availableBranches: state.availableBranches.map((item) =>
-                item.id === branch.id ? branch : item
-            ),
-            allBranches: state.allBranches.map((item) =>
-                item.id === branch.id ? branch : item
-            ),
-            activeBranchVersion: state.activeBranchVersion + 1,
+            activeBranchId: branchId,
+            selectionVersion: state.selectionVersion + 1,
         }));
-        try {
-            const context = get().sessionContext;
-            if (context) {
-                const storedBranch: StoredActiveBranch = {
-                    branchId: branch.id,
-                    ...context,
-                };
-                await AsyncStorage.setItem(
-                    ACTIVE_BRANCH_STORAGE_KEY,
-                    JSON.stringify(storedBranch)
-                );
-            }
-        } catch {
-            // AsyncStorage error ignored
-        }
+        await persist(branchId, get().sessionContext);
     },
 
     clearActiveBranch: async () => {
         set((state) => ({
-            activeBranch: null,
-            availableBranches: [],
-            allBranches: [],
-            hasFetchedUserBranches: false,
-            error: null,
+            activeBranchId: null,
             sessionContext: null,
-            activeBranchVersion: state.activeBranchVersion + 1,
+            selectionVersion: state.selectionVersion + 1,
         }));
         try {
             await AsyncStorage.removeItem(ACTIVE_BRANCH_STORAGE_KEY);
         } catch {
-            // AsyncStorage error ignored
+            // Al volver a entrar se valida contra la sesión igual.
         }
     },
 
-    selectAndEnsureAssigned: async (branch, userId, token) => {
-        try {
-            const isAlreadyAssigned = get().availableBranches.some((b) => b.id === branch.id);
-
-            if (!isAlreadyAssigned) {
-                await assignUserToBranch(userId, branch.id, token);
-                const updatedAvailable = [...get().availableBranches, branch];
-                set({ availableBranches: updatedAvailable });
-            }
-
-            await get().setActiveBranch(branch);
-        } catch (err: any) {
-            const message = err?.message || 'Error al seleccionar y asignar la sucursal.';
-            set({ error: message });
-            throw err;
+    reconcileActiveBranch: async (branches) => {
+        const { activeBranchId: currentId, selectionVersion: version, sessionContext: context } = get();
+        if (currentId && branches.some((branch) => branch.id === currentId)) {
+            return { kind: 'unchanged' };
         }
-    },
 
-    assignBranchToUser: async (userId, branch, token, isCurrentAuthUser = false) => {
-        try {
-            const assignedUser = await assignUserToBranch(userId, branch.id, token);
-
-            // Una sucursal inactiva no es elegible aunque quede asignada.
-            if (isCurrentAuthUser && branch.active !== false) {
-                const current = get().availableBranches;
-                if (!current.some((b) => b.id === branch.id)) {
-                    set({ availableBranches: [...current, branch] });
-                }
-            }
-
-            return assignedUser;
-        } catch (err: any) {
-            const message = err?.message || 'Error al asignar la sucursal al usuario.';
-            set({ error: message });
-            throw err;
+        const storedId = currentId ? null : await readStoredBranchId(context);
+        // Mientras se leía la persistencia el usuario eligió otra o cambió la sesión: manda eso.
+        if (get().selectionVersion !== version || get().sessionContext !== context) {
+            return { kind: 'unchanged' };
         }
-    },
 
-    removeBranchFromUser: async (userId, branchId, token, isCurrentAuthUser = false) => {
+        const next = branches.find((branch) => branch.id === storedId) ?? branches[0] ?? null;
+        set((state) => ({
+            activeBranchId: next?.id ?? null,
+            selectionVersion: state.selectionVersion + 1,
+        }));
+
         try {
-            const removedUser = await removeUserFromBranch(userId, branchId, token);
-
-            if (isCurrentAuthUser) {
-                const updatedAvailable = get().availableBranches.filter((b) => b.id !== branchId);
-                let newActive = get().activeBranch;
-
-                if (newActive?.id === branchId) {
-                    newActive = null;
-                    try {
-                        await AsyncStorage.removeItem(ACTIVE_BRANCH_STORAGE_KEY);
-                    } catch {
-                        // Ignore
-                    }
-                }
-
-                set({
-                    availableBranches: updatedAvailable,
-                    activeBranch: newActive,
-                });
+            await AsyncStorage.removeItem(LEGACY_ACTIVE_BRANCH_STORAGE_KEY);
+            if (next) {
+                await persist(next.id, context);
+            } else {
+                await AsyncStorage.removeItem(ACTIVE_BRANCH_STORAGE_KEY);
             }
-
-            return removedUser;
-        } catch (err: any) {
-            const message = err?.message || 'Error al remover la sucursal del usuario.';
-            set({ error: message });
-            throw err;
-        }
-    },
-
-    hydrateActiveBranch: async (branches) => {
-        try {
-            const hydrationVersion = get().activeBranchVersion;
-            const savedBranchId = await AsyncStorage.getItem(ACTIVE_BRANCH_STORAGE_KEY);
-            if (get().activeBranchVersion !== hydrationVersion) {
-                return get().activeBranch;
-            }
-            const activeOnly = branches.filter(
-                (branch) =>
-                    branch.active !== false &&
-                    (!get().sessionContext ||
-                        !branch.companyId ||
-                        branch.companyId === get().sessionContext?.companyId)
-            );
-            const context = get().sessionContext;
-            let parsedSavedBranch: StoredActiveBranch | null = null;
-
-            if (savedBranchId) {
-                try {
-                    parsedSavedBranch = JSON.parse(savedBranchId) as StoredActiveBranch;
-                } catch {
-                    // Migrate the previous raw branch ID format below.
-                }
-            }
-
-            const savedBranchMatchesSession =
-                parsedSavedBranch &&
-                context &&
-                parsedSavedBranch.userId === context.userId &&
-                parsedSavedBranch.companyId === context.companyId;
-            const persistedBranchId = parsedSavedBranch
-                ? savedBranchMatchesSession
-                    ? parsedSavedBranch.branchId
-                    : null
-                : savedBranchId;
-            const match = persistedBranchId
-                ? activeOnly.find((branch) => branch.id === persistedBranchId)
-                : undefined;
-
-            if (match) {
-                if (get().activeBranchVersion !== hydrationVersion) {
-                    return get().activeBranch;
-                }
-                set({ activeBranch: match });
-                return match;
-            }
-
-            await AsyncStorage.removeItem(ACTIVE_BRANCH_STORAGE_KEY);
-
-            if (activeOnly.length > 0) {
-                if (get().activeBranchVersion !== hydrationVersion) {
-                    return get().activeBranch;
-                }
-                const firstAvailable = activeOnly[0];
-                await get().setActiveBranch(firstAvailable);
-                return firstAvailable;
-            }
-
-            set({ activeBranch: null });
         } catch {
-            // AsyncStorage error ignored
+            // La selección en memoria ya quedó; la persistencia se reintenta en la próxima.
         }
 
-        return null;
-    },
-
-    fetchUserBranches: async (userId, token) => {
-        const context = get().sessionContext;
-        const version = get().activeBranchVersion;
-        set({ isLoading: true, error: null });
-        try {
-            const response = await getUserBranches(userId, token);
-            // Se vuelve a pedir al volver al frente: una respuesta de otra sesión no se aplica.
-            if (get().sessionContext !== context) {
-                return get().availableBranches;
-            }
-            // Una sucursal inactiva cuenta como no asignada (el backend tampoco deja operar en ella).
-            const branches = response.filter((branch) => branch.active !== false);
-            set({
-                availableBranches: branches,
-                hasFetchedUserBranches: true,
-                isLoading: false,
-            });
-            // Si el usuario eligió otra sucursal mientras tanto, su selección manda.
-            if (get().activeBranchVersion === version) {
-                await get().hydrateActiveBranch(branches);
-            }
-            return branches;
-        } catch (err: any) {
-            if (get().sessionContext !== context) {
-                throw err;
-            }
-            const message = err?.message || 'Error al obtener sucursales del usuario.';
-            set({ error: message, isLoading: false, hasFetchedUserBranches: true });
-            throw err;
+        if (currentId) {
+            return { kind: 'replaced', previousId: currentId, branch: next };
         }
-    },
-
-    fetchAllBranches: async (token, active) => {
-        set({ isLoading: true, error: null });
-        try {
-            const branches = await getAllBranches(token, active);
-            set({ allBranches: branches, isLoading: false });
-            return branches;
-        } catch (err: any) {
-            const message = err?.message || 'Error al obtener sucursales.';
-            set({ error: message, isLoading: false });
-            throw err;
-        }
-    },
-
-    createBranch: async (data, token) => {
-        set({ isLoading: true, error: null });
-        const context = get().sessionContext;
-        try {
-            const newBranch = await createBranch(data, token);
-            const currentAll = get().allBranches;
-            // El backend asigna la sucursal nueva a quien la crea: ya es elegible como activa.
-            // Si mientras tanto cambió la sesión, la lista es de otro usuario y no se toca.
-            const sameSession = get().sessionContext === context;
-            const currentAvailable = get().availableBranches;
-            set({
-                allBranches: [...currentAll, newBranch],
-                ...(sameSession && !currentAvailable.some((b) => b.id === newBranch.id)
-                    ? { availableBranches: [...currentAvailable, newBranch] }
-                    : {}),
-                isLoading: false,
-            });
-            return newBranch;
-        } catch (err: any) {
-            const message = err?.message || 'Error al crear la sucursal.';
-            set({ error: message, isLoading: false });
-            throw err;
-        }
-    },
-
-    updateBranch: async (id, data, token) => {
-        set({ isLoading: true, error: null });
-        try {
-            const updated = await updateBranch(id, data, token);
-            const currentAll = get().allBranches.map((b) =>
-                b.id === id ? updated : b
-            );
-            const currentAvailable = get().availableBranches.map((b) =>
-                b.id === id ? updated : b
-            );
-
-            let newActive = get().activeBranch;
-            if (newActive?.id === id) {
-                newActive = updated;
-            }
-
-            set({
-                allBranches: currentAll,
-                availableBranches: currentAvailable,
-                activeBranch: newActive,
-                isLoading: false,
-            });
-
-            return updated;
-        } catch (err: any) {
-            const message = err?.message || 'Error al actualizar la sucursal.';
-            set({ error: message, isLoading: false });
-            throw err;
-        }
-    },
-
-    toggleBranchActive: async (id, currentActive, token) => {
-        set({ isLoading: true, error: null });
-        try {
-            const updated = currentActive
-                ? await deactivateBranch(id, token)
-                : await activateBranch(id, token);
-
-            const currentAll = get().allBranches.map((b) =>
-                b.id === id ? updated : b
-            );
-            // Inactiva = no asignada: deja de ser elegible como sucursal activa.
-            const currentAvailable = get().availableBranches
-                .map((b) => (b.id === id ? updated : b))
-                .filter((b) => b.active !== false);
-
-            let newActive = get().activeBranch;
-            if (newActive?.id === id && !updated.active) {
-                // Si la sucursal activa fue desactivada para la empresa, deseleccionarla
-                newActive = null;
-                try {
-                    await AsyncStorage.removeItem(ACTIVE_BRANCH_STORAGE_KEY);
-                } catch {
-                    // Ignore
-                }
-            }
-
-            set({
-                allBranches: currentAll,
-                availableBranches: currentAvailable,
-                activeBranch: newActive,
-                isLoading: false,
-            });
-
-            // Al reactivarla vuelve a ser elegible solo si el usuario la tiene asignada:
-            // eso lo sabe el backend, así que se releen sus sucursales.
-            const context = get().sessionContext;
-            if (updated.active && context) {
-                get().fetchUserBranches(context.userId, token).catch(() => {});
-            }
-        } catch (err: any) {
-            const message = err?.message || 'Error al cambiar estado de la sucursal.';
-            set({ error: message, isLoading: false });
-            throw err;
-        }
+        return next ? { kind: 'restored', branch: next } : { kind: 'unchanged' };
     },
 }));
-

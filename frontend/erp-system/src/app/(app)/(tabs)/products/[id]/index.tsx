@@ -10,8 +10,8 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useProduct, useSetProductActive } from '@/hooks/use-product-queries';
-import { useBranchStore } from '@/stores/branch-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { showErrorToast } from '@/stores/toast-store';
 import { SharedStyles } from '@/styles/shared';
@@ -20,7 +20,7 @@ import { productStock, variantStock } from '@/utils/product-stock';
 
 export default function ProductDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
-    const activeBranch = useBranchStore((state) => state.activeBranch);
+    const activeBranch = useActiveBranch();
     const canEdit = useAuthStore((state) => hasPermission(state.user, 'ADMINISTRAR_PRODUCTOS'));
     const { product, isLoading, loadError, reload } = useProduct(id);
     const setProductActive = useSetProductActive();

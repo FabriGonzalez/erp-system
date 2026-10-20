@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { ResetPasswordModal } from '@/components/users/ResetPasswordModal';
@@ -9,6 +9,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useBranches } from '@/hooks/use-branch-queries';
 import {
     useCompanyUser,
     useSetUserActive,
@@ -16,17 +17,14 @@ import {
     useUserBranches,
 } from '@/hooks/use-user-queries';
 import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
 import { SharedStyles } from '@/styles/shared';
 import { Branch } from '@/types/branch';
 import { confirmAction } from '@/utils/confirm';
 
 export default function UserDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
-    const token = useAuthStore((state) => state.token);
     const currentUserId = useAuthStore((state) => state.user?.id);
-    const allBranches = useBranchStore((state) => state.allBranches);
-    const fetchAllBranches = useBranchStore((state) => state.fetchAllBranches);
+    const { branches: allBranches } = useBranches();
 
     const { user, isLoading, error, reload } = useCompanyUser(id);
     const userBranches = useUserBranches(id);
@@ -34,12 +32,6 @@ export default function UserDetailScreen() {
     const toggleBranch = useToggleUserBranch(id);
     const [isPasswordModalVisible, setPasswordModalVisible] = useState(false);
     const [actionError, setActionError] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (token) {
-            fetchAllBranches(token).catch(() => {});
-        }
-    }, [token, fetchAllBranches]);
 
     const assignedIds = useMemo(
         () => new Set(userBranches.branches.map((branch) => branch.id)),

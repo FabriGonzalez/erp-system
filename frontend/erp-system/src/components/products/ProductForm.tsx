@@ -3,8 +3,8 @@ import { ProductAttributeValueFormModal } from '@/components/attributes/ProductA
 import { CategoryFormModal } from '@/components/categories/CategoryFormModal';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useAttributes } from '@/hooks/use-attribute-queries';
-import { useBranchStore } from '@/stores/branch-store';
 import { SharedStyles } from '@/styles/shared';
 import { useAuthStore } from '@/stores/auth-store';
 import { Branch } from '@/types/branch';
@@ -195,7 +195,7 @@ export function ProductForm({
     const [isCreateAttrModalVisible, setIsCreateAttrModalVisible] = useState(false);
     const [createValueAttrId, setCreateValueAttrId] = useState<string | null>(null);
 
-    const activeBranch = useBranchStore((state) => state.activeBranch);
+    const activeBranch = useActiveBranch();
     const selectedCategory = categories.find((category) => category.id === categoryId);
     // Una inactiva no se puede asignar (CATEGORY_INACTIVE); al editar, la que ya tenía el
     // producto se sigue mostrando para no perderla de vista.
@@ -265,7 +265,9 @@ export function ProductForm({
             const price = Number(normalizedPrice);
             if (!sku) nextErrors.variants = 'Todas las variantes deben tener SKU';
             if (sku && skuSet.has(sku)) nextErrors.variants = 'Los SKU no se pueden repetir entre variantes';
-            if (!variant.price.trim() || !/^\d+(\.\d+)?$/.test(normalizedPrice) || !Number.isFinite(price) || price < 0) nextErrors.variants = 'Todas las variantes deben tener un precio válido';
+            if (!variant.price.trim() || !/^\d+(\.\d+)?$/.test(normalizedPrice) || !Number.isFinite(price)) nextErrors.variants = 'Todas las variantes deben tener un precio válido';
+            // Un precio 0 dejaría pedidos de $0 que figuran "Pendiente": el backend también lo rechaza.
+            else if (price <= 0) nextErrors.variants = 'El precio de cada variante tiene que ser mayor a $0';
             Object.values(variant.stockByBranch).forEach((stock) => {
                 if (!Number.isInteger(stock) || stock < 0) nextErrors.variants = 'El stock debe ser un número entero no negativo';
             });

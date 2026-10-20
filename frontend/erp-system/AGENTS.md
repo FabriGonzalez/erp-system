@@ -22,8 +22,9 @@ erp-system/
 │       └── src/
 │           ├── app/          # Expo Router: layouts y pantallas
 │           ├── components/   # Componentes reutilizables
+│           ├── hooks/        # Queries y mutaciones de TanStack Query por módulo
 │           ├── services/     # Comunicación HTTP con el backend
-│           ├── stores/       # Estado global con Zustand
+│           ├── stores/       # Estado del cliente con Zustand
 │           └── types/        # Tipos TypeScript y contratos
 ├── docker-compose.yml
 └── .git/
@@ -33,7 +34,7 @@ Stack del frontend:
 - Expo / React Native.
 - Expo Router para navegación y layouts.
 - TypeScript.
-- Zustand para estado global.
+- TanStack Query para los datos del servidor; Zustand para el estado del cliente.
 - AsyncStorage para persistencia local.
 - Servicios REST bajo `src/services/`.
 
@@ -57,7 +58,7 @@ Flujo habitual:
 ```text
 Pantalla / componente
         ↓
-Store de Zustand (cuando corresponda)
+Hook de TanStack Query en src/hooks (datos del servidor)
         ↓
 Servicio de dominio en src/services
         ↓
@@ -70,13 +71,18 @@ Evitá colocar llamadas HTTP directamente en componentes si el módulo ya utiliz
 
 ### Estado del servidor: TanStack Query
 
-- **Datos que vienen del backend → TanStack Query** (`@tanstack/react-query`, cliente en `src/services/query-client.ts`). **Estado propio del cliente → Zustand** (sesión, sucursal activa, borrador de orden).
-- Clientes ya usa este esquema (`src/hooks/use-customer-queries.ts`): claves por entidad (`customerKeys`), listados con `useInfiniteQuery` y mutaciones que actualizan o invalidan la caché y sincronizan las copias que viven fuera de ella (p. ej. el cliente del borrador de orden).
-- Los demás módulos todavía usan stores de Zustand con fetch propio. Se migran de a uno y con decisión explícita; no mezcles los dos esquemas para la misma entidad.
+- **Datos que vienen del backend → TanStack Query** (`@tanstack/react-query`, cliente en `src/services/query-client.ts`). **Estado propio del cliente → Zustand** (sesión, id de la sucursal activa, borrador de orden, toasts y diálogos).
+- Todos los módulos usan este esquema (`src/hooks/use-*-queries.ts`): claves por entidad (`orderKeys`, `productKeys`, `branchKeys`…), listados paginados con `usePagedList` (`useInfiniteQuery`) y mutaciones que siembran el detalle e invalidan lo que cambió. Las claves que otros módulos necesitan invalidar van en archivos aparte (`catalog-keys`, `customer-account-keys`, `user-keys`) para no crear ciclos de imports.
+- Los listados se paginan y filtran en el backend; los catálogos chicos (categorías, atributos, sucursales) se piden enteros. No guardes copias de una entidad del servidor en Zustand: derivala de la caché por id (como `useActiveBranch`).
 - La sesión no va en las claves: `clearServerCache()` vacía la caché al iniciar sesión, al cerrarla y al expirar, para que nunca se vean datos de otra empresa. Toda query nueva debe estar deshabilitada sin token.
 - Las queries no se reintentan ante 4xx (configurado en el cliente).
 
-Los stores deben mantener sincronizadas todas las representaciones de una entidad que efectivamente se usen en la UI. Si una operación modifica una entidad, revisá las listas, selecciones y detalles que puedan contener copias de esa entidad.
+Si una operación modifica una entidad, revisá qué otras queries la contienen (listas, detalles, otras entidades que traen su nombre) e invalidalas.
+
+### Avisos y confirmaciones
+
+- No uses `Alert.alert` ni `window.confirm`: en web no se ven o se ven distinto. Avisos con `showToast` / `showErrorToast` (`src/stores/toast-store.ts`) y confirmaciones con `confirmAction` (`src/utils/confirm.ts`) o `chooseAction` (`src/stores/dialog-store.ts`); los muestran `ToastHost` y `DialogHost`, montados una vez en `src/app/_layout.tsx`.
+- Dentro de un `Modal` de React Native, mostrá los errores en el propio modal: en el celular el Modal tapa los toasts.
 
 ## 5. Cliente API y manejo de errores
 
@@ -100,7 +106,8 @@ No cambies este flujo sin necesidad explícita y verificá que siga funcionando 
 
 Archivos de referencia:
 - `src/stores/auth-store.ts`
-- `src/stores/branch-store.ts`
+- `src/stores/branch-store.ts` (solo estado del cliente: id de la sucursal activa y su persistencia)
+- `src/hooks/use-branch-queries.ts` (sucursales del usuario y de la empresa, `useActiveBranch`, `useActiveBranchSync`, mutaciones)
 - `src/services/branch-service.ts`
 - `src/app/_layout.tsx`
 - `src/app/(app)/_layout.tsx`
@@ -111,11 +118,11 @@ El contexto de sucursal está asociado al usuario y a la empresa. La persistenci
 
 ### Reglas para el estado de sucursales
 
-- `activeBranch`, `availableBranches` y `allBranches` pueden contener representaciones de la misma sucursal; al cambiar la sucursal activa, mantenelas coherentes.
-- La selección manual de una sucursal debe prevalecer sobre hidrataciones/cargas anteriores que terminen tarde.
-- `hydrateActiveBranch()` y `fetchUserBranches()` deben respetar el contexto `userId` / `companyId`.
-- `clearActiveBranch()` y el cambio de contexto de sesión deben invalidar operaciones antiguas que podrían escribir estado o persistencia después.
-- No permitas que una respuesta asíncrona vieja sobrescriba una acción más reciente del usuario.
+- El store guarda solo `activeBranchId`; la sucursal se deriva con `useActiveBranch()` de `useMyBranches()` (asignadas y activas del usuario), así un renombre o una desactivación se ven sin copiar nada.
+- `useActiveBranchSync()` (montado una vez en `src/app/(app)/_layout.tsx`) llama a `reconcileActiveBranch()`: restaura la guardada del mismo usuario y empresa o toma la primera, y si la elegida deja de estar disponible pasa a otra y lo avisa.
+- La selección manual (`selectActiveBranch`) debe prevalecer sobre restauraciones que terminen tarde: `selectionVersion` y el contexto de sesión se verifican después de cada espera.
+- `clearActiveBranch()` y `setSessionContext()` invalidan operaciones antiguas que podrían escribir estado o persistencia después.
+- Antes de elegir una sucursal recién asignada, agregala a `branchKeys.mine` (como `useSelectBranch`): si no, la sincronización la toma por no disponible.
 
 ### Usuarios asignados a sucursales
 
@@ -145,8 +152,8 @@ Los IDs de API pueden llegar como números; el dominio del frontend puede normal
 
 ### Stock
 
-- El stock se consulta mediante los endpoints de inventario y se asocia a las variantes por `productVariantId`.
-- El frontend ha utilizado una carga de productos y stocks en paralelo para evitar una request de stock por variante. Antes de cambiar esta estrategia, comprobá el comportamiento actual para no introducir un problema N+1.
+- Las respuestas de producto traen el stock por sucursal de cada variante (una consulta de stocks por página en el backend). Inventario usa `GET /api/v1/inventory/stocks` paginado; el stock de los ítems de un borrador sale de `useVariantStock` (`variantIds`), no del catálogo cargado. No introduzcas una request de stock por variante (N+1).
+- El precio de una variante tiene que ser mayor a 0.
 - La estructura de dominio para stock por variante es `stockByBranch: Record<string, number>`.
 - `PATCH /api/v1/inventory/stocks/adjust` recibe `productVariantId`, `branchId`, `newQuantity` y `reason`. `newQuantity` representa la **cantidad final**, no el delta.
 - Para la creación de productos, el request de variante usa `initialStock`.
@@ -178,7 +185,7 @@ npx tsc --noEmit
 Para ESLint, usar el script del proyecto o ejecutarlo sobre los archivos modificados, por ejemplo:
 
 ```bash
-npx eslint src/services/branch-service.ts src/stores/branch-store.ts src/components/branches/BranchUsersAssignmentModal.tsx
+npx eslint src/hooks/use-branch-queries.ts src/stores/branch-store.ts src/components/branches/BranchUsersAssignmentModal.tsx
 ```
 
 También revisar:

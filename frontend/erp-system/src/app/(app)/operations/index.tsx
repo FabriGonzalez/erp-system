@@ -10,8 +10,8 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useOrders } from '@/hooks/use-order-queries';
-import { useBranchStore } from '@/stores/branch-store';
 import { SharedStyles } from '@/styles/shared';
 import { DeliveryType, Order } from '@/types/order';
 
@@ -30,7 +30,7 @@ const DELIVERY_TYPE_BY_FILTER: Record<OperationsFilter, DeliveryType | undefined
 };
 
 export default function OperationsScreen() {
-    const activeBranchId = useBranchStore((state) => state.activeBranch?.id);
+    const activeBranchId = useActiveBranch()?.id;
     const [filter, setFilter] = useState<OperationsFilter>('ALL');
     const {
         items: orders,

@@ -1,5 +1,5 @@
 import { SymbolView } from 'expo-symbols';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
@@ -16,10 +16,8 @@ import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { invalidateUserBranches } from '@/hooks/user-keys';
-import { getBranchUsers, getCompanyUsers } from '@/services/user-service';
-import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
+import { useBranchUsers, useToggleBranchUser } from '@/hooks/use-branch-queries';
+import { useCompanyUsers } from '@/hooks/use-user-queries';
 import { Branch } from '@/types/branch';
 import { CompanyUser } from '@/types/user';
 import { getInitials } from '@/utils/format';
@@ -30,101 +28,38 @@ type BranchUsersAssignmentModalProps = {
     onClose: () => void;
 };
 
-export function BranchUsersAssignmentModal({
-    visible,
-    branch,
-    onClose,
-}: BranchUsersAssignmentModalProps) {
-    const { token, user: currentUser } = useAuthStore();
-    const { assignBranchToUser, removeBranchFromUser } = useBranchStore();
+/**
+ * Usuarios asignados a una sucursal. El contenido se monta al abrirlo: así las queries se
+ * piden (o se refrescan si quedaron viejas) recién cuando hace falta.
+ */
+export function BranchUsersAssignmentModal({ visible, branch, onClose }: BranchUsersAssignmentModalProps) {
+    if (!visible || !branch) return null;
+    return <AssignmentModal branch={branch} onClose={onClose} />;
+}
 
-    const [users, setUsers] = useState<CompanyUser[]>([]);
-    const [assignedUserIds, setAssignedUserIds] = useState<Set<string>>(new Set());
-    const [isLoading, setIsLoading] = useState(false);
+function AssignmentModal({ branch, onClose }: { branch: Branch; onClose: () => void }) {
+    const companyUsers = useCompanyUsers();
+    const branchUsers = useBranchUsers(branch.id);
+    const toggleUser = useToggleBranchUser(branch.id);
     const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
     // Dentro del modal: en el celular un toast quedaría tapado por el Modal.
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const loadRequestId = useRef(0);
-    const branchId = branch?.id;
+    const [actionError, setActionError] = useState<string | null>(null);
 
-    const loadData = useCallback(async () => {
-        if (!branchId || !token) return;
-        const requestId = ++loadRequestId.current;
-        setIsLoading(true);
-        setErrorMessage(null);
-        try {
-            const [companyUsers, branchUsers] = await Promise.all([
-                getCompanyUsers(token),
-                getBranchUsers(branchId, token),
-            ]);
-
-            if (requestId === loadRequestId.current) {
-                setUsers(companyUsers);
-                setAssignedUserIds(new Set(branchUsers.map((u) => String(u.id))));
-            }
-        } catch (err: unknown) {
-            if (requestId === loadRequestId.current) {
-                setErrorMessage(err instanceof Error && err.message
-                    ? err.message
-                    : 'No se pudieron cargar los usuarios de la sucursal.');
-            }
-        } finally {
-            if (requestId === loadRequestId.current) {
-                setIsLoading(false);
-            }
-        }
-    }, [branchId, token]);
-
-    useEffect(() => {
-        if (visible) {
-            // Loading the modal data synchronizes the local view with the backend.
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            void loadData();
-        }
-    }, [loadData, visible]);
+    const users = companyUsers.users;
+    // La lista de asignados se actualiza enseguida al tocar el switch (optimista) y vuelve
+    // atrás solo si el backend falla.
+    const assignedUserIds = new Set(branchUsers.users.map((user) => user.id));
+    const isLoading = companyUsers.isLoading || branchUsers.isLoading;
+    const errorMessage = actionError ?? companyUsers.error ?? branchUsers.error;
 
     async function handleToggleUser(targetUser: CompanyUser) {
-        if (!branch || !token) return;
-
-        const targetUserId = String(targetUser.id);
-        const isCurrentlyAssigned = assignedUserIds.has(targetUserId);
-        const isCurrentAuthUser = currentUser?.id === targetUserId;
-
-        // 1. Actualización optimista inmediata en estado local para evitar parpadeo en el Switch nativo
-        setAssignedUserIds((prev) => {
-            const next = new Set(prev);
-            if (isCurrentlyAssigned) {
-                next.delete(targetUserId);
-            } else {
-                next.add(targetUserId);
-            }
-            return next;
-        });
-
-        setTogglingUserId(targetUserId);
-        setErrorMessage(null);
-
+        if (togglingUserId) return;
+        setTogglingUserId(targetUser.id);
+        setActionError(null);
         try {
-            if (isCurrentlyAssigned) {
-                await removeBranchFromUser(targetUserId, branch.id, token, isCurrentAuthUser);
-            } else {
-                await assignBranchToUser(targetUserId, branch, token, isCurrentAuthUser);
-            }
-            // La ficha del usuario muestra sus sucursales desde la caché.
-            invalidateUserBranches(targetUserId);
+            await toggleUser.mutateAsync({ user: targetUser, assign: !assignedUserIds.has(targetUser.id) });
         } catch (err: unknown) {
-            // Revertir optimismo en caso de error
-            setAssignedUserIds((prev) => {
-                const next = new Set(prev);
-                if (isCurrentlyAssigned) {
-                    next.add(targetUserId);
-                } else {
-                    next.delete(targetUserId);
-                }
-                return next;
-            });
-
-            setErrorMessage(err instanceof Error && err.message
+            setActionError(err instanceof Error && err.message
                 ? err.message
                 : 'No se pudo actualizar la asignación del usuario.');
         } finally {
@@ -132,11 +67,9 @@ export function BranchUsersAssignmentModal({
         }
     }
 
-    if (!branch) return null;
-
     return (
         <Modal
-            visible={visible}
+            visible
             transparent
             animationType="fade"
             onRequestClose={onClose}

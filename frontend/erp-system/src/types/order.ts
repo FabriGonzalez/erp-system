@@ -175,10 +175,6 @@ export type OrderListParams = {
     paymentStatus?: PaymentStatus;
 };
 
-export type OrderStatusFilter = OrderStatus | 'ALL';
-
-export type OrderDeliveryFilter = DeliveryType | 'ALL';
-
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
     CONFIRMED: 'Confirmado',
     TO_PREPARE: 'A preparar',
