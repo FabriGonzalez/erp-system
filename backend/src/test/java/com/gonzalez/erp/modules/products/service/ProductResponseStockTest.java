@@ -1,5 +1,6 @@
 package com.gonzalez.erp.modules.products.service;
 
+import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.config.security.CustomUserDetails;
 import com.gonzalez.erp.modules.branches.entity.Branch;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
@@ -12,6 +13,8 @@ import com.gonzalez.erp.modules.inventory.entity.Stock;
 import com.gonzalez.erp.modules.inventory.repository.StockRepository;
 import com.gonzalez.erp.modules.inventory.service.StockMovementRecorder;
 import com.gonzalez.erp.modules.inventory.service.StockService;
+import com.gonzalez.erp.modules.products.dto.request.ProductSearchCriteria;
+import com.gonzalez.erp.modules.products.dto.request.ProductStockFilter;
 import com.gonzalez.erp.modules.products.dto.response.ProductResponse;
 import com.gonzalez.erp.modules.products.dto.response.ProductVariantStockResponse;
 import com.gonzalez.erp.modules.products.entity.Product;
@@ -27,6 +30,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -36,6 +43,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -100,19 +108,53 @@ class ProductResponseStockTest {
         Product buzo = product(21L, "Buzo");
         ProductVariant remeraM = variant(40L, remera, "REM-M");
         ProductVariant buzoL = variant(41L, buzo, "BUZ-L");
-        when(productRepository.findByCompanyId(COMPANY_ID)).thenReturn(List.of(remera, buzo));
+        Pageable pageable = PageRequest.of(0, 20);
+        when(productRepository.search(COMPANY_ID, null, null, false, "%", false, false, null, pageable))
+                .thenReturn(new PageImpl<>(List.of(remera, buzo), pageable, 2));
         when(variantRepository.findByProductIdInWithAttributes(List.of(20L, 21L)))
                 .thenReturn(List.of(remeraM, buzoL));
         when(stockRepository.findByProductVariantIdInAndCompanyId(List.of(40L, 41L), COMPANY_ID))
                 .thenReturn(List.of(stock(remeraM, centro, 5), stock(remeraM, norte, 0), stock(buzoL, norte, 3)));
 
-        List<ProductResponse> response = productService.findAll(null);
+        PageResponse<ProductResponse> response = productService.findAll(noFilters(), pageable);
 
-        assertThat(response.get(0).variants().get(0).stock())
+        assertThat(response.totalElements()).isEqualTo(2);
+        assertThat(response.content().get(0).variants().get(0).stock())
                 .containsExactly(new ProductVariantStockResponse(CENTRO_ID, 5), new ProductVariantStockResponse(NORTE_ID, 0));
-        assertThat(response.get(1).variants().get(0).stock())
+        assertThat(response.content().get(1).variants().get(0).stock())
                 .containsExactly(new ProductVariantStockResponse(NORTE_ID, 3));
         verify(stockRepository, times(1)).findByProductVariantIdInAndCompanyId(any(), any());
+    }
+
+    @Test
+    void listingSearchesWithoutAccentsAndPassesTheStockFilter() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(productRepository.search(COMPANY_ID, true, 30L, true, "%camion rojo%", true, false, CENTRO_ID, pageable))
+                .thenReturn(Page.empty(pageable));
+
+        PageResponse<ProductResponse> response = productService.findAll(
+                new ProductSearchCriteria(true, 30L, "  Camión   ROJO ", ProductStockFilter.IN_STOCK, CENTRO_ID),
+                pageable);
+
+        assertThat(response.content()).isEmpty();
+        verify(variantRepository, never()).findByProductIdInWithAttributes(any());
+        verify(stockRepository, never()).findByProductVariantIdInAndCompanyId(any(), any());
+    }
+
+    @Test
+    void outOfStockFilterWithoutBranchUsesTheCompanyTotal() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(productRepository.search(COMPANY_ID, null, null, false, "%", false, true, null, pageable))
+                .thenReturn(Page.empty(pageable));
+
+        productService.findAll(new ProductSearchCriteria(null, null, "   ", ProductStockFilter.OUT_OF_STOCK, null),
+                pageable);
+
+        verify(productRepository).search(COMPANY_ID, null, null, false, "%", false, true, null, pageable);
+    }
+
+    private static ProductSearchCriteria noFilters() {
+        return new ProductSearchCriteria(null, null, null, null, null);
     }
 
     @Test

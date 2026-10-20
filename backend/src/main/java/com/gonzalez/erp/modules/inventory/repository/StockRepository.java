@@ -66,13 +66,45 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
             @Param("companyId") Long companyId
     );
 
-        @Query("SELECT s FROM Stock s " +
-            "JOIN FETCH s.productVariant pv " +
-            "JOIN FETCH pv.product " +
-            "JOIN FETCH s.branch " +
-            "JOIN FETCH s.company c " +
-            "WHERE c.id = :companyId")
-        List<Stock> findAllByCompanyId(@Param("companyId") Long companyId);
+    /**
+     * Listado paginado del stock de la empresa. :search (producto o SKU) llega en minúsculas, sin
+     * tildes y con los comodines (StockServiceImpl.normalizeSearch). Con filterVariants, solo las
+     * variantes de :variantIds (el stock de los ítems de un borrador).
+     */
+    @Query(value = """
+            SELECT s FROM Stock s
+            JOIN FETCH s.productVariant pv
+            JOIN FETCH pv.product p
+            JOIN FETCH s.branch b
+            WHERE s.company.id = :companyId
+            AND (:branchId IS NULL OR b.id = :branchId)
+            AND (:filterVariants = false OR pv.id IN :variantIds)
+            AND (:hasSearch = false
+                 OR CAST(FUNCTION('translate', LOWER(p.name),
+                         'áàäâéèëêíìïîóòöôúùüûñç', 'aaaaeeeeiiiioooouuuunc') AS String) LIKE :search
+                 OR LOWER(pv.sku) LIKE :search)
+            """,
+            countQuery = """
+            SELECT COUNT(s) FROM Stock s
+            JOIN s.productVariant pv
+            JOIN pv.product p
+            WHERE s.company.id = :companyId
+            AND (:branchId IS NULL OR s.branch.id = :branchId)
+            AND (:filterVariants = false OR pv.id IN :variantIds)
+            AND (:hasSearch = false
+                 OR CAST(FUNCTION('translate', LOWER(p.name),
+                         'áàäâéèëêíìïîóòöôúùüûñç', 'aaaaeeeeiiiioooouuuunc') AS String) LIKE :search
+                 OR LOWER(pv.sku) LIKE :search)
+            """)
+    Page<Stock> search(
+            @Param("companyId") Long companyId,
+            @Param("branchId") Long branchId,
+            @Param("filterVariants") boolean filterVariants,
+            @Param("variantIds") Collection<Long> variantIds,
+            @Param("hasSearch") boolean hasSearch,
+            @Param("search") String search,
+            Pageable pageable
+    );
 
         @Query("SELECT s FROM Stock s " +
             "JOIN FETCH s.productVariant pv " +

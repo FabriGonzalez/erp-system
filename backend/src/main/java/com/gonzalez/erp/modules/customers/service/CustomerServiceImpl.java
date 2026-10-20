@@ -23,7 +23,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.text.Normalizer;
+import com.gonzalez.erp.common.util.SearchText;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -181,15 +181,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     /** Minúsculas, sin tildes y con espacios simples: la forma que espera CustomerRepository.searchWithText. */
     static String normalizeSearch(String search) {
-        if (search == null) {
-            return null;
-        }
-        String collapsed = search.trim().replaceAll("\\s+", " ");
-        if (collapsed.isEmpty()) {
-            return null;
-        }
-        return Normalizer.normalize(collapsed.toLowerCase(Locale.ROOT), Normalizer.Form.NFD)
-                .replaceAll("\\p{M}", "");
+        return SearchText.normalize(search);
     }
 
     private void validateDocumentPair(String documentType, String documentNumber) {

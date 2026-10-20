@@ -1,6 +1,8 @@
 package com.gonzalez.erp.modules.products.service;
 
+import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.common.util.SearchText;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.categories.entity.Category;
 import com.gonzalez.erp.modules.categories.repository.CategoryRepository;
@@ -16,6 +18,8 @@ import com.gonzalez.erp.modules.inventory.service.StockMovementRecorder;
 import com.gonzalez.erp.modules.inventory.service.StockService;
 import com.gonzalez.erp.modules.products.dto.request.InitialStockRequest;
 import com.gonzalez.erp.modules.products.dto.request.ProductRequest;
+import com.gonzalez.erp.modules.products.dto.request.ProductSearchCriteria;
+import com.gonzalez.erp.modules.products.dto.request.ProductStockFilter;
 import com.gonzalez.erp.modules.products.dto.request.ProductUpdateRequest;
 import com.gonzalez.erp.modules.products.dto.request.ProductVariantRequest;
 import com.gonzalez.erp.modules.products.dto.request.ProductVariantStockRequest;
@@ -35,6 +39,8 @@ import com.gonzalez.erp.modules.products.repository.ProductAttributeValueReposit
 import com.gonzalez.erp.modules.products.repository.ProductRepository;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,17 +64,27 @@ public class ProductServiceImpl implements ProductService {
     private final StockMovementRecorder stockMovementRecorder;
 
     @Override
-    public List<ProductResponse> findAll(Boolean active) {
+    public PageResponse<ProductResponse> findAll(ProductSearchCriteria criteria, Pageable pageable) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
+        String search = SearchText.normalize(criteria.query());
 
-        List<Product> products = (active != null)
-                ? productRepository.findByCompanyIdAndActive(companyId, active)
-                : productRepository.findByCompanyId(companyId);
+        Page<Product> page = productRepository.search(
+                companyId,
+                criteria.active(),
+                criteria.categoryId(),
+                search != null,
+                SearchText.containsPattern(search),
+                criteria.stock() == ProductStockFilter.IN_STOCK,
+                criteria.stock() == ProductStockFilter.OUT_OF_STOCK,
+                criteria.branchId(),
+                pageable);
 
+        List<Product> products = page.getContent();
         if (products.isEmpty()) {
-            return List.of();
+            return PageResponse.of(page, product -> ProductMapper.toResponse(product, List.of()));
         }
 
+        // Variantes y stocks de toda la página en una consulta cada uno, no uno por producto.
         List<Long> productIds = products.stream()
                 .map(Product::getId)
                 .toList();
@@ -89,15 +105,10 @@ public class ProductServiceImpl implements ProductService {
                         )
                 ));
 
-        return products.stream()
-                .map(product -> ProductMapper.toResponse(
-                        product,
-                        variantsByProduct.getOrDefault(
-                                product.getId(),
-                                List.of()
-                        )
-                ))
-                .toList();
+        return PageResponse.of(page, product -> ProductMapper.toResponse(
+                product,
+                variantsByProduct.getOrDefault(product.getId(), List.of())
+        ));
     }
 
     @Override

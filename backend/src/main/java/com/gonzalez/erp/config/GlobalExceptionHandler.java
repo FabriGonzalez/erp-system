@@ -19,6 +19,7 @@ import com.gonzalez.erp.modules.customers.exception.InvalidCustomerRequestExcept
 import com.gonzalez.erp.modules.inventory.exception.InsufficientStockException;
 import com.gonzalez.erp.modules.inventory.exception.StockAlreadyExistsException;
 import com.gonzalez.erp.modules.inventory.exception.InvalidStockMovementQueryException;
+import com.gonzalez.erp.modules.inventory.exception.InvalidStockQueryException;
 import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
 import com.gonzalez.erp.modules.orders.exception.InactiveOrderCustomerException;
 import com.gonzalez.erp.modules.orders.exception.InsufficientStockForEditException;
@@ -27,6 +28,7 @@ import com.gonzalez.erp.modules.orders.exception.InvalidOrderStatusTransitionExc
 import com.gonzalez.erp.modules.orders.exception.InvalidShippingAddressException;
 import com.gonzalez.erp.modules.orders.exception.QuickSaleValidationException;
 import com.gonzalez.erp.modules.payments.exception.InvalidPaymentException;
+import com.gonzalez.erp.modules.products.exception.InvalidProductQueryException;
 import com.gonzalez.erp.modules.products.exception.InvalidProductVariantsException;
 import com.gonzalez.erp.modules.products.exception.ProductAttributeNameAlreadyExistsException;
 import com.gonzalez.erp.modules.products.exception.ProductAttributeValueAlreadyExistsException;
@@ -379,9 +381,18 @@ public class GlobalExceptionHandler {
                 ));
     }
 
-    @ExceptionHandler(InvalidStockMovementQueryException.class)
-    public ResponseEntity<ErrorResponse> handleInvalidStockMovementQuery(
-            InvalidStockMovementQueryException ex, HttpServletRequest request) {
+    @ExceptionHandler({
+            InvalidStockMovementQueryException.class,
+            InvalidStockQueryException.class,
+            InvalidProductQueryException.class
+    })
+    public ResponseEntity<ErrorResponse> handleInvalidListQuery(
+            RuntimeException ex, HttpServletRequest request) {
+        String code = switch (ex) {
+            case InvalidStockQueryException e -> "INVALID_STOCK_QUERY";
+            case InvalidProductQueryException e -> "INVALID_PRODUCT_QUERY";
+            default -> "INVALID_STOCK_MOVEMENT_QUERY";
+        };
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of(
@@ -389,7 +400,7 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_REQUEST.getReasonPhrase(),
                         ex.getMessage(),
                         request.getRequestURI(),
-                        "INVALID_STOCK_MOVEMENT_QUERY"
+                        code
                 ));
     }
 

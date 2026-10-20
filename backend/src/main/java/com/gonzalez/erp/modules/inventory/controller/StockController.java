@@ -1,8 +1,10 @@
 package com.gonzalez.erp.modules.inventory.controller;
 
 import com.gonzalez.erp.common.dto.ErrorResponse;
+import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.modules.inventory.dto.request.StockAdjustRequest;
 import com.gonzalez.erp.modules.inventory.dto.response.StockResponse;
+import com.gonzalez.erp.modules.inventory.exception.InvalidStockQueryException;
 import com.gonzalez.erp.modules.inventory.service.StockService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -12,6 +14,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,13 +32,35 @@ import java.util.List;
 )
 public class StockController {
 
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final StockService stockService;
 
     @PreAuthorize("hasAnyAuthority('CONSULTAR_STOCK','AJUSTAR_STOCK','TRANSFERIR_STOCK','CREAR_PEDIDOS')")
     @GetMapping
-    @Operation(summary = "Listar stocks", description = "Obtiene todos los registros de stock.")
-    public ResponseEntity<List<StockResponse>> findAll() {
-        return ResponseEntity.ok(stockService.findAll());
+    @Operation(summary = "Listar stocks",
+               description = "Paginado, por nombre de producto y SKU. Filtros opcionales: branchId, q (producto o SKU, "
+                       + "sin distinguir mayúsculas ni tildes) y variantIds (stock de esas variantes).")
+    @ApiResponse(responseCode = "400", description = "Parámetros de paginación inválidos",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<PageResponse<StockResponse>> search(
+            @Parameter(description = "ID de la sucursal")
+            @RequestParam(required = false) Long branchId,
+            @Parameter(description = "Texto a buscar en el producto o el SKU")
+            @RequestParam(required = false) String q,
+            @Parameter(description = "IDs de variante, separados por coma")
+            @RequestParam(required = false) List<Long> variantIds,
+            @Parameter(description = "Número de página, base 0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Tamaño de página (1 a " + MAX_PAGE_SIZE + ")")
+            @RequestParam(defaultValue = "20") int size) {
+        if (page < 0 || size < 1 || size > MAX_PAGE_SIZE) {
+            throw new InvalidStockQueryException(
+                    "page must be >= 0 and size between 1 and " + MAX_PAGE_SIZE);
+        }
+        // El id desempata para que la paginación sea estable.
+        Sort sort = Sort.by("productVariant.product.name", "productVariant.sku", "id");
+        return ResponseEntity.ok(stockService.search(branchId, q, variantIds, PageRequest.of(page, size, sort)));
     }
 
     @PreAuthorize("hasAnyAuthority('CONSULTAR_STOCK','AJUSTAR_STOCK','TRANSFERIR_STOCK','CREAR_PEDIDOS')")

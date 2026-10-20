@@ -1,6 +1,8 @@
 package com.gonzalez.erp.modules.inventory.service;
 
+import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.common.util.SearchText;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
 import com.gonzalez.erp.modules.branches.service.BranchAccessService;
@@ -15,6 +17,8 @@ import com.gonzalez.erp.modules.inventory.repository.StockRepository;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,12 +37,26 @@ public class StockServiceImpl implements StockService {
     private final BranchAccessService branchAccessService;
 
     @Override
-    public List<StockResponse> findAll() {
+    public PageResponse<StockResponse> search(Long branchId, String query, List<Long> variantIds,
+                                              Pageable pageable) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
+        if (branchId != null) {
+            validateBranchBelongsToCurrentCompany(branchId);
+        }
+        String search = SearchText.normalize(query);
+        boolean filterVariants = variantIds != null && !variantIds.isEmpty();
 
-        return stockRepository.findAllByCompanyId(companyId).stream()
-                .map(StockMapper::toResponse)
-                .toList();
+        // El stock es legible en toda la empresa (etapa 13): no se filtra por asignación.
+        Page<Stock> stocks = stockRepository.search(
+                companyId,
+                branchId,
+                filterVariants,
+                // IN con una lista vacía no es SQL válido; con filterVariants = false no se usa.
+                filterVariants ? variantIds : List.of(-1L),
+                search != null,
+                SearchText.containsPattern(search),
+                pageable);
+        return PageResponse.of(stocks, StockMapper::toResponse);
     }
 
     @Override
