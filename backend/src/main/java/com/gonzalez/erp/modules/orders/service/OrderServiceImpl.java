@@ -178,7 +178,7 @@ public class OrderServiceImpl implements OrderService {
                 .build();
 
         if (request.salesType() == SalesType.WITH_PRODUCTS) {
-            List<OrderItem> items = buildItemsFromRequest(request.items(), companyId);
+            List<OrderItem> items = buildItemsFromRequest(request.items(), companyId, Map.of());
             order.updateItems(items);
             order.recalculateTotal();
 
@@ -333,13 +333,16 @@ public class OrderServiceImpl implements OrderService {
             }
             validateNoDuplicateVariants(newItems);
 
-            List<OrderItem> builtNewItems = buildItemsFromRequest(newItems, companyId);
-
             Long branchId = order.getBranch().getId();
             Map<Long, Integer> oldQuantities = new HashMap<>();
+            Map<Long, BigDecimal> soldPrices = new HashMap<>();
             for (OrderItem item : order.getItems()) {
                 oldQuantities.put(item.getProductVariant().getId(), item.getQuantity());
+                soldPrices.put(item.getProductVariant().getId(), item.getUnitPrice());
             }
+
+            // Lo que ya estaba en el pedido conserva el precio con que se vendió.
+            List<OrderItem> builtNewItems = buildItemsFromRequest(newItems, companyId, soldPrices);
 
             Map<Long, Integer> newQuantities = new LinkedHashMap<>();
             for (OrderItem item : builtNewItems) {
@@ -682,7 +685,12 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    private List<OrderItem> buildItemsFromRequest(List<OrderItemRequest> items, Long companyId) {
+    /**
+     * Arma los ítems con el precio actual de cada variante, salvo las que figuran en
+     * {@code soldPrices} (las que el pedido ya tenía al editarlo), que conservan ese precio.
+     */
+    private List<OrderItem> buildItemsFromRequest(List<OrderItemRequest> items, Long companyId,
+                                                  Map<Long, BigDecimal> soldPrices) {
         List<OrderItem> orderItems = new ArrayList<>();
         for (OrderItemRequest itemRequest : items) {
             ProductVariant variant = productVariantRepository
@@ -698,7 +706,7 @@ public class OrderServiceImpl implements OrderService {
             orderItems.add(OrderItem.builder()
                     .productVariant(variant)
                     .quantity(itemRequest.quantity())
-                    .unitPrice(variant.getPrice())
+                    .unitPrice(soldPrices.getOrDefault(variant.getId(), variant.getPrice()))
                     .build());
         }
         return orderItems;
