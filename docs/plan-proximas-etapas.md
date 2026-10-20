@@ -1,7 +1,7 @@
 # Plan de las etapas que quedan
 
-Estado al 2026-10-20, rama `feature/products-query`. Para retomar: pasarle este archivo a
-Claude y elegir la etapa (la próxima planificada es la 17).
+Estado al 2026-10-20, rama `feature/catalog-feedback`. Para retomar: pasarle este archivo a
+Claude y elegir la etapa (la próxima planificada es la 18).
 
 ## Cómo se trabaja (vale para todas las etapas)
 
@@ -66,6 +66,10 @@ Claude y elegir la etapa (la próxima planificada es la 17).
   stock por sucursal o total, `variantIds`); `use-product-queries`, `use-stock-queries` y
   `catalog-keys`; límites del borrador con `useVariantStock` (bajar ya no borra el ítem, al editar
   se suma lo reservado y se conserva el precio vendido); ajuste de stock solo del detalle.
+- **Etapa 17 — Categorías y atributos; avisos y confirmaciones** (`feature/catalog-feedback`,
+  3f204f8): `use-category-queries` y `use-attribute-queries` (listas completas), toasts y diálogo
+  propios en el layout raíz (sin `Alert.alert` ni `window.confirm`), confirmación al cancelar un
+  pedido, toast al registrar una venta o un envío, selector de categoría sin inactivas.
 
 ---
 
@@ -1109,26 +1113,104 @@ devuelven las listas completas.
 **Fuera de alcance.** Sucursales a TanStack (próxima migración), mensajes de éxito nuevos donde hoy
 no hay ninguno.
 
+## Etapa 18 — Sucursales a TanStack Query; Mi Perfil y limpieza
+
+Plan detallado el 2026-10-20, relevado contra el código.
+
+**Arranque.** Crear `feature/branches-query` desde `feature/catalog-feedback` (la etapa 17 ya está
+commiteada).
+
+**Decisiones del usuario (2026-10-20).**
+- Sucursales es la última migración a TanStack Query; con ella no quedan datos del servidor en
+  Zustand.
+- "Mi Perfil" pasa a ser una pantalla de solo lectura.
+- Se **prohíbe el precio $0** en las variantes (backend y formulario): así un pedido no puede
+  quedar en $0 y figurar "Pendiente". Las variantes que ya estén en $0 se siguen pudiendo vender
+  hasta que se editen.
+- Migraciones (Flyway) y el test de contexto **no** entran: en desarrollo alcanza con
+  `ddl-auto: update`; quedan como pendiente "antes de producción".
+
+**Lo que hay hoy.**
+- `branch-store` (402 líneas) mezcla estado del cliente —la sucursal activa, guardada en
+  AsyncStorage por usuario y empresa, con guardas de versión y de sesión— con dos listas del
+  servidor: `availableBranches` (las asignadas y activas del usuario) y `allBranches` (las de la
+  empresa), cada una con su `fetch`, `isLoading`/`error` compartidos y `hasFetchedUserBranches`.
+- `activeBranch` es una copia: al renombrar o desactivar una sucursal, `updateBranch` y
+  `toggleBranchActive` tienen que reemplazarla a mano en las tres listas.
+- `(app)/_layout` pide las sucursales del usuario al entrar y otra vez al volver al frente con un
+  `AppState` propio; Inventario y Reportes también las piden si no están.
+- `BranchUsersAssignmentModal` carga usuarios con `fetch` propio y un contador de requests para
+  descartar respuestas viejas; `use-user-queries` ya tiene `useCompanyUsers`.
+- "Mi Perfil" en Más no hace nada. `getBranchById`, `OrdersFilterList` (y `OrderStatusFilter` /
+  `OrderDeliveryFilter`) sin uso; `FRONTEND_DOCS.md` describe un dashboard y un login mock que ya no
+  existen; la clave vieja `@erp/active-branch-id` puede seguir en AsyncStorage.
+
+### Backend
+
+1. **Precio mayor a 0:** `@DecimalMin(value = "0.0", inclusive = false)` en `ProductVariantRequest`,
+   `ProductVariantUpdateRequest` y la entidad; mensaje en español en el frontend.
+2. **Tests:** validación del precio 0 en alta y edición.
+
+### Frontend
+
+1. **`hooks/use-branch-queries.ts`:** `branchKeys` (`all`, `mine(userId)`, `list()`).
+   - `useMyBranches()`: las asignadas y activas del usuario (reemplaza `availableBranches`,
+     `fetchUserBranches` y `hasFetchedUserBranches`). El refresco al volver al frente lo hace
+     TanStack: se borra el `AppState` de sucursales de `(app)/_layout` (el de `refreshUser` queda).
+   - `useBranches()`: las de la empresa (Sucursales, destino de transferencias, ficha del usuario).
+   - Mutaciones: alta, edición, activar/desactivar, asignar/quitar usuario y "elegir y asignarme"
+     (`selectAndEnsureAssigned`). Invalidan sucursales, las sucursales del usuario afectado y,
+     al desactivar, pedidos y reportes (dejan de verse los de esa sucursal).
+2. **`branch-store` queda solo con estado del cliente:** `activeBranchId`, la persistencia por
+   usuario y empresa, el contexto de sesión y la versión de selección. `useActiveBranch()` deriva la
+   sucursal de `useMyBranches()` por id, así un renombre o una desactivación se ven solos.
+   Un único `useActiveBranchSync()` en `(app)/_layout`: cuando llega la lista, si la elegida ya no
+   está (desactivada o desasignada) restaura la guardada del mismo usuario y empresa o toma la
+   primera; una selección manual hecha mientras tanto manda (misma guarda de versión que hoy).
+3. **Pantallas:** las 12 que leen `activeBranch` pasan a `useActiveBranch()`; Reportes, Inventario,
+   Sucursales, Sucursal activa, transferencias, ficha del usuario y `BranchFormModal` a los hooks.
+   `BranchUsersAssignmentModal` usa `useCompanyUsers`, una query de usuarios de la sucursal y la
+   mutación con actualización optimista y vuelta atrás solo si falla (los `201`/`204` sin body
+   siguen siendo éxito).
+4. **Mi Perfil** (`settings/profile.tsx`): nombre, email, rol, empresa, sucursales asignadas y
+   sucursal activa, con accesos a Sucursal activa y Cambiar contraseña (si puede). Sale de
+   `/auth/me` (`refreshUser`); sin endpoints nuevos.
+5. **Precio:** `ProductForm` exige precio mayor a 0.
+6. **Limpieza:** borrar `getBranchById`, `OrdersFilterList` y sus tipos, `FRONTEND_DOCS.md`
+   (la referencia es `AGENTS.md` y este plan) y la clave `@erp/active-branch-id` al hidratar.
+   Actualizar en `AGENTS.md` las secciones de arquitectura y sucursales al esquema nuevo.
+
+### Validación
+
+- Backend: tests unitarios en la copia del scratchpad.
+- Frontend: `npx tsc --noEmit`, eslint de los archivos tocados, `git diff --check`.
+
+**Pruebas manuales (las hace el usuario).**
+- Entrar: se restaura la sucursal activa guardada; con otro usuario o empresa no se reutiliza.
+- Cambiar la sucursal activa: se actualiza todo y persiste tras recargar; una carga vieja no
+  la pisa.
+- Renombrar la sucursal activa: el nombre nuevo se ve en el encabezado sin recargar.
+- Desactivar la sucursal activa o quitarse a uno mismo de ella: deja de ser la activa.
+- Asignar/quitar usuarios en el modal: el switch queda bien; si falla, vuelve y se ve el error.
+- Volver al frente después de que otro admin cambió las asignaciones: se actualizan.
+- Logout, sesión expirada y volver a entrar.
+- Mi Perfil. Producto con precio 0: no se puede guardar.
+
+**Fuera de alcance.** Migraciones y test de contexto (antes de producción); acceso a deudas desde
+el detalle del cliente.
+
 ---
 
 ## Pendientes chicos (sin orden; sumar a la etapa afín)
 
-- Redirección inicial inconsistente: `index.tsx` y `login.tsx` van a `/orders`, `_layout.tsx:45` a
-  `/shipments`.
 - `customers/[id]/debts.tsx` solo se abre desde `debtors.tsx`; evaluar acceso desde el detalle del cliente.
-- Limpieza: `FRONTEND_DOCS.md` desactualizado (describe dashboard y login mock); clave huérfana
-  `@erp/active-branch-id` en AsyncStorage; funciones sin uso (`getBranchById`; `getCategoryById` se
-  borra en la 17); "Mi Perfil" sin acción en `more.tsx`.
-- Migrar los demás módulos a TanStack Query, de a uno y con decisión explícita (categorías y
-  atributos en la 17; después sucursales).
-- `OrdersFilterList.tsx` no se usa en ninguna pantalla (y con él `OrderStatusFilter` /
-  `OrderDeliveryFilter`).
-- Un pedido con total 0 figura "Pendiente" (`OrderMapper.computePaymentStatus`).
 - Permiso que el backend nunca chequea: `ADMINISTRAR_PRECIOS` (`ACCEDER_TODAS_SUCURSALES` toma
   sentido en la etapa 12: autoasignación a sucursales nuevas).
-- `BackendApplicationTests` (test de contexto) falla desde 2026-10-06; los unitarios se corren con
-  `-Dtest=!BackendApplicationTests`.
-- Unicidad de usuario sin distinguir mayúsculas: hoy solo en el servicio; con migraciones, índice
-  único sobre `lower(username)`.
-- Sin migraciones (`ddl-auto: update`): no crea índices funcionales ni actualiza los CHECK de los
-  enums (por eso la etapa 10 no pudo sumar un tipo de movimiento).
+- **Antes de producción** (decisión del usuario: en desarrollo alcanza con `ddl-auto: update`):
+  - Migraciones (Flyway con línea base del esquema actual): `ddl-auto: update` no crea índices
+    funcionales ni actualiza los CHECK de los enums (por eso la etapa 10 no pudo sumar un tipo de
+    movimiento).
+  - Unicidad de usuario sin distinguir mayúsculas: hoy solo en el servicio; con migraciones,
+    índice único sobre `lower(username)`.
+  - `BackendApplicationTests` (test de contexto) falla desde 2026-10-06; los unitarios se corren
+    con `-Dtest=!BackendApplicationTests`.
