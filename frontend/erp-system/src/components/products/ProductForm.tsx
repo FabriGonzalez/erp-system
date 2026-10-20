@@ -3,21 +3,20 @@ import { ProductAttributeValueFormModal } from '@/components/attributes/ProductA
 import { CategoryFormModal } from '@/components/categories/CategoryFormModal';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useAttributes } from '@/hooks/use-attribute-queries';
 import { useBranchStore } from '@/stores/branch-store';
 import { SharedStyles } from '@/styles/shared';
-import { useProductAttributeStore } from '@/stores/product-attribute-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { Branch } from '@/types/branch';
 import { Category } from '@/types/category';
 import {
-    ProductAttribute,
     ProductAttributeValue,
     ProductFormData,
     ProductVariantAttribute,
 } from '@/types/product';
 import { hasPermission } from '@/utils/permissions';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Platform,
@@ -36,8 +35,6 @@ type DraftVariant = ProductFormData['variants'][number];
 type ProductFormProps = {
     initialValues?: Partial<ProductFormData>;
     categories: Category[];
-    attributes?: ProductAttribute[];
-    attributeValues?: ProductAttributeValue[];
     branches: Branch[];
     onSubmit: (data: ProductFormData) => void;
     onCancel: () => void;
@@ -164,26 +161,14 @@ function generateCombinations(
 export function ProductForm({
     initialValues,
     categories,
-    attributes: propsAttributes,
-    attributeValues: propsAttributeValues,
     branches,
     onSubmit,
     onCancel,
     isSubmitting = false,
     submitLabel = 'Guardar Producto',
 }: ProductFormProps) {
-    const storeAttributes = useProductAttributeStore((state) => state.attributes);
-    const storeAttributeValues = useProductAttributeStore((state) => state.attributeValues);
-    const fetchAttributes = useProductAttributeStore((state) => state.fetchAttributes);
-    const token = useAuthStore((state) => state.token);
-    const attributes = propsAttributes ?? storeAttributes;
-    const attributeValues = propsAttributeValues ?? storeAttributeValues;
-
-    useEffect(() => {
-        if (token && storeAttributes.length === 0) {
-            void fetchAttributes(token);
-        }
-    }, [fetchAttributes, storeAttributes.length, token]);
+    // Todos los atributos y valores (de la caché compartida con Atributos) para armar variantes.
+    const { attributes, attributeValues } = useAttributes();
 
     const [name, setName] = useState(initialValues?.name ?? '');
     const [categoryId, setCategoryId] = useState(initialValues?.categoryId ?? '');
@@ -212,6 +197,11 @@ export function ProductForm({
 
     const activeBranch = useBranchStore((state) => state.activeBranch);
     const selectedCategory = categories.find((category) => category.id === categoryId);
+    // Una inactiva no se puede asignar (CATEGORY_INACTIVE); al editar, la que ya tenía el
+    // producto se sigue mostrando para no perderla de vista.
+    const selectableCategories = categories.filter(
+        (category) => category.active || category.id === initialValues?.categoryId,
+    );
 
     function selectCategory(id: string) {
         setCategoryId(id);
@@ -348,7 +338,9 @@ export function ProductForm({
             <View style={styles.formGroup}>
                 <Text style={SharedStyles.sectionTitle}>Categoría <Text style={styles.required}>*</Text></Text>
                 <Pressable style={[styles.selectButton, errors.categoryId && styles.inputError]} onPress={() => !isSubmitting && setCategoryModalVisible(true)}>
-                    <Text style={[styles.selectButtonText, !selectedCategory && styles.placeholderText]}>{selectedCategory ? selectedCategory.name : 'Seleccionar categoría'}</Text>
+                    <Text style={[styles.selectButtonText, !selectedCategory && styles.placeholderText]}>{selectedCategory
+                        ? `${selectedCategory.name}${selectedCategory.active ? '' : ' (inactiva)'}`
+                        : 'Seleccionar categoría'}</Text>
                     <SymbolView name={{ ios: 'chevron.down', android: 'arrow_drop_down', web: 'arrow_drop_down' }} size={20} tintColor={Colors.textSecondary} />
                 </Pressable>
                 {errors.categoryId ? <Text style={styles.errorText}>{errors.categoryId}</Text> : null}
@@ -642,7 +634,7 @@ export function ProductForm({
 
             <CategoryModal
                 visible={categoryModalVisible}
-                categories={categories}
+                categories={selectableCategories}
                 selectedCategoryId={categoryId}
                 onSelect={selectCategory}
                 onClose={() => setCategoryModalVisible(false)}

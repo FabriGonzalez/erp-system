@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
@@ -21,10 +21,10 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useCategories } from '@/hooks/use-category-queries';
 import { useProducts } from '@/hooks/use-product-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
-import { useCategoryStore } from '@/stores/category-store';
 import { SharedStyles } from '@/styles/shared';
 import { StatusFilter, StockFilter } from '@/types/product';
 import { hasPermission } from '@/utils/permissions';
@@ -32,9 +32,8 @@ import { productStock } from '@/utils/product-stock';
 
 export default function ProductsScreen() {
     const user = useAuthStore((state) => state.user);
-    const token = useAuthStore((state) => state.token);
     const activeBranch = useBranchStore((state) => state.activeBranch);
-    const { categories, fetchCategories } = useCategoryStore();
+    const { categories } = useCategories();
 
     // Filtros propios de esta pantalla: los selectores de productos tienen su propia búsqueda.
     const [searchQuery, setSearchQuery] = useState('');
@@ -60,12 +59,6 @@ export default function ProductsScreen() {
         stock: stockFilter === 'ALL' ? undefined : stockFilter,
         branchId,
     });
-
-    useEffect(() => {
-        if (token) {
-            fetchCategories(token).catch(() => {});
-        }
-    }, [fetchCategories, token]);
 
     function resetFilters() {
         setSearchQuery('');

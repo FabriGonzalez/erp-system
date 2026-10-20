@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
     FlatList,
     ActivityIndicator,
     Pressable,
+    RefreshControl,
     StyleSheet,
     Switch,
     Text,
@@ -17,42 +18,23 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useProductAttributeStore } from '@/stores/product-attribute-store';
-import { useAuthStore } from '@/stores/auth-store';
+import { useAttributes, useSetAttributeActive } from '@/hooks/use-attribute-queries';
+import { showErrorToast } from '@/stores/toast-store';
 import { SharedStyles } from '@/styles/shared';
 import { ProductAttribute } from '@/types/product';
 
 export default function AttributesListScreen() {
-    const {
-        attributes,
-        attributeValues,
-        fetchAttributes,
-        activateAttribute,
-        deactivateAttribute,
-        isLoading,
-        error,
-    } = useProductAttributeStore();
-    const token = useAuthStore((state) => state.token);
+    const { attributes, attributeValues, isLoading, isRefreshing, error, refresh } = useAttributes();
+    const setAttributeActive = useSetAttributeActive();
 
     const [isFormModalVisible, setIsFormModalVisible] = useState(false);
     const [editingAttribute, setEditingAttribute] = useState<ProductAttribute | null>(null);
 
-    useEffect(() => {
-        if (token) {
-            void fetchAttributes(token);
-        }
-    }, [token, fetchAttributes]);
-
     async function handleToggle(attribute: ProductAttribute) {
-        if (!token) return;
         try {
-            if (attribute.active) {
-                await deactivateAttribute(attribute.id, token);
-            } else {
-                await activateAttribute(attribute.id, token);
-            }
-        } catch {
-            // The store exposes the request error to the screen.
+            await setAttributeActive.mutateAsync({ id: attribute.id, active: !attribute.active });
+        } catch (toggleError) {
+            showErrorToast(toggleError, 'No se pudo cambiar el estado del atributo.');
         }
     }
 
@@ -193,6 +175,7 @@ export default function AttributesListScreen() {
                 />
             </View>
 
+            {/* El "sin atributos" se muestra recién cuando se sabe que no hay (antes salía bajo el spinner). */}
             {isLoading ? (
                 <ActivityIndicator color={Colors.primary} style={styles.loader} />
             ) : error ? (
@@ -200,24 +183,27 @@ export default function AttributesListScreen() {
                     title="No se pudieron cargar los atributos"
                     description={error}
                     actionLabel="Reintentar"
-                    onAction={() => token && void fetchAttributes(token)}
+                    onAction={refresh}
                 />
-            ) : null}
-
-            <FlatList
-                data={isLoading || error ? [] : attributes}
-                keyExtractor={(item) => item.id}
-                renderItem={renderItem}
-                contentContainerStyle={styles.listContainer}
-                ListEmptyComponent={
-                    <EmptyState
-                        title="Sin atributos registrados"
-                        description="Creá tu primer atributo como Color o Talle para comenzar a definir variantes."
-                        actionLabel="+ Crear Atributo"
-                        onAction={handleOpenCreate}
-                    />
-                }
-            />
+            ) : (
+                <FlatList
+                    data={attributes}
+                    keyExtractor={(item) => item.id}
+                    renderItem={renderItem}
+                    contentContainerStyle={styles.listContainer}
+                    refreshControl={
+                        <RefreshControl refreshing={isRefreshing} onRefresh={refresh} tintColor={Colors.primary} />
+                    }
+                    ListEmptyComponent={
+                        <EmptyState
+                            title="Sin atributos registrados"
+                            description="Creá tu primer atributo como Color o Talle para comenzar a definir variantes."
+                            actionLabel="+ Crear Atributo"
+                            onAction={handleOpenCreate}
+                        />
+                    }
+                />
+            )}
 
             {/* Modal de Creación / Edición */}
             <ProductAttributeFormModal

@@ -1,9 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
     FlatList,
-    ActivityIndicator,
     Pressable,
     StyleSheet,
     Switch,
@@ -20,36 +19,24 @@ import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useProductAttributeStore } from '@/stores/product-attribute-store';
-import { useAuthStore } from '@/stores/auth-store';
+import {
+    useAttributes,
+    useSetAttributeActive,
+    useSetAttributeValueActive,
+} from '@/hooks/use-attribute-queries';
+import { showErrorToast } from '@/stores/toast-store';
 import { SharedStyles } from '@/styles/shared';
 import { ProductAttributeValue } from '@/types/product';
 
 export default function AttributeDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
 
-    const {
-        attributes,
-        attributeValues,
-        fetchAttributeById,
-        activateAttribute,
-        deactivateAttribute,
-        activateAttributeValue,
-        deactivateAttributeValue,
-        isLoading,
-        error,
-    } = useProductAttributeStore();
-    const token = useAuthStore((state) => state.token);
+    // El detalle sale de las listas completas (cacheadas, compartidas con Atributos): tras un
+    // F5 se piden y la pantalla se arma cuando llegan.
+    const { attributes, attributeValues, isLoading, error, refresh } = useAttributes();
+    const setAttributeActive = useSetAttributeActive();
+    const setValueActive = useSetAttributeValueActive();
 
-    useEffect(() => {
-        if (id && token) {
-            void fetchAttributeById(id, token);
-        }
-    }, [id, token, fetchAttributeById]);
-
-    // Se derivan del estado, no de getters del store que leen get(): con el React Compiler,
-    // una función estable con los mismos argumentos se memoriza y, al recargar (F5), quedaba
-    // fijo el primer resultado (store vacío) aunque los datos llegaran después.
     const attribute = attributes.find((item) => item.id === id);
     const values = attribute
         ? attributeValues.filter((value) => value.attributeId === attribute.id)
@@ -59,7 +46,7 @@ export default function AttributeDetailScreen() {
     const [isValueModalVisible, setIsValueModalVisible] = useState(false);
     const [editingValue, setEditingValue] = useState<ProductAttributeValue | null>(null);
 
-    if (isLoading && !attribute) {
+    if (isLoading) {
         return <LoadingState />;
     }
 
@@ -70,7 +57,7 @@ export default function AttributeDetailScreen() {
                     title="No se pudo cargar el atributo"
                     description={error}
                     actionLabel="Reintentar"
-                    onAction={() => id && token && void fetchAttributeById(id, token)}
+                    onAction={refresh}
                 />
             </Screen>
         );
@@ -85,6 +72,24 @@ export default function AttributeDetailScreen() {
                 actionLabel="Volver a atributos"
             />
         );
+    }
+
+    const currentAttribute = attribute;
+
+    async function handleToggleAttribute() {
+        try {
+            await setAttributeActive.mutateAsync({ id: currentAttribute.id, active: !currentAttribute.active });
+        } catch (toggleError) {
+            showErrorToast(toggleError, 'No se pudo cambiar el estado del atributo.');
+        }
+    }
+
+    async function handleToggleValue(value: ProductAttributeValue) {
+        try {
+            await setValueActive.mutateAsync({ id: value.id, active: !value.active });
+        } catch (toggleError) {
+            showErrorToast(toggleError, 'No se pudo cambiar el estado del valor.');
+        }
     }
 
     function handleOpenCreateValue() {
@@ -132,12 +137,7 @@ export default function AttributeDetailScreen() {
                     <View style={styles.switchContainer}>
                         <Switch
                             value={item.active}
-                            onValueChange={() => {
-                                if (!token) return;
-                                void (item.active
-                                    ? deactivateAttributeValue(item.id, token)
-                                    : activateAttributeValue(item.id, token));
-                            }}
+                            onValueChange={() => void handleToggleValue(item)}
                             trackColor={{ false: Colors.track, true: Colors.primary }}
                             thumbColor={Colors.white}
                         />
@@ -204,12 +204,7 @@ export default function AttributeDetailScreen() {
                         </Text>
                         <Switch
                             value={attribute.active}
-                            onValueChange={() => {
-                                if (!token) return;
-                                void (attribute.active
-                                    ? deactivateAttribute(attribute.id, token)
-                                    : activateAttribute(attribute.id, token));
-                            }}
+                            onValueChange={() => void handleToggleAttribute()}
                             trackColor={{ false: Colors.track, true: Colors.primary }}
                             thumbColor={Colors.white}
                         />
@@ -227,19 +222,8 @@ export default function AttributeDetailScreen() {
                 />
             </View>
 
-            {isLoading ? (
-                <ActivityIndicator color={Colors.primary} style={styles.loader} />
-            ) : error ? (
-                <EmptyState
-                    title="No se pudo cargar el atributo"
-                    description={error}
-                    actionLabel="Reintentar"
-                    onAction={() => id && token && void fetchAttributeById(id, token)}
-                />
-            ) : null}
-
             <FlatList
-                data={isLoading || error ? [] : values}
+                data={values}
                 keyExtractor={(item) => item.id}
                 renderItem={renderValueItem}
                 contentContainerStyle={styles.listContainer}
@@ -280,9 +264,6 @@ export default function AttributeDetailScreen() {
 const styles = StyleSheet.create({
     container: {
         padding: 0,
-    },
-    loader: {
-        marginVertical: Spacing.xl,
     },
     attributeHeaderCard: {
         backgroundColor: Colors.surface,

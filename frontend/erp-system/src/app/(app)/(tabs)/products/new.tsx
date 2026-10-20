@@ -1,15 +1,16 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ProductForm } from '@/components/products/ProductForm';
 import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
+import { useCategories } from '@/hooks/use-category-queries';
 import { useCreateProduct } from '@/hooks/use-product-queries';
 import { useAuthStore } from '@/stores/auth-store';
-import { useCategoryStore } from '@/stores/category-store';
+import { showToast } from '@/stores/toast-store';
 import { SharedStyles } from '@/styles/shared';
 import { ProductFormData } from '@/types/product';
 import { hasPermission } from '@/utils/permissions';
@@ -17,25 +18,18 @@ import { hasPermission } from '@/utils/permissions';
 export default function NewProductScreen() {
     const canAccess = useAuthStore((state) => hasPermission(state.user, 'ADMINISTRAR_PRODUCTOS'));
     const createProduct = useCreateProduct();
-    const { categories, fetchCategories } = useCategoryStore();
+    const { categories } = useCategories();
     const user = useAuthStore((state) => state.user);
-    const token = useAuthStore((state) => state.token);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (token) {
-            fetchCategories(token).catch(() => {});
-        }
-    }, [fetchCategories, token]);
 
     async function handleSubmit(formData: ProductFormData) {
         setIsSubmitting(true);
         setErrorMessage(null);
         try {
             await createProduct.mutateAsync(toProductRequest(formData));
-            setSuccessMessage('¡Producto creado exitosamente!');
+            // El toast sigue visible después de volver al listado.
+            showToast({ type: 'success', message: 'Producto creado.' });
             router.back();
         } catch (error: unknown) {
             setErrorMessage(
@@ -96,21 +90,6 @@ export default function NewProductScreen() {
                 <View style={SharedStyles.headerSpacer} />
             </View>
 
-            {/* Banner de Éxito */}
-            {successMessage && (
-                <View style={SharedStyles.successBanner}>
-                    <SymbolView
-                        name={{
-                            ios: 'checkmark.circle.fill',
-                            android: 'check_circle',
-                            web: 'check_circle',
-                        }}
-                        size={20}
-                        tintColor={Colors.success}
-                    />
-                    <Text style={SharedStyles.successText}>{successMessage}</Text>
-                </View>
-            )}
             {errorMessage && (
                 <View style={styles.errorBanner}>
                     <Text style={styles.errorText}>{errorMessage}</Text>

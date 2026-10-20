@@ -2,7 +2,6 @@ import { SymbolView } from 'expo-symbols';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     FlatList,
     Modal,
     Pressable,
@@ -43,6 +42,8 @@ export function BranchUsersAssignmentModal({
     const [assignedUserIds, setAssignedUserIds] = useState<Set<string>>(new Set());
     const [isLoading, setIsLoading] = useState(false);
     const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
+    // Dentro del modal: en el celular un toast quedaría tapado por el Modal.
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const loadRequestId = useRef(0);
     const branchId = branch?.id;
 
@@ -50,6 +51,7 @@ export function BranchUsersAssignmentModal({
         if (!branchId || !token) return;
         const requestId = ++loadRequestId.current;
         setIsLoading(true);
+        setErrorMessage(null);
         try {
             const [companyUsers, branchUsers] = await Promise.all([
                 getCompanyUsers(token),
@@ -60,11 +62,12 @@ export function BranchUsersAssignmentModal({
                 setUsers(companyUsers);
                 setAssignedUserIds(new Set(branchUsers.map((u) => String(u.id))));
             }
-        } catch (err: any) {
-            Alert.alert(
-                'Error',
-                err?.message || 'No se pudieron cargar los usuarios de la sucursal.'
-            );
+        } catch (err: unknown) {
+            if (requestId === loadRequestId.current) {
+                setErrorMessage(err instanceof Error && err.message
+                    ? err.message
+                    : 'No se pudieron cargar los usuarios de la sucursal.');
+            }
         } finally {
             if (requestId === loadRequestId.current) {
                 setIsLoading(false);
@@ -99,6 +102,7 @@ export function BranchUsersAssignmentModal({
         });
 
         setTogglingUserId(targetUserId);
+        setErrorMessage(null);
 
         try {
             if (isCurrentlyAssigned) {
@@ -108,7 +112,7 @@ export function BranchUsersAssignmentModal({
             }
             // La ficha del usuario muestra sus sucursales desde la caché.
             invalidateUserBranches(targetUserId);
-        } catch (err: any) {
+        } catch (err: unknown) {
             // Revertir optimismo en caso de error
             setAssignedUserIds((prev) => {
                 const next = new Set(prev);
@@ -120,10 +124,9 @@ export function BranchUsersAssignmentModal({
                 return next;
             });
 
-            Alert.alert(
-                'Error',
-                err?.message || 'No se pudo actualizar la asignación del usuario.'
-            );
+            setErrorMessage(err instanceof Error && err.message
+                ? err.message
+                : 'No se pudo actualizar la asignación del usuario.');
         } finally {
             setTogglingUserId(null);
         }
@@ -155,6 +158,12 @@ export function BranchUsersAssignmentModal({
                             />
                         </Pressable>
                     </View>
+
+                    {errorMessage ? (
+                        <View style={styles.errorBanner}>
+                            <Text style={styles.errorText}>{errorMessage}</Text>
+                        </View>
+                    ) : null}
 
                     {isLoading ? (
                         <View style={styles.loadingContainer}>
@@ -277,6 +286,18 @@ const styles = StyleSheet.create({
     },
     closeButton: {
         padding: Spacing.xs,
+    },
+    errorBanner: {
+        backgroundColor: Colors.errorLight,
+        borderColor: Colors.errorBorder,
+        borderWidth: 1,
+        borderRadius: 10,
+        padding: Spacing.md,
+        marginBottom: Spacing.sm,
+    },
+    errorText: {
+        color: Colors.error,
+        fontSize: 13,
     },
     loadingContainer: {
         padding: Spacing.xxl,

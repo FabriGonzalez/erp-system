@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
-import { Product, ProductAttribute, ProductAttributeValue, ProductVariant } from '@/types/product';
+import { Product, ProductVariant } from '@/types/product';
 
 const LOW_STOCK_THRESHOLD = 3;
 
@@ -17,8 +17,6 @@ type ProductSelectionCardProps = {
     isMaxStockReached: boolean;
     attributeIds: string[];
     isExpanded: boolean;
-    attributes: ProductAttribute[];
-    attributeValues: ProductAttributeValue[];
     selectedAttributes: Record<string, string>;
     branchId: string;
     attributeOptions: (product: Product, attributeId: string) => string[];
@@ -41,8 +39,6 @@ export function ProductSelectionCard({
     isMaxStockReached,
     attributeIds,
     isExpanded,
-    attributes,
-    attributeValues,
     selectedAttributes,
     branchId,
     attributeOptions,
@@ -68,6 +64,14 @@ export function ProductSelectionCard({
         ? `Stock: ${shownStock}${qtyInCart > 0 ? ` · ${qtyInCart} ${selectedLabel}` : ''}`
         : `Stock total: ${shownStock}`;
 
+    // Los nombres de atributo y valor vienen en el producto: no hace falta el catálogo de
+    // atributos (antes, sin cargarlo, se veía "Atributo" y el id del valor).
+    const variantAttributes = product.variants.flatMap((variant) => variant.attributes);
+    const attributeName = (attributeId: string) =>
+        variantAttributes.find((attribute) => attribute.attributeId === attributeId)?.attributeName ?? 'Atributo';
+    const valueName = (valueId: string) =>
+        variantAttributes.find((attribute) => attribute.attributeValueId === valueId)?.valueName ?? valueId;
+
     return (
         <Pressable
             style={({ pressed }) => [SharedStyles.rowCard, styles.productCard, pressed && !isExpanded && SharedStyles.pressed]}
@@ -91,7 +95,7 @@ export function ProductSelectionCard({
                         {attributeIds.map((attributeId) => (
                             <View key={attributeId}>
                                 <Text style={styles.smallLabel}>
-                                    {attributes.find((attribute) => attribute.id === attributeId)?.name ?? 'Atributo'}
+                                    {attributeName(attributeId)}
                                 </Text>
                                 <View style={styles.optionRow}>
                                     {attributeOptions(product, attributeId).map((valueId) => (
@@ -111,7 +115,7 @@ export function ProductSelectionCard({
                                                 selectedAttributes[attributeId] === valueId && styles.optionTextSelected,
                                             ]}
                                             >
-                                                {attributeValues.find((value) => value.id === valueId)?.name ?? valueId}
+                                                {valueName(valueId)}
                                             </Text>
                                         </Pressable>
                                     ))}

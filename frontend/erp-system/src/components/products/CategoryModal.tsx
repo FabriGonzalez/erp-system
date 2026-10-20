@@ -73,7 +73,7 @@ export function CategoryModal({
                                                 isSelected && styles.categoryItemNameSelected,
                                             ]}
                                         >
-                                            {cat.name}
+                                            {cat.name}{cat.active ? '' : ' (inactiva)'}
                                         </Text>
                                         {cat.description ? (
                                             <Text style={styles.categoryItemDesc}>

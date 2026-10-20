@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { ProductSelectionCard } from '@/components/products/ProductSelectionCard';
@@ -9,8 +9,6 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useProducts } from '@/hooks/use-product-queries';
-import { useAuthStore } from '@/stores/auth-store';
-import { useProductAttributeStore } from '@/stores/product-attribute-store';
 import { Product } from '@/types/product';
 
 type VariantCatalogProps = {
@@ -47,18 +45,6 @@ export function VariantCatalog({
     noBranchDescription,
     listPaddingBottom = Spacing.xxl * 3,
 }: VariantCatalogProps) {
-    const token = useAuthStore((state) => state.token);
-    const attributes = useProductAttributeStore((state) => state.attributes);
-    const attributeValues = useProductAttributeStore((state) => state.attributeValues);
-    const fetchAttributes = useProductAttributeStore((state) => state.fetchAttributes);
-    const hasAttributes = attributes.length > 0;
-
-    useEffect(() => {
-        if (token && !hasAttributes) {
-            fetchAttributes(token).catch(() => {});
-        }
-    }, [token, hasAttributes, fetchAttributes]);
-
     const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
     const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
     // Propia de cada catálogo: no pisa la búsqueda del listado de Productos.
@@ -166,8 +152,6 @@ export function VariantCatalog({
                                 isMaxStockReached={qtyInCart >= availableStock}
                                 attributeIds={attributeIds}
                                 isExpanded={isExpanded}
-                                attributes={attributes}
-                                attributeValues={attributeValues}
                                 selectedAttributes={selectedAttributes}
                                 branchId={branchId}
                                 attributeOptions={attributeOptions}

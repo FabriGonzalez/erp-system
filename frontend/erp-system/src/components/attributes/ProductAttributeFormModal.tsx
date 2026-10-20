@@ -6,8 +6,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useAuthStore } from '@/stores/auth-store';
-import { useProductAttributeStore } from '@/stores/product-attribute-store';
+import { useSaveAttribute } from '@/hooks/use-attribute-queries';
 import { ProductAttribute } from '@/types/product';
 
 type ProductAttributeFormModalProps = {
@@ -29,9 +28,7 @@ export function ProductAttributeFormModal({
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const createAttribute = useProductAttributeStore((state) => state.createAttribute);
-    const updateAttribute = useProductAttributeStore((state) => state.updateAttribute);
-    const token = useAuthStore((state) => state.token);
+    const saveAttribute = useSaveAttribute();
 
     useEffect(() => {
         if (visible) {
@@ -46,23 +43,17 @@ export function ProductAttributeFormModal({
 
     async function handleSubmit() {
         setError(null);
-        if (!token) {
-            setError('No hay una sesión activa.');
-            return;
-        }
         if (!name.trim()) {
             setError('El nombre del atributo es obligatorio.');
             return;
         }
         setIsSubmitting(true);
         try {
-            if (isEditing && attributeId) {
-                const updated = await updateAttribute(attributeId, { name }, token);
-                onSuccess?.(updated);
-            } else {
-                const created = await createAttribute({ name }, token);
-                onSuccess?.(created);
-            }
+            const saved = await saveAttribute.mutateAsync({
+                id: isEditing ? attributeId : undefined,
+                data: { name },
+            });
+            onSuccess?.(saved);
             onClose();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al guardar el atributo.');

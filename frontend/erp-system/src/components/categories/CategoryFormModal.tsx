@@ -4,8 +4,7 @@ import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 import { AppButton } from '@/components/ui/AppButton';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useAuthStore } from '@/stores/auth-store';
-import { useCategoryStore } from '@/stores/category-store';
+import { useSaveCategory } from '@/hooks/use-category-queries';
 import { Category } from '@/types/category';
 
 type CategoryFormModalProps = {
@@ -22,8 +21,7 @@ export function CategoryFormModal({
     onClose,
     onSaved,
 }: CategoryFormModalProps) {
-    const token = useAuthStore((state) => state.token);
-    const { createCategory, updateCategory } = useCategoryStore();
+    const saveCategory = useSaveCategory();
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,11 +60,6 @@ export function CategoryFormModal({
             return;
         }
 
-        if (!token) {
-            setErrorMessage('No hay sesión activa.');
-            return;
-        }
-
         setIsSubmitting(true);
         setErrorMessage(null);
 
@@ -76,9 +69,10 @@ export function CategoryFormModal({
                 description: trimmedDescription || null,
             };
 
-            const saved = isEdit && categoryToEdit
-                ? await updateCategory(categoryToEdit.id, data, token)
-                : await createCategory(data, token);
+            const saved = await saveCategory.mutateAsync({
+                id: isEdit ? categoryToEdit?.id : undefined,
+                data,
+            });
             onSaved?.(saved);
             onClose();
         } catch (error: unknown) {

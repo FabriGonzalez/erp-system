@@ -12,6 +12,7 @@ import { useCreateOrder } from '@/hooks/use-order-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
+import { showToast } from '@/stores/toast-store';
 import { SharedStyles } from '@/styles/shared';
 import {
     toBackendCustomerId,
@@ -67,7 +68,7 @@ export default function NewOrderScreen() {
             // El resumen guarda el importe cobrado justo antes de enviar.
             const draft = useOrderDraftStore.getState();
 
-            await createOrder.mutateAsync({
+            const order = await createOrder.mutateAsync({
                 branchId: Number(activeBranch.id),
                 customerId: toBackendCustomerId(customer),
                 salesType,
@@ -78,6 +79,8 @@ export default function NewOrderScreen() {
             });
 
             resetDraft();
+            // El toast sigue visible después de volver a Ventas.
+            showToast({ type: 'success', message: `Venta ${order.orderNumber} registrada.` });
             router.back();
         } catch (error) {
             setErrorMessage(

@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ProductForm } from '@/components/products/ProductForm';
@@ -9,9 +9,10 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
+import { useCategories } from '@/hooks/use-category-queries';
 import { useProduct, useUpdateProduct } from '@/hooks/use-product-queries';
 import { useAuthStore } from '@/stores/auth-store';
-import { useCategoryStore } from '@/stores/category-store';
+import { showToast } from '@/stores/toast-store';
 import { SharedStyles } from '@/styles/shared';
 import { ProductFormData } from '@/types/product';
 import { hasPermission } from '@/utils/permissions';
@@ -23,19 +24,11 @@ export default function EditProductScreen() {
     // partir del stock actual y no de la copia en caché (podría pisar una venta reciente).
     const { product, isLoading, loadError } = useProduct(id, { fresh: true });
     const updateProduct = useUpdateProduct();
-    const { categories, fetchCategories } = useCategoryStore();
+    const { categories } = useCategories();
     const user = useAuthStore((state) => state.user);
-    const token = useAuthStore((state) => state.token);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [submissionError, setSubmissionError] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (token) {
-            fetchCategories(token).catch(() => {});
-        }
-    }, [fetchCategories, token]);
 
     if (isLoading) {
         return <LoadingState />;
@@ -94,7 +87,8 @@ export default function EditProductScreen() {
 
             await updateProduct.mutateAsync({ id: product.id, data: productRequest });
 
-            setSuccessMessage('¡Cambios guardados con éxito!');
+            // El toast sigue visible después de volver al detalle.
+            showToast({ type: 'success', message: 'Cambios guardados.' });
             router.back();
         } catch (error: unknown) {
             setSubmissionError(
@@ -133,20 +127,6 @@ export default function EditProductScreen() {
                 <View style={SharedStyles.headerSpacer} />
             </View>
 
-            {successMessage && (
-                <View style={SharedStyles.successBanner}>
-                    <SymbolView
-                        name={{
-                            ios: 'checkmark.circle.fill',
-                            android: 'check_circle',
-                            web: 'check_circle',
-                        }}
-                        size={20}
-                        tintColor={Colors.success}
-                    />
-                    <Text style={SharedStyles.successText}>{successMessage}</Text>
-                </View>
-            )}
             {submissionError && (
                 <View style={styles.errorBanner}>
                     <Text style={styles.errorText}>{submissionError}</Text>

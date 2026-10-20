@@ -1,5 +1,4 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 
 import { OrderActions } from '@/components/orders/OrderActions';
@@ -7,7 +6,6 @@ import { OrderHeader } from '@/components/orders/OrderHeader';
 import { OrderInfoCard } from '@/components/orders/OrderInfoCard';
 import { OrderProducts } from '@/components/orders/OrderProducts';
 import { OrderTimeline } from '@/components/orders/OrderTimeline';
-import { SuccessBanner } from '@/components/orders/SuccessBanner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
@@ -22,15 +20,8 @@ export default function OperationDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const user = useAuthStore((state) => state.user);
     const { order, isLoading, loadError } = useOrder(id);
-    const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-    function showSuccess(message: string) {
-        setSuccessMessage(message);
-        setTimeout(() => setSuccessMessage(null), 2000);
-    }
-
+    // El éxito se avisa con un toast; el error queda junto a las acciones.
     const { isBusy, errorMessage, handleCancel, handleDispatch } = useOrderActions(
-        showSuccess,
         { cancel: 'Operación cancelada', dispatch: 'Envío despachado correctamente' },
     );
 
@@ -67,7 +58,6 @@ export default function OperationDetailScreen() {
     return (
         <Screen style={styles.screen}>
             <OrderHeader order={currentOrder} />
-            {successMessage && <SuccessBanner message={successMessage} />}
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 <OrderInfoCard order={currentOrder} />
                 <OrderProducts order={currentOrder} />

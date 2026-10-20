@@ -1,35 +1,33 @@
-import { Alert, Platform } from 'react-native';
+import { chooseAction } from '@/stores/dialog-store';
 
 type ConfirmOptions = {
     title: string;
     message: string;
     confirmLabel: string;
-    // Marca la acción como destructiva (rojo en iOS).
+    // Marca la acción como destructiva (botón rojo).
     destructive?: boolean;
+    // Por defecto "Cancelar"; cambiarlo cuando la acción misma es cancelar algo.
+    cancelLabel?: string;
 };
 
 /**
- * Pide confirmación y resuelve true si el usuario acepta. En web Alert.alert no muestra
- * nada, así que ahí se usa window.confirm (mismo criterio que use-order-actions).
+ * Pide confirmación y resuelve true si el usuario acepta. Usa el diálogo propio (DialogHost),
+ * igual en web y en el celular; cerrarlo sin elegir cuenta como cancelar.
  */
-export function confirmAction({ title, message, confirmLabel, destructive = false }: ConfirmOptions): Promise<boolean> {
-    if (Platform.OS === 'web') {
-        return Promise.resolve(window.confirm(`${title}\n\n${message}`));
-    }
-
-    return new Promise((resolve) => {
-        Alert.alert(
-            title,
-            message,
-            [
-                { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
-                {
-                    text: confirmLabel,
-                    style: destructive ? 'destructive' : 'default',
-                    onPress: () => resolve(true),
-                },
-            ],
-            { cancelable: true, onDismiss: () => resolve(false) },
-        );
+export async function confirmAction({
+    title,
+    message,
+    confirmLabel,
+    destructive = false,
+    cancelLabel = 'Cancelar',
+}: ConfirmOptions): Promise<boolean> {
+    const answer = await chooseAction({
+        title,
+        message,
+        options: [
+            { label: cancelLabel, value: false, style: 'cancel' },
+            { label: confirmLabel, value: true, style: destructive ? 'destructive' : 'default' },
+        ],
     });
+    return answer === true;
 }

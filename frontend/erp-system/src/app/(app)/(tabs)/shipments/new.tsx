@@ -12,6 +12,7 @@ import { useCreateOrder } from '@/hooks/use-order-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
+import { showToast } from '@/stores/toast-store';
 import { SharedStyles } from '@/styles/shared';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import {
@@ -51,7 +52,7 @@ export default function NewShipmentScreen() {
             const draft = useOrderDraftStore.getState();
 
             // El backend copia la dirección al envío en la misma transacción del alta.
-            await createOrder.mutateAsync({
+            const order = await createOrder.mutateAsync({
                 branchId: Number(activeBranch.id),
                 customerId: toBackendCustomerId(customer),
                 salesType: 'WITH_PRODUCTS',
@@ -62,6 +63,8 @@ export default function NewShipmentScreen() {
             });
 
             resetDraft();
+            // El toast sigue visible después de volver a Envíos.
+            showToast({ type: 'success', message: `Envío ${order.orderNumber} creado.` });
             router.back();
         } catch (error) {
             setErrorMessage(

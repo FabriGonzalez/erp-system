@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ProductCard } from '@/components/products/ProductCard';
 import { NotFound } from '@/components/ui/NotFound';
@@ -13,6 +13,7 @@ import { Spacing } from '@/constants/spacing';
 import { useProduct, useSetProductActive } from '@/hooks/use-product-queries';
 import { useBranchStore } from '@/stores/branch-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { showErrorToast } from '@/stores/toast-store';
 import { SharedStyles } from '@/styles/shared';
 import { hasPermission } from '@/utils/permissions';
 import { productStock, variantStock } from '@/utils/product-stock';
@@ -60,10 +61,7 @@ export default function ProductDetailScreen() {
         try {
             await setProductActive.mutateAsync({ id: currentProduct.id, active: !currentProduct.active });
         } catch (error: unknown) {
-            Alert.alert(
-                'Error',
-                error instanceof Error ? error.message : 'No se pudo cambiar el estado del producto.'
-            );
+            showErrorToast(error, 'No se pudo cambiar el estado del producto.');
         } finally {
             setIsToggling(false);
         }

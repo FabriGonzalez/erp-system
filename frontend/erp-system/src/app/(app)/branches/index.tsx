@@ -3,7 +3,6 @@ import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     FlatList,
     Pressable,
     RefreshControl,
@@ -21,6 +20,7 @@ import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
+import { showErrorToast } from '@/stores/toast-store';
 import { SharedStyles } from '@/styles/shared';
 import { Branch } from '@/types/branch';
 import { confirmAction } from '@/utils/confirm';
@@ -81,11 +81,8 @@ export default function BranchesListScreen() {
         setSelectingBranchId(branch.id);
         try {
             await selectAndEnsureAssigned(branch, user.id, token);
-        } catch (err: any) {
-            Alert.alert(
-                'Error',
-                err?.message || 'No se pudo seleccionar la sucursal como activa.'
-            );
+        } catch (err: unknown) {
+            showErrorToast(err, 'No se pudo seleccionar la sucursal como activa.');
         } finally {
             setSelectingBranchId(null);
         }
@@ -108,11 +105,8 @@ export default function BranchesListScreen() {
         setTogglingBranchId(branch.id);
         try {
             await toggleBranchActive(branch.id, Boolean(branch.active), token);
-        } catch (err: any) {
-            Alert.alert(
-                'Error',
-                err?.message || 'No se pudo cambiar el estado de la sucursal.'
-            );
+        } catch (err: unknown) {
+            showErrorToast(err, 'No se pudo cambiar el estado de la sucursal.');
         } finally {
             setTogglingBranchId(null);
         }

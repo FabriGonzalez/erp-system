@@ -6,8 +6,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useProductAttributeStore } from '@/stores/product-attribute-store';
-import { useAuthStore } from '@/stores/auth-store';
+import { useSaveAttributeValue } from '@/hooks/use-attribute-queries';
 import { ProductAttributeValue } from '@/types/product';
 
 type ProductAttributeValueFormModalProps = {
@@ -33,9 +32,7 @@ export function ProductAttributeValueFormModal({
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const createAttributeValue = useProductAttributeStore((state) => state.createAttributeValue);
-    const updateAttributeValue = useProductAttributeStore((state) => state.updateAttributeValue);
-    const token = useAuthStore((state) => state.token);
+    const saveAttributeValue = useSaveAttributeValue();
 
     useEffect(() => {
         if (visible) {
@@ -50,23 +47,18 @@ export function ProductAttributeValueFormModal({
 
     async function handleSubmit() {
         setError(null);
-        if (!token) {
-            setError('No hay una sesión activa.');
-            return;
-        }
         if (!name.trim()) {
             setError('El nombre del valor es obligatorio.');
             return;
         }
         setIsSubmitting(true);
         try {
-            if (isEditing && valueId) {
-                const updated = await updateAttributeValue(valueId, { value: name }, token);
-                onSuccess?.(updated);
-            } else {
-                const created = await createAttributeValue(attributeId, { value: name }, token);
-                onSuccess?.(created);
-            }
+            const saved = await saveAttributeValue.mutateAsync({
+                attributeId,
+                id: isEditing ? valueId : undefined,
+                data: { value: name },
+            });
+            onSuccess?.(saved);
             onClose();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al guardar el valor.');

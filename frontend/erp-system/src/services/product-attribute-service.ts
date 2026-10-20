@@ -64,31 +64,6 @@ export async function getAllAttributes(token: string): Promise<ProductAttribute[
     return data.map(normalizeAttribute);
 }
 
-export async function getAttributeById(id: string, token: string): Promise<ProductAttribute> {
-    const response = await apiFetch(`${API_BASE_URL}/api/v1/product-attributes/${id}`, {
-        headers: headers(token),
-    });
-    return normalizeAttribute(await responseData<ProductAttributeResponse>(
-        response,
-        'No se pudo obtener el atributo.'
-    ));
-}
-
-export async function getAttributeValues(
-    attributeId: string,
-    token: string
-): Promise<ProductAttributeValue[]> {
-    const response = await apiFetch(
-        `${API_BASE_URL}/api/v1/product-attributes/${attributeId}/values`,
-        { headers: headers(token) }
-    );
-    const data = await responseData<ProductAttributeValueResponse[]>(
-        response,
-        'No se pudieron obtener los valores del atributo.'
-    );
-    return data.map(normalizeValue);
-}
-
 /** Valores de todos los atributos de la empresa, en una sola request. */
 export async function getAllAttributeValues(token: string): Promise<ProductAttributeValue[]> {
     const response = await apiFetch(`${API_BASE_URL}/api/v1/product-attributes/values`, {

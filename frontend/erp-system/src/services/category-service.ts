@@ -64,27 +64,6 @@ export async function getAllCategories(token: string): Promise<Category[]> {
 }
 
 /**
- * Obtiene el detalle de una categoría por su ID.
- * Endpoint: GET /api/v1/categories/{id}
- */
-export async function getCategoryById(
-    id: string,
-    token: string
-): Promise<Category> {
-    const response = await apiFetch(`${API_BASE_URL}/api/v1/categories/${id}`, {
-        method: 'GET',
-        headers: authHeaders(token),
-    });
-
-    const raw = await handleResponse<BackendCategoryResponse>(
-        response,
-        'No se pudo obtener la categoría.'
-    );
-
-    return normalizeCategory(raw);
-}
-
-/**
  * Crea una nueva categoría para la empresa.
  * Endpoint: POST /api/v1/categories
  */

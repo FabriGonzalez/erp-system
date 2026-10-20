@@ -1,9 +1,8 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     FlatList,
     Pressable,
     RefreshControl,
@@ -18,36 +17,17 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useAuthStore } from '@/stores/auth-store';
-import { useCategoryStore } from '@/stores/category-store';
+import { useCategories, useSetCategoryActive } from '@/hooks/use-category-queries';
+import { showErrorToast } from '@/stores/toast-store';
 import { SharedStyles } from '@/styles/shared';
 import { Category } from '@/types/category';
 
 export default function CategoriesScreen() {
-    const token = useAuthStore((state) => state.token);
-    const {
-        categories,
-        isLoading,
-        error,
-        fetchCategories,
-        activateCategory,
-        deactivateCategory,
-    } = useCategoryStore();
+    const { categories, isLoading, isRefreshing, error, refresh } = useCategories();
+    const setCategoryActive = useSetCategoryActive();
     const [isFormModalVisible, setIsFormModalVisible] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
     const [togglingCategoryId, setTogglingCategoryId] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (token) {
-            fetchCategories(token).catch(() => {});
-        }
-    }, [token, fetchCategories]);
-
-    function handleRefresh() {
-        if (token) {
-            fetchCategories(token).catch(() => {});
-        }
-    }
 
     function handleOpenCreate() {
         setEditingCategory(null);
@@ -60,22 +40,13 @@ export default function CategoriesScreen() {
     }
 
     async function handleToggleActive(category: Category) {
-        if (!token || togglingCategoryId) return;
+        if (togglingCategoryId) return;
 
         setTogglingCategoryId(category.id);
         try {
-            if (category.active) {
-                await deactivateCategory(category.id, token);
-            } else {
-                await activateCategory(category.id, token);
-            }
-        } catch (error: unknown) {
-            Alert.alert(
-                'Error',
-                error instanceof Error
-                    ? error.message
-                    : 'No se pudo cambiar el estado de la categoría.'
-            );
+            await setCategoryActive.mutateAsync({ id: category.id, active: !category.active });
+        } catch (toggleError: unknown) {
+            showErrorToast(toggleError, 'No se pudo cambiar el estado de la categoría.');
         } finally {
             setTogglingCategoryId(null);
         }
@@ -193,21 +164,15 @@ export default function CategoriesScreen() {
                 <AppButton title="+ Nueva" onPress={handleOpenCreate} style={styles.addButton} />
             </View>
 
-            {error && categories.length > 0 ? (
-                <View style={styles.inlineError}>
-                    <Text style={styles.inlineErrorText}>{error}</Text>
-                </View>
-            ) : null}
-
-            {isLoading && categories.length === 0 ? (
+            {isLoading ? (
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={Colors.primary} />
                     <Text style={styles.loadingText}>Cargando categorías...</Text>
                 </View>
-            ) : error && categories.length === 0 ? (
+            ) : error ? (
                 <View style={styles.errorContainer}>
                     <Text style={styles.errorText}>{error}</Text>
-                    <AppButton title="Reintentar" onPress={handleRefresh} style={styles.retryButton} />
+                    <AppButton title="Reintentar" onPress={refresh} style={styles.retryButton} />
                 </View>
             ) : (
                 <FlatList
@@ -217,8 +182,8 @@ export default function CategoriesScreen() {
                     contentContainerStyle={categories.length === 0 ? SharedStyles.listEmpty : styles.listContainer}
                     refreshControl={
                         <RefreshControl
-                            refreshing={isLoading}
-                            onRefresh={handleRefresh}
+                            refreshing={isRefreshing}
+                            onRefresh={refresh}
                             colors={[Colors.primary]}
                             tintColor={Colors.primary}
                         />
@@ -277,15 +242,6 @@ const styles = StyleSheet.create({
     addButton: {
         paddingHorizontal: Spacing.md,
         paddingVertical: Spacing.sm,
-    },
-    inlineError: {
-        backgroundColor: Colors.errorLight,
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.sm,
-    },
-    inlineErrorText: {
-        color: Colors.error,
-        fontSize: 13,
     },
     loadingContainer: {
         flex: 1,
