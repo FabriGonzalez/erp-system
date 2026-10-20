@@ -1204,13 +1204,76 @@ commiteada).
 **Fuera de alcance.** Migraciones y test de contexto (antes de producción); acceso a deudas desde
 el detalle del cliente.
 
+## Etapa 19 — Permiso de precios y deudas desde el cliente
+
+Plan detallado el 2026-10-20, relevado contra el código.
+
+**Arranque.** Crear `feature/prices-debts` desde `feature/branches-query` (la etapa 18 ya está
+commiteada: 46b45fa backend, 02adf93 frontend).
+
+**Decisiones del usuario (2026-10-20).**
+- Los pendientes chicos se resuelven en una etapa corta.
+- `ADMINISTRAR_PRECIOS` **se aplica**: para dar de alta una variante o cambiar el precio de una
+  existente hace falta `ADMINISTRAR_PRODUCTOS` **y** `ADMINISTRAR_PRECIOS`. Sin el segundo se puede
+  editar el resto del producto, pero el precio queda bloqueado y el backend rechaza cambiarlo.
+
+**Lo que hay hoy.**
+- `ADMINISTRAR_PRECIOS` está en el enum `Permission` y en `permission-labels.ts` ("Todavía sin efecto
+  en la app"); ningún endpoint ni pantalla lo chequea. `ProductController` solo pide
+  `ADMINISTRAR_PRODUCTOS` en alta, edición, activar y desactivar; `ProductServiceImpl.create` /
+  `update` toman el precio de cada variante sin mirar permisos.
+- `customers/[id]/debts.tsx` (pendientes, movimientos y anular pagos) solo se abre desde
+  `debtors.tsx`. El detalle del cliente (`customers/[id]/index.tsx`) no muestra su saldo ni enlaza a
+  la cuenta. Los endpoints `/customers/{id}/account*` piden `ADMINISTRAR_CLIENTES`, `CREAR_PEDIDOS`,
+  `REGISTRAR_PAGOS` o `VER_REPORTES`; `DEBTORS_READ_PERMISSIONS` (para `/debtors`) es más estricto.
+
+### Backend
+
+1. **Precio con permiso.** En `ProductServiceImpl`, al **crear** (cada variante nueva trae precio) y
+   al **actualizar** (variante nueva, o variante existente cuyo precio cambia), exigir
+   `ADMINISTRAR_PRECIOS`; si falta, `AccessDeniedException` (el handler ya responde 403 con código
+   `FORBIDDEN`). Si el precio enviado es igual al actual no cuenta como cambio, así el formulario
+   puede reenviar todo sin que falle. Comprobación con un helper chico (por ejemplo
+   `SecurityUtils.hasAuthority`), sin tocar `@PreAuthorize`.
+2. **Tests:** crear sin el permiso → 403; editar el nombre con el mismo precio sin el permiso → ok;
+   cambiar el precio sin el permiso → 403; con el permiso → ok.
+3. **Roles existentes.** `ddl-auto: update` no agrega permisos a roles ya guardados: el ADMIN creado
+   por el aprovisionamiento ya los tiene todos (relevar `ProvisioningServiceImpl`); los roles
+   personalizados se actualizan desde la pantalla de roles.
+
+### Frontend
+
+1. **Permiso:** `hasPermission(user, 'ADMINISTRAR_PRECIOS')` en `ProductForm` (la pantalla ya exige
+   `ADMINISTRAR_PRODUCTOS`): sin él, el campo precio de las variantes existentes queda de solo
+   lectura y el alta de una variante nueva avisa que hace falta el permiso; la pantalla de producto
+   nuevo pide ambos. En `permission-labels.ts`, quitar el "Todavía sin efecto" y describir lo que
+   hace. Mostrar el error 403 en el formulario si llega igual.
+2. **Deudas desde el cliente:** en el detalle, una tarjeta "Cuenta corriente" con el saldo (de
+   `useCustomerAccountSummaryQuery`) y el acceso a `customers/[id]/debts`, visible si el usuario
+   tiene alguno de los permisos de `/account` (nuevo `CUSTOMER_ACCOUNT_READ_PERMISSIONS` en
+   `utils/permissions.ts`). La navegación queda dentro del stack de clientes (sin cruzar stacks).
+3. **AGENTS.md:** en la sección de productos, regla del precio y su permiso.
+
+### Validación
+
+- Backend: tests unitarios en la copia del scratchpad.
+- Frontend: `npx tsc --noEmit`, eslint de los archivos tocados, `git diff --check`.
+
+**Pruebas manuales (las hace el usuario).**
+- Con un rol sin `ADMINISTRAR_PRECIOS`: editar nombre, categoría o stock de un producto sí; el precio
+  está bloqueado; crear un producto no deja (o avisa). Con el permiso: todo igual que hoy.
+- Reiniciar el backend en IntelliJ (Rebuild) antes de probar.
+- Detalle de un cliente con deuda: aparece el saldo y lleva a la cuenta; volver deja en el cliente.
+- Un usuario sin ninguno de los permisos de cuenta no ve la tarjeta.
+
+**Fuera de alcance.** Migraciones, índice de `lower(username)` y test de contexto (antes de
+producción).
+
 ---
 
 ## Pendientes chicos (sin orden; sumar a la etapa afín)
 
-- `customers/[id]/debts.tsx` solo se abre desde `debtors.tsx`; evaluar acceso desde el detalle del cliente.
-- Permiso que el backend nunca chequea: `ADMINISTRAR_PRECIOS` (`ACCEDER_TODAS_SUCURSALES` toma
-  sentido en la etapa 12: autoasignación a sucursales nuevas).
+- (Etapa 19) Acceso a deudas desde el detalle del cliente y permiso `ADMINISTRAR_PRECIOS`.
 - **Antes de producción** (decisión del usuario: en desarrollo alcanza con `ddl-auto: update`):
   - Migraciones (Flyway con línea base del esquema actual): `ddl-auto: update` no crea índices
     funcionales ni actualiza los CHECK de los enums (por eso la etapa 10 no pudo sumar un tipo de
