@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { ProductSelectionCard } from '@/components/products/ProductSelectionCard';
 import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useProducts } from '@/hooks/use-product-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProductAttributeStore } from '@/stores/product-attribute-store';
 import { Product } from '@/types/product';
@@ -14,15 +16,13 @@ import { Product } from '@/types/product';
 type VariantCatalogProps = {
     /** Sucursal cuyo stock se muestra y limita las cantidades. */
     branchId: string;
-    products: Product[];
-    isLoading: boolean;
-    /** Error de carga; solo se muestra si todavía no hay productos. */
-    errorMessage: string | null;
-    onRefresh: () => void;
-    searchQuery: string;
-    onSearchQueryChange: (query: string) => void;
     /** Unidades ya elegidas de esa variante. */
     getSelectedQuantity: (productId: string, variantId: string) => number;
+    /**
+     * Unidades de la variante que ya tiene reservadas el pedido que se edita: están
+     * descontadas del stock de la sucursal y se suman al disponible.
+     */
+    getReservedQuantity?: (variantId: string) => number;
     onAddItem: (product: Product, stock: number, variantId: string) => void;
     onUpdateItemQuantity: (productId: string, variantId: string, quantity: number, stock: number) => void;
     showPrice?: boolean;
@@ -38,13 +38,8 @@ type VariantCatalogProps = {
  */
 export function VariantCatalog({
     branchId,
-    products,
-    isLoading,
-    errorMessage,
-    onRefresh,
-    searchQuery,
-    onSearchQueryChange,
     getSelectedQuantity,
+    getReservedQuantity,
     onAddItem,
     onUpdateItemQuantity,
     showPrice,
@@ -66,22 +61,23 @@ export function VariantCatalog({
 
     const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
     const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
+    // Propia de cada catálogo: no pisa la búsqueda del listado de Productos.
+    const [searchQuery, setSearchQuery] = useState('');
 
-    const filteredProducts = useMemo(() => {
-        const query = searchQuery.trim().toLowerCase();
-
-        if (!branchId) return [];
-
-        return products.filter((product) => {
-            if (!product.active) return false;
-            if (!product.variants.some((variant) => (variant.stockByBranch[branchId] ?? 0) > 0)) return false;
-            if (!query) return true;
-
-            const matchesName = product.name.toLowerCase().includes(query);
-            const matchesSku = product.variants.some((variant) => variant.sku.toLowerCase().includes(query));
-            return matchesName || matchesSku;
-        });
-    }, [products, searchQuery, branchId]);
+    // Activos con stock en la sucursal, filtrados en el backend. Se vuelven a pedir cada vez
+    // que se abre el catálogo: las cantidades se limitan con este stock.
+    const {
+        items: products,
+        isInitialLoading,
+        isRefreshing,
+        isLoadingMore,
+        error,
+        loadMore,
+        refresh,
+    } = useProducts(
+        { q: searchQuery, active: true, stock: 'IN_STOCK', branchId },
+        { enabled: Boolean(branchId), staleTime: 0 },
+    );
 
     function getSelectedVariant(product: Product) {
         if (product.variants.length === 1 && (product.variants[0].stockByBranch[branchId] ?? 0) > 0) return product.variants[0];
@@ -119,21 +115,24 @@ export function VariantCatalog({
                 <AppInput
                     placeholder="Buscar producto por nombre o SKU..."
                     value={searchQuery}
-                    onChangeText={onSearchQueryChange}
+                    onChangeText={setSearchQuery}
                 />
             </View>
 
-            {isLoading && products.length === 0 ? (
+            {isInitialLoading ? (
                 <LoadingState label="Cargando productos..." />
-            ) : errorMessage && products.length === 0 ? (
-                <ErrorState message={errorMessage} onRetry={onRefresh} />
+            ) : error && products.length === 0 ? (
+                <ErrorState message={error} onRetry={refresh} />
             ) : (
                 <FlatList
-                    data={filteredProducts}
+                    data={branchId ? products : []}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={[styles.listContainer, { paddingBottom: listPaddingBottom }]}
                     showsVerticalScrollIndicator={false}
-                    refreshControl={<RefreshControl refreshing={isLoading} onRefresh={onRefresh} />}
+                    refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} />}
+                    onEndReached={loadMore}
+                    onEndReachedThreshold={0.4}
+                    ListFooterComponent={isLoadingMore ? <ActivityIndicator color={Colors.primary} /> : null}
                     ListEmptyComponent={
                         !branchId ? (
                             <EmptyState title="Sin sucursal activa" description={noBranchDescription} />
@@ -146,7 +145,9 @@ export function VariantCatalog({
                     }
                     renderItem={({ item: product }) => {
                         const selectedVariant = getSelectedVariant(product);
-                        const availableStock = selectedVariant?.stockByBranch[branchId] ?? 0;
+                        const branchStock = selectedVariant?.stockByBranch[branchId] ?? 0;
+                        const reserved = selectedVariant ? getReservedQuantity?.(selectedVariant.id) ?? 0 : 0;
+                        const availableStock = branchStock + reserved;
                         const qtyInCart = selectedVariant ? getSelectedQuantity(product.id, selectedVariant.id) : 0;
                         const attributeIds = Array.from(new Set([
                             ...product.variants
@@ -193,8 +194,11 @@ export function VariantCatalog({
                                     setSelectedProductId(product.id);
                                     setSelectedAttributes({});
                                 }}
-                                onAddItem={onAddItem}
-                                onUpdateItemQuantity={onUpdateItemQuantity}
+                                // Quien recibe la cantidad ya suma lo reservado: se le pasa el stock de la sucursal.
+                                onAddItem={(item, _stock, variantId) => onAddItem(item, branchStock, variantId)}
+                                onUpdateItemQuantity={(productId, variantId, quantity) =>
+                                    onUpdateItemQuantity(productId, variantId, quantity, branchStock)
+                                }
                                 showPrice={showPrice}
                                 selectedLabel={selectedLabel}
                             />

@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
     FlatList,
     Pressable,
     RefreshControl,
@@ -20,13 +21,14 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { SharedStyles } from '@/styles/shared';
-
+import { useProducts } from '@/hooks/use-product-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
 import { useCategoryStore } from '@/stores/category-store';
-import { useProductStore } from '@/stores/product-store';
+import { SharedStyles } from '@/styles/shared';
+import { StatusFilter, StockFilter } from '@/types/product';
 import { hasPermission } from '@/utils/permissions';
+import { productStock } from '@/utils/product-stock';
 
 export default function ProductsScreen() {
     const user = useAuthStore((state) => state.user);
@@ -34,65 +36,47 @@ export default function ProductsScreen() {
     const activeBranch = useBranchStore((state) => state.activeBranch);
     const { categories, fetchCategories } = useCategoryStore();
 
+    // Filtros propios de esta pantalla: los selectores de productos tienen su propia búsqueda.
+    const [searchQuery, setSearchQuery] = useState('');
+    const [stockFilter, setStockFilter] = useState<StockFilter>('ALL');
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+    const [selectedCategoryId, setSelectedCategory] = useState<string | null>(null);
+
+    // Sin sucursal activa, el stock (y su filtro) es el total de todas las sucursales.
+    const branchId = activeBranch?.id;
     const {
-        products,
-        searchQuery,
-        stockFilter,
-        statusFilter,
-        selectedCategoryId,
-        isLoading,
-        isError,
-        errorMessage,
-        setSearchQuery,
-        setStockFilter,
-        setStatusFilter,
-        setSelectedCategory,
-        resetFilters,
-        fetchProducts,
-    } = useProductStore();
+        items: products,
+        totalElements,
+        isInitialLoading,
+        isRefreshing,
+        isLoadingMore,
+        error,
+        loadMore,
+        refresh,
+    } = useProducts({
+        q: searchQuery,
+        categoryId: selectedCategoryId ?? undefined,
+        active: statusFilter === 'ALL' ? undefined : statusFilter === 'ACTIVE',
+        stock: stockFilter === 'ALL' ? undefined : stockFilter,
+        branchId,
+    });
 
     useEffect(() => {
         if (token) {
-            fetchProducts(token).catch(() => {});
             fetchCategories(token).catch(() => {});
         }
-    }, [fetchCategories, fetchProducts, token]);
+    }, [fetchCategories, token]);
 
-    function handleRefresh() {
-        if (token) {
-            fetchProducts(token).catch(() => {});
-        }
+    function resetFilters() {
+        setSearchQuery('');
+        setStockFilter('ALL');
+        setStatusFilter('ALL');
+        setSelectedCategory(null);
     }
 
     // El backend usa el mismo permiso para crear, editar y activar/desactivar productos.
     const canCreate = hasPermission(user, 'ADMINISTRAR_PRODUCTOS');
     const canEdit = canCreate;
-
-    const filteredProducts = useMemo(() => {
-        const branchId = activeBranch?.id ?? '1';
-
-        return products.filter((product) => {
-            if (searchQuery.trim()) {
-                const query = searchQuery.toLowerCase().trim();
-                const matchesName = product.name.toLowerCase().includes(query);
-                const matchesSku = product.variants.some((variant) => variant.sku.toLowerCase().includes(query));
-                if (!matchesName && !matchesSku) return false;
-            }
-
-            if (selectedCategoryId && product.categoryId !== selectedCategoryId) {
-                return false;
-            }
-
-            if (statusFilter === 'ACTIVE' && !product.active) return false;
-            if (statusFilter === 'INACTIVE' && product.active) return false;
-
-            const currentStock = product.variants.reduce((sum, variant) => sum + (variant.stockByBranch[branchId] ?? 0), 0);
-            if (stockFilter === 'IN_STOCK' && currentStock <= 0) return false;
-            if (stockFilter === 'OUT_OF_STOCK' && currentStock > 0) return false;
-
-            return true;
-        });
-    }, [products, searchQuery, selectedCategoryId, statusFilter, stockFilter, activeBranch]);
 
     function handleCreateProduct() {
         router.push('/products/new' as any);
@@ -164,8 +148,8 @@ export default function ProductsScreen() {
 
             <View style={styles.resultsBar}>
                 <Text style={styles.resultsCount}>
-                    {filteredProducts.length}{' '}
-                    {filteredProducts.length === 1 ? 'producto' : 'productos'} encontrados
+                    {totalElements}{' '}
+                    {totalElements === 1 ? 'producto' : 'productos'} encontrados
                 </Text>
                 {hasActiveFilters && (
                     <Pressable onPress={resetFilters} style={styles.resetFiltersButton}>
@@ -174,30 +158,29 @@ export default function ProductsScreen() {
                 )}
             </View>
 
-            {isLoading && (
+            {isInitialLoading ? (
                 <LoadingState label="Cargando productos..." />
-            )}
-
-            {!isLoading && isError && (
+            ) : error && products.length === 0 ? (
                 <ErrorState
-                    message={errorMessage}
-                    onRetry={handleRefresh}
+                    message={error}
+                    onRetry={refresh}
                 />
-            )}
-
-            {!isLoading && !isError && (
+            ) : (
                 <FlatList
-                    data={filteredProducts}
+                    data={products}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContainer}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
                         <RefreshControl
-                            refreshing={isLoading}
-                            onRefresh={handleRefresh}
+                            refreshing={isRefreshing}
+                            onRefresh={refresh}
                             tintColor={Colors.primary}
                         />
                     }
+                    onEndReached={loadMore}
+                    onEndReachedThreshold={0.4}
+                    ListFooterComponent={isLoadingMore ? <ActivityIndicator color={Colors.primary} /> : null}
                     ListEmptyComponent={
                         <EmptyState
                             title={
@@ -227,19 +210,14 @@ export default function ProductsScreen() {
                             }
                         />
                     }
-                    renderItem={({ item }) => {
-                        const branchId = activeBranch?.id ?? '1';
-                        const currentStock = item.variants.reduce((sum, variant) => sum + (variant.stockByBranch[branchId] ?? 0), 0);
-
-                        return (
-                            <ProductCard
-                                product={item}
-                                stock={currentStock}
-                                canEdit={canEdit}
-                                onPress={() => handleEditProduct(item.id)}
-                            />
-                        );
-                    }}
+                    renderItem={({ item }) => (
+                        <ProductCard
+                            product={item}
+                            stock={productStock(item, branchId)}
+                            canEdit={canEdit}
+                            onPress={() => handleEditProduct(item.id)}
+                        />
+                    )}
                 />
             )}
         </Screen>

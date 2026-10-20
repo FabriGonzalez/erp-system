@@ -10,7 +10,6 @@ import { useAuthStore } from '@/stores/auth-store';
 import { Branch } from '@/types/branch';
 import { Category } from '@/types/category';
 import {
-    Product,
     ProductAttribute,
     ProductAttributeValue,
     ProductFormData,
@@ -40,8 +39,6 @@ type ProductFormProps = {
     attributes?: ProductAttribute[];
     attributeValues?: ProductAttributeValue[];
     branches: Branch[];
-    existingProducts: Product[];
-    currentProductId?: string;
     onSubmit: (data: ProductFormData) => void;
     onCancel: () => void;
     isSubmitting?: boolean;
@@ -91,8 +88,6 @@ function generateCombinations(
     productName: string,
     attributeValues: ProductAttributeValue[],
     basePrice: string,
-    existingProducts: Product[],
-    currentProductId?: string,
 ): DraftVariant[] {
     const groups = Object.entries(selectedValues).filter(
         ([, values]) => values.length > 0,
@@ -123,15 +118,9 @@ function generateCombinations(
         ]),
     );
 
-    const usedSkus = new Set(
-        existingProducts
-            .filter((product) => product.id !== currentProductId)
-            .flatMap((product) =>
-                product.variants.map((variant) =>
-                    variant.sku.toUpperCase(),
-                ),
-            ),
-    );
+    // Únicos dentro del producto. Contra el resto de la empresa los valida el backend
+    // (VARIANT_SKU_ALREADY_EXISTS): el listado está paginado y no se tienen todos los SKU.
+    const usedSkus = new Set<string>();
 
     for (const variant of currentVariants) {
         if (variant.sku.trim()) {
@@ -178,8 +167,6 @@ export function ProductForm({
     attributes: propsAttributes,
     attributeValues: propsAttributeValues,
     branches,
-    existingProducts,
-    currentProductId,
     onSubmit,
     onCancel,
     isSubmitting = false,
@@ -270,7 +257,7 @@ export function ProductForm({
             setErrors((current) => ({ ...current, variants: 'Seleccioná al menos un atributo y un valor para generar variantes' }));
             return;
         }
-        setVariants(generateCombinations(selectedValues, variants, name, attributeValues, basePrice, existingProducts, currentProductId));
+        setVariants(generateCombinations(selectedValues, variants, name, attributeValues, basePrice));
         setVariantMode(true);
         setErrors((current) => ({ ...current, variants: '' }));
     }
@@ -282,13 +269,12 @@ export function ProductForm({
         if (!variants.length) nextErrors.variants = 'Debes agregar al menos una variante';
 
         const skuSet = new Set<string>();
-        const existingSkus = new Set(existingProducts.filter((product) => product.id !== currentProductId).flatMap((product) => product.variants.map((variant) => variant.sku.toUpperCase())));
         variants.forEach((variant) => {
             const sku = variant.sku.trim().toUpperCase();
             const normalizedPrice = variant.price.trim().replace(',', '.');
             const price = Number(normalizedPrice);
             if (!sku) nextErrors.variants = 'Todas las variantes deben tener SKU';
-            if (sku && (skuSet.has(sku) || existingSkus.has(sku))) nextErrors.variants = 'Los SKU deben ser únicos dentro de la empresa';
+            if (sku && skuSet.has(sku)) nextErrors.variants = 'Los SKU no se pueden repetir entre variantes';
             if (!variant.price.trim() || !/^\d+(\.\d+)?$/.test(normalizedPrice) || !Number.isFinite(price) || price < 0) nextErrors.variants = 'Todas las variantes deben tener un precio válido';
             Object.values(variant.stockByBranch).forEach((stock) => {
                 if (!Number.isInteger(stock) || stock < 0) nextErrors.variants = 'El stock debe ser un número entero no negativo';

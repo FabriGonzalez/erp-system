@@ -15,6 +15,12 @@ import {
 } from '@/types/order';
 import { Product } from '@/types/product';
 
+/** Lo que el pedido en edición ya tenía de una variante. */
+type OriginalItem = {
+    quantity: number;
+    unitPrice: number;
+};
+
 type OrderDraftState = {
     orderId: string | null;
     customer: Customer;
@@ -23,6 +29,9 @@ type OrderDraftState = {
     deliveryType: DeliveryType;
     address: CustomerAddress | undefined;
     items: OrderItem[];
+    // Solo al editar, por variante: esas unidades ya están descontadas del stock (se suman al
+    // límite) y conservan el precio con que se vendieron, como hace el backend.
+    originalItems: Record<string, OriginalItem>;
     amountPaid: number;
     paymentMethod: PaymentMethod;
     applyCredit: boolean;
@@ -40,6 +49,7 @@ type OrderDraftState = {
     setPaymentMethod: (method: PaymentMethod) => void;
     setApplyCredit: (applyCredit: boolean) => void;
 
+    /** maxStock: stock de la variante en la sucursal; al editar se le suma lo ya reservado. */
     addItem: (product: Product, maxStock: number, variantId?: string) => void;
     updateItemQuantity: (
         productId: string,
@@ -52,6 +62,17 @@ type OrderDraftState = {
     reset: () => void;
 };
 
+/**
+ * Cantidad que queda después de pedir quantity: bajar siempre se puede; subir, hasta el límite
+ * (o hasta lo que ya hay, si el stock bajó). 0 saca el ítem.
+ */
+function nextQuantity(current: number, requested: number, limit: number): number {
+    if (requested <= current) {
+        return Math.max(0, requested);
+    }
+    return Math.min(requested, Math.max(limit, current));
+}
+
 export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
     orderId: null,
     customer: CUSTOMER_ANONYMOUS,
@@ -60,6 +81,7 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
     deliveryType: 'LOCAL_PICKUP',
     address: undefined,
     items: [],
+    originalItems: {},
     amountPaid: 0,
     paymentMethod: 'CASH',
     applyCredit: false,
@@ -73,6 +95,7 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
             deliveryType: mode === 'SHIPMENT' ? 'SHIPPING' : 'LOCAL_PICKUP',
             address: undefined,
             items: [],
+            originalItems: {},
             amountPaid: 0,
             paymentMethod: 'CASH',
             applyCredit: false,
@@ -101,6 +124,9 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
             // es un snapshot (order.shippingAddress), no una dirección del cliente.
             address: undefined,
             items: order.items,
+            originalItems: Object.fromEntries(
+                order.items.map((item) => [item.variantId, { quantity: item.quantity, unitPrice: item.unitPrice }]),
+            ),
             amountPaid,
         });
     },
@@ -149,21 +175,19 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
     },
 
     addItem: (product, maxStock, variantId) => {
-        if (maxStock <= 0) {
-            return;
-        }
-
-        const { items } = get();
+        const { items, originalItems } = get();
         const variant = product.variants.find((item) => item.id === variantId) ?? product.variants[0];
         if (!variant) return;
 
+        const original = originalItems[variant.id];
+        const limit = maxStock + (original?.quantity ?? 0);
         const existingItem = items.find(
             (item) => item.productId === product.id && item.variantId === variant.id,
         );
 
         const currentQuantity = existingItem?.quantity ?? 0;
 
-        if (currentQuantity >= maxStock) {
+        if (currentQuantity >= limit) {
             return;
         }
 
@@ -185,6 +209,8 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
             return;
         }
 
+        // Si se quitó y se vuelve a agregar en la misma edición, conserva el precio vendido.
+        const unitPrice = original?.unitPrice ?? variant.price;
         const newItem: OrderItem = {
             id: `item-${Date.now()}-${product.id}`,
             productId: product.id,
@@ -192,8 +218,8 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
             productName: product.name,
             productSku: variant.sku,
             quantity: 1,
-            unitPrice: variant.price,
-            subtotal: variant.price,
+            unitPrice,
+            subtotal: unitPrice,
         };
 
         set({
@@ -202,19 +228,25 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
     },
 
     updateItemQuantity: (productId, variantId, quantity, maxStock) => {
-        const { items } = get();
+        const { items, originalItems } = get();
+        const item = items.find(
+            (candidate) => candidate.productId === productId && candidate.variantId === variantId,
+        );
+        if (!item) return;
 
-        if (quantity <= 0 || maxStock <= 0) {
+        const limit = maxStock + (originalItems[variantId]?.quantity ?? 0);
+        const targetQuantity = nextQuantity(item.quantity, quantity, limit);
+
+        // Sin stock libre no se borra: solo lo saca llegar a 0 (o el botón quitar).
+        if (targetQuantity <= 0) {
             set({
                 items: items.filter(
-                    (item) => item.productId !== productId || item.variantId !== variantId,
+                    (candidate) => candidate.productId !== productId || candidate.variantId !== variantId,
                 ),
             });
 
             return;
         }
-
-        const targetQuantity = Math.min(quantity, maxStock);
 
         set({
             items: items.map((item) =>
@@ -252,6 +284,7 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
             deliveryType: 'LOCAL_PICKUP',
             address: undefined,
             items: [],
+            originalItems: {},
             amountPaid: 0,
             paymentMethod: 'CASH',
             applyCredit: false,

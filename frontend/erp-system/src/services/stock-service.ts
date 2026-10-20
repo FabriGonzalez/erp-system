@@ -1,4 +1,5 @@
-import { Stock, StockAdjustRequest, StockResponse } from '@/types/stock';
+import { PageResponse } from '@/types/order';
+import { Stock, StockAdjustRequest, StockListParams, StockResponse } from '@/types/stock';
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
 import { BRANCH_ACCESS_ERRORS, parseResponse } from '@/services/api-error';
 
@@ -15,6 +16,7 @@ const STOCK_ERRORS = {
         STOCK_NOT_FOUND: 'Stock no encontrado.',
         STOCK_ALREADY_EXISTS: 'Ese producto ya tiene stock registrado en la sucursal.',
         INSUFFICIENT_STOCK: 'No hay stock suficiente.',
+        INVALID_STOCK_QUERY: 'No se pudo cargar el listado de stock.',
     },
     byStatus: {
         403: 'No tenés permiso para ajustar el stock.',
@@ -42,19 +44,23 @@ function normalizeStock(data: StockResponse): Stock {
     };
 }
 
-async function getStocks(path: string, token: string): Promise<Stock[]> {
-    const response = await apiFetch(`${API_BASE_URL}/api/v1/inventory/stocks${path}`, {
+export async function getStocks(
+    params: StockListParams & { page: number; size: number },
+    token: string
+): Promise<PageResponse<Stock>> {
+    const query = new URLSearchParams({ page: String(params.page), size: String(params.size) });
+    if (params.branchId) query.set('branchId', params.branchId);
+    if (params.q?.trim()) query.set('q', params.q.trim());
+    if (params.variantIds?.length) query.set('variantIds', params.variantIds.join(','));
+
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/inventory/stocks?${query.toString()}`, {
         headers: authHeaders(token),
     });
-    const data = await handleResponse<StockResponse[]>(
+    const page = await handleResponse<PageResponse<StockResponse>>(
         response,
         'No se pudieron obtener los stocks.'
     );
-    return data.map(normalizeStock);
-}
-
-export function getAllStocks(token: string) {
-    return getStocks('', token);
+    return { ...page, content: page.content.map(normalizeStock) };
 }
 
 export async function getStockById(id: string, token: string): Promise<Stock> {
@@ -65,14 +71,6 @@ export async function getStockById(id: string, token: string): Promise<Stock> {
         response,
         'No se pudo obtener el stock.'
     ));
-}
-
-export function getStocksByBranch(branchId: string, token: string) {
-    return getStocks(`/branch/${branchId}`, token);
-}
-
-export function getStocksByVariant(productVariantId: string, token: string) {
-    return getStocks(`/variant/${productVariantId}`, token);
 }
 
 export async function adjustStock(

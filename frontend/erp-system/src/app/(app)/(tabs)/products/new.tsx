@@ -7,16 +7,16 @@ import { ProductForm } from '@/components/products/ProductForm';
 import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
+import { useCreateProduct } from '@/hooks/use-product-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { useCategoryStore } from '@/stores/category-store';
-import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
 import { ProductFormData } from '@/types/product';
 import { hasPermission } from '@/utils/permissions';
 
 export default function NewProductScreen() {
     const canAccess = useAuthStore((state) => hasPermission(state.user, 'ADMINISTRAR_PRODUCTOS'));
-    const { products, createProduct } = useProductStore();
+    const createProduct = useCreateProduct();
     const { categories, fetchCategories } = useCategoryStore();
     const user = useAuthStore((state) => state.user);
     const token = useAuthStore((state) => state.token);
@@ -31,11 +31,10 @@ export default function NewProductScreen() {
     }, [fetchCategories, token]);
 
     async function handleSubmit(formData: ProductFormData) {
-        if (!token) return;
         setIsSubmitting(true);
         setErrorMessage(null);
         try {
-            await createProduct(toProductRequest(formData), token);
+            await createProduct.mutateAsync(toProductRequest(formData));
             setSuccessMessage('¡Producto creado exitosamente!');
             router.back();
         } catch (error: unknown) {
@@ -122,7 +121,6 @@ export default function NewProductScreen() {
             <ProductForm
                 categories={categories}
                 branches={user?.branches ?? []}
-                existingProducts={products}
                 onSubmit={handleSubmit}
                 onCancel={() => router.back()}
                 isSubmitting={isSubmitting}

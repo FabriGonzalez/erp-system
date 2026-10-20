@@ -9,9 +9,9 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
+import { useProduct, useUpdateProduct } from '@/hooks/use-product-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { useCategoryStore } from '@/stores/category-store';
-import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
 import { ProductFormData } from '@/types/product';
 import { hasPermission } from '@/utils/permissions';
@@ -19,14 +19,10 @@ import { hasPermission } from '@/utils/permissions';
 export default function EditProductScreen() {
     const canAccess = useAuthStore((state) => hasPermission(state.user, 'ADMINISTRAR_PRODUCTOS'));
     const { id } = useLocalSearchParams<{ id: string }>();
-    const {
-        products,
-        errorMessage,
-        isError,
-        isLoading,
-        fetchProductById,
-        updateProductFromApi,
-    } = useProductStore();
+    // fresh: la edición manda cantidades finales de stock, así que el formulario tiene que
+    // partir del stock actual y no de la copia en caché (podría pisar una venta reciente).
+    const { product, isLoading, loadError } = useProduct(id, { fresh: true });
+    const updateProduct = useUpdateProduct();
     const { categories, fetchCategories } = useCategoryStore();
     const user = useAuthStore((state) => state.user);
     const token = useAuthStore((state) => state.token);
@@ -38,15 +34,10 @@ export default function EditProductScreen() {
     useEffect(() => {
         if (token) {
             fetchCategories(token).catch(() => {});
-            if (!products.some((item) => item.id === id)) {
-                fetchProductById(id, token).catch(() => {});
-            }
         }
-    }, [fetchCategories, fetchProductById, id, products, token]);
+    }, [fetchCategories, token]);
 
-    const product = products.find((p) => p.id === id);
-
-    if (isLoading && !product) {
+    if (isLoading) {
         return <LoadingState />;
     }
 
@@ -69,7 +60,7 @@ export default function EditProductScreen() {
                 </View>
                 <EmptyState
                     title="Producto no encontrado"
-                    description="El producto que intentas editar no existe o fue removido."
+                    description={loadError ?? 'El producto que intentas editar no existe o fue removido.'}
                     actionLabel="Volver a productos"
                     onAction={() => router.back()}
                 />
@@ -79,7 +70,6 @@ export default function EditProductScreen() {
 
     async function handleSubmit(formData: ProductFormData) {
         if (!product) return;
-        if (!token) return;
         setIsSubmitting(true);
         setSubmissionError(null);
         try {
@@ -102,7 +92,7 @@ export default function EditProductScreen() {
                 })),
             };
 
-            await updateProductFromApi(product.id, productRequest, token);
+            await updateProduct.mutateAsync({ id: product.id, data: productRequest });
 
             setSuccessMessage('¡Cambios guardados con éxito!');
             router.back();
@@ -157,11 +147,9 @@ export default function EditProductScreen() {
                     <Text style={SharedStyles.successText}>{successMessage}</Text>
                 </View>
             )}
-            {(submissionError || (isError && errorMessage)) && (
+            {submissionError && (
                 <View style={styles.errorBanner}>
-                    <Text style={styles.errorText}>
-                        {submissionError || errorMessage}
-                    </Text>
+                    <Text style={styles.errorText}>{submissionError}</Text>
                 </View>
             )}
 
@@ -181,8 +169,6 @@ export default function EditProductScreen() {
                 }}
                 categories={categories}
                 branches={user?.branches ?? []}
-                existingProducts={products}
-                currentProductId={product.id}
                 onSubmit={handleSubmit}
                 onCancel={() => router.back()}
                 isSubmitting={isSubmitting}

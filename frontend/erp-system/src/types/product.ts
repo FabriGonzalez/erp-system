@@ -119,4 +119,16 @@ export type ProductFormData = {
 
 export type StockFilter = 'ALL' | 'IN_STOCK' | 'OUT_OF_STOCK';
 
+/**
+ * Filtros del listado paginado de productos. stock se mide en branchId o, sin sucursal, en el
+ * total de la empresa.
+ */
+export type ProductListParams = {
+    q?: string;
+    categoryId?: string;
+    active?: boolean;
+    stock?: Exclude<StockFilter, 'ALL'>;
+    branchId?: string;
+};
+
 export type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';

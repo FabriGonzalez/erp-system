@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,10 +12,10 @@ import { FilterChip } from '@/components/ui/FilterChip';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useVariantStock } from '@/hooks/use-stock-queries';
 import { useCreateTransfer } from '@/hooks/use-transfer-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
-import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
 import { Product } from '@/types/product';
 
@@ -24,6 +24,8 @@ type DraftItem = {
     productName: string;
     variantId: string;
     sku: string;
+    // "Color: Rojo · Talle: M", tomado del producto al agregarlo (vienen los nombres).
+    attributesLabel: string;
     quantity: number;
 };
 
@@ -42,17 +44,11 @@ export default function NewTransferScreen() {
     const origin = useBranchStore((state) => state.activeBranch);
     const allBranches = useBranchStore((state) => state.allBranches);
     const fetchAllBranches = useBranchStore((state) => state.fetchAllBranches);
-    const products = useProductStore((state) => state.products);
-    const fetchProducts = useProductStore((state) => state.fetchProducts);
-    const isLoadingProducts = useProductStore((state) => state.isLoading);
-    const isProductsError = useProductStore((state) => state.isError);
-    const productsErrorMessage = useProductStore((state) => state.errorMessage);
     const createTransfer = useCreateTransfer();
 
     const originId = origin?.id ?? '';
     const [draft, setDraft] = useState<Draft>(() => emptyDraft(originId));
     const [isCatalogVisible, setCatalogVisible] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
     const [submitError, setSubmitError] = useState<string | null>(null);
 
     // Lo elegido vale para una sucursal de origen: si cambia la activa, se empieza de nuevo.
@@ -67,45 +63,26 @@ export default function NewTransferScreen() {
         updateDraft((current) => ({ ...current, items: change(current.items) }));
     }
 
-    // El stock de origen tiene que estar al día para limitar las cantidades.
-    const loadProducts = useCallback(() => {
-        if (!token) return;
-        fetchProducts(token).catch(() => {});
-    }, [token, fetchProducts]);
-
     useEffect(() => {
-        loadProducts();
         if (token) {
             fetchAllBranches(token).catch(() => {});
         }
-    }, [loadProducts, token, fetchAllBranches]);
+    }, [token, fetchAllBranches]);
 
     const destinations = useMemo(
         () => allBranches.filter((branch) => branch.active !== false && branch.id !== originId),
         [allBranches, originId],
     );
 
-    // Stock en origen y atributos ("Color: Rojo · Talle: M") por variante, según la última carga.
-    // Los nombres vienen en el producto: no hace falta cargar el store de atributos.
-    const { originStockByVariant, attributesByVariant } = useMemo(() => {
-        const stock = new Map<string, number>();
-        const labels = new Map<string, string>();
+    // Stock en origen de lo elegido, al día (se vuelve a pedir al abrir y tras cada operación),
+    // sin depender de qué páginas del catálogo se cargaron.
+    const { stockOf } = useVariantStock(originId, items.map((item) => item.variantId));
 
-        for (const product of products) {
-            for (const variant of product.variants) {
-                stock.set(variant.id, variant.stockByBranch[originId] ?? 0);
-                const label = variant.attributes
-                    .map(({ attributeName, valueName }) =>
-                        attributeName && valueName ? `${attributeName}: ${valueName}` : null)
-                    .filter(Boolean)
-                    .join(' · ');
-                if (label) labels.set(variant.id, label);
-            }
-        }
-        return { originStockByVariant: stock, attributesByVariant: labels };
-    }, [products, originId]);
-
-    const exceedsStock = (item: DraftItem) => item.quantity > (originStockByVariant.get(item.variantId) ?? 0);
+    // Solo se marca cuando se sabe: mientras llega el stock de una variante nueva no se avisa.
+    const exceedsStock = (item: DraftItem) => {
+        const stock = stockOf(item.variantId);
+        return stock !== undefined && item.quantity > stock;
+    };
     const hasStockProblems = items.some(exceedsStock);
     const totalUnits = items.reduce((sum, item) => sum + item.quantity, 0);
     // Qué se eligió, para la barra del catálogo; el SKU distingue variantes del mismo producto.
@@ -117,11 +94,17 @@ export default function NewTransferScreen() {
         .join(' · ');
     const canSubmit = Boolean(destinationId) && items.length > 0 && !hasStockProblems && !createTransfer.isPending;
 
+    // Bajar siempre se puede (aunque el stock haya bajado o no haya llegado); subir, hasta el
+    // stock. Solo llegar a 0 saca el ítem.
     function setQuantity(variantId: string, quantity: number, stock: number) {
         setItems((current) => {
-            const target = Math.min(quantity, stock);
-            if (target <= 0) return current.filter((item) => item.variantId !== variantId);
-            return current.map((item) => item.variantId === variantId ? { ...item, quantity: target } : item);
+            const item = current.find((candidate) => candidate.variantId === variantId);
+            if (!item) return current;
+            const target = quantity <= item.quantity
+                ? quantity
+                : Math.min(quantity, Math.max(stock, item.quantity));
+            if (target <= 0) return current.filter((candidate) => candidate.variantId !== variantId);
+            return current.map((candidate) => candidate.variantId === variantId ? { ...candidate, quantity: target } : candidate);
         });
     }
 
@@ -141,6 +124,11 @@ export default function NewTransferScreen() {
                 productName: product.name,
                 variantId,
                 sku: variant.sku,
+                attributesLabel: variant.attributes
+                    .map(({ attributeName, valueName }) =>
+                        attributeName && valueName ? `${attributeName}: ${valueName}` : null)
+                    .filter(Boolean)
+                    .join(' · '),
                 quantity: 1,
             }];
         });
@@ -234,14 +222,16 @@ export default function NewTransferScreen() {
                         <Text style={styles.hint}>Agregá los productos que salen de {origin.name}.</Text>
                     ) : (
                         items.map((item) => {
-                            const stock = originStockByVariant.get(item.variantId) ?? 0;
+                            const knownStock = stockOf(item.variantId);
+                            // Hasta que llega, no se puede subir la cantidad.
+                            const stock = knownStock ?? item.quantity;
                             const overStock = exceedsStock(item);
                             return (
                                 <View key={item.variantId} style={styles.itemRow}>
                                     <View style={styles.itemInfo}>
                                         <Text style={styles.itemName}>{item.productName}</Text>
                                         <Text style={[styles.hint, overStock && styles.errorInline]}>
-                                            {[`Stock en origen: ${stock}`, attributesByVariant.get(item.variantId)]
+                                            {[knownStock === undefined ? 'Stock en origen: …' : `Stock en origen: ${knownStock}`, item.attributesLabel]
                                                 .filter(Boolean)
                                                 .join(' · ')}
                                         </Text>
@@ -318,12 +308,6 @@ export default function NewTransferScreen() {
                     <View style={styles.modalBody}>
                         <VariantCatalog
                             branchId={originId}
-                            products={products}
-                            isLoading={isLoadingProducts}
-                            errorMessage={isProductsError ? productsErrorMessage ?? 'No se pudieron cargar los productos.' : null}
-                            onRefresh={loadProducts}
-                            searchQuery={searchQuery}
-                            onSearchQueryChange={setSearchQuery}
                             getSelectedQuantity={(_productId, variantId) =>
                                 items.find((item) => item.variantId === variantId)?.quantity ?? 0
                             }

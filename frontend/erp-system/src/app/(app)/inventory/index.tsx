@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
@@ -17,10 +17,9 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useBranchStocks } from '@/hooks/use-stock-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBranchStore } from '@/stores/branch-store';
-import { useProductStore } from '@/stores/product-store';
-import { useStockStore } from '@/stores/stock-store';
 import { SharedStyles } from '@/styles/shared';
 import { Stock } from '@/types/stock';
 import { STOCK_MOVEMENT_READ_PERMISSIONS, hasAnyPermission } from '@/utils/permissions';
@@ -31,43 +30,26 @@ export default function InventoryScreen() {
     const activeBranch = useBranchStore((state) => state.activeBranch);
     const fetchUserBranches = useBranchStore((state) => state.fetchUserBranches);
     const hasFetchedUserBranches = useBranchStore((state) => state.hasFetchedUserBranches);
-    // El modal de ajuste del detalle usa el catálogo y las sucursales cargados acá.
-    const fetchProducts = useProductStore((state) => state.fetchProducts);
-    const { stocks, isLoading, error, fetchStocksByBranch } = useStockStore();
     // Se entra con cualquier permiso de lectura de stock; el detalle (historial y ajuste)
     // pide los permisos de movimientos, que incluyen AJUSTAR_STOCK.
     const canOpenDetail = hasAnyPermission(user, STOCK_MOVEMENT_READ_PERMISSIONS);
     const [query, setQuery] = useState('');
-    const activeBranchId = activeBranch?.id ?? null;
+    // Cada sucursal y búsqueda tiene su caché: una respuesta de la sucursal anterior no se mezcla.
+    const {
+        items: stocks,
+        isInitialLoading,
+        isRefreshing,
+        isLoadingMore,
+        error,
+        loadMore,
+        refresh,
+    } = useBranchStocks({ branchId: activeBranch?.id, q: query });
 
     useEffect(() => {
-        if (!token) return;
-        void fetchProducts(token);
-        if (user && !hasFetchedUserBranches) {
+        if (token && user && !hasFetchedUserBranches) {
             void fetchUserBranches(user.id, token);
         }
-    }, [fetchProducts, fetchUserBranches, hasFetchedUserBranches, token, user]);
-
-    const loadStocks = useCallback(() => {
-        if (!token || !activeBranchId) return;
-        // El error queda en el store y se muestra abajo.
-        fetchStocksByBranch(activeBranchId, token).catch(() => undefined);
-    }, [activeBranchId, fetchStocksByBranch, token]);
-
-    useEffect(() => {
-        loadStocks();
-    }, [loadStocks]);
-
-    const filteredStocks = useMemo(() => {
-        // Si la sucursal activa cambió con una carga anterior en curso, su respuesta no se muestra.
-        const branchStocks = stocks.filter((stock) => stock.branchId === activeBranchId);
-        const normalized = query.trim().toLowerCase();
-        if (!normalized) return branchStocks;
-        return branchStocks.filter((stock) =>
-            stock.productName.toLowerCase().includes(normalized)
-            || stock.productVariantSku.toLowerCase().includes(normalized)
-        );
-    }, [activeBranchId, query, stocks]);
+    }, [fetchUserBranches, hasFetchedUserBranches, token, user]);
 
     function renderItem({ item }: { item: Stock }) {
         return (
@@ -97,26 +79,29 @@ export default function InventoryScreen() {
                 />
             );
         }
-        if (isLoading && filteredStocks.length === 0) return <LoadingState label="Cargando stock..." />;
-        if (error) {
+        if (isInitialLoading) return <LoadingState label="Cargando stock..." />;
+        if (error && stocks.length === 0) {
             return (
                 <EmptyState
                     title="No se pudo cargar el inventario"
                     description={error}
                     actionLabel="Reintentar"
-                    onAction={loadStocks}
+                    onAction={refresh}
                 />
             );
         }
         return (
             <FlatList
-                data={filteredStocks}
+                data={stocks}
                 keyExtractor={(item) => item.id}
                 renderItem={renderItem}
                 contentContainerStyle={styles.list}
                 refreshControl={
-                    <RefreshControl refreshing={isLoading} onRefresh={loadStocks} tintColor={Colors.primary} />
+                    <RefreshControl refreshing={isRefreshing} onRefresh={refresh} tintColor={Colors.primary} />
                 }
+                onEndReached={loadMore}
+                onEndReachedThreshold={0.4}
+                ListFooterComponent={isLoadingMore ? <ActivityIndicator color={Colors.primary} /> : null}
                 ListEmptyComponent={
                     <EmptyState
                         title="Sin stock registrado"
@@ -143,7 +128,7 @@ export default function InventoryScreen() {
                     />
                 </Pressable>
                 <Text style={SharedStyles.headerTitle}>Inventario</Text>
-                {isLoading ? <ActivityIndicator color={Colors.primary} /> : null}
+                {isRefreshing ? <ActivityIndicator color={Colors.primary} /> : null}
             </View>
 
             {activeBranch ? (

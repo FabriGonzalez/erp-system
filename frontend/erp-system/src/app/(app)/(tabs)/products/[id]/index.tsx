@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ProductCard } from '@/components/products/ProductCard';
@@ -10,51 +10,27 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useProduct, useSetProductActive } from '@/hooks/use-product-queries';
 import { useBranchStore } from '@/stores/branch-store';
 import { useAuthStore } from '@/stores/auth-store';
-import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
 import { hasPermission } from '@/utils/permissions';
+import { productStock, variantStock } from '@/utils/product-stock';
 
 export default function ProductDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const activeBranch = useBranchStore((state) => state.activeBranch);
-    const token = useAuthStore((state) => state.token);
     const canEdit = useAuthStore((state) => hasPermission(state.user, 'ADMINISTRAR_PRODUCTOS'));
-    const {
-        products,
-        isLoading,
-        isError,
-        errorMessage,
-        fetchProductById,
-        activateProduct,
-        deactivateProduct,
-    } = useProductStore();
+    const { product, isLoading, loadError, reload } = useProduct(id);
+    const setProductActive = useSetProductActive();
     const [isToggling, setIsToggling] = useState(false);
 
-    const product = products.find((p) => p.id === id);
-
-    useEffect(() => {
-        if (token && !product) {
-            fetchProductById(id, token).catch(() => {});
-        }
-    }, [fetchProductById, id, product, token]);
-
-    if (isLoading && !product) {
+    if (isLoading) {
         return <LoadingState />;
     }
 
-    if (isError && !product) {
-        return (
-            <ErrorState
-                message={errorMessage}
-                onRetry={() => {
-                    if (token) {
-                        fetchProductById(id, token).catch(() => {});
-                    }
-                }}
-            />
-        );
+    if (loadError && !product) {
+        return <ErrorState message={loadError} onRetry={reload} />;
     }
 
     if (!product) {
@@ -70,22 +46,19 @@ export default function ProductDetailScreen() {
 
     const currentProduct = product;
 
-    const branchId = activeBranch?.id ?? '1';
-    const currentStock = currentProduct.variants.reduce((sum, variant) => sum + (variant.stockByBranch[branchId] ?? 0), 0);
+    // Sin sucursal activa, el total de todas las sucursales.
+    const branchId = activeBranch?.id;
+    const currentStock = productStock(currentProduct, branchId);
 
     function handleEdit() {
         router.push(`/(app)/(tabs)/products/${currentProduct.id}/edit`);
     }
 
     async function handleToggleActive() {
-        if (!token || isToggling) return;
+        if (isToggling) return;
         setIsToggling(true);
         try {
-            if (currentProduct.active) {
-                await deactivateProduct(currentProduct.id, token);
-            } else {
-                await activateProduct(currentProduct.id, token);
-            }
+            await setProductActive.mutateAsync({ id: currentProduct.id, active: !currentProduct.active });
         } catch (error: unknown) {
             Alert.alert(
                 'Error',
@@ -150,7 +123,7 @@ export default function ProductDetailScreen() {
                             </View>
                             <View>
                                 <Text style={styles.variantPrice}>${variant.price.toLocaleString('es-AR')}</Text>
-                                <Text style={styles.variantSku}>Stock: {variant.stockByBranch[branchId] ?? 0}</Text>
+                                <Text style={styles.variantSku}>Stock: {variantStock(variant, branchId)}</Text>
                             </View>
                         </View>
                     ))}

@@ -13,9 +13,9 @@ import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useCustomerAccountSummary } from '@/hooks/use-customer-account-summary';
 import { useCustomer, useCustomerAddresses } from '@/hooks/use-customer-queries';
+import { useVariantStock } from '@/hooks/use-stock-queries';
 import { useBranchStore } from '@/stores/branch-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
-import { useProductStore } from '@/stores/product-store';
 import { SharedStyles } from '@/styles/shared';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import { Order, OrderCreationMode } from '@/types/order';
@@ -46,7 +46,6 @@ export function OrderForm({
     submitLabel = 'Crear Pedido',
 }: OrderFormProps) {
     const activeBranch = useBranchStore((state) => state.activeBranch);
-    const products = useProductStore((state) => state.products);
 
     const {
         customer,
@@ -74,6 +73,8 @@ export function OrderForm({
 
     const branchId = activeBranch?.id ?? '';
     const branchName = activeBranch?.name ?? 'Sin sucursal activa';
+    // Stock de lo que hay en el carrito, sin depender de qué páginas del catálogo se cargaron.
+    const { stockOf } = useVariantStock(branchId, items.map((item) => item.variantId));
 
     useEffect(() => {
         if (initialOrder) {
@@ -197,16 +198,9 @@ export function OrderForm({
     }
 
     function handleUpdateQuantity(productId: string, variantId: string, newQty: number) {
-        const product = products.find(
-            (item) => item.id === productId,
-        );
-
-        const variant = product?.variants.find((item) => item.id === variantId);
-        const maxStock = variant
-            ? variant.stockByBranch[branchId] ?? 0
-            : 0;
-
-        updateItemQuantity(productId, variantId, newQty, maxStock);
+        // Mientras llega el stock de la variante solo se puede bajar; al editar, el store
+        // suma lo que el pedido ya tenía reservado.
+        updateItemQuantity(productId, variantId, newQty, stockOf(variantId) ?? 0);
     }
 
     function validate(): boolean {

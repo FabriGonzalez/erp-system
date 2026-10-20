@@ -11,7 +11,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { StockTransfer } from '@/types/transfer';
 
 import { errorText, requireToken, usePagedList } from './use-paged-list';
-import { refreshStockAfterChange } from './use-stock-movement-queries';
+import { refreshStockAfterChange } from './catalog-keys';
 
 const PAGE_SIZE = 20;
 

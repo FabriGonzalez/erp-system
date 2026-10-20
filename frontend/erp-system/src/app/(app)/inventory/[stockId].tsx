@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { StockAdjustModal } from '@/components/inventory/StockAdjustModal';
@@ -11,11 +11,9 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { invalidateStockMovements, useStockMovements } from '@/hooks/use-stock-movement-queries';
+import { useStockMovements } from '@/hooks/use-stock-movement-queries';
+import { useStock } from '@/hooks/use-stock-queries';
 import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
-import { useProductStore } from '@/stores/product-store';
-import { useStockStore } from '@/stores/stock-store';
 import { SharedStyles } from '@/styles/shared';
 import { Stock } from '@/types/stock';
 import { StockMovement } from '@/types/stock-movement';
@@ -25,35 +23,12 @@ import { formatStockDelta, stockMovementReference, stockMovementTitle } from '@/
 
 export default function StockDetailScreen() {
     const { stockId } = useLocalSearchParams<{ stockId: string }>();
-    const token = useAuthStore((state) => state.token);
     const user = useAuthStore((state) => state.user);
     const canAdjust = hasPermission(user, 'AJUSTAR_STOCK');
-    const availableBranches = useBranchStore((state) => state.availableBranches);
-    const products = useProductStore((state) => state.products);
-    // Inventario ya cargó el stock; se pide aparte solo si no está (p. ej. al recargar la web).
-    const stock = useStockStore((state) => state.stocks.find((item) => item.id === stockId) ?? null);
-    const fetchStockById = useStockStore((state) => state.fetchStockById);
-    const [stockError, setStockError] = useState<string | null>(null);
-    const [stockAttempt, setStockAttempt] = useState(0);
+    // Se muestra la copia del listado de Inventario mientras llega la actual (o tras un F5).
+    const { stock, loadError, reload } = useStock(stockId);
     const [isAdjusting, setIsAdjusting] = useState(false);
     const movements = useStockMovements(stockId);
-
-    const needsStock = !stock && Boolean(token && stockId);
-
-    useEffect(() => {
-        if (!needsStock || !token || !stockId) return;
-        let active = true;
-        fetchStockById(stockId, token)
-            .then(() => {
-                if (active) setStockError(null);
-            })
-            .catch((err: unknown) => {
-                if (active) setStockError(err instanceof Error ? err.message : 'No se pudo cargar el stock.');
-            });
-        return () => {
-            active = false;
-        };
-    }, [fetchStockById, needsStock, stockAttempt, stockId, token]);
 
     function renderMovement({ item }: { item: StockMovement }) {
         const reference = stockMovementReference(item);
@@ -100,8 +75,8 @@ export default function StockDetailScreen() {
 
     function renderBody() {
         if (!stock) {
-            if (stockError) {
-                return <ErrorState message={stockError} onRetry={() => setStockAttempt((n) => n + 1)} />;
+            if (loadError) {
+                return <ErrorState message={loadError} onRetry={reload} />;
             }
             return <LoadingState label="Cargando stock..." />;
         }
@@ -158,15 +133,9 @@ export default function StockDetailScreen() {
 
             {renderBody()}
 
-            <StockAdjustModal
-                visible={isAdjusting}
-                stock={stock}
-                branches={availableBranches}
-                products={products}
-                token={token}
-                onClose={() => setIsAdjusting(false)}
-                onSaved={invalidateStockMovements}
-            />
+            {stock && isAdjusting ? (
+                <StockAdjustModal stock={stock} onClose={() => setIsAdjusting(false)} />
+            ) : null}
         </Screen>
     );
 }

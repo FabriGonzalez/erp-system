@@ -1,5 +1,7 @@
+import { PageResponse } from '@/types/order';
 import {
     Product,
+    ProductListParams,
     ProductRequest,
     ProductResponse,
     ProductVariant,
@@ -17,6 +19,7 @@ const PRODUCT_ERRORS = {
         INVALID_PRODUCT_VARIANTS:
             'Las variantes no son válidas: una variante sin atributos tiene que ser la única del producto, cada variante lleva un solo valor por atributo y una sucursal no se puede repetir en el stock.',
         ATTRIBUTE_VALUE_ALREADY_EXISTS: 'Ese valor de atributo ya existe.',
+        INVALID_PRODUCT_QUERY: 'No se pudo cargar el listado de productos.',
     },
     byStatus: {
         404: 'Producto, categoría, sucursal o atributo no encontrados.',
@@ -70,18 +73,28 @@ function normalizeProduct(data: ProductResponse): Product {
     };
 }
 
-export async function getAllProducts(token: string): Promise<Product[]> {
-    const response = await apiFetch(`${API_BASE_URL}/api/v1/products`, {
+export async function getProducts(
+    params: ProductListParams & { page: number; size: number },
+    token: string
+): Promise<PageResponse<Product>> {
+    const query = new URLSearchParams({ page: String(params.page), size: String(params.size) });
+    if (params.q?.trim()) query.set('q', params.q.trim());
+    if (params.categoryId) query.set('categoryId', params.categoryId);
+    if (params.active !== undefined) query.set('active', String(params.active));
+    if (params.stock) query.set('stock', params.stock);
+    if (params.branchId) query.set('branchId', params.branchId);
+
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/products?${query.toString()}`, {
         method: 'GET',
         headers: authHeaders(token),
     });
 
-    const rawList = await handleResponse<ProductResponse[]>(
+    const page = await handleResponse<PageResponse<ProductResponse>>(
         response,
         'No se pudieron obtener los productos.'
     );
 
-    return rawList.map(normalizeProduct);
+    return { ...page, content: page.content.map(normalizeProduct) };
 }
 
 export async function getProductById(

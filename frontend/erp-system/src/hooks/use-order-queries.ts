@@ -1,4 +1,4 @@
-import { InfiniteData, useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 
 import {
     cancelOrder,
@@ -16,13 +16,12 @@ import {
     OrderListParams,
     OrderRequest,
     OrderUpdateRequest,
-    PageResponse,
     RefundAction,
 } from '@/types/order';
 
+import { refreshStockAfterChange } from './catalog-keys';
 import { invalidateCustomerAccount } from './customer-account-keys';
-import { errorText, requireToken, usePagedList } from './use-paged-list';
-import { refreshStockAfterChange } from './use-stock-movement-queries';
+import { errorText, findInPagedLists, requireToken, usePagedList } from './use-paged-list';
 
 const PAGE_SIZE = 20;
 
@@ -52,21 +51,6 @@ export function useOrders(filters: OrderListFilters) {
     );
 }
 
-/** La copia de la orden en algún listado ya cargado, para no mostrar un spinner. */
-function findInLists(id: string): Order | undefined {
-    const lists = queryClient.getQueriesData<InfiniteData<PageResponse<Order>>>({
-        queryKey: orderKeys.lists(),
-    });
-
-    for (const [, data] of lists) {
-        for (const page of data?.pages ?? []) {
-            const order = page.content.find((item) => item.id === id);
-            if (order) return order;
-        }
-    }
-    return undefined;
-}
-
 type UseOrderOptions = {
     /**
      * Espera a la respuesta del backend aunque la orden ya esté en caché: el borrador de
@@ -83,7 +67,8 @@ export function useOrder(id: string | undefined, options?: UseOrderOptions) {
         queryKey: orderKeys.detail(id ?? ''),
         queryFn: () => getOrderById(id as string, requireToken()),
         enabled,
-        placeholderData: fresh || !id ? undefined : () => findInLists(id),
+        // La copia de algún listado cargado, para no mostrar un spinner.
+        placeholderData: fresh || !id ? undefined : () => findInPagedLists<Order>(orderKeys.lists(), id),
         refetchOnMount: fresh ? 'always' : true,
     });
 

@@ -1,5 +1,6 @@
-import { QueryKey, useInfiniteQuery } from '@tanstack/react-query';
+import { InfiniteData, QueryKey, useInfiniteQuery } from '@tanstack/react-query';
 
+import { queryClient } from '@/services/query-client';
 import { useAuthStore } from '@/stores/auth-store';
 import { PageResponse } from '@/types/order';
 
@@ -15,6 +16,22 @@ export function requireToken(): string {
 export function errorText(error: unknown): string | null {
     if (!error) return null;
     return error instanceof Error ? error.message : 'Ocurrió un error inesperado.';
+}
+
+/**
+ * La copia de un elemento en algún listado paginado ya cargado (p. ej. para usarla como
+ * placeholder del detalle y no mostrar un spinner).
+ */
+export function findInPagedLists<T extends { id: string }>(listsKey: QueryKey, id: string): T | undefined {
+    const lists = queryClient.getQueriesData<InfiniteData<PageResponse<T>>>({ queryKey: listsKey });
+
+    for (const [, data] of lists) {
+        for (const page of data?.pages ?? []) {
+            const item = page.content.find((candidate) => candidate.id === id);
+            if (item) return item;
+        }
+    }
+    return undefined;
 }
 
 /** Listado paginado con scroll infinito; mismo contrato que useCustomerList. */

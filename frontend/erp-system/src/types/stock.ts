@@ -11,6 +11,13 @@ export type Stock = {
     updatedAt?: string | null;
 };
 
+/** Filtros del listado paginado de stock; variantIds pide el stock de esas variantes. */
+export type StockListParams = {
+    branchId?: string;
+    q?: string;
+    variantIds?: string[];
+};
+
 export type StockAdjustRequest = {
     productVariantId: number;
     branchId: number;
