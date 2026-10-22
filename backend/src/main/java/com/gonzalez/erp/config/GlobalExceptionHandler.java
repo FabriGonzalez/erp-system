@@ -30,6 +30,7 @@ import com.gonzalez.erp.modules.orders.exception.QuickSaleValidationException;
 import com.gonzalez.erp.modules.payments.exception.InvalidPaymentException;
 import com.gonzalez.erp.modules.products.exception.InvalidProductQueryException;
 import com.gonzalez.erp.modules.products.exception.InvalidProductVariantsException;
+import com.gonzalez.erp.modules.products.exception.PricePermissionRequiredException;
 import com.gonzalez.erp.modules.products.exception.ProductAttributeNameAlreadyExistsException;
 import com.gonzalez.erp.modules.products.exception.ProductAttributeValueAlreadyExistsException;
 import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveException;
@@ -81,6 +82,21 @@ public class GlobalExceptionHandler {
                         ex.getMessage(),
                         request.getRequestURI(),
                         "BRANCH_ACCESS_DENIED"
+                ));
+    }
+
+    // El permiso depende de lo que cambia en el request, no del endpoint: el frontend lo explica aparte.
+    @ExceptionHandler(PricePermissionRequiredException.class)
+    public ResponseEntity<ErrorResponse> handlePricePermissionRequired(
+            PricePermissionRequiredException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of(
+                        HttpStatus.FORBIDDEN.value(),
+                        HttpStatus.FORBIDDEN.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "PRICE_PERMISSION_REQUIRED"
                 ));
     }
 

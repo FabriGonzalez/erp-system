@@ -31,6 +31,7 @@ import com.gonzalez.erp.modules.products.entity.ProductAttributeValue;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.entity.ProductVariantAttribute;
 import com.gonzalez.erp.modules.products.exception.InvalidProductVariantsException;
+import com.gonzalez.erp.modules.products.exception.PricePermissionRequiredException;
 import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveException;
 import com.gonzalez.erp.modules.products.exception.ProductVariantSkuAlreadyExistsException;
 import com.gonzalez.erp.modules.products.mapper.ProductMapper;
@@ -38,6 +39,7 @@ import com.gonzalez.erp.modules.products.mapper.ProductVariantMapper;
 import com.gonzalez.erp.modules.products.repository.ProductAttributeValueRepository;
 import com.gonzalez.erp.modules.products.repository.ProductRepository;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
+import com.gonzalez.erp.modules.roles.entity.Permission;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -128,6 +130,8 @@ public class ProductServiceImpl implements ProductService {
     @Transactional
     public ProductResponse create(ProductRequest request) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
+        // Toda variante nueva fija un precio.
+        requirePricePermission();
 
         Category category = findCategoryOrThrow(request.categoryId());
         checkCategoryActive(category);
@@ -357,6 +361,14 @@ public class ProductServiceImpl implements ProductService {
                     vr.attributeValueIds(),
                     vr.sku()
             );
+
+            // El formulario reenvía todas las variantes: reenviar el mismo precio no cuenta.
+            boolean setsPrice = existingForSku
+                    .map(existing -> existing.getPrice().compareTo(vr.price()) != 0)
+                    .orElse(true);
+            if (setsPrice) {
+                requirePricePermission();
+            }
         }
 
         List<ProductVariant> savedVariants = new ArrayList<>();
@@ -653,6 +665,13 @@ public class ProductServiceImpl implements ProductService {
                                 "Category not found with id: " + id
                         )
                 );
+    }
+
+    /** Fijar o cambiar el precio de una variante exige ADMINISTRAR_PRECIOS además de ADMINISTRAR_PRODUCTOS. */
+    private void requirePricePermission() {
+        if (!SecurityUtils.hasAuthority(Permission.ADMINISTRAR_PRECIOS.name())) {
+            throw new PricePermissionRequiredException();
+        }
     }
 
     private void checkCategoryActive(Category category) {

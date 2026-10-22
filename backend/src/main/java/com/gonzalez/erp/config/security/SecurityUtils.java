@@ -37,4 +37,11 @@ public final class SecurityUtils {
     public static String getCurrentUsername() {
         return getCurrentUserDetails().getUsername();
     }
+
+    /** Para chequeos que dependen de los datos del request y no se pueden expresar con @PreAuthorize. */
+    public static boolean hasAuthority(String authority) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(granted -> authority.equals(granted.getAuthority()));
+    }
 }

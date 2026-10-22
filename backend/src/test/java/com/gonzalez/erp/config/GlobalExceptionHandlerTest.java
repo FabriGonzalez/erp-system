@@ -2,6 +2,7 @@ package com.gonzalez.erp.config;
 
 import com.gonzalez.erp.modules.branches.exception.BranchNameAlreadyExistsException;
 import com.gonzalez.erp.modules.inventory.entity.StockMovementType;
+import com.gonzalez.erp.modules.products.exception.PricePermissionRequiredException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -80,6 +81,13 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void missingPricePermissionHasItsOwnCode() throws Exception {
+        mockMvc.perform(get("/test/price"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PRICE_PERMISSION_REQUIRED"));
+    }
+
+    @Test
     void unexpectedErrorDoesNotExposeItsMessage() throws Exception {
         mockMvc.perform(get("/test/boom"))
                 .andExpect(status().isInternalServerError())
@@ -115,6 +123,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/conflict")
         String conflict() {
             throw new BranchNameAlreadyExistsException("Centro");
+        }
+
+        @GetMapping("/price")
+        String price() {
+            throw new PricePermissionRequiredException();
         }
 
         @GetMapping("/boom")
