@@ -154,6 +154,7 @@ Los IDs de API pueden llegar como números; el dominio del frontend puede normal
 
 - Las respuestas de producto traen el stock por sucursal de cada variante (una consulta de stocks por página en el backend). Inventario usa `GET /api/v1/inventory/stocks` paginado; el stock de los ítems de un borrador sale de `useVariantStock` (`variantIds`), no del catálogo cargado. No introduzcas una request de stock por variante (N+1).
 - El precio de una variante tiene que ser mayor a 0.
+- Fijar o cambiar un precio exige `ADMINISTRAR_PRECIOS` además de `ADMINISTRAR_PRODUCTOS`: crear un producto, agregar una variante (el backend reconoce las existentes por SKU) o cambiar el precio de una existente. Reenviar el mismo precio no cuenta, así el formulario manda todo. Sin el permiso, `ProductForm` deja los precios de solo lectura y el backend responde 403 `PRICE_PERMISSION_REQUIRED`.
 - La estructura de dominio para stock por variante es `stockByBranch: Record<string, number>`.
 - `PATCH /api/v1/inventory/stocks/adjust` recibe `productVariantId`, `branchId`, `newQuantity` y `reason`. `newQuantity` representa la **cantidad final**, no el delta.
 - Para la creación de productos, el request de variante usa `initialStock`.

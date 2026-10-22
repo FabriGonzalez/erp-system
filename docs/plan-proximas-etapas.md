@@ -1,7 +1,7 @@
 # Plan de las etapas que quedan
 
-Estado al 2026-10-20, rama `feature/catalog-feedback`. Para retomar: pasarle este archivo a
-Claude y elegir la etapa (la próxima planificada es la 18).
+Estado al 2026-10-22, rama `feature/prices-debts`. Para retomar: pasarle este archivo a
+Claude y elegir la etapa (la próxima planificada es la 20).
 
 ## Cómo se trabaja (vale para todas las etapas)
 
@@ -75,6 +75,12 @@ Claude y elegir la etapa (la próxima planificada es la 18).
   `useActiveBranch` derivada por id, `useActiveBranchSync`), pantalla Mi Perfil, precio de variante
   mayor a 0 (backend y formulario), borrado de `FRONTEND_DOCS.md`, `OrdersFilterList` y
   `getBranchById`. Ya no queda ningún dato del servidor en Zustand.
+- **Etapa 19 — Permiso de precios y deudas desde el cliente** (`feature/prices-debts`): crear un
+  producto, agregar una variante o cambiar un precio exige `ADMINISTRAR_PRECIOS` (403
+  `PRICE_PERMISSION_REQUIRED`; reenviar el mismo precio no cuenta); sin él, `ProductForm` deja los
+  precios de solo lectura. Tarjeta "Cuenta corriente" con el saldo en el detalle del cliente.
+  Aparte: renombrar un producto al editarlo ya no regenera el SKU de sus variantes existentes (el
+  backend las reconoce por SKU y las reemplazaba por otras).
 
 ---
 
@@ -1509,7 +1515,6 @@ electrónica, compra como invitado.
 
 ## Pendientes chicos (sin orden; sumar a la etapa afín)
 
-- (Etapa 19) Acceso a deudas desde el detalle del cliente y permiso `ADMINISTRAR_PRECIOS`.
 - **Antes de producción** (decisión del usuario: en desarrollo alcanza con `ddl-auto: update`):
   - Migraciones (Flyway con línea base del esquema actual): `ddl-auto: update` no crea índices
     funcionales ni actualiza los CHECK de los enums (por eso la etapa 10 no pudo sumar un tipo de

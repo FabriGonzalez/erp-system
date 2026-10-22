@@ -20,6 +20,8 @@ const PRODUCT_ERRORS = {
             'Las variantes no son válidas: una variante sin atributos tiene que ser la única del producto, cada variante lleva un solo valor por atributo y una sucursal no se puede repetir en el stock.',
         ATTRIBUTE_VALUE_ALREADY_EXISTS: 'Ese valor de atributo ya existe.',
         INVALID_PRODUCT_QUERY: 'No se pudo cargar el listado de productos.',
+        PRICE_PERMISSION_REQUIRED:
+            'Tu usuario no tiene el permiso "Administrar precios": no puede cambiar precios ni agregar variantes.',
     },
     byStatus: {
         404: 'Producto, categoría, sucursal o atributo no encontrados.',

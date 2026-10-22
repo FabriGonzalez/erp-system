@@ -26,13 +26,14 @@ import {
     useSetCustomerActive,
     useUpdateAddress,
 } from '@/hooks/use-customer-queries';
+import { useCustomerAccountSummaryQuery } from '@/hooks/use-customer-account-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
 import { CustomerAddress, documentTypeLabel } from '@/types/customer';
 import { addressToDraft, toAddressRequest } from '@/utils/address';
 import { confirmAction } from '@/utils/confirm';
-import { getInitials } from '@/utils/format';
-import { hasPermission } from '@/utils/permissions';
+import { formatCurrency, getInitials } from '@/utils/format';
+import { CUSTOMER_ACCOUNT_READ_PERMISSIONS, hasAnyPermission, hasPermission } from '@/utils/permissions';
 
 export default function CustomerDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -41,8 +42,10 @@ export default function CustomerDetailScreen() {
     // Mismos permisos que exige el backend para cada acción.
     const canManageCustomers = hasPermission(user, 'ADMINISTRAR_CLIENTES');
     const canEditAddresses = canManageCustomers || hasPermission(user, 'CREAR_PEDIDOS');
+    const canViewAccount = hasAnyPermission(user, CUSTOMER_ACCOUNT_READ_PERMISSIONS);
 
     const { customer, error, notFound, isLoading, reload } = useCustomer(id);
+    const { summary, isLoading: summaryLoading } = useCustomerAccountSummaryQuery(id, canViewAccount);
     const {
         addresses,
         error: addressesError,
@@ -261,6 +264,56 @@ export default function CustomerDetailScreen() {
                         </Pressable>
                     ) : null}
                 </View>
+
+                {canViewAccount ? (
+                    <Pressable
+                        onPress={() =>
+                            router.push({
+                                pathname: '/customers/[id]/debts',
+                                params: { id: customer.id },
+                            })
+                        }
+                        style={({ pressed }) => [styles.accountCard, pressed && SharedStyles.pressed]}
+                    >
+                        <View style={styles.sectionHeaderText}>
+                            <Text style={styles.accountTitle}>Cuenta corriente</Text>
+                            {summary ? (
+                                <>
+                                    <Text
+                                        style={[
+                                            styles.accountBalance,
+                                            summary.debt > 0 && styles.accountDebt,
+                                            summary.debt <= 0 && summary.credit > 0 && styles.accountCredit,
+                                        ]}
+                                    >
+                                        {summary.debt > 0
+                                            ? `Debe ${formatCurrency(summary.debt)}`
+                                            : summary.credit > 0
+                                                ? `Saldo a favor ${formatCurrency(summary.credit)}`
+                                                : 'Al día'}
+                                    </Text>
+                                    {summary.pendingOrders > 0 ? (
+                                        <Text style={styles.sectionSubtitle}>
+                                            {summary.pendingOrders}{' '}
+                                            {summary.pendingOrders === 1
+                                                ? 'pedido con saldo pendiente'
+                                                : 'pedidos con saldo pendiente'}
+                                        </Text>
+                                    ) : null}
+                                </>
+                            ) : summaryLoading ? (
+                                <ActivityIndicator size="small" color={Colors.primary} style={styles.accountLoader} />
+                            ) : (
+                                <Text style={styles.sectionSubtitle}>Ver pendientes, pagos y movimientos</Text>
+                            )}
+                        </View>
+                        <SymbolView
+                            name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                            size={18}
+                            tintColor={Colors.textSecondary}
+                        />
+                    </Pressable>
+                ) : null}
 
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
@@ -560,6 +613,38 @@ const styles = StyleSheet.create({
     statusButtonText: {
         fontSize: 14,
         fontWeight: '600',
+    },
+    accountCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+        marginTop: Spacing.lg,
+        backgroundColor: Colors.surface,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        padding: Spacing.lg,
+    },
+    accountTitle: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: Colors.textSecondary,
+    },
+    accountBalance: {
+        marginTop: 2,
+        fontSize: 18,
+        fontWeight: '700',
+        color: Colors.text,
+    },
+    accountDebt: {
+        color: Colors.error,
+    },
+    accountCredit: {
+        color: Colors.primary,
+    },
+    accountLoader: {
+        alignSelf: 'flex-start',
+        marginTop: Spacing.xs,
     },
     section: {
         marginTop: Spacing.xl,

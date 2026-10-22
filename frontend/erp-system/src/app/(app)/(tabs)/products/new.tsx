@@ -16,7 +16,9 @@ import { ProductFormData } from '@/types/product';
 import { hasPermission } from '@/utils/permissions';
 
 export default function NewProductScreen() {
-    const canAccess = useAuthStore((state) => hasPermission(state.user, 'ADMINISTRAR_PRODUCTOS'));
+    // Cada variante nueva fija un precio: crear exige también ADMINISTRAR_PRECIOS.
+    const canAccess = useAuthStore((state) =>
+        hasPermission(state.user, 'ADMINISTRAR_PRODUCTOS') && hasPermission(state.user, 'ADMINISTRAR_PRECIOS'));
     const createProduct = useCreateProduct();
     const { categories } = useCategories();
     const user = useAuthStore((state) => state.user);
@@ -66,7 +68,7 @@ export default function NewProductScreen() {
             <NotFound
                 headerTitle="Nuevo producto"
                 title="Sin permisos"
-                description="Tu usuario no tiene permiso para crear productos."
+                description={'Crear productos requiere los permisos "Administrar productos" y "Administrar precios".'}
             />
         );
     }

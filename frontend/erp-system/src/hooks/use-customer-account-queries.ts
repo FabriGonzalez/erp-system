@@ -26,9 +26,9 @@ function isRegisteredCustomer(id: string | undefined): id is string {
 // --- Consultas ---
 
 /** Deuda, saldo a favor y pedidos pendientes calculados por el backend. */
-export function useCustomerAccountSummaryQuery(customerId: string | undefined) {
+export function useCustomerAccountSummaryQuery(customerId: string | undefined, allowed = true) {
     const hasSession = useAuthStore((state) => Boolean(state.token));
-    const enabled = hasSession && isRegisteredCustomer(customerId);
+    const enabled = allowed && hasSession && isRegisteredCustomer(customerId);
     const result = useQuery({
         queryKey: customerAccountKeys.summary(customerId ?? ''),
         queryFn: () => getCustomerAccountSummary(customerId as string, requireToken()),

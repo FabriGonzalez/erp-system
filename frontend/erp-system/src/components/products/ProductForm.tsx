@@ -192,6 +192,11 @@ export function ProductForm({
     const [isCreateCategoryModalVisible, setIsCreateCategoryModalVisible] = useState(false);
     const openCreateCategoryOnDismissRef = useRef(false);
     const canCreateCategory = useAuthStore((state) => hasPermission(state.user, 'ADMINISTRAR_CATEGORIAS'));
+    // Sin este permiso los precios quedan de solo lectura y no se pueden sumar variantes
+    // (cada una nueva fija un precio): el backend lo rechaza con PRICE_PERMISSION_REQUIRED.
+    const canEditPrices = useAuthStore((state) => hasPermission(state.user, 'ADMINISTRAR_PRECIOS'));
+    // El backend reconoce las variantes existentes por SKU.
+    const initialSkus = new Set((initialValues?.variants ?? []).map((variant) => variant.sku.trim().toUpperCase()));
     const [isCreateAttrModalVisible, setIsCreateAttrModalVisible] = useState(false);
     const [createValueAttrId, setCreateValueAttrId] = useState<string | null>(null);
 
@@ -210,7 +215,10 @@ export function ProductForm({
 
     function updateName(value: string) {
         setName(value);
-        setVariants((current) => current.map((variant) => variant.sku === '' || variant.sku === buildSku(name, variant.attributes, attributeValues)
+        // Solo las variantes nuevas siguen al nombre: el backend reconoce las existentes por SKU,
+        // y cambiárselo las reemplazaría por otras (los pedidos quedan en las viejas).
+        setVariants((current) => current.map((variant) => !initialSkus.has(variant.sku.trim().toUpperCase())
+            && (variant.sku === '' || variant.sku === buildSku(name, variant.attributes, attributeValues))
             ? { ...variant, sku: buildSku(value, variant.attributes, attributeValues) }
             : variant));
     }
@@ -281,6 +289,9 @@ export function ProductForm({
                 }
             });
             if (sku) skuSet.add(sku);
+            if (!canEditPrices && sku && !initialSkus.has(sku)) {
+                nextErrors.variants = 'Sin el permiso "Administrar precios" no se pueden agregar variantes ni cambiar el SKU de una existente';
+            }
         });
 
         const keys = variants.map((variant) => combinationKey(variant.attributes));
@@ -369,7 +380,7 @@ export function ProductForm({
                             }]);
                         }
                     }}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !canEditPrices}
                     trackColor={{ false: Colors.track, true: Colors.primary }}
                     thumbColor={Colors.white}
                 />
@@ -428,13 +439,15 @@ export function ProductForm({
                             );
                         })}
 
-                    <Pressable
-                        style={styles.secondaryButton}
-                        onPress={handleGenerate}
-                        disabled={isSubmitting}
-                    >
-                        <Text style={styles.secondaryButtonText}>Generar variantes</Text>
-                    </Pressable>
+                    {canEditPrices && (
+                        <Pressable
+                            style={styles.secondaryButton}
+                            onPress={handleGenerate}
+                            disabled={isSubmitting}
+                        >
+                            <Text style={styles.secondaryButtonText}>Generar variantes</Text>
+                        </Pressable>
+                    )}
                 </View>
             )}
 
@@ -446,8 +459,14 @@ export function ProductForm({
                     onChangeText={updateBasePrice}
                     keyboardType="decimal-pad"
                     placeholder="0.00"
-                    editable={!isSubmitting}
+                    editable={!isSubmitting && canEditPrices}
                 />
+                {!canEditPrices && (
+                    <Text style={styles.hintText}>
+                        Tu usuario no tiene el permiso &quot;Administrar precios&quot;: los precios son de solo
+                        lectura y no se pueden agregar variantes.
+                    </Text>
+                )}
             </View>
             <Text style={styles.smallLabel}>
                 Stock {activeBranch ? `— ${activeBranch.name}` : ''}
@@ -515,7 +534,7 @@ export function ProductForm({
                                     }
                                     keyboardType="decimal-pad"
                                     placeholder="0.00"
-                                    editable={!isSubmitting}
+                                    editable={!isSubmitting && canEditPrices}
                                 />
                             </View>
                         </View>
@@ -703,5 +722,5 @@ const styles = StyleSheet.create({
     stockRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.xs },
     stockBranchName: { flex: 1, fontSize: 13, color: Colors.text },
     stockInput: { width: 90, height: 40, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: Spacing.sm, fontSize: 14, backgroundColor: Colors.surface, color: Colors.text, textAlign: 'right' },
-    formGroup: { marginBottom: Spacing.lg }, row: { flexDirection: 'row', gap: Spacing.md }, flex1: { flex: 1 }, required: { color: Colors.error }, smallLabel: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary, marginBottom: 4 }, sectionTitle: { marginBottom: Spacing.sm }, input: { height: 48, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: Spacing.md, fontSize: 15, backgroundColor: Colors.surface, color: Colors.text }, inputError: { borderColor: Colors.error, backgroundColor: Colors.errorInput }, errorText: { fontSize: 12, color: Colors.error, marginTop: 4, fontWeight: '500' }, textArea: { height: 85, paddingTop: Spacing.md }, selectButton: { height: 48, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: Spacing.md, backgroundColor: Colors.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, selectButtonText: { fontSize: 15, color: Colors.text }, placeholderText: { color: Colors.textSecondary }, modeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: Spacing.lg }, switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: Spacing.xl }, switchLabelContainer: { flex: 1, marginRight: Spacing.md }, switchTitle: { fontSize: 15, fontWeight: '600', color: Colors.text }, switchSubtitle: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 }, attributeGroup: { marginBottom: Spacing.md }, attributeTitle: { fontSize: 14, fontWeight: '600', color: Colors.text }, chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs }, chip: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, backgroundColor: Colors.surface }, chipSelected: { backgroundColor: Colors.primaryLight, borderColor: Colors.primary }, chipText: { color: Colors.textSecondary, fontSize: 13 }, chipTextSelected: { color: Colors.primary, fontWeight: '600' }, secondaryButton: { borderWidth: 1, borderColor: Colors.primary, borderRadius: 10, height: 44, alignItems: 'center', justifyContent: 'center', marginTop: Spacing.sm }, secondaryButtonText: { color: Colors.primary, fontWeight: '600' }, variantCard: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, padding: Spacing.md, marginBottom: Spacing.sm }, variantTitle: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm }, removeText: { color: Colors.error, fontSize: 12, fontWeight: '600', marginTop: Spacing.sm }, actionsContainer: { gap: Spacing.sm, marginTop: Spacing.sm }, submitButtonDisabled: { opacity: 0.7 }, submittingContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    formGroup: { marginBottom: Spacing.lg }, row: { flexDirection: 'row', gap: Spacing.md }, flex1: { flex: 1 }, required: { color: Colors.error }, smallLabel: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary, marginBottom: 4 }, sectionTitle: { marginBottom: Spacing.sm }, input: { height: 48, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: Spacing.md, fontSize: 15, backgroundColor: Colors.surface, color: Colors.text }, inputError: { borderColor: Colors.error, backgroundColor: Colors.errorInput }, errorText: { fontSize: 12, color: Colors.error, marginTop: 4, fontWeight: '500' }, hintText: { fontSize: 12, color: Colors.textSecondary, marginTop: 4 }, textArea: { height: 85, paddingTop: Spacing.md }, selectButton: { height: 48, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: Spacing.md, backgroundColor: Colors.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, selectButtonText: { fontSize: 15, color: Colors.text }, placeholderText: { color: Colors.textSecondary }, modeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: Spacing.lg }, switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: Spacing.xl }, switchLabelContainer: { flex: 1, marginRight: Spacing.md }, switchTitle: { fontSize: 15, fontWeight: '600', color: Colors.text }, switchSubtitle: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 }, attributeGroup: { marginBottom: Spacing.md }, attributeTitle: { fontSize: 14, fontWeight: '600', color: Colors.text }, chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs }, chip: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, backgroundColor: Colors.surface }, chipSelected: { backgroundColor: Colors.primaryLight, borderColor: Colors.primary }, chipText: { color: Colors.textSecondary, fontSize: 13 }, chipTextSelected: { color: Colors.primary, fontWeight: '600' }, secondaryButton: { borderWidth: 1, borderColor: Colors.primary, borderRadius: 10, height: 44, alignItems: 'center', justifyContent: 'center', marginTop: Spacing.sm }, secondaryButtonText: { color: Colors.primary, fontWeight: '600' }, variantCard: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, padding: Spacing.md, marginBottom: Spacing.sm }, variantTitle: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm }, removeText: { color: Colors.error, fontSize: 12, fontWeight: '600', marginTop: Spacing.sm }, actionsContainer: { gap: Spacing.sm, marginTop: Spacing.sm }, submitButtonDisabled: { opacity: 0.7 }, submittingContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
 });

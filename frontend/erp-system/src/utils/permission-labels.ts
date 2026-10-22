@@ -16,7 +16,10 @@ export const PERMISSION_INFO: Record<Permission, PermissionInfo> = {
     ADMINISTRAR_CLIENTES: { label: 'Administrar clientes' },
     ADMINISTRAR_PRODUCTOS: { label: 'Administrar productos y atributos' },
     ADMINISTRAR_CATEGORIAS: { label: 'Administrar categorías' },
-    ADMINISTRAR_PRECIOS: { label: 'Administrar precios', hint: 'Todavía sin efecto en la app.' },
+    ADMINISTRAR_PRECIOS: {
+        label: 'Administrar precios',
+        hint: 'Junto con "Administrar productos": crear productos, agregar variantes y cambiar precios.',
+    },
     CONSULTAR_STOCK: { label: 'Ver stock' },
     AJUSTAR_STOCK: { label: 'Ajustar stock' },
     TRANSFERIR_STOCK: { label: 'Transferir stock entre sucursales' },

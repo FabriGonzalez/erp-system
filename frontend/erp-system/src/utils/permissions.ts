@@ -36,6 +36,14 @@ export const STOCK_MOVEMENT_READ_PERMISSIONS = [
 /** GET /api/v1/inventory/transfers y /transfers/{id}. */
 export const TRANSFER_READ_PERMISSIONS = ['TRANSFERIR_STOCK', 'CONSULTAR_STOCK'] as const satisfies readonly Permission[];
 
+/** GET /api/v1/customers/{id}/account, /account/pending-orders y /account/transactions. */
+export const CUSTOMER_ACCOUNT_READ_PERMISSIONS = [
+    'ADMINISTRAR_CLIENTES',
+    'CREAR_PEDIDOS',
+    'REGISTRAR_PAGOS',
+    'VER_REPORTES',
+] as const satisfies readonly Permission[];
+
 /** GET /api/v1/customers/debtors. */
 export const DEBTORS_READ_PERMISSIONS = [
     'ADMINISTRAR_CLIENTES',

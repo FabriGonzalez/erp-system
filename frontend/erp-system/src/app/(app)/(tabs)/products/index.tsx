@@ -67,9 +67,10 @@ export default function ProductsScreen() {
         setSelectedCategory(null);
     }
 
-    // El backend usa el mismo permiso para crear, editar y activar/desactivar productos.
-    const canCreate = hasPermission(user, 'ADMINISTRAR_PRODUCTOS');
-    const canEdit = canCreate;
+    // Editar y activar/desactivar piden ADMINISTRAR_PRODUCTOS; crear, también
+    // ADMINISTRAR_PRECIOS (cada variante nueva fija un precio).
+    const canEdit = hasPermission(user, 'ADMINISTRAR_PRODUCTOS');
+    const canCreate = canEdit && hasPermission(user, 'ADMINISTRAR_PRECIOS');
 
     function handleCreateProduct() {
         router.push('/products/new' as any);
