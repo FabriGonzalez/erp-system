@@ -34,6 +34,7 @@ public record OrderResponse(
         Instant shippedAt,
         Instant cancelledAt,
         List<OrderItemResponse> items,
+        List<OrderPromoResponse> promos,
         Instant createdAt,
         Instant updatedAt
 ) {

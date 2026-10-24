@@ -20,6 +20,11 @@ import java.util.List;
                 @UniqueConstraint(
                         name = "uk_product_variant_company_sku",
                         columnNames = {"company_id", "sku"}
+                ),
+                // Opcional: Postgres admite varios NULL en una unique.
+                @UniqueConstraint(
+                        name = "uk_product_variant_company_barcode",
+                        columnNames = {"company_id", "barcode"}
                 )
         }
 )
@@ -39,6 +44,10 @@ public class ProductVariant extends BaseEntity {
     @Column(nullable = false, length = 50)
     private String sku;
 
+    @Size(max = 64, message = "Barcode must not exceed 64 characters")
+    @Column(length = 64)
+    private String barcode;
+
     @NotNull(message = "Variant price is required")
     @DecimalMin(value = "0.0", inclusive = false, message = "Variant price must be greater than 0")
     @Column(nullable = false, precision = 12, scale = 2)
@@ -56,9 +65,10 @@ public class ProductVariant extends BaseEntity {
     @Builder.Default
     private List<ProductVariantAttribute> attributes = new ArrayList<>();
 
-    public void update(String sku, BigDecimal price) {
+    public void update(String sku, BigDecimal price, String barcode) {
         this.sku = sku;
         this.price = price;
+        this.barcode = barcode;
     }
 
     public void deactivate() {

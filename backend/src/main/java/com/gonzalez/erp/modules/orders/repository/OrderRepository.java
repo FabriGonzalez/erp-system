@@ -137,7 +137,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     );
 
     /**
-     * Variantes más vendidas por unidades. Cada fila es
+     * Variantes más vendidas sueltas, por unidades. Cada fila es
      * [variantId (Long), productName (String), sku (String), quantity (Long), total (BigDecimal)].
      * El límite sale del Pageable.
      */
@@ -160,6 +160,31 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("from") Instant from,
             @Param("to") Instant to,
             Pageable pageable
+    );
+
+    /**
+     * Unidades vendidas dentro de promos, por variante. Cada fila es
+     * [variantId (Long), productName (String), sku (String), quantity (Long)]. El ingreso de la
+     * promo no se reparte entre sus variantes.
+     */
+    @Query("""
+            SELECT v.id, p.name, v.sku, SUM(c.quantity * op.quantity)
+            FROM OrderPromoComponent c
+            JOIN c.orderPromo op
+            JOIN op.order o
+            JOIN c.productVariant v
+            JOIN v.product p
+            WHERE o.company.id = :companyId
+            AND o.branch.id IN :branchIds
+            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.createdAt >= :from AND o.createdAt < :to
+            GROUP BY v.id, p.name, v.sku
+            """)
+    List<Object[]> sumPromoUnitsByVariant(
+            @Param("companyId") Long companyId,
+            @Param("branchIds") Collection<Long> branchIds,
+            @Param("from") Instant from,
+            @Param("to") Instant to
     );
 
     /** Pedidos por despachar (foto actual). Una sola fila: [count (Long), oldestCreatedAt (Instant o null)]. */

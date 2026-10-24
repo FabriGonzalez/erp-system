@@ -37,6 +37,10 @@ import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveExcep
 import com.gonzalez.erp.modules.products.exception.ProductSkuAlreadyExistsException;
 import com.gonzalez.erp.modules.products.exception.ProductVariantSkuAlreadyExistsException;
 import com.gonzalez.erp.modules.reports.exception.InvalidReportRangeException;
+import com.gonzalez.erp.modules.products.exception.ProductVariantBarcodeAlreadyExistsException;
+import com.gonzalez.erp.modules.promotions.exception.InvalidPromotionException;
+import com.gonzalez.erp.modules.promotions.exception.InvalidPromotionQueryException;
+import com.gonzalez.erp.modules.promotions.exception.PromotionNotAvailableException;
 import com.gonzalez.erp.modules.roles.exception.RoleCodeAlreadyExistsException;
 import com.gonzalez.erp.modules.roles.exception.RoleNameAlreadyExistsException;
 import com.gonzalez.erp.modules.shipments.exception.InvalidShipmentException;
@@ -223,6 +227,7 @@ public class GlobalExceptionHandler {
             CategoryNameAlreadyExistsException.class,
             ProductSkuAlreadyExistsException.class,
             ProductVariantSkuAlreadyExistsException.class,
+            ProductVariantBarcodeAlreadyExistsException.class,
             ProductAttributeNameAlreadyExistsException.class,
             ProductAttributeValueAlreadyExistsException.class,
             ProductCategoryNotActiveException.class,
@@ -237,6 +242,7 @@ public class GlobalExceptionHandler {
             case CategoryNameAlreadyExistsException e -> "CATEGORY_NAME_ALREADY_EXISTS";
             case ProductSkuAlreadyExistsException e -> "PRODUCT_SKU_ALREADY_EXISTS";
             case ProductVariantSkuAlreadyExistsException e -> "VARIANT_SKU_ALREADY_EXISTS";
+            case ProductVariantBarcodeAlreadyExistsException e -> "VARIANT_BARCODE_ALREADY_EXISTS";
             case ProductAttributeNameAlreadyExistsException e -> "ATTRIBUTE_NAME_ALREADY_EXISTS";
             case ProductAttributeValueAlreadyExistsException e -> "ATTRIBUTE_VALUE_ALREADY_EXISTS";
             case ProductCategoryNotActiveException e -> "CATEGORY_INACTIVE";
@@ -383,6 +389,35 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(InvalidPromotionException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidPromotion(
+            InvalidPromotionException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "INVALID_PROMOTION"
+                ));
+    }
+
+    // La promo existe pero hoy no se puede vender (no vigente o con una variante inactiva).
+    @ExceptionHandler(PromotionNotAvailableException.class)
+    public ResponseEntity<ErrorResponse> handlePromotionNotAvailable(
+            PromotionNotAvailableException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(
+                        HttpStatus.CONFLICT.value(),
+                        HttpStatus.CONFLICT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "PROMOTION_NOT_AVAILABLE"
+                ));
+    }
+
     @ExceptionHandler(InvalidReportRangeException.class)
     public ResponseEntity<ErrorResponse> handleInvalidReportRange(
             InvalidReportRangeException ex, HttpServletRequest request) {
@@ -400,13 +435,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             InvalidStockMovementQueryException.class,
             InvalidStockQueryException.class,
-            InvalidProductQueryException.class
+            InvalidProductQueryException.class,
+            InvalidPromotionQueryException.class
     })
     public ResponseEntity<ErrorResponse> handleInvalidListQuery(
             RuntimeException ex, HttpServletRequest request) {
         String code = switch (ex) {
             case InvalidStockQueryException e -> "INVALID_STOCK_QUERY";
             case InvalidProductQueryException e -> "INVALID_PRODUCT_QUERY";
+            case InvalidPromotionQueryException e -> "INVALID_PROMOTION_QUERY";
             default -> "INVALID_STOCK_MOVEMENT_QUERY";
         };
         return ResponseEntity

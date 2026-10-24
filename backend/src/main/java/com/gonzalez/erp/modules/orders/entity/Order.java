@@ -8,6 +8,7 @@ import com.gonzalez.erp.modules.orders.exception.InvalidOrderException;
 import com.gonzalez.erp.modules.users.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 @Entity
 @Table(
@@ -91,6 +93,13 @@ public class Order extends BaseEntity {
     @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
 
+    // El listado arma la respuesta de toda la página: se cargan en tandas y no una consulta por pedido.
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id ASC")
+    @BatchSize(size = 50)
+    @Builder.Default
+    private List<OrderPromo> promos = new ArrayList<>();
+
     public void ship() {
         if (status != OrderStatus.TO_PREPARE) {
             throw new InvalidOrderException(
@@ -161,13 +170,64 @@ public class Order extends BaseEntity {
         }
     }
 
+    /*
+     * Reemplaza las líneas de promo. Las que el pedido ya tenía (por id) solo cambian la
+     * cantidad: conservan nombre, precio y variantes con que se vendieron (de las entrantes se
+     * usan solo id y quantity). Las entrantes sin id son líneas nuevas.
+     */
+    public void updatePromos(List<OrderPromo> newPromos) {
+        List<OrderPromo> incoming = newPromos != null ? newPromos : List.of();
+        Map<Long, OrderPromo> incomingById = new HashMap<>();
+        for (OrderPromo promo : incoming) {
+            if (promo.getId() != null) {
+                incomingById.put(promo.getId(), promo);
+            }
+        }
+
+        this.promos.removeIf(existing -> !incomingById.containsKey(existing.getId()));
+
+        for (OrderPromo existing : this.promos) {
+            existing.setQuantity(incomingById.get(existing.getId()).getQuantity());
+        }
+
+        for (OrderPromo promo : incoming) {
+            if (promo.getId() == null) {
+                promo.setOrder(this);
+                this.promos.add(promo);
+            }
+        }
+    }
+
+    /**
+     * Unidades de cada variante que consume el pedido: las sueltas más las de cada promo
+     * (cantidad del componente × cantidad de promos). Ordenadas por id de variante, que es
+     * el orden en que se bloquea el stock.
+     */
+    public Map<Long, Integer> quantitiesByVariant() {
+        Map<Long, Integer> quantities = new TreeMap<>();
+        for (OrderItem item : items) {
+            quantities.merge(item.getProductVariant().getId(), item.getQuantity(), Integer::sum);
+        }
+        for (OrderPromo promo : promos) {
+            for (OrderPromoComponent component : promo.getComponents()) {
+                quantities.merge(component.getProductVariant().getId(),
+                        component.getQuantity() * promo.getQuantity(), Integer::sum);
+            }
+        }
+        return quantities;
+    }
+
     public void recalculateTotal() {
         if (salesType == SalesType.QUICK_SALE) {
             this.total = quickSaleAmount != null ? quickSaleAmount : BigDecimal.ZERO;
         } else {
-            this.total = items.stream()
+            BigDecimal itemsTotal = items.stream()
                     .map(item -> item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal promosTotal = promos.stream()
+                    .map(promo -> promo.getUnitPrice().multiply(BigDecimal.valueOf(promo.getQuantity())))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            this.total = itemsTotal.add(promosTotal);
         }
     }
 
@@ -200,6 +260,6 @@ public class Order extends BaseEntity {
     }
 
     public boolean requiresStockValidation() {
-        return salesType == SalesType.WITH_PRODUCTS && !items.isEmpty();
+        return salesType == SalesType.WITH_PRODUCTS && (!items.isEmpty() || !promos.isEmpty());
     }
 }

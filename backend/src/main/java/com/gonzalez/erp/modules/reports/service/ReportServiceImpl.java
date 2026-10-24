@@ -23,6 +23,7 @@ import com.gonzalez.erp.modules.reports.exception.InvalidReportRangeException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,7 +32,9 @@ import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -97,12 +100,7 @@ public class ReportServiceImpl implements ReportService {
                 collectionsByMethod(paymentRepository.sumActiveByMethod(companyId, branchIds, from, to)),
                 orderRepository.sumWalkInSales(companyId, branchIds, from, to));
 
-        List<TopProduct> topProducts = orderRepository
-                .findTopSellingVariants(companyId, branchIds, from, to, PageRequest.of(0, TOP_PRODUCTS_LIMIT))
-                .stream()
-                .map(row -> new TopProduct(
-                        (Long) row[0], (String) row[1], (String) row[2], toLong(row[3]), (BigDecimal) row[4]))
-                .toList();
+        List<TopProduct> topProducts = topProducts(companyId, branchIds, from, to);
 
         Object[] pendingRow = orderRepository.summarizeOrdersToPrepare(companyId, branchIds).get(0);
         PendingOrders pendingOrders = new PendingOrders(toLong(pendingRow[0]), (Instant) pendingRow[1]);
@@ -117,6 +115,32 @@ public class ReportServiceImpl implements ReportService {
         return new DashboardResponse(from, to, previousFrom, previousTo, branchId,
                 sales, previousSales, salesByBranch, collections, debtSummary,
                 topProducts, pendingOrders, lowStock);
+    }
+
+    /**
+     * Más vendidos por unidades, sueltas y dentro de promos. El total es solo de las sueltas:
+     * el precio de una promo no se reparte entre sus variantes. Para sumar las dos fuentes se
+     * traen todas las variantes vendidas en el período (agrupadas) y se corta después.
+     */
+    private List<TopProduct> topProducts(Long companyId, List<Long> branchIds, Instant from, Instant to) {
+        Map<Long, TopProduct> byVariant = new LinkedHashMap<>();
+        for (Object[] row : orderRepository.findTopSellingVariants(companyId, branchIds, from, to, Pageable.unpaged())) {
+            byVariant.put((Long) row[0], new TopProduct(
+                    (Long) row[0], (String) row[1], (String) row[2], toLong(row[3]), (BigDecimal) row[4]));
+        }
+        for (Object[] row : orderRepository.sumPromoUnitsByVariant(companyId, branchIds, from, to)) {
+            Long variantId = (Long) row[0];
+            TopProduct loose = byVariant.get(variantId);
+            byVariant.put(variantId, new TopProduct(
+                    variantId, (String) row[1], (String) row[2],
+                    toLong(row[3]) + (loose != null ? loose.quantity() : 0),
+                    loose != null ? loose.total() : BigDecimal.ZERO));
+        }
+        return byVariant.values().stream()
+                .sorted(Comparator.comparingLong(TopProduct::quantity).reversed()
+                        .thenComparing(TopProduct::productVariantId))
+                .limit(TOP_PRODUCTS_LIMIT)
+                .toList();
     }
 
     private static void validate(Instant from, Instant to, int lowStockThreshold) {

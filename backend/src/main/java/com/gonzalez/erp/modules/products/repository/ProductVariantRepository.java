@@ -17,6 +17,13 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
 
     boolean existsBySkuAndCompanyIdAndIdNot(String sku, Long companyId, Long id);
 
+    boolean existsByBarcodeAndCompanyId(String barcode, Long companyId);
+
+    boolean existsByBarcodeAndCompanyIdAndIdNot(String barcode, Long companyId, Long id);
+
+    /** Variantes activas de varios productos (precios de las promos). */
+    List<ProductVariant> findByProductIdInAndActiveTrue(Collection<Long> productIds);
+
     @Query("SELECT pv FROM ProductVariant pv LEFT JOIN FETCH pv.product LEFT JOIN FETCH pv.company WHERE pv.id = :id")
     Optional<ProductVariant> findByIdWithProductAndCompany(@Param("id") Long id);
 

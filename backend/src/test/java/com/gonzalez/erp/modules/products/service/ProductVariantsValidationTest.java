@@ -26,8 +26,8 @@ class ProductVariantsValidationTest {
 
     @Test
     void variantRequestsAcceptMissingAttributes() {
-        ProductVariantRequest create = new ProductVariantRequest("SKU-PACK", BigDecimal.TEN, null, null);
-        ProductVariantUpdateRequest update = new ProductVariantUpdateRequest("SKU-PACK", BigDecimal.TEN, null, null);
+        ProductVariantRequest create = new ProductVariantRequest("SKU-PACK", BigDecimal.TEN, null, null, null);
+        ProductVariantUpdateRequest update = new ProductVariantUpdateRequest("SKU-PACK", BigDecimal.TEN, null, null, null);
 
         assertThat(validator.validate(create)).isEmpty();
         assertThat(validator.validate(update)).isEmpty();

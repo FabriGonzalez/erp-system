@@ -179,6 +179,6 @@ class ProductStockMovementTest {
 
     private ProductUpdateRequest request(ProductVariantStockRequest... stock) {
         return new ProductUpdateRequest("Remera", null, CATEGORY_ID, List.of(
-                new ProductVariantUpdateRequest("REM-M", BigDecimal.TEN, List.of(), List.of(stock))));
+                new ProductVariantUpdateRequest("REM-M", BigDecimal.TEN, null, List.of(), List.of(stock))));
     }
 }

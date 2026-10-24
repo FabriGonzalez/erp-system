@@ -108,7 +108,7 @@ class ProductPricePermissionTest {
         loginWith(Permission.ADMINISTRAR_PRODUCTOS);
 
         assertThatThrownBy(() -> productService.create(new ProductRequest("Buzo", null, CATEGORY_ID,
-                List.of(new ProductVariantRequest("BUZ-M", new BigDecimal("2000"), List.of(), List.of())))))
+                List.of(new ProductVariantRequest("BUZ-M", new BigDecimal("2000"), null, List.of(), List.of())))))
                 .isInstanceOf(PricePermissionRequiredException.class);
         verify(productRepository, never()).saveAndFlush(any());
     }
@@ -118,7 +118,7 @@ class ProductPricePermissionTest {
         loginWith(Permission.ADMINISTRAR_PRODUCTOS, Permission.ADMINISTRAR_PRECIOS);
 
         productService.create(new ProductRequest("Buzo", null, CATEGORY_ID,
-                List.of(new ProductVariantRequest("BUZ-M", new BigDecimal("2000"), List.of(), List.of()))));
+                List.of(new ProductVariantRequest("BUZ-M", new BigDecimal("2000"), null, List.of(), List.of()))));
 
         verify(productRepository).saveAndFlush(any());
     }
@@ -184,7 +184,7 @@ class ProductPricePermissionTest {
     }
 
     private static ProductVariantUpdateRequest variantRequest(String sku, String price) {
-        return new ProductVariantUpdateRequest(sku, new BigDecimal(price), List.of(), List.of());
+        return new ProductVariantUpdateRequest(sku, new BigDecimal(price), null, List.of(), List.of());
     }
 
     private static ProductUpdateRequest update(String name, ProductVariantUpdateRequest... variants) {

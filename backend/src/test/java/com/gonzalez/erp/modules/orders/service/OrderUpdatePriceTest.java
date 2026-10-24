@@ -122,7 +122,7 @@ class OrderUpdatePriceTest {
         stubUpdate(order, sold);
 
         orderService.update(ORDER_ID,
-                new OrderUpdateRequest(null, List.of(new OrderItemRequest(SOLD_VARIANT_ID, 3)), null));
+                new OrderUpdateRequest(null, List.of(new OrderItemRequest(SOLD_VARIANT_ID, 3)), null, null));
 
         assertThat(order.getItems()).singleElement().satisfies(item -> {
             assertThat(item.getQuantity()).isEqualTo(3);
@@ -141,7 +141,7 @@ class OrderUpdatePriceTest {
 
         orderService.update(ORDER_ID, new OrderUpdateRequest(null, List.of(
                 new OrderItemRequest(SOLD_VARIANT_ID, 1),
-                new OrderItemRequest(NEW_VARIANT_ID, 2)), null));
+                new OrderItemRequest(NEW_VARIANT_ID, 2)), null, null));
 
         assertThat(priceOf(order, SOLD_VARIANT_ID)).isEqualByComparingTo("1000");
         assertThat(priceOf(order, NEW_VARIANT_ID)).isEqualByComparingTo("500");

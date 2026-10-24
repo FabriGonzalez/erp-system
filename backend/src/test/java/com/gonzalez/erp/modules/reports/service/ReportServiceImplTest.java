@@ -14,6 +14,7 @@ import com.gonzalez.erp.modules.payments.entity.PaymentMethod;
 import com.gonzalez.erp.modules.payments.repository.PaymentRepository;
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse;
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.MethodTotal;
+import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.TopProduct;
 import com.gonzalez.erp.modules.reports.exception.InvalidReportRangeException;
 import com.gonzalez.erp.modules.users.entity.User;
 import org.junit.jupiter.api.AfterEach;
@@ -34,6 +35,7 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -239,5 +241,36 @@ class ReportServiceImplTest {
         Branch branch = Branch.builder().name(name).company(company).build();
         branch.setId(id);
         return branch;
+    }
+
+    @Test
+    void topProductsAddTheUnitsSoldInsidePromos() {
+        List<Long> branchIds = List.of(CENTRO_ID);
+        when(branchAccessService.accessibleBranchIds()).thenReturn(branchIds);
+        when(customerBalanceService.getDebtSummary(COMPANY_ID))
+                .thenReturn(new CustomerDebtSummaryResponse(BigDecimal.ZERO, 0));
+        when(orderRepository.findTopSellingVariants(eq(COMPANY_ID), eq(branchIds), eq(FROM), eq(TO), any()))
+                .thenReturn(List.<Object[]>of(
+                        new Object[]{5L, "Remera", "REM-M", 4L, new BigDecimal("4000")},
+                        new Object[]{6L, "Buzo", "BUZ-M", 3L, new BigDecimal("9000")}));
+        when(orderRepository.sumPromoUnitsByVariant(COMPANY_ID, branchIds, FROM, TO)).thenReturn(List.<Object[]>of(
+                new Object[]{6L, "Buzo", "BUZ-M", 2L},
+                new Object[]{7L, "Gorra", "GOR-U", 1L}));
+        when(orderRepository.summarizeOrdersToPrepare(COMPANY_ID, branchIds))
+                .thenReturn(List.<Object[]>of(new Object[]{0L, null}));
+        when(stockRepository.findLowStock(eq(COMPANY_ID), eq(branchIds), anyInt(), any()))
+                .thenReturn(Page.empty());
+
+        DashboardResponse response = reportService.getDashboard(FROM, TO, null, null, 5);
+
+        // Buzo: 3 sueltos + 2 en promos; el importe es solo el de los sueltos.
+        assertThat(response.topProducts())
+                .extracting(TopProduct::sku, TopProduct::quantity)
+                .containsExactly(
+                        tuple("BUZ-M", 5L),
+                        tuple("REM-M", 4L),
+                        tuple("GOR-U", 1L));
+        assertThat(response.topProducts().get(0).total()).isEqualByComparingTo("9000");
+        assertThat(response.topProducts().get(2).total()).isEqualByComparingTo("0");
     }
 }

@@ -53,11 +53,11 @@ class ProductVariantPriceTest {
     }
 
     private static ProductVariantRequest create(String price) {
-        return new ProductVariantRequest("SKU-1", new BigDecimal(price), List.of(), List.of());
+        return new ProductVariantRequest("SKU-1", new BigDecimal(price), null, List.of(), List.of());
     }
 
     private static ProductVariantUpdateRequest update(String price) {
-        return new ProductVariantUpdateRequest("SKU-1", new BigDecimal(price), List.of(), List.of());
+        return new ProductVariantUpdateRequest("SKU-1", new BigDecimal(price), null, List.of(), List.of());
     }
 
     private static <T> Set<String> violations(T request) {

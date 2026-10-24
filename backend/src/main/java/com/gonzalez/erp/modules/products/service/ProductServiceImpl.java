@@ -32,6 +32,7 @@ import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.entity.ProductVariantAttribute;
 import com.gonzalez.erp.modules.products.exception.InvalidProductVariantsException;
 import com.gonzalez.erp.modules.products.exception.PricePermissionRequiredException;
+import com.gonzalez.erp.modules.products.exception.ProductVariantBarcodeAlreadyExistsException;
 import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveException;
 import com.gonzalez.erp.modules.products.exception.ProductVariantSkuAlreadyExistsException;
 import com.gonzalez.erp.modules.products.mapper.ProductMapper;
@@ -236,6 +237,7 @@ public class ProductServiceImpl implements ProductService {
         );
 
         Set<String> seenSkus = new HashSet<>();
+        Set<String> seenBarcodes = new HashSet<>();
 
         for (ProductVariantRequest vr : variantRequests) {
             validateSkuUnique(
@@ -243,6 +245,13 @@ public class ProductServiceImpl implements ProductService {
                     companyId,
                     null,
                     seenSkus
+            );
+
+            validateBarcodeUnique(
+                    normalizeBarcode(vr.barcode()),
+                    companyId,
+                    null,
+                    seenBarcodes
             );
 
             validateAttributeValueIds(
@@ -262,6 +271,7 @@ public class ProductServiceImpl implements ProductService {
             ProductVariant variant = ProductVariant.builder()
                     .product(product)
                     .sku(vr.sku())
+                    .barcode(normalizeBarcode(vr.barcode()))
                     .price(vr.price())
                     .company(product.getCompany())
                     .build();
@@ -334,6 +344,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         Set<String> seenSkus = new HashSet<>();
+        Set<String> seenBarcodes = new HashSet<>();
 
         for (ProductVariantUpdateRequest vr : variantRequests) {
             Optional<ProductVariant> existingForSku =
@@ -350,6 +361,13 @@ public class ProductServiceImpl implements ProductService {
                     companyId,
                     excludeId,
                     seenSkus
+            );
+
+            validateBarcodeUnique(
+                    normalizeBarcode(vr.barcode()),
+                    companyId,
+                    excludeId,
+                    seenBarcodes
             );
 
             validateAttributeValueIds(
@@ -386,7 +404,8 @@ public class ProductServiceImpl implements ProductService {
 
                 variant.update(
                         vr.sku(),
-                        vr.price()
+                        vr.price(),
+                        normalizeBarcode(vr.barcode())
                 );
 
                 /*
@@ -399,6 +418,7 @@ public class ProductServiceImpl implements ProductService {
                 variant = ProductVariant.builder()
                         .product(product)
                         .sku(vr.sku())
+                        .barcode(normalizeBarcode(vr.barcode()))
                         .price(vr.price())
                         .company(product.getCompany())
                         .build();
@@ -570,6 +590,37 @@ public class ProductServiceImpl implements ProductService {
 
         if (existsInDb) {
             throw new ProductVariantSkuAlreadyExistsException(sku);
+        }
+    }
+
+    /** Sin espacios alrededor; vacío = sin código. */
+    static String normalizeBarcode(String barcode) {
+        if (barcode == null || barcode.isBlank()) {
+            return null;
+        }
+        return barcode.trim();
+    }
+
+    private void validateBarcodeUnique(
+            String barcode,
+            Long companyId,
+            Long excludeVariantId,
+            Set<String> seenBarcodes
+    ) {
+        if (barcode == null) {
+            return;
+        }
+
+        if (!seenBarcodes.add(barcode)) {
+            throw new ProductVariantBarcodeAlreadyExistsException(barcode);
+        }
+
+        boolean existsInDb = excludeVariantId != null
+                ? variantRepository.existsByBarcodeAndCompanyIdAndIdNot(barcode, companyId, excludeVariantId)
+                : variantRepository.existsByBarcodeAndCompanyId(barcode, companyId);
+
+        if (existsInDb) {
+            throw new ProductVariantBarcodeAlreadyExistsException(barcode);
         }
     }
 

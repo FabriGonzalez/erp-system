@@ -18,6 +18,10 @@ public record ProductVariantRequest(
         @DecimalMin(value = "0.0", inclusive = false, message = "Variant price must be greater than 0")
         BigDecimal price,
 
+        // Opcional; único por empresa cuando está.
+        @Size(max = 64, message = "Barcode must not exceed 64 characters")
+        String barcode,
+
         // Vacío = producto sin variantes (una sola variante sin atributos).
         List<Long> attributeValueIds,
 

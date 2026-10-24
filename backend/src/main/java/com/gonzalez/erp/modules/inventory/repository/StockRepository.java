@@ -67,8 +67,9 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     );
 
     /**
-     * Listado paginado del stock de la empresa. :search (producto o SKU) llega en minúsculas, sin
-     * tildes y con los comodines (StockServiceImpl.normalizeSearch). Con filterVariants, solo las
+     * Listado paginado del stock de la empresa. :search (producto, SKU o código de barras) llega
+     * en minúsculas, sin tildes y con los comodines (StockServiceImpl.normalizeSearch). Con
+     * filterVariants, solo las
      * variantes de :variantIds (el stock de los ítems de un borrador).
      */
     @Query(value = """
@@ -82,7 +83,8 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
             AND (:hasSearch = false
                  OR CAST(FUNCTION('translate', LOWER(p.name),
                          'áàäâéèëêíìïîóòöôúùüûñç', 'aaaaeeeeiiiioooouuuunc') AS String) LIKE :search
-                 OR LOWER(pv.sku) LIKE :search)
+                 OR LOWER(pv.sku) LIKE :search
+                 OR LOWER(pv.barcode) LIKE :search)
             """,
             countQuery = """
             SELECT COUNT(s) FROM Stock s
@@ -94,7 +96,8 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
             AND (:hasSearch = false
                  OR CAST(FUNCTION('translate', LOWER(p.name),
                          'áàäâéèëêíìïîóòöôúùüûñç', 'aaaaeeeeiiiioooouuuunc') AS String) LIKE :search
-                 OR LOWER(pv.sku) LIKE :search)
+                 OR LOWER(pv.sku) LIKE :search
+                 OR LOWER(pv.barcode) LIKE :search)
             """)
     Page<Stock> search(
             @Param("companyId") Long companyId,

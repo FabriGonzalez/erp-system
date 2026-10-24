@@ -31,6 +31,9 @@ public record OrderRequest(
         Boolean applyCredit,
 
         // Pago cobrado al crear la orden; se asigna a esta orden.
-        @Valid InitialPaymentRequest initialPayment
+        @Valid InitialPaymentRequest initialPayment,
+
+        // Promos vigentes, sin repetir. WITH_PRODUCTS lleva al menos un ítem o una promo.
+        List<@Valid OrderPromoRequest> promos
 ) {
 }

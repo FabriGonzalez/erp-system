@@ -2,10 +2,15 @@ package com.gonzalez.erp.modules.orders.mapper;
 
 import com.gonzalez.erp.modules.customers.entity.Customer;
 import com.gonzalez.erp.modules.orders.dto.response.OrderItemResponse;
+import com.gonzalez.erp.modules.orders.dto.response.OrderPromoResponse;
 import com.gonzalez.erp.modules.orders.dto.response.OrderResponse;
 import com.gonzalez.erp.modules.orders.entity.Order;
 import com.gonzalez.erp.modules.orders.entity.OrderItem;
+import com.gonzalez.erp.modules.orders.entity.OrderPromo;
+import com.gonzalez.erp.modules.orders.entity.OrderPromoComponent;
 import com.gonzalez.erp.modules.orders.entity.PaymentStatus;
+import com.gonzalez.erp.modules.products.entity.ProductVariant;
+import com.gonzalez.erp.modules.promotions.mapper.PromotionMapper;
 import com.gonzalez.erp.modules.shipments.entity.Shipment;
 import com.gonzalez.erp.modules.shipments.mapper.ShipmentMapper;
 
@@ -49,6 +54,9 @@ public final class OrderMapper {
                 order.getItems().stream()
                         .map(OrderMapper::toItemResponse)
                         .toList(),
+                order.getPromos().stream()
+                        .map(OrderMapper::toPromoResponse)
+                        .toList(),
                 order.getCreatedAt(),
                 order.getUpdatedAt()
         );
@@ -87,6 +95,31 @@ public final class OrderMapper {
         }
 
         return (firstName + " " + lastName).trim();
+    }
+
+    private static OrderPromoResponse toPromoResponse(OrderPromo promo) {
+        return new OrderPromoResponse(
+                promo.getId(),
+                promo.getPromotion().getId(),
+                promo.getName(),
+                promo.getUnitPrice(),
+                promo.getQuantity(),
+                promo.getComponents().stream()
+                        .map(OrderMapper::toPromoComponent)
+                        .toList()
+        );
+    }
+
+    private static OrderPromoResponse.Component toPromoComponent(OrderPromoComponent component) {
+        ProductVariant variant = component.getProductVariant();
+        return new OrderPromoResponse.Component(
+                variant.getProduct().getId(),
+                variant.getProduct().getName(),
+                variant.getId(),
+                variant.getSku(),
+                PromotionMapper.variantName(variant),
+                component.getQuantity()
+        );
     }
 
     private static OrderItemResponse toItemResponse(OrderItem item) {

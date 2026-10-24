@@ -136,7 +136,7 @@ class OrderShippingAddressTest {
     @Test
     void quickSaleCannotBeShipped() {
         OrderRequest request = new OrderRequest(BRANCH_ID, CUSTOMER_ID, SalesType.QUICK_SALE,
-                new BigDecimal("1000"), DeliveryType.SHIPPING, ADDRESS_ID, null, null, null);
+                new BigDecimal("1000"), DeliveryType.SHIPPING, ADDRESS_ID, null, null, null, null);
         when(branchAccessService.requireAccessible(BRANCH_ID)).thenReturn(branch);
 
         assertThatThrownBy(() -> orderService.create(request))
@@ -228,7 +228,7 @@ class OrderShippingAddressTest {
         when(shipmentRepository.saveAndFlush(any(Shipment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         OrderResponse response = orderService.update(ORDER_ID,
-                new OrderUpdateRequest(null, List.of(new OrderItemRequest(VARIANT_ID, 1)), ADDRESS_ID));
+                new OrderUpdateRequest(null, List.of(new OrderItemRequest(VARIANT_ID, 1)), ADDRESS_ID, null));
 
         assertThat(response.shipment()).isNotNull();
         assertThat(response.shipment().street()).isEqualTo("Corrientes");
@@ -246,7 +246,7 @@ class OrderShippingAddressTest {
         when(addressRepository.findByIdAndCustomerId(ADDRESS_ID, CUSTOMER_ID)).thenReturn(Optional.of(address));
 
         assertThatThrownBy(() -> orderService.update(ORDER_ID,
-                new OrderUpdateRequest(null, List.of(new OrderItemRequest(VARIANT_ID, 1)), ADDRESS_ID)))
+                new OrderUpdateRequest(null, List.of(new OrderItemRequest(VARIANT_ID, 1)), ADDRESS_ID, null)))
                 .isInstanceOf(InvalidShippingAddressException.class);
         verify(shipmentRepository, never()).saveAndFlush(any());
     }
@@ -278,7 +278,7 @@ class OrderShippingAddressTest {
 
     private OrderRequest withProducts(DeliveryType deliveryType, Long shippingAddressId) {
         return new OrderRequest(BRANCH_ID, CUSTOMER_ID, SalesType.WITH_PRODUCTS, null, deliveryType,
-                shippingAddressId, List.of(new OrderItemRequest(VARIANT_ID, 1)), null, null);
+                shippingAddressId, List.of(new OrderItemRequest(VARIANT_ID, 1)), null, null, null);
     }
 
     private Order shippingOrder() {
