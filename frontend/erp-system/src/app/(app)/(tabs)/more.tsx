@@ -38,7 +38,10 @@ export default function MoreScreen() {
     // La pantalla de sucursales también asigna usuarios.
     const canManageBranches = hasPermission(user, 'ADMINISTRAR_SUCURSALES') || canManageUsers;
     const canManageCategories = hasPermission(user, 'ADMINISTRAR_CATEGORIAS');
-    const showAdministration = canManageAttributes || canManageUsers || canManageBranches || canManageCategories;
+    // Las promos fijan precios: se administran con ese permiso.
+    const canManagePromotions = hasPermission(user, 'ADMINISTRAR_PRECIOS');
+    const showAdministration = canManageAttributes || canManageUsers || canManageBranches || canManageCategories
+        || canManagePromotions;
 
     return (
         <Screen style={styles.screen}>
@@ -171,6 +174,14 @@ export default function MoreScreen() {
                                     onPress={() => {
                                         router.push('/categories' as any);
                                     }}
+                                />
+                            )}
+                            {canManagePromotions && (
+                                <MenuListItem
+                                    title="Promociones"
+                                    subtitle="Combos de productos a precio fijo, con vigencia"
+                                    iconName={{ ios: 'gift.fill', android: 'redeem', web: 'redeem' }}
+                                    onPress={() => router.push('/promotions')}
                                 />
                             )}
                         </View>

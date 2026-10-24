@@ -18,7 +18,7 @@ export const PERMISSION_INFO: Record<Permission, PermissionInfo> = {
     ADMINISTRAR_CATEGORIAS: { label: 'Administrar categorías' },
     ADMINISTRAR_PRECIOS: {
         label: 'Administrar precios',
-        hint: 'Junto con "Administrar productos": crear productos, agregar variantes y cambiar precios.',
+        hint: 'Junto con "Administrar productos": crear productos, agregar variantes y cambiar precios. Solo: administrar promociones.',
     },
     CONSULTAR_STOCK: { label: 'Ver stock' },
     AJUSTAR_STOCK: { label: 'Ajustar stock' },

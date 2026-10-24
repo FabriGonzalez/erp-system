@@ -31,7 +31,7 @@ export function OrderProducts({ order }: OrderProductsProps) {
                     </Text>
                 </View>
             ) : (
-                order.items.map((item) => (
+                [...order.items.map((item) => (
                     <View key={item.id} style={styles.productRow}>
                         <View style={styles.productInfo}>
                             <Text style={styles.productName} numberOfLines={1}>
@@ -47,7 +47,32 @@ export function OrderProducts({ order }: OrderProductsProps) {
                             {formatCurrency(item.subtotal)}
                         </Text>
                     </View>
-                ))
+                )),
+                // Como se vendió: nombre, precio y componentes no cambian con la promo.
+                ...order.promos.map((promo) => (
+                    <View key={`promo-${promo.id}`} style={styles.productRow}>
+                        <View style={styles.productInfo}>
+                            <Text style={styles.productName} numberOfLines={1}>
+                                Promo: {promo.name}
+                            </Text>
+
+                            {promo.components.map((component) => (
+                                <Text key={component.variantId} style={styles.productDetail} numberOfLines={1}>
+                                    {component.quantity * promo.quantity}× {component.productName}
+                                    {component.variantName ? ` (${component.variantName})` : ''}
+                                </Text>
+                            ))}
+
+                            <Text style={styles.productDetail}>
+                                {promo.quantity} × {formatCurrency(promo.unitPrice)}
+                            </Text>
+                        </View>
+
+                        <Text style={styles.productSubtotal}>
+                            {formatCurrency(promo.subtotal)}
+                        </Text>
+                    </View>
+                ))]
             )}
 
             <View style={styles.totalRow}>

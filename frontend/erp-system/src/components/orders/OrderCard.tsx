@@ -55,7 +55,12 @@ export function OrderCard({ order, onPress }: OrderCardProps) {
                     <Text style={styles.itemsCount}>
                         {order.salesType === 'QUICK_SALE'
                             ? 'Venta rápida'
-                            : `${order.items.length} ${order.items.length === 1 ? 'producto' : 'productos'}`}
+                            : [
+                                `${order.items.length} ${order.items.length === 1 ? 'producto' : 'productos'}`,
+                                order.promos.length > 0
+                                    ? `${order.promos.length} ${order.promos.length === 1 ? 'promo' : 'promos'}`
+                                    : null,
+                            ].filter(Boolean).join(' · ')}
                     </Text>
                     <Text style={styles.total}>${order.total.toLocaleString('es-AR')}</Text>
                     {showPayment && order.balance > 0 && (

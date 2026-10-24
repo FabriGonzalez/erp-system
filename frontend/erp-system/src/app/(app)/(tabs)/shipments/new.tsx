@@ -19,6 +19,7 @@ import {
     toBackendCustomerId,
     toOrderItemRequests,
     toOrderPaymentOptions,
+    toOrderPromoRequests,
 } from '@/utils/order-request';
 import { hasPermission } from '@/utils/permissions';
 
@@ -30,6 +31,7 @@ export default function NewShipmentScreen() {
     const customer = useOrderDraftStore((state) => state.customer);
     const address = useOrderDraftStore((state) => state.address);
     const items = useOrderDraftStore((state) => state.items);
+    const promos = useOrderDraftStore((state) => state.promos);
     const resetDraft = useOrderDraftStore((state) => state.reset);
     const activeBranch = useActiveBranch();
 
@@ -39,7 +41,7 @@ export default function NewShipmentScreen() {
             !activeBranch ||
             customer.id === CUSTOMER_ANONYMOUS.id ||
             !address ||
-            items.length === 0
+            (items.length === 0 && promos.length === 0)
         ) {
             return;
         }
@@ -59,6 +61,7 @@ export default function NewShipmentScreen() {
                 deliveryType: 'SHIPPING',
                 shippingAddressId: Number(address.id),
                 items: toOrderItemRequests(items),
+                promos: toOrderPromoRequests(promos),
                 ...toOrderPaymentOptions(draft),
             });
 

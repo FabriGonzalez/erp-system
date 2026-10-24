@@ -125,7 +125,7 @@ export default function InventoryScreen() {
             {activeBranch ? (
                 <View style={styles.toolbar}>
                     <Text style={styles.branchLabel}>Sucursal: {activeBranch.name}</Text>
-                    <AppInput value={query} onChangeText={setQuery} placeholder="Buscar producto o SKU" />
+                    <AppInput value={query} onChangeText={setQuery} placeholder="Buscar producto, SKU o código" />
                 </View>
             ) : null}
 

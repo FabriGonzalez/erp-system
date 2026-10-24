@@ -13,7 +13,7 @@ import { useOrder, useUpdateOrder } from '@/hooks/use-order-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
-import { toOrderItemRequests } from '@/utils/order-request';
+import { toOrderItemRequests, toOrderPromoRequests } from '@/utils/order-request';
 import { OrderFlow } from '@/utils/order-routes';
 import { hasPermission } from '@/utils/permissions';
 
@@ -31,6 +31,7 @@ export function EditShipmentScreen({ flow }: EditShipmentScreenProps) {
     const order = loadedOrder?.deliveryType === 'SHIPPING' ? loadedOrder : undefined;
     const updateOrder = useUpdateOrder();
     const items = useOrderDraftStore((state) => state.items);
+    const promos = useOrderDraftStore((state) => state.promos);
     const resetDraft = useOrderDraftStore((state) => state.reset);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -58,7 +59,7 @@ export function EditShipmentScreen({ flow }: EditShipmentScreenProps) {
     // El backend permite cambiar los ítems y la dirección de entrega de una orden en
     // TO_PREPARE; cliente, sucursal y tipo de entrega no se pueden modificar.
     async function handleSubmit() {
-        if (isSubmitting || items.length === 0) return;
+        if (isSubmitting || (items.length === 0 && promos.length === 0)) return;
 
         setIsSubmitting(true);
         setErrorMessage(null);
@@ -70,6 +71,7 @@ export function EditShipmentScreen({ flow }: EditShipmentScreenProps) {
                 id: shipment.id,
                 data: {
                     items: toOrderItemRequests(items),
+                    promos: toOrderPromoRequests(promos),
                     shippingAddressId: address ? Number(address.id) : undefined,
                 },
             });

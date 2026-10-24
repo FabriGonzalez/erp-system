@@ -146,7 +146,7 @@ El frontend gestiona productos con variantes, atributos y stock por sucursal.
 
 El dominio de producto incluye:
 - Producto: `id`, `name`, `categoryId`, `active`, `variants`, y metadatos opcionales.
-- Variante: `id`, `sku`, `price`, `attributes`, `stockByBranch`, y metadatos opcionales.
+- Variante: `id`, `sku`, `price`, `attributes`, `stockByBranch`, y metadatos opcionales. `barcode` es opcional y único por empresa (409 `VARIANT_BARCODE_ALREADY_EXISTS`); la búsqueda de productos y de stock también busca por él.
 
 Los IDs de API pueden llegar como números; el dominio del frontend puede normalizarlos a strings según los helpers ya existentes. Conservá esa convención dentro de cada capa y evitá comparaciones inconsistentes entre `number` y `string`.
 
@@ -163,6 +163,13 @@ Los IDs de API pueden llegar como números; el dominio del frontend puede normal
 - Las cantidades pueden ser cero; las cantidades negativas no son válidas.
 
 Al modificar productos o stock, probá tanto el caso normal como la combinación de precio/atributos/stock y verificá que los datos persistan al volver a cargar.
+
+### Promos
+
+- Una promo (`/api/v1/promotions`, `use-promotion-queries`) es un conjunto de **productos** con su cantidad a un precio fijo (p. ej. buzo + pantalón); la variante de cada unidad se elige al vender, cualquier activa con stock, de toda la empresa, con vigencia desde/hasta inclusive. El estado (`ACTIVE` vigente, `SCHEDULED`, `EXPIRED`, `INACTIVE`) lo calcula el backend con su fecha; las fechas viajan como `AAAA-MM-DD` (mostrarlas con `formatDay`, no con `new Date()`). Se administran con `ADMINISTRAR_PRECIOS` (Más → Administración → Promociones) y se leen también con `CREAR_PEDIDOS`. No se borran: se desactivan.
+- No se aplican solas: se eligen en la pestaña Promos de `select-products`, que abre `PromoVariantChooser` para elegir la variante de cada unidad. Cada combinación es una **línea** (`OrderPromo`); la misma promo puede ir en varias. El pedido lleva `promos` aparte de `items`: una línea nueva va con `promotionId`, `quantity` y `variants` (sus unidades por promo deben cubrir exacto lo que lleva cada producto); una que el pedido ya tenía, solo con `id` y `quantity`. En el borrador las líneas nuevas tienen id con `NEW_PROMO_LINE_PREFIX`. El pedido guarda una copia (nombre, precio, variantes): editar, vencer o desactivar la promo no cambia lo vendido; una línea nueva exige promo vigente (409 `PROMOTION_NOT_AVAILABLE`).
+- El stock se mide **por variante sobre el total**: sueltas + (unidades del componente × cantidad de promos). En el borrador, `originalUnits` es lo que el pedido en edición ya tenía descontado; el límite de un ítem suelto resta lo que usan las promos y el de una línea de promo sale de `promoLimit` (`utils/draft-stock.ts`). El stock del borrador incluye las variantes de las promos (`draftVariantIds`).
+- Reportes: "más vendidos" suma las unidades vendidas en promos, pero el importe es solo el de las ventas sueltas.
 
 ## 8. Prevención de condiciones de carrera
 

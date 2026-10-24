@@ -4,27 +4,33 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
-import { OrderItem } from '@/types/order';
+import { OrderItem, OrderPromo } from '@/types/order';
 
 type OrderCartSectionProps = {
     items: OrderItem[];
+    promos: OrderPromo[];
     onAddProducts: () => void;
     onUpdateQuantity: (productId: string, variantId: string, newQuantity: number) => void;
     onRemoveItem: (productId: string, variantId: string) => void;
+    onUpdatePromoQuantity: (lineId: string, newQuantity: number) => void;
 };
 
 export function OrderCartSection({
     items,
+    promos,
     onAddProducts,
     onUpdateQuantity,
     onRemoveItem,
+    onUpdatePromoQuantity,
 }: OrderCartSectionProps) {
-    const totalAmount = items.reduce((sum, item) => sum + item.subtotal, 0);
+    const totalAmount = items.reduce((sum, item) => sum + item.subtotal, 0)
+        + promos.reduce((sum, promo) => sum + promo.subtotal, 0);
+    const linesCount = items.length + promos.length;
 
     return (
         <View style={styles.container}>
             <View style={styles.headerRow}>
-                <Text style={[SharedStyles.sectionTitle, { marginBottom: 0 }]}>Productos en el pedido ({items.length})</Text>
+                <Text style={[SharedStyles.sectionTitle, { marginBottom: 0 }]}>Productos en el pedido ({linesCount})</Text>
                 <Pressable onPress={onAddProducts} style={styles.addBtnHeader}>
                     <SymbolView
                         name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }}
@@ -32,12 +38,12 @@ export function OrderCartSection({
                         tintColor={Colors.primary}
                     />
                     <Text style={styles.addBtnHeaderText}>
-                        {items.length === 0 ? 'Seleccionar' : 'Modificar'}
+                        {linesCount === 0 ? 'Seleccionar' : 'Modificar'}
                     </Text>
                 </Pressable>
             </View>
 
-            {items.length === 0 ? (
+            {linesCount === 0 ? (
                 <Pressable
                     style={({ pressed }) => [styles.emptyCartBox, pressed && SharedStyles.pressed]}
                     onPress={onAddProducts}
@@ -49,7 +55,7 @@ export function OrderCartSection({
                     />
                     <Text style={styles.emptyCartTitle}>No agregaste productos aún</Text>
                     <Text style={styles.emptyCartSub}>
-                        Tocá aquí para explorar el catálogo y agregar ítems al pedido
+                        Tocá aquí para explorar el catálogo y agregar productos o promos al pedido
                     </Text>
                     <View style={styles.selectProductsButton}>
                         <Text style={styles.selectProductsButtonText}>+ Agregar productos</Text>
@@ -96,6 +102,58 @@ export function OrderCartSection({
 
                                 <Text style={styles.subtotalText}>
                                     ${item.subtotal.toLocaleString('es-AR')}
+                                </Text>
+                            </View>
+                        </View>
+                    ))}
+
+                    {promos.map((promo) => (
+                        <View key={promo.id} style={styles.itemRow}>
+                            <View style={styles.itemMainInfo}>
+                                <View style={styles.promoTitleRow}>
+                                    <Text style={styles.promoTag}>PROMO</Text>
+                                    <Text style={[styles.itemName, styles.promoName]}>{promo.name}</Text>
+                                </View>
+                                {promo.components.map((component) => (
+                                    <Text key={component.variantId} style={styles.itemSku} numberOfLines={1}>
+                                        {component.quantity}× {component.productName}
+                                        {component.variantName ? ` (${component.variantName})` : ''}
+                                    </Text>
+                                ))}
+                                <Text style={styles.itemUnitPrice}>
+                                    ${promo.unitPrice.toLocaleString('es-AR')} c/u
+                                </Text>
+                            </View>
+
+                            <View style={styles.itemQuantityAndSubtotal}>
+                                <View style={styles.quantityControls}>
+                                    <Pressable
+                                        style={styles.qtyBtn}
+                                        onPress={() => onUpdatePromoQuantity(promo.id, promo.quantity - 1)}
+                                    >
+                                        <SymbolView
+                                            name={{ ios: 'minus', android: 'remove', web: 'remove' }}
+                                            size={14}
+                                            tintColor={Colors.text}
+                                        />
+                                    </Pressable>
+
+                                    <Text style={styles.qtyText}>{promo.quantity}</Text>
+
+                                    <Pressable
+                                        style={styles.qtyBtn}
+                                        onPress={() => onUpdatePromoQuantity(promo.id, promo.quantity + 1)}
+                                    >
+                                        <SymbolView
+                                            name={{ ios: 'plus', android: 'add', web: 'add' }}
+                                            size={14}
+                                            tintColor={Colors.text}
+                                        />
+                                    </Pressable>
+                                </View>
+
+                                <Text style={styles.subtotalText}>
+                                    ${promo.subtotal.toLocaleString('es-AR')}
                                 </Text>
                             </View>
                         </View>
@@ -201,6 +259,25 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: Colors.text,
+    },
+    promoTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 2,
+    },
+    promoTag: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: Colors.successDark,
+        backgroundColor: Colors.successLight,
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    promoName: {
+        flexShrink: 1,
     },
     itemSku: {
         fontSize: 12,

@@ -12,7 +12,7 @@ import { queryClient } from '@/services/query-client';
 import { useAuthStore } from '@/stores/auth-store';
 import { Product, ProductListParams, ProductRequest, ProductUpdateRequest } from '@/types/product';
 
-import { invalidateStockViews, productKeys } from './catalog-keys';
+import { invalidateStockViews, productKeys, promotionKeys } from './catalog-keys';
 import { useDebouncedValue } from './use-debounced-value';
 import { errorText, findInPagedLists, requireToken, usePagedList } from './use-paged-list';
 
@@ -83,10 +83,14 @@ export function useProduct(id: string | undefined, options?: UseProductOptions) 
 
 // --- Mutaciones ---
 
-/** La respuesta es el producto actualizado: se siembra el detalle y se invalidan los listados. */
+/**
+ * La respuesta es el producto actualizado: se siembra el detalle y se invalidan los listados.
+ * Las promos también, porque muestran el precio de cada variante y si sigue activa.
+ */
 function syncProduct(product: Product) {
     queryClient.setQueryData(productKeys.detail(product.id), product);
     void queryClient.invalidateQueries({ queryKey: productKeys.lists() });
+    void queryClient.invalidateQueries({ queryKey: promotionKeys.all });
 }
 
 /** Alta y edición cargan stock por sucursal (y la edición lo registra como ajuste). */

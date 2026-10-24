@@ -118,6 +118,9 @@ export default function ProductDetailScreen() {
                                         : 'Variante única'}
                                 </Text>
                                 <Text style={styles.variantSku}>SKU: {variant.sku}</Text>
+                                {variant.barcode ? (
+                                    <Text style={styles.variantSku}>Código de barras: {variant.barcode}</Text>
+                                ) : null}
                             </View>
                             <View>
                                 <Text style={styles.variantPrice}>${variant.price.toLocaleString('es-AR')}</Text>

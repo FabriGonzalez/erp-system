@@ -18,6 +18,7 @@ import {
     toBackendCustomerId,
     toOrderItemRequests,
     toOrderPaymentOptions,
+    toOrderPromoRequests,
 } from '@/utils/order-request';
 import { hasPermission } from '@/utils/permissions';
 
@@ -36,6 +37,7 @@ export default function NewOrderScreen() {
     const quickSaleAmount = useOrderDraftStore((state) => state.quickSaleAmount);
     const customer = useOrderDraftStore((state) => state.customer);
     const items = useOrderDraftStore((state) => state.items);
+    const promos = useOrderDraftStore((state) => state.promos);
     const resetDraft = useOrderDraftStore((state) => state.reset);
 
     const activeBranch = useActiveBranch();
@@ -50,8 +52,8 @@ export default function NewOrderScreen() {
             return;
         }
 
-        if (salesType === 'WITH_PRODUCTS' && items.length === 0) {
-            setErrorMessage('El pedido debe tener al menos un producto.');
+        if (salesType === 'WITH_PRODUCTS' && items.length === 0 && promos.length === 0) {
+            setErrorMessage('El pedido debe tener al menos un producto o una promo.');
             return;
         }
 
@@ -75,6 +77,7 @@ export default function NewOrderScreen() {
                 quickSaleAmount: isQuickSale ? quickSaleAmount : undefined,
                 deliveryType: 'LOCAL_PICKUP',
                 items: isQuickSale ? undefined : toOrderItemRequests(items),
+                promos: isQuickSale ? undefined : toOrderPromoRequests(promos),
                 ...toOrderPaymentOptions(draft),
             });
 

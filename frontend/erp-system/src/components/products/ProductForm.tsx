@@ -223,7 +223,7 @@ export function ProductForm({
             : variant));
     }
 
-    function updateVariant(index: number, field: 'sku' | 'price', value: string) {
+    function updateVariant(index: number, field: 'sku' | 'price' | 'barcode', value: string) {
         setVariants((current) => current.map((variant, variantIndex) => variantIndex === index ? { ...variant, [field]: value } : variant));
         setErrors((current) => ({ ...current, variants: '' }));
     }
@@ -267,6 +267,7 @@ export function ProductForm({
         if (!variants.length) nextErrors.variants = 'Debes agregar al menos una variante';
 
         const skuSet = new Set<string>();
+        const barcodeSet = new Set<string>();
         variants.forEach((variant) => {
             const sku = variant.sku.trim().toUpperCase();
             const normalizedPrice = variant.price.trim().replace(',', '.');
@@ -289,6 +290,10 @@ export function ProductForm({
                 }
             });
             if (sku) skuSet.add(sku);
+            // Contra el resto de la empresa lo valida el backend (VARIANT_BARCODE_ALREADY_EXISTS).
+            const barcode = variant.barcode?.trim() ?? '';
+            if (barcode && barcodeSet.has(barcode)) nextErrors.variants = 'Los códigos de barras no se pueden repetir entre variantes';
+            if (barcode) barcodeSet.add(barcode);
             if (!canEditPrices && sku && !initialSkus.has(sku)) {
                 nextErrors.variants = 'Sin el permiso "Administrar precios" no se pueden agregar variantes ni cambiar el SKU de una existente';
             }
@@ -309,7 +314,12 @@ export function ProductForm({
             categoryId,
             description: description.trim(),
             active,
-            variants: variants.map((variant) => ({ ...variant, sku: variant.sku.trim().toUpperCase(), price: variant.price.trim() })),
+            variants: variants.map((variant) => ({
+                ...variant,
+                sku: variant.sku.trim().toUpperCase(),
+                price: variant.price.trim(),
+                barcode: variant.barcode?.trim() ?? '',
+            })),
         });
     }
 
@@ -538,6 +548,20 @@ export function ProductForm({
                                 />
                             </View>
                         </View>
+
+                        <Text style={styles.smallLabel}>
+                            Código de barras (opcional)
+                        </Text>
+                        <AppInput
+                            style={styles.input}
+                            value={variant.barcode ?? ''}
+                            onChangeText={(value) => updateVariant(index, 'barcode', value)}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            maxLength={64}
+                            placeholder="Ej. 7791234567890"
+                            editable={!isSubmitting}
+                        />
 
                         <Text style={styles.smallLabel}>
                             Stock

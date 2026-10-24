@@ -19,6 +19,7 @@ import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import { Order, OrderCreationMode } from '@/types/order';
+import { draftVariantIds, promoLimit } from '@/utils/draft-stock';
 import { CUSTOMER_PICKER_ROUTES, ORDER_FORM_ROUTES, OrderFlow } from '@/utils/order-routes';
 
 const INACTIVE_CUSTOMER_MESSAGE = 'El cliente seleccionado está inactivo. Elegí otro cliente para continuar.';
@@ -53,6 +54,8 @@ export function OrderForm({
         quickSaleAmount,
         address,
         items,
+        promos,
+        originalUnits,
         applyCredit,
         setApplyCredit,
         initNewOrder,
@@ -62,6 +65,7 @@ export function OrderForm({
         setQuickSaleAmount,
         updateItemQuantity,
         removeItem,
+        updatePromoQuantity,
     } = useOrderDraftStore();
 
     const creationMode = mode ?? (initialOrder?.deliveryType === 'SHIPPING' ? 'SHIPMENT' : 'SALE');
@@ -73,8 +77,9 @@ export function OrderForm({
 
     const branchId = activeBranch?.id ?? '';
     const branchName = activeBranch?.name ?? 'Sin sucursal activa';
-    // Stock de lo que hay en el carrito, sin depender de qué páginas del catálogo se cargaron.
-    const { stockOf } = useVariantStock(branchId, items.map((item) => item.variantId));
+    // Stock de lo que hay en el carrito (sueltos y variantes de las promos), sin depender de
+    // qué páginas del catálogo se cargaron.
+    const { stockOf } = useVariantStock(branchId, draftVariantIds(items, promos));
 
     useEffect(() => {
         if (initialOrder) {
@@ -159,7 +164,8 @@ export function OrderForm({
     const itemsTotal = items.reduce(
         (sum, item) => sum + item.subtotal,
         0,
-    );
+    ) + promos.reduce((sum, promo) => sum + promo.subtotal, 0);
+    const hasProducts = items.length > 0 || promos.length > 0;
 
     const totalAmount = effectiveSalesType === 'QUICK_SALE' ? quickSaleAmount : itemsTotal;
 
@@ -203,12 +209,21 @@ export function OrderForm({
         updateItemQuantity(productId, variantId, newQty, stockOf(variantId) ?? 0);
     }
 
+    function handleUpdatePromoQuantity(lineId: string, newQty: number) {
+        const promo = promos.find((candidate) => candidate.id === lineId);
+        if (!promo) return;
+        // Más de la misma combinación de variantes. Hasta que llega su stock solo se puede bajar;
+        // una línea que el pedido ya tenía conserva lo vendido aunque la promo haya vencido.
+        const limit = promoLimit(lineId, promo.components, stockOf, originalUnits, items, promos);
+        updatePromoQuantity(lineId, newQty, limit ?? promo.quantity);
+    }
+
     function validate(): boolean {
         setFormError(null);
 
-        if (effectiveSalesType === 'WITH_PRODUCTS' && items.length === 0) {
+        if (effectiveSalesType === 'WITH_PRODUCTS' && !hasProducts) {
             setFormError(
-                'Debes agregar al menos un producto al pedido.',
+                'Debes agregar al menos un producto o una promo al pedido.',
             );
             return false;
         }
@@ -265,7 +280,7 @@ export function OrderForm({
     const isFormInvalid =
         isShippingBlocked ||
         isCustomerInactive ||
-        (effectiveSalesType === 'WITH_PRODUCTS' ? items.length === 0 : quickSaleAmount <= 0) ||
+        (effectiveSalesType === 'WITH_PRODUCTS' ? !hasProducts : quickSaleAmount <= 0) ||
         ((isShipment || effectiveSalesType === 'QUICK_SALE') && customer.id === CUSTOMER_ANONYMOUS.id);
 
     return (
@@ -329,9 +344,11 @@ export function OrderForm({
             {effectiveSalesType === 'WITH_PRODUCTS' ? (
                 <OrderCartSection
                     items={items}
+                    promos={promos}
                     onAddProducts={handleAddProducts}
                     onUpdateQuantity={handleUpdateQuantity}
                     onRemoveItem={removeItem}
+                    onUpdatePromoQuantity={handleUpdatePromoQuantity}
                 />
             ) : (
                 <View style={styles.quickSaleCard}>
@@ -357,7 +374,7 @@ export function OrderForm({
                 total={totalAmount}
                 creditApplied={creditApplied}
                 showPayment={!isEditing}
-                itemsCount={effectiveSalesType === 'WITH_PRODUCTS' ? items.length : 0}
+                itemsCount={effectiveSalesType === 'WITH_PRODUCTS' ? items.length + promos.length : 0}
                 deliveryType={effectiveDeliveryType}
                 branchName={branchName}
                 isSubmitting={isSubmitting}

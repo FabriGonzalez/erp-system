@@ -1,5 +1,6 @@
 import { queryClient } from '@/services/query-client';
 import { ProductListParams } from '@/types/product';
+import { PromotionListParams } from '@/types/promotion';
 import { StockListParams } from '@/types/stock';
 
 import { invalidateStockMovements } from './use-stock-movement-queries';
@@ -13,6 +14,14 @@ export const productKeys = {
     lists: () => [...productKeys.all, 'list'] as const,
     list: (filters: ProductListParams) => [...productKeys.lists(), filters] as const,
     detail: (id: string) => [...productKeys.all, 'detail', id] as const,
+};
+
+// Las promos muestran el precio actual y si cada variante sigue activa: cambian con los productos.
+export const promotionKeys = {
+    all: ['promotions'] as const,
+    lists: () => [...promotionKeys.all, 'list'] as const,
+    list: (filters: PromotionListParams) => [...promotionKeys.lists(), filters] as const,
+    detail: (id: string) => [...promotionKeys.all, 'detail', id] as const,
 };
 
 export const stockKeys = {

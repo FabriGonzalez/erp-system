@@ -1,7 +1,8 @@
 # Plan de las etapas que quedan
 
-Estado al 2026-10-22, rama `feature/prices-debts`. Para retomar: pasarle este archivo a
-Claude y elegir la etapa (la próxima planificada es la 20).
+Estado al 2026-10-23, rama `feature/promotions` (etapa 20 implementada, sin commitear). Para
+retomar: pasarle este archivo a Claude y elegir la etapa (la 21 está sin planear; la 22 tiene plan
+general).
 
 ## Cómo se trabaja (vale para todas las etapas)
 
@@ -81,6 +82,16 @@ Claude y elegir la etapa (la próxima planificada es la 20).
   precios de solo lectura. Tarjeta "Cuenta corriente" con el saldo en el detalle del cliente.
   Aparte: renombrar un producto al editarlo ya no regenera el SKU de sus variantes existentes (el
   backend las reconoce por SKU y las reemplazaba por otras).
+- **Etapa 20 — Promos y código de barras** (`feature/promotions`): módulo `promotions`
+  (**productos** con cantidad a precio fijo, vigencia inclusive, estado calculado; escritura con
+  `ADMINISTRAR_PRECIOS`). Corrección del usuario (2026-10-23): la promo es por producto y la
+  variante de cada unidad se elige al vender (cualquier activa; cada unidad puede ser distinta);
+  cada combinación es una línea del pedido (`OrderPromo` + variantes elegidas, copiadas) y la
+  misma promo puede repetirse en varias líneas. Stock por variante sobre sueltos + promos en alta,
+  edición y cancelación; "más vendidos" suma las unidades de promos. Frontend: Más →
+  Administración → Promociones, pestaña Promos en `select-products` con `PromoVariantChooser`,
+  límites del borrador en `utils/draft-stock.ts`. `barcode` opcional por variante, único por
+  empresa y buscable.
 
 ---
 
@@ -1291,6 +1302,27 @@ decisiones de diseño marcadas "propuesta" las puede vetar el usuario antes de a
 - Para armarla se usa el selector de productos existente y se elige el precio.
 - Código de barras: campo opcional en la variante, "por si en algún momento lo queremos"; sin
   escaneo con cámara por ahora.
+
+**Decisión de precios (2026-10-23, pendiente de implementar en la próxima sesión).**
+- El precio de la promo es **fijo por defecto**: elija el cliente la variante que elija, la promo
+  cobra lo mismo. Ejemplo: "Buzo + Pantalón a $50.000" cobra $50.000 con buzo M o XXL.
+- **Promos por defecto para todas las variantes:** al armar la promo a partir de productos, el
+  sistema genera una línea por combinación de variantes con el precio fijo, sin que el usuario
+  las tenga que cargar una a una.
+- **Excepción por variante a distinto precio:** se puede marcar una variante puntual con su propio
+  precio dentro de la promo (p. ej. XXL a $55.000 en lugar de $50.000). Así el precio fijo sigue
+  siendo la regla y la excepción queda explícita.
+- Esto es la alternativa 1 del análisis del 2026-10-23 (precio fijo, con aviso del rango de
+  sueltos al armar la promo y al vender) más la excepción por variante. Descartadas por ahora:
+  recargo por diferencia, descuento sobre la suma y limitar variantes.
+- **A confirmar antes de implementar:** (a) si la excepción es por variante o por combinación
+  completa; (b) si el precio excepcional se usa también en el selector de venta y en el pedido
+  (copia del precio al vender, igual que hoy); (c) si la generación por defecto corre al guardar la
+  promo o solo al abrir el armado.
+- Impacto en lo ya escrito (propuesta, sin validar): `PromotionItem` gana un `price` opcional (null = usa el precio de la
+  promo); el cálculo de `OrderPromo.unitPrice` sigue siendo un snapshot del pedido; el ahorro del
+  selector y de la pantalla de administración se calcula por componente, no solo por la suma de
+  precios sueltos. Reportes: "más vendidos" no cambia.
 
 **Lo que hay hoy (relevamiento).**
 - `OrderItem` = una variante por línea con `unitPrice` y `quantity`; el precio lo fija siempre el

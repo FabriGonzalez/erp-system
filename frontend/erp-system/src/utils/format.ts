@@ -36,3 +36,16 @@ export function formatDate(iso: string): string {
         year: 'numeric',
     });
 }
+
+/**
+ * Fecha sin hora del backend (AAAA-MM-DD). new Date() la tomaría como medianoche UTC y en
+ * Argentina mostraría el día anterior: se arma en hora local.
+ */
+export function formatDay(ymd: string): string {
+    const [year, month, day] = ymd.split('-').map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString('es-AR', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+    });
+}

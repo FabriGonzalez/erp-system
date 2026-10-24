@@ -150,7 +150,10 @@ export default function ReportsScreen() {
                     </Text>
                 </Card>
 
-                <Card title="Más vendidos">
+                <Card
+                    title="Más vendidos"
+                    note="Las unidades incluyen las vendidas en promos; el importe es solo el de las ventas sueltas."
+                >
                     {dashboard.topProducts.length === 0 ? (
                         <Text style={styles.secondaryText}>Sin ventas de productos en el período.</Text>
                     ) : (

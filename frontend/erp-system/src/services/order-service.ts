@@ -6,6 +6,8 @@ import {
     OrderItem,
     OrderItemResponse,
     OrderListParams,
+    OrderPromo,
+    OrderPromoResponse,
     OrderRequest,
     OrderResponse,
     OrderShippingAddress,
@@ -28,6 +30,8 @@ const ORDER_ERRORS = {
         INVALID_SHIPPING_ADDRESS:
             'La dirección de envío no es válida: tiene que ser una dirección activa del cliente, con calle y ciudad.',
         INVALID_SHIPMENT: 'El envío no se puede actualizar en el estado actual.',
+        PROMOTION_NOT_AVAILABLE:
+            'Una de las promos ya no está vigente o tiene un producto desactivado. Sacala del pedido para continuar.',
         ORDER_ALREADY_HAS_SHIPMENT: 'La orden ya tiene un envío registrado.',
         STOCK_NOT_FOUND: 'Uno de los productos no tiene stock en la sucursal.',
     },
@@ -60,6 +64,28 @@ function normalizeOrderItem(item: OrderItemResponse): OrderItem {
         quantity,
         unitPrice,
         subtotal: quantity * unitPrice,
+    };
+}
+
+function normalizeOrderPromo(promo: OrderPromoResponse): OrderPromo {
+    const quantity = Number(promo.quantity);
+    const unitPrice = Number(promo.unitPrice);
+
+    return {
+        id: String(promo.id),
+        promotionId: String(promo.promotionId),
+        name: promo.name,
+        unitPrice,
+        quantity,
+        subtotal: quantity * unitPrice,
+        components: (promo.components ?? []).map((component) => ({
+            productId: String(component.productId),
+            productName: component.productName,
+            variantId: String(component.productVariantId),
+            sku: component.productVariantSku,
+            variantName: component.variantName ?? '',
+            quantity: Number(component.quantity),
+        })),
     };
 }
 
@@ -98,6 +124,7 @@ function normalizeOrder(data: OrderResponse): Order {
         branchId: String(data.branchId),
         branchName: data.branchName,
         items: (data.items ?? []).map(normalizeOrderItem),
+        promos: (data.promos ?? []).map(normalizeOrderPromo),
         total: Number(data.total),
         amountPaid: Number(data.amountPaid ?? 0),
         paymentStatus: data.paymentStatus,

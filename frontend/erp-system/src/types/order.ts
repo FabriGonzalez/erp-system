@@ -23,6 +23,35 @@ export type OrderItem = {
     subtotal: number;
 };
 
+export const NEW_PROMO_LINE_PREFIX = 'new-';
+
+/** Variante elegida en una línea de promo; quantity = unidades por cada promo de la línea. */
+export type OrderPromoComponent = {
+    productId: string;
+    productName: string;
+    variantId: string;
+    sku: string;
+    // "Rojo · M"; vacío si el producto no tiene variantes.
+    variantName: string;
+    quantity: number;
+};
+
+/**
+ * Una línea de promo: una combinación de variantes elegidas, vendida quantity veces; la misma
+ * promo puede ir en varias líneas. Nombre, precio y variantes quedan como se vendió: no cambian
+ * aunque después se edite, venza o se desactive la promo. En el borrador, las líneas nuevas
+ * tienen un id que empieza con NEW_PROMO_LINE_PREFIX.
+ */
+export type OrderPromo = {
+    id: string;
+    promotionId: string;
+    name: string;
+    unitPrice: number;
+    quantity: number;
+    subtotal: number;
+    components: OrderPromoComponent[];
+};
+
 /**
  * Dirección de entrega copiada al crear el envío: no cambia si después editan la
  * dirección del cliente. No es una CustomerAddress (no tiene id, principal ni activa).
@@ -52,6 +81,7 @@ export type Order = {
     branchId: string;
     branchName: string;
     items: OrderItem[];
+    promos: OrderPromo[];
     total: number;
     // Los tres los calcula el backend con los pagos asignados; sin cliente se cobra en el acto.
     amountPaid: number;
@@ -67,6 +97,17 @@ export type RefundAction = 'KEEP_AS_CREDIT' | 'REFUND_MONEY';
 export type OrderItemRequest = {
     productVariantId: number;
     quantity: number;
+};
+
+/**
+ * Una línea de promo. Nueva: promotionId y las variantes elegidas (por cada producto, sus
+ * unidades por promo). Al editar, una línea existente va solo con id y quantity.
+ */
+export type OrderPromoRequest = {
+    id?: number;
+    promotionId?: number;
+    quantity: number;
+    variants?: { productVariantId: number; quantity: number }[];
 };
 
 export type PaymentMethod = 'CASH' | 'TRANSFER' | 'DEBIT_CARD' | 'CREDIT_CARD';
@@ -92,6 +133,8 @@ export type OrderRequest = {
     // Obligatoria con SHIPPING y prohibida con LOCAL_PICKUP: dirección del cliente del pedido.
     shippingAddressId?: number;
     items?: OrderItemRequest[];
+    // Promos vigentes, sin repetir. Con productos lleva al menos un ítem o una promo.
+    promos?: OrderPromoRequest[];
     // Solo con cliente: aplica su saldo a favor a esta orden.
     applyCredit?: boolean;
     // Solo con cliente: pago cobrado ahora, asignado a esta orden.
@@ -101,6 +144,8 @@ export type OrderRequest = {
 export type OrderUpdateRequest = {
     quickSaleAmount?: number;
     items?: OrderItemRequest[];
+    // Reemplaza las promos: las que ya tenía conservan precio y componentes.
+    promos?: OrderPromoRequest[];
     // Solo envíos: cambia la dirección de entrega. Sin el campo queda la actual.
     shippingAddressId?: number;
 };
@@ -117,6 +162,22 @@ export type OrderItemResponse = {
     productVariantSku: string;
     quantity: number;
     unitPrice: number | string;
+};
+
+export type OrderPromoResponse = {
+    id: number | string;
+    promotionId: number | string;
+    name: string;
+    unitPrice: number | string;
+    quantity: number;
+    components?: {
+        productId: number | string;
+        productName: string;
+        productVariantId: number | string;
+        productVariantSku: string;
+        variantName?: string | null;
+        quantity: number;
+    }[] | null;
 };
 
 export type ShipmentResponse = {
@@ -152,6 +213,7 @@ export type OrderResponse = {
     createdAt: string;
     updatedAt: string;
     items?: OrderItemResponse[] | null;
+    promos?: OrderPromoResponse[] | null;
 };
 
 export type PageResponse<T> = {

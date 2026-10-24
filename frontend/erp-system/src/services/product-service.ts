@@ -15,6 +15,7 @@ const PRODUCT_ERRORS = {
         ...BRANCH_ACCESS_ERRORS,
         PRODUCT_SKU_ALREADY_EXISTS: 'Ya existe un producto con ese SKU.',
         VARIANT_SKU_ALREADY_EXISTS: 'Ya existe una variante con ese SKU. Cada variante necesita un SKU único.',
+        VARIANT_BARCODE_ALREADY_EXISTS: 'Ese código de barras ya lo tiene otra variante de la empresa.',
         CATEGORY_INACTIVE: 'La categoría está inactiva. Elegí otra o activala antes de guardar.',
         INVALID_PRODUCT_VARIANTS:
             'Las variantes no son válidas: una variante sin atributos tiene que ser la única del producto, cada variante lleva un solo valor por atributo y una sucursal no se puede repetir en el stock.',
@@ -54,6 +55,7 @@ function normalizeProduct(data: ProductResponse): Product {
             (variant): ProductVariant => ({
                 id: String(variant.id),
                 sku: variant.sku,
+                barcode: variant.barcode ?? undefined,
                 price: Number(variant.price),
                 active: variant.active,
                 createdAt: variant.createdAt ?? null,
@@ -130,6 +132,7 @@ export async function createProduct(
             variants: data.variants.map((variant) => ({
                 sku: variant.sku.trim(),
                 price: variant.price,
+                barcode: variant.barcode?.trim() || null,
                 attributeValueIds: variant.attributeValueIds,
                 ...(variant.initialStock
                     ? { initialStock: variant.initialStock }
@@ -161,6 +164,7 @@ export async function updateProduct(
             variants: data.variants.map((variant) => ({
                 sku: variant.sku.trim(),
                 price: variant.price,
+                barcode: variant.barcode?.trim() || null,
                 attributeValueIds: variant.attributeValueIds,
                 stock: variant.stock,
             })),

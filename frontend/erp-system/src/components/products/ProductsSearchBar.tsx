@@ -13,7 +13,7 @@ export function ProductsSearchBar({
         <SearchBar
             value={value}
             onChangeText={onChangeText}
-            placeholder="Buscar por nombre o SKU..."
+            placeholder="Buscar por nombre, SKU o código de barras..."
             returnKeyType="search"
         />
     );

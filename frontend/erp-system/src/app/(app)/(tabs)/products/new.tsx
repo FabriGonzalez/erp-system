@@ -50,6 +50,7 @@ export default function NewProductScreen() {
             variants: formData.variants.map((variant) => ({
                 sku: variant.sku,
                 price: Number(variant.price.replace(',', '.')),
+                barcode: variant.barcode || null,
                 attributeValueIds: variant.attributes.map((attribute) =>
                     Number(attribute.attributeValueId)
                 ),

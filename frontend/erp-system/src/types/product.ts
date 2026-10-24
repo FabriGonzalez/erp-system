@@ -10,6 +10,8 @@ export type Category = {
 export type ProductVariantUpdateRequest = {
     sku: string;
     price: number;
+    // Opcional, único por empresa; null lo borra.
+    barcode?: string | null;
     attributeValueIds: number[];
     stock: ProductInitialStockRequest[];
 };
@@ -46,6 +48,7 @@ export type ProductInitialStockRequest = {
 export type ProductVariantRequest = {
     sku: string;
     price: number;
+    barcode?: string | null;
     attributeValueIds: number[];
     initialStock?: ProductInitialStockRequest[];
 };
@@ -60,6 +63,7 @@ export type ProductRequest = {
 export type ProductVariantResponse = {
     id: number | string;
     sku: string;
+    barcode?: string | null;
     price: number;
     active: boolean;
     attributes: ProductAttributeValueResponse[];
@@ -83,6 +87,7 @@ export type ProductResponse = {
 export type ProductVariant = {
     id: string;
     sku: string;
+    barcode?: string;
     price: number;
     attributes: ProductVariantAttribute[];
     stockByBranch: Record<string, number>;
@@ -112,6 +117,7 @@ export type ProductFormData = {
         id?: string;
         sku: string;
         price: string;
+        barcode?: string;
         attributes: ProductVariantAttribute[];
         stockByBranch: Record<string, number>;
     }[];
