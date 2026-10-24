@@ -13,6 +13,9 @@ target/
 .springBeans
 .sts4-cache
 
+graphify-out/
+backend/graphify-out/
+
 ### IntelliJ IDEA ###
 .idea
 *.iws
