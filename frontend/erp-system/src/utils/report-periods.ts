@@ -1,7 +1,7 @@
 export type ReportPeriod = 'today' | '7d' | '30d';
 
 export const REPORT_PERIODS: { value: ReportPeriod; label: string; comparison: string }[] = [
-    { value: 'today', label: 'Hoy', comparison: 'ayer a esta hora' },
+    { value: 'today', label: 'Hoy', comparison: 'ayer' },
     { value: '7d', label: '7 días', comparison: 'los 7 días anteriores' },
     { value: '30d', label: '30 días', comparison: 'los 30 días anteriores' },
 ];

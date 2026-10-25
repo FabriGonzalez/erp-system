@@ -15,7 +15,7 @@ import { useDashboard } from '@/hooks/use-report-queries';
 import { SharedStyles } from '@/styles/shared';
 import { PAYMENT_METHOD_LABELS } from '@/types/order';
 import { Dashboard } from '@/types/report';
-import { formatCurrency, formatDateTime } from '@/utils/format';
+import { formatCurrency, formatDateTime, formatTime } from '@/utils/format';
 import { percentChange, REPORT_PERIODS, ReportPeriod } from '@/utils/report-periods';
 
 function Card({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
@@ -42,7 +42,7 @@ function Row({ label, value, detail }: { label: string; value: string; detail?: 
 
 function formatChange(change: number | null, comparison: string): { text: string; style: object | null } {
     if (change === null) {
-        return { text: `Sin ventas en ${comparison}`, style: null };
+        return { text: `Sin ventas para comparar con ${comparison}`, style: null };
     }
     const rounded = Math.round(change);
     const sign = rounded > 0 ? '+' : '';
@@ -63,12 +63,17 @@ export default function ReportsScreen() {
     const comparison = REPORT_PERIODS.find((item) => item.value === period)?.comparison ?? '';
 
     function renderSales(data: Dashboard) {
-        const change = formatChange(percentChange(data.sales.total, data.previousSales.total), comparison);
+        // Hoy se compara contra el mismo tramo de ayer: de 00:00 hasta la hora de la consulta.
+        const todayRange = period === 'today' ? `de 00:00 a ${formatTime(data.to)}` : null;
+        const change = formatChange(
+            percentChange(data.sales.total, data.previousSales.total),
+            todayRange ? `${comparison} ${todayRange}` : comparison
+        );
         const maxBranchTotal = Math.max(...data.salesByBranch.map((branch) => branch.total), 0);
 
         return (
             <>
-                <Card title="Ventas">
+                <Card title="Ventas" note={todayRange ? `Hoy ${todayRange}` : undefined}>
                     <Text style={styles.bigNumber}>{formatCurrency(data.sales.total)}</Text>
                     <Text style={[styles.secondaryText, change.style]}>{change.text}</Text>
                     <View style={styles.statsRow}>
