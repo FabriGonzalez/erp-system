@@ -1451,7 +1451,7 @@ para que la consuma, más lo mínimo en el ERP para atender los pedidos web.
   y se resuelve desde el ERP (con una transferencia).
 - Cada tienda se identifica por **dominio propio** de la empresa.
 - Imágenes de producto en **almacenamiento S3-compatible** (MinIO en docker-compose para
-  desarrollo).
+  desarrollo; Oracle Object Storage en producción).
 - **Envío de mails** con un proveedor (MailHog en desarrollo): verificar el email, recuperar la
   contraseña y avisar el pedido confirmado.
 
@@ -1486,7 +1486,15 @@ para que la consuma, más lo mínimo en el ERP para atender los pedidos web.
    configurados (deja de ser `*`).
 2. **Imágenes:** entidad `ProductImage` (producto o variante, orden, clave en el almacenamiento).
    Subida con URL firmada (S3-compatible, MinIO en docker-compose) desde el ERP con
-   `ADMINISTRAR_PRODUCTOS`; validación de tipo y tamaño; borrado.
+   `ADMINISTRAR_PRODUCTOS`; validación de tipo (JPG, PNG, WebP) y tamaño; orden; borrado.
+   En producción, **Oracle Object Storage** (S3-compatible, decisión del 2026-10-25): solo cambia
+   la configuración (endpoint, bucket, credenciales por env).
+   **Regla para publicar (decisión del usuario, 2026-10-25):** el producto necesita al menos una
+   foto, propia o de cualquiera de sus variantes. Publicar sin ninguna → 409
+   `PRODUCT_IMAGE_REQUIRED`; borrar la última foto de un producto publicado también se rechaza
+   (hay que despublicarlo antes). Una variante sin fotos muestra las del producto; la portada
+   del listado es la primera foto del producto o, si no tiene, la de la primera variante con
+   foto.
 3. **Producto en la tienda:** `Product.publishedOnline` (y descripción ya existente). Solo se
    muestran productos activos, publicados, de categorías activas, con precio. Es el mismo
    producto del ERP, no una copia (decisión del 2026-10-25): stock, precio, promos, reportes y
@@ -1501,6 +1509,8 @@ para que la consuma, más lo mínimo en el ERP para atender los pedidos web.
 5. **Catálogo público:** `GET /store/categories`, `GET /store/products` (paginado, búsqueda,
    categoría, orden por precio/nombre), `GET /store/products/{id}` con variantes, atributos,
    imágenes y disponibilidad sumada de todas las sucursales activas (cantidad o "sin stock").
+   Los productos y variantes sin stock **se muestran** como "Sin stock" (decisión del usuario,
+   2026-10-25); el checkout los rechaza.
 6. **ERP (frontend):** dominio, habilitación, porcentaje y redondeo de la tienda en la
    configuración de la empresa; imágenes y "publicar en la tienda" en el formulario de producto.
 7. **Migración:** `V2__tienda.sql` (campos de tienda en `companies`, `published_online` en
