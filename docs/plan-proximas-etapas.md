@@ -1465,8 +1465,9 @@ para que la consuma, más lo mínimo en el ERP para atender los pedidos web.
 - `Customer` no tiene credenciales; su email no es único. `Company` no tiene dominio ni datos de
   tienda. `SalesType` = `WITH_PRODUCTS`, `QUICK_SALE`; `OrderStatus` sin "pendiente de pago";
   `PaymentMethod` sin Mercado Pago. Productos sin imágenes. No hay `@Scheduled`, mail ni S3.
-- Esquema con `ddl-auto: update`, que no cambia columnas a nullable ni los CHECK de los enums:
-  **esta etapa requiere recrear la base de desarrollo** (o adelantar las migraciones).
+- Desde 2026-10-25 el esquema va por Flyway (`ddl-auto: validate`): los cambios de esta etapa
+  (columnas a nullable, CHECK de los enums nuevos) van en migraciones; ya no hace falta recrear la
+  base de desarrollo.
 
 **Criterios comunes.**
 - Endpoints públicos separados bajo `/api/v1/store/**`; nunca se exponen los del ERP. Respuestas
@@ -1487,12 +1488,23 @@ para que la consuma, más lo mínimo en el ERP para atender los pedidos web.
    Subida con URL firmada (S3-compatible, MinIO en docker-compose) desde el ERP con
    `ADMINISTRAR_PRODUCTOS`; validación de tipo y tamaño; borrado.
 3. **Producto en la tienda:** `Product.publishedOnline` (y descripción ya existente). Solo se
-   muestran productos activos, publicados, de categorías activas, con precio.
-4. **Catálogo público:** `GET /store/categories`, `GET /store/products` (paginado, búsqueda,
+   muestran productos activos, publicados, de categorías activas, con precio. Es el mismo
+   producto del ERP, no una copia (decisión del 2026-10-25): stock, precio, promos, reportes y
+   movimientos siguen atados a `ProductVariant`.
+4. **Precio web (decisión del usuario, 2026-10-25):** un ajuste porcentual único para toda la
+   tienda, `Company.storePriceAdjustmentPercent` (puede ser negativo; 0 = mismo precio que el
+   ERP), más una regla de redondeo configurable (p. ej. al múltiplo de $10 o $100). El precio web
+   no se guarda: lo calcula el backend con una sola función que usan el catálogo público y el
+   checkout. **Se aplica también a las promos.** Lo cambia `ADMINISTRAR_PRECIOS`. El pedido guarda
+   el precio cobrado, así cambiar el porcentaje no altera pedidos viejos. Sin precio fijo por
+   variante por ahora (si aparece el caso: `storePrice` opcional que manda sobre el porcentaje).
+5. **Catálogo público:** `GET /store/categories`, `GET /store/products` (paginado, búsqueda,
    categoría, orden por precio/nombre), `GET /store/products/{id}` con variantes, atributos,
    imágenes y disponibilidad sumada de todas las sucursales activas (cantidad o "sin stock").
-5. **ERP (frontend):** dominio y habilitación de la tienda en la configuración de la empresa;
-   imágenes y "publicar en la tienda" en el formulario de producto.
+6. **ERP (frontend):** dominio, habilitación, porcentaje y redondeo de la tienda en la
+   configuración de la empresa; imágenes y "publicar en la tienda" en el formulario de producto.
+7. **Migración:** `V2__tienda.sql` (campos de tienda en `companies`, `published_online` en
+   productos, tabla `product_images`).
 
 ### 22B — Cuentas de comprador y mails
 
