@@ -4,6 +4,7 @@ import tools.jackson.databind.json.JsonMapper;
 import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.config.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
@@ -39,6 +40,11 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final JsonMapper objectMapper;
 
+    // Orígenes web que pueden llamar a la API: "*" en desarrollo; en producción el dominio de la
+    // web (CORS_ALLOWED_ORIGINS). Las apps de celular no pasan por CORS.
+    @Value("${app.cors.allowed-origins}")
+    private List<String> allowedOrigins;
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -54,7 +60,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("*"));
+        configuration.setAllowedOriginPatterns(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
         configuration.setExposedHeaders(List.of("Retry-After"));

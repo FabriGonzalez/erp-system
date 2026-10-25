@@ -245,6 +245,13 @@ Próximas áreas del roadmap:
 
 Confirmá siempre el estado real del código antes de asumir que un módulo está completo.
 
+### Producción y esquema de la base
+
+- El despliegue está en `deploy/` y se explica en `docs/deploy.md` (VM con Docker Compose: Postgres, backend y Caddy, que sirve la web y pasa `/api/` al backend en el mismo dominio).
+- El esquema lo manejan las migraciones de Flyway (`backend/src/main/resources/db/migration`); Hibernate solo valida (`ddl-auto: validate`). Todo cambio de una entidad va en una migración nueva `V{n}__descripcion.sql`; nunca se edita una ya aplicada.
+- Agregar un valor a un enum también exige migración: su columna tiene un `CHECK` con los valores permitidos, que `validate` no revisa.
+- La web se exporta en modo `single` (`app.json`): no agregues código que dependa del prerender estático. `EXPO_PUBLIC_API_URL` queda fija al exportar o compilar.
+
 ## 11. Cómo reportar el resultado de una tarea
 
 Al finalizar, respondé en español y de forma concreta:

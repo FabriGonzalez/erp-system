@@ -1,0 +1,15 @@
+spring:
+  # En producción la base arranca vacía: nada de tomar un esquema ajeno como versión 1.
+  flyway:
+    baseline-on-migrate: false
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+server:
+  # Detrás de Caddy: getRemoteAddr devuelve la IP real del cliente (X-Forwarded-For), que usa el
+  # límite de intentos de login. Tomcat solo le cree a proxies de redes internas.
+  forward-headers-strategy: native
+  shutdown: graceful

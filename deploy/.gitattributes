@@ -1,0 +1,2 @@
+# Estos archivos se usan en Linux: siempre con LF, aunque se editen en Windows.
+* text=auto eol=lf

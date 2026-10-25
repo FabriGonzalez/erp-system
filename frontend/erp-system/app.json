@@ -8,9 +8,11 @@
     "scheme": "erpsystem",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.gonzalez.erp"
     },
     "android": {
+      "package": "com.gonzalez.erp",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -21,7 +23,7 @@
     },
     "web": {
       "name": "ERP System",
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [

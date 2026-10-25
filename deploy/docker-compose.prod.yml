@@ -1,0 +1,67 @@
+# Producción: Postgres + backend + Caddy (HTTPS y la web). Se levanta desde esta carpeta con
+#   docker compose -f docker-compose.prod.yml up -d --build
+# y lee los secretos de deploy/.env (copiar .env.example). Ver docs/deploy.md.
+name: erp
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: erp_db
+      POSTGRES_USER: erp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en deploy/.env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Sin "ports": la base solo se ve desde la red interna de Docker.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp -d erp_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ../backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://postgres:5432/erp_db
+      DB_USERNAME: erp
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Falta JWT_SECRET en deploy/.env}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+      CORS_ALLOWED_ORIGINS: https://${DOMAIN:?Falta DOMAIN en deploy/.env}
+      ERP_PLATFORM_ADMIN_USERNAME: ${ERP_PLATFORM_ADMIN_USERNAME:-platform_admin}
+      ERP_PLATFORM_ADMIN_EMAIL: ${ERP_PLATFORM_ADMIN_EMAIL:-platform@erp.local}
+      ERP_PLATFORM_ADMIN_PASSWORD: ${ERP_PLATFORM_ADMIN_PASSWORD:-}
+      JAVA_OPTS: ${JAVA_OPTS:--Xmx1g}
+
+  # Caddy saca el certificado HTTPS solo, sirve la web y pasa /api/ al backend: web y API en el
+  # mismo dominio.
+  web:
+    build:
+      context: ../frontend/erp-system
+      dockerfile: ../../deploy/web.Dockerfile
+      args:
+        EXPO_PUBLIC_API_URL: https://${DOMAIN}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

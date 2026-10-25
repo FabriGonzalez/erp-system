@@ -15,8 +15,8 @@ function resolveApiBaseUrl(): string {
     if (configured) return configured.replace(/\/+$/, '');
 
     const port = process.env.EXPO_PUBLIC_API_PORT ?? DEFAULT_API_PORT;
-    // En web, Expo también renderiza en el servidor (Node), donde no hay window: ahí no se
-    // hacen requests, y en el navegador el módulo se vuelve a evaluar con window.
+    // Sin window (si la web se renderizara en el servidor) no se hacen requests; en el
+    // navegador el módulo se evalúa con window.
     const host = Platform.OS === 'web'
         ? (typeof window !== 'undefined' ? window.location.hostname : undefined)
         // hostUri es "IP:puerto" del servidor de Metro, p. ej. "192.168.80.31:8081".

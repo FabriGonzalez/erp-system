@@ -1,0 +1,15 @@
+{$DOMAIN} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy backend:8080
+	}
+
+	# La web es una sola página (web.output "single"): toda ruta que no sea un archivo
+	# devuelve index.html y Expo Router resuelve la pantalla.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
