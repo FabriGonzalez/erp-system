@@ -1491,8 +1491,10 @@ para que la consuma, más lo mínimo en el ERP para atender los pedidos web.
    la configuración (endpoint, bucket, credenciales por env).
    **Regla para publicar (decisión del usuario, 2026-10-25):** el producto necesita al menos una
    foto, propia o de cualquiera de sus variantes. Publicar sin ninguna → 409
-   `PRODUCT_IMAGE_REQUIRED`; borrar la última foto de un producto publicado también se rechaza
-   (hay que despublicarlo antes). Una variante sin fotos muestra las del producto; la portada
+   `PRODUCT_IMAGE_REQUIRED`. Borrar la última foto de un producto publicado lo **despublica** en
+   la misma operación (decisión del usuario, 2026-10-25): el ERP lo avisa antes en la
+   confirmación ("El producto se va a despublicar de la tienda") y la respuesta del borrado
+   indica que se despublicó. Una variante sin fotos muestra las del producto; la portada
    del listado es la primera foto del producto o, si no tiene, la de la primera variante con
    foto.
 3. **Producto en la tienda:** `Product.publishedOnline` (y descripción ya existente). Solo se
