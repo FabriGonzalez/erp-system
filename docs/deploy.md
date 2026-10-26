@@ -3,6 +3,11 @@
 Guía para poner el ERP en internet gratis: una VM de Oracle Cloud con todo adentro, un subdominio
 de DuckDNS y HTTPS automático. Primero explica las piezas; después, el paso a paso.
 
+> Oracle quedó descartado (no acepta la tarjeta). Mientras no haya VPS, para las demos con el
+> celular el backend va en Render y la base en Neon (**sección 11**), o todo desde la PC con
+> Tailscale Funnel (**sección 10**). Lo de las secciones 4.1 a 4.3 es propio de Oracle; el resto
+> vale igual para cualquier VPS con Ubuntu.
+
 ## 1. Cómo queda armado
 
 ```text
@@ -263,3 +268,181 @@ inicio**. Queda un ícono como el de una app.
 | El backend no arranca: `Schema-validation` | Falta una migración para un cambio de entidad (sección 8). |
 | El backend no arranca: `Validate failed: Migration checksum mismatch` | Se editó una migración ya aplicada: volver el archivo a como estaba y hacer una nueva. |
 | La VM se apagó sola | Reclamación por inactividad de Oracle: pasar la cuenta a Pay As You Go (sección 2). |
+
+## 10. Demos desde la PC (sin VPS)
+
+Para mostrar el sistema mientras no haya VPS. Corre el mismo stack de producción en tu PC, con su
+propia base, separada de la de desarrollo, y **Tailscale Funnel** lo publica en internet con una
+dirección HTTPS fija (`https://mi-pc.tailXXXX.ts.net`).
+
+```text
+  Navegador / celular
+          │  https://mi-pc.tailXXXX.ts.net
+          ▼
+  Servidores de Tailscale (ponen el HTTPS)
+          │  túnel cifrado, iniciado desde tu PC
+          ▼
+┌──────────────────────────── Tu PC ───────────────────────────────┐
+│  Tailscale ──► 127.0.0.1:8090 ──► web (Caddy, HTTP)              │
+│                                     ├── /api/* ──► backend       │
+│                                     └── la web        │          │
+│                                                     postgres     │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+- **No hay que abrir puertos en el router** y anda aunque el proveedor de internet use CGNAT. La
+  conexión la inicia tu PC hacia Tailscale; desde afuera solo se llega por ese túnel.
+- **Solo se publica el puerto 8090**, y únicamente para la propia PC (`127.0.0.1`). Ni la red
+  local ni internet llegan directo a Caddy, y el backend y la base siguen sin verse desde afuera.
+- `deploy/docker-compose.pc.yml` se suma al de producción y solo cambia eso: Caddy atiende HTTP en
+  el 8090 y Tailscale pone el certificado.
+- La dirección no cambia mientras no renombres la PC en Tailscale, así que el APK sigue
+  funcionando.
+- Mientras no la uses, la PC y Docker Desktop pueden estar apagados: el sitio no responde y no pasa
+  nada más. Al prender Docker Desktop, los contenedores vuelven solos (`restart: unless-stopped`).
+
+**Cuidados.** Cargá solo datos de prueba, nunca datos reales de clientes. Usá contraseñas
+fuertes: la dirección está en internet. Todos los visitantes llegan con la misma IP interna, así
+que el límite de intentos de login por IP (30 fallidos en 15 minutos) es compartido; el límite
+por usuario funciona igual.
+
+### 10.1 Instalar Tailscale
+
+1. Bajar Tailscale para Windows de <https://tailscale.com/download> e iniciar sesión (con Google,
+   Microsoft o GitHub). El plan Personal es gratis y no pide tarjeta.
+2. En la consola web (<https://login.tailscale.com/admin>):
+   - **DNS**: activar *MagicDNS* y *HTTPS Certificates*.
+   - **Machines**: copiar el nombre completo de la PC, p. ej. `mi-pc.tailXXXX.ts.net`. Ese es el
+     `DOMAIN`.
+
+### 10.2 Configurar y levantar
+
+Desde `deploy/` (en PowerShell, con Docker Desktop abierto):
+
+```sh
+copy .env.example .env
+notepad .env
+```
+
+En `.env`, igual que en 4.5, pero con `DOMAIN=mi-pc.tailXXXX.ts.net` (sin `https://`). Las
+contraseñas se pueden generar con `openssl rand -base64 48` desde Git Bash.
+
+```sh
+docker compose -f docker-compose.prod.yml -f docker-compose.pc.yml up -d --build
+```
+
+Revisar que ande en la PC: <http://localhost:8090>. Tienen que aparecer la pantalla de login y,
+en `docker compose -f docker-compose.prod.yml logs backend`, el
+`Platform admin 'platform_admin' created`.
+
+### 10.3 Publicarlo
+
+```sh
+tailscale funnel --bg 8090
+```
+
+La primera vez muestra un link para habilitar Funnel en tu cuenta: abrirlo, aceptar y volver a
+correr el comando. Después probar desde el celular **con datos móviles, sin wifi**:
+`https://mi-pc.tailXXXX.ts.net`.
+
+- Ver qué está publicado: `tailscale funnel status`.
+- Dejar de publicarlo: `tailscale funnel reset`. Los contenedores siguen corriendo en la PC.
+- Apagar los contenedores: `docker compose -f docker-compose.prod.yml -f docker-compose.pc.yml down`.
+  Los datos quedan en el volumen; para borrarlos también, agregar `-v`.
+
+### 10.4 Actualizar y backups
+
+Para actualizar, `git pull` y el mismo `up -d --build` de 10.2. `backup.sh` funciona igual: se
+puede correr a mano desde Git Bash antes de actualizar.
+
+### 10.5 App de Android
+
+Igual que la sección 6, pero en `eas.json` va `https://mi-pc.tailXXXX.ts.net` en lugar de
+`https://TU-SUBDOMINIO.duckdns.org`.
+
+### 10.6 Cuando haya VPS
+
+Se sigue la sección 4 sin `docker-compose.pc.yml`. Si querés llevarte los datos de las demos,
+hacé un backup en la PC y restauralo en el VPS (4.7). La dirección cambia, así que hay que
+recompilar el APK con la nueva.
+
+## 11. Demos con el celular: backend en Render, base en Neon
+
+Para mostrar la app de Android sin VPS y sin la PC prendida. Las dos cuentas son gratis.
+
+```text
+  APK en el celular
+          │  https://erp-backend-xxxx.onrender.com/api/...
+          ▼
+  Render (backend, imagen de backend/Dockerfile)  ──►  Neon (Postgres)
+```
+
+- **Render** compila `backend/Dockerfile` desde GitHub y lo corre. Plan gratis: 512 MB de RAM,
+  0.1 de CPU y 750 horas por mes. **Se duerme a los 15 minutos sin uso** y el primer pedido lo
+  despierta, pero el arranque tarda uno o varios minutos. **Antes de una demo, abrir la app (o la
+  dirección del backend en el navegador) unos minutos antes.**
+- **Neon** es la base. Plan gratis: 0.5 GB y 100 horas de cómputo por mes. Se duerme a los
+  5 minutos sin uso y despierta en un segundo.
+- No hay web ni Caddy: el APK le habla directo al backend, que ya viene con HTTPS de Render.
+- Render construye desde GitHub: lo que no esté pusheado a la rama elegida no se despliega.
+
+### 11.1 Base en Neon
+
+1. Crear la cuenta en <https://neon.com> y un proyecto. **Región: AWS US East (N. Virginia)**,
+   la misma que el backend: si están lejos, cada consulta cruza el continente.
+2. En *Connect*, **desactivar *Connection pooling*** (Flyway necesita la conexión directa) y
+   copiar los datos. Neon da algo como
+   `postgresql://neondb_owner:CLAVE@ep-algo-123.us-east-1.aws.neon.tech/neondb?sslmode=require`,
+   que en Render se carga separado:
+   - `DB_URL` = `jdbc:postgresql://ep-algo-123.us-east-1.aws.neon.tech/neondb?sslmode=require`
+   - `DB_USERNAME` = `neondb_owner`
+   - `DB_PASSWORD` = `CLAVE`
+
+### 11.2 Backend en Render
+
+1. Crear la cuenta en <https://render.com> con GitHub y darle acceso al repo `erp-system`.
+2. *New* → **Web Service** → el repo:
+   - **Branch**: la que tenga el código a mostrar.
+   - **Root Directory**: `backend`. **Language**: Docker (toma `backend/Dockerfile`).
+   - **Region**: Virginia (US East). **Instance type**: Free.
+3. *Environment Variables*:
+
+   | Variable | Valor |
+   |---|---|
+   | `SPRING_PROFILES_ACTIVE` | `prod` |
+   | `PORT` | `8080` |
+   | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | Los de Neon (11.1). |
+   | `JWT_SECRET` | Generado con `openssl rand -base64 48` (Git Bash). |
+   | `ERP_PLATFORM_ADMIN_EMAIL` / `ERP_PLATFORM_ADMIN_PASSWORD` | El usuario que crea las empresas (como en 4.5). |
+   | `JAVA_OPTS` | `-Xmx300m -Xss512k -XX:+UseSerialGC -XX:TieredStopAtLevel=1` |
+   | `SERVER_TOMCAT_THREADS_MAX` | `20` |
+   | `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE` | `5` |
+   | `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE` | `0` |
+
+   `JAVA_OPTS` y los hilos achican Java para que entre en 512 MB y arranque más rápido con poca
+   CPU. Con `MINIMUM_IDLE` en 0 el backend suelta las conexiones que no usa y Neon se puede
+   dormir; si no, gasta sus horas de cómputo aunque nadie use la app.
+4. *Create Web Service*. El primer deploy tarda varios minutos (compila con Maven). En *Logs*
+   tienen que aparecer `Successfully applied` (las migraciones en Neon), `Platform admin ...
+   created` y `Started BackendApplication`.
+5. Arriba figura la dirección, p. ej. `https://erp-backend-xxxx.onrender.com`. Abrir
+   `https://erp-backend-xxxx.onrender.com/api/v1/branches` en el navegador: si responde con un
+   error 401 o 403 en JSON, el backend está vivo; lo que falta es el login.
+
+Cada push a la rama vuelve a desplegar solo (se puede apagar en *Settings → Auto-Deploy*). Las
+migraciones nuevas se aplican al arrancar, como en la sección 8.
+
+### 11.3 APK
+
+Igual que la sección 6, pero en `eas.json` va la dirección de Render (`https://erp-backend-xxxx.onrender.com`)
+en lugar de `https://TU-SUBDOMINIO.duckdns.org`. Si la dirección cambia, hay que recompilar el
+APK. Desde el celular, iniciar sesión con el platform admin y crear la empresa de demo.
+
+### 11.4 Problemas comunes
+
+| Síntoma | Qué revisar |
+|---|---|
+| La app tarda mucho o da error de red al abrirla | Render estaba dormido: esperar uno o dos minutos y reintentar. |
+| El deploy falla con `Out of memory` o `Exited with status 137` | Bajar `-Xmx` a `256m` en `JAVA_OPTS`. |
+| El backend no conecta a la base | `DB_URL` empieza con `jdbc:postgresql://`, sin usuario ni clave adentro y con `?sslmode=require`; el host es el directo (sin `-pooler`). |
+| Neon dice que se quedó sin horas de cómputo | Falta `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=0`. |

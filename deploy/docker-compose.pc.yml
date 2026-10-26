@@ -1,0 +1,13 @@
+# Demos desde la PC, sin VPS: se suma al de producción y Tailscale Funnel pone el HTTPS.
+#   docker compose -f docker-compose.prod.yml -f docker-compose.pc.yml up -d --build
+# DOMAIN en deploy/.env es el nombre de la PC en Tailscale (algo.ts.net). Ver docs/deploy.md,
+# sección 10.
+services:
+  web:
+    environment:
+      # Caddy atiende HTTP en el 80 para cualquier nombre: el certificado lo pone Tailscale.
+      DOMAIN: ":80"
+    ports: !override
+      # Solo desde la propia PC, que es de donde llega Tailscale: ni la red local ni internet
+      # entran directo.
+      - "127.0.0.1:8090:80"
