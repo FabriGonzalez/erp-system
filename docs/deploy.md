@@ -436,9 +436,26 @@ migraciones nuevas se aplican al arrancar, como en la sección 8.
 
 Igual que la sección 6, pero en `eas.json` va la dirección de Render (`https://erp-backend-xxxx.onrender.com`)
 en lugar de `https://TU-SUBDOMINIO.duckdns.org`. Si la dirección cambia, hay que recompilar el
-APK. Desde el celular, iniciar sesión con el platform admin y crear la empresa de demo.
+APK. En el celular se entra con el administrador de la empresa de demo, creada antes desde el
+panel de plataforma (11.4).
 
-### 11.4 Problemas comunes
+### 11.4 Panel de plataforma (crear la empresa de demo)
+
+El platform admin no entra por la app: usa el panel web de `frontend/admin-panel`, que corre en
+tu PC y le habla al backend de Render. Solo lo usás vos, así que no hace falta publicarlo.
+
+1. En Render, agregar la variable `CORS_ALLOWED_ORIGINS` = `http://localhost:5173`: el
+   navegador solo deja que el panel llame al backend si este lo permite. La app no lo necesita.
+2. Crear `frontend/admin-panel/.env.local` (git lo ignora) con
+   `VITE_API_URL=https://erp-backend-xxxx.onrender.com`.
+3. Desde `frontend/admin-panel`: `npm install` (la primera vez) y `npm run dev`. Abrir
+   <http://localhost:5173> y entrar con el **usuario** `platform_admin` (o el de
+   `ERP_PLATFORM_ADMIN_USERNAME`, si se cambió) y `ERP_PLATFORM_ADMIN_PASSWORD`. El login es por
+   usuario, no por email.
+4. Dar de alta la empresa de demo. La contraseña temporal de su administrador se muestra **una
+   sola vez**: anotarla. Con ese usuario se entra en el celular.
+
+### 11.5 Problemas comunes
 
 | Síntoma | Qué revisar |
 |---|---|

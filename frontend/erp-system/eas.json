@@ -10,7 +10,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://TU-SUBDOMINIO.duckdns.org"
+        "EXPO_PUBLIC_API_URL": "https://erp-system-mtwc.onrender.com"
       }
     },
     "production": {
