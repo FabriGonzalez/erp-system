@@ -43,6 +43,19 @@ public class ProductImportController {
                 .body(importService.template());
     }
 
+    @Operation(summary = "Exportar catálogo",
+            description = "Planilla .xlsx con las variantes activas de los productos activos, en el formato de la "
+                    + "plantilla: editada y subida de nuevo, actualiza precios, códigos de barras y stock.")
+    @PreAuthorize("hasAuthority('ADMINISTRAR_PRODUCTOS')")
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> export() {
+        return ResponseEntity.ok()
+                .contentType(XLSX)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename("productos.xlsx").build().toString())
+                .body(importService.export());
+    }
+
     @Operation(summary = "Previsualizar importación",
             description = "Lee y valida un .xlsx, .xls o .csv sin guardar nada. Responde qué pasaría con cada fila.")
     @PreAuthorize("hasAuthority('ADMINISTRAR_PRODUCTOS')")

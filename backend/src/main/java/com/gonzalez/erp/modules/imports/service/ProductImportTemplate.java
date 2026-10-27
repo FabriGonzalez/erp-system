@@ -10,10 +10,12 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -86,22 +88,38 @@ final class ProductImportTemplate {
 
     private ProductImportTemplate() {}
 
+    /**
+     * Una variante del catálogo exportado. attributes: clave normalizada del atributo → valor;
+     * stock: clave normalizada de la sucursal → cantidad.
+     */
+    record CatalogRow(String product, String description, String category, String sku, String barcode,
+                      BigDecimal price, Map<String, String> attributes, Map<String, Integer> stock) {}
+
+    /** Una columna: fija, de atributo o de stock (con la clave normalizada del atributo o la sucursal). */
+    private record Column(String header, FixedColumn fixed, String attributeKey, String branchKey) {}
+
+    /** La plantilla vacía. */
     static byte[] build(List<String> attributeNames, List<String> branchNames) {
-        List<String> headers = new ArrayList<>();
-        Arrays.stream(FixedColumn.values()).forEach(column -> headers.add(column.header));
+        return build(attributeNames, branchNames, List.of());
+    }
+
+    /** Con filas es el catálogo exportado: se puede editar y volver a subir. */
+    static byte[] build(List<String> attributeNames, List<String> branchNames, List<CatalogRow> rows) {
+        List<Column> columns = new ArrayList<>();
+        Arrays.stream(FixedColumn.values()).forEach(column -> columns.add(new Column(column.header, column, null, null)));
         // Un atributo que se llame como una columna fija o empiece con "Stock" se leería como esa
         // columna; uno repetido (sin distinguir mayúsculas ni tildes) daría "columna repetida".
         Set<String> usedKeys = new HashSet<>();
-        headers.forEach(header -> usedKeys.add(SearchText.normalize(header)));
+        columns.forEach(column -> usedKeys.add(SearchText.normalize(column.header())));
         for (String attribute : attributeNames) {
             String key = SearchText.normalize(attribute);
             if (FixedColumn.ofKey(key) == null && !isStockKey(key) && usedKeys.add(key)) {
-                headers.add(attribute);
+                columns.add(new Column(attribute, null, key, null));
             }
         }
         for (String branch : branchNames) {
             if (usedKeys.add(SearchText.normalize(STOCK_PREFIX + branch))) {
-                headers.add(STOCK_PREFIX + branch);
+                columns.add(new Column(STOCK_PREFIX + branch, null, null, SearchText.normalize(branch)));
             }
         }
 
@@ -116,18 +134,22 @@ final class ProductImportTemplate {
 
             Sheet products = workbook.createSheet(PRODUCTS_SHEET);
             Row headerRow = products.createRow(0);
-            for (int i = 0; i < headers.size(); i++) {
-                String header = headers.get(i);
-                headerRow.createCell(i).setCellValue(header);
+            for (int i = 0; i < columns.size(); i++) {
+                Column column = columns.get(i);
+                headerRow.createCell(i).setCellValue(column.header());
                 headerRow.getCell(i).setCellStyle(headerStyle);
-                products.setColumnWidth(i, Math.max(14, header.length() + 4) * 256);
-                if (header.equals(FixedColumn.SKU.header) || header.equals(FixedColumn.BARCODE.header)) {
+                products.setColumnWidth(i, Math.max(14, column.header().length() + 4) * 256);
+                if (isText(column)) {
                     products.setDefaultColumnStyle(i, textStyle);
                 }
             }
             products.setColumnWidth(0, 30 * 256);
             products.setColumnWidth(1, 30 * 256);
             products.createFreezePane(0, 1);
+
+            for (int r = 0; r < rows.size(); r++) {
+                writeRow(products.createRow(r + 1), columns, rows.get(r), textStyle);
+            }
 
             Sheet instructions = workbook.createSheet("Instrucciones");
             instructions.setColumnWidth(0, 110 * 256);
@@ -143,6 +165,41 @@ final class ProductImportTemplate {
             return out.toByteArray();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    private static boolean isText(Column column) {
+        return column.fixed() == FixedColumn.SKU || column.fixed() == FixedColumn.BARCODE;
+    }
+
+    /** Precio y stock como números (el importador los lee sin interpretar separadores); el resto, texto. */
+    private static void writeRow(Row row, List<Column> columns, CatalogRow data, CellStyle textStyle) {
+        for (int i = 0; i < columns.size(); i++) {
+            Column column = columns.get(i);
+            if (column.branchKey() != null) {
+                row.createCell(i).setCellValue(data.stock().getOrDefault(column.branchKey(), 0));
+                continue;
+            }
+            if (column.fixed() == FixedColumn.PRICE) {
+                row.createCell(i).setCellValue(data.price().doubleValue());
+                continue;
+            }
+            String value = column.attributeKey() != null
+                    ? data.attributes().get(column.attributeKey())
+                    : switch (column.fixed()) {
+                        case PRODUCT -> data.product();
+                        case DESCRIPTION -> data.description();
+                        case CATEGORY -> data.category();
+                        case SKU -> data.sku();
+                        case BARCODE -> data.barcode();
+                        case PRICE -> null;
+                    };
+            if (value != null) {
+                row.createCell(i).setCellValue(value);
+                if (isText(column)) {
+                    row.getCell(i).setCellStyle(textStyle);
+                }
+            }
         }
     }
 }

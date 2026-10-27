@@ -60,4 +60,14 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     );
 
     List<ProductVariant> findByCompanyIdAndBarcodeIn(Long companyId, Collection<String> barcodes);
+
+    /** Variantes activas de productos activos, con producto, categoría y atributos (exportar). */
+    @Query("SELECT DISTINCT pv FROM ProductVariant pv " +
+            "JOIN FETCH pv.product p " +
+            "JOIN FETCH p.category " +
+            "LEFT JOIN FETCH pv.attributes pva " +
+            "LEFT JOIN FETCH pva.attributeValue av " +
+            "LEFT JOIN FETCH av.attribute " +
+            "WHERE pv.company.id = :companyId AND pv.active = true AND p.active = true")
+    List<ProductVariant> findActiveForExport(@Param("companyId") Long companyId);
 }

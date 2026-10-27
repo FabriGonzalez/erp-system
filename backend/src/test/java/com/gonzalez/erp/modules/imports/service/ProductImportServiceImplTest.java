@@ -287,6 +287,34 @@ class ProductImportServiceImplTest {
     }
 
     @Test
+    void theExportedCatalogIsReimportedWithoutChanges() throws Exception {
+        Product product = Product.builder().name("Remera").category(category).company(company).build();
+        product.setId(PRODUCT_ID);
+        ProductVariant medium = variant(product, 40L, "REM-M", sizeM);
+        ProductVariant large = variant(product, 41L, "REM-L", sizeL);
+        when(attributeRepository.findByCompanyIdAndActive(COMPANY_ID, true)).thenReturn(List.of(size));
+        when(variantRepository.findActiveForExport(COMPANY_ID)).thenReturn(List.of(medium, large));
+        when(variantRepository.findByCompanyIdAndUpperSkuIn(eq(COMPANY_ID), anyCollection())).thenReturn(List.of(medium, large));
+        when(stockRepository.findByProductVariantIdInAndCompanyId(anyCollection(), eq(COMPANY_ID))).thenReturn(List.of(
+                Stock.builder().productVariant(medium).branch(branch).company(company).quantity(3).build()));
+
+        byte[] exported = importService.export();
+
+        SpreadsheetReader.SheetData sheet = SpreadsheetReader.read("productos.xlsx", exported, "Productos", 10);
+        assertThat(sheet.headers()).containsExactly(
+                "Producto", "Descripción", "Categoría", "SKU", "Código de barras", "Precio", "Talle", "Stock Centro");
+        // Ordenadas por producto y SKU; sin stock en la sucursal, 0.
+        assertThat(sheet.rows()).extracting(row -> row.cell(3).text() + " " + row.cell(5).text() + " "
+                + row.cell(6).text() + " " + row.cell(7).text())
+                .containsExactly("REM-L 1000 L 0", "REM-M 1000 M 3");
+
+        ProductImportResult result = importService.preview("productos.xlsx", exported);
+        assertThat(result.valid()).isTrue();
+        assertThat(result.rows()).extracting(ProductImportRow::action)
+                .containsOnly(ProductImportAction.UNCHANGED);
+    }
+
+    @Test
     void aStockColumnOfAnUnknownBranchIsAFileError() {
         ProductImportResult result = importService.preview("p.csv", csv("""
                 Producto;Stock Norte

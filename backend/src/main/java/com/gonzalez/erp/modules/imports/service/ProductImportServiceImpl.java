@@ -60,6 +60,7 @@ import java.util.stream.Collectors;
 public class ProductImportServiceImpl implements ProductImportService {
 
     static final int MAX_ROWS = 5000;
+    private static final int EXPORT_BATCH = 1000;
     /** price es numeric(12,2). */
     private static final BigDecimal MAX_PRICE = new BigDecimal("10000000000");
 
@@ -84,6 +85,69 @@ public class ProductImportServiceImpl implements ProductImportService {
                 .toList();
         List<String> branches = activeBranches(companyId).stream().map(Branch::getName).toList();
         return ProductImportTemplate.build(attributes, branches);
+    }
+
+    /*
+     * Variantes activas de productos activos, una por fila, con el stock de cada sucursal activa
+     * (0 si no tiene). Reimportado sin cambios, cada fila da UNCHANGED. Las columnas de atributo
+     * son las activas más las que usan estas variantes aunque estén desactivadas.
+     */
+    @Override
+    public byte[] export() {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+        List<Branch> branches = activeBranches(companyId);
+        List<ProductVariant> variants = variantRepository.findActiveForExport(companyId).stream()
+                .sorted(Comparator
+                        .comparing((ProductVariant variant) -> variant.getProduct().getName(), String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(variant -> variant.getProduct().getId())
+                        .thenComparing(ProductVariant::getSku))
+                .toList();
+
+        Map<String, String> attributeNames = new HashMap<>();
+        attributeRepository.findByCompanyIdAndActive(companyId, true)
+                .forEach(attribute -> attributeNames.putIfAbsent(SearchText.normalize(attribute.getName()), attribute.getName()));
+        variants.forEach(variant -> variant.getAttributes().forEach(pva -> {
+            String name = pva.getAttributeValue().getAttribute().getName();
+            attributeNames.putIfAbsent(SearchText.normalize(name), name);
+        }));
+
+        Map<Long, Map<String, Integer>> stockByVariant = new HashMap<>();
+        Map<Long, String> branchKeys = new HashMap<>();
+        branches.forEach(branch -> branchKeys.put(branch.getId(), SearchText.normalize(branch.getName())));
+        List<Long> variantIds = variants.stream().map(ProductVariant::getId).toList();
+        // De a tandas: un IN con decenas de miles de ids pasaría el límite de parámetros de Postgres.
+        for (int from = 0; from < variantIds.size(); from += EXPORT_BATCH) {
+            List<Long> batch = variantIds.subList(from, Math.min(from + EXPORT_BATCH, variantIds.size()));
+            for (Stock stock : stockRepository.findByProductVariantIdInAndCompanyId(batch, companyId)) {
+                String branchKey = branchKeys.get(stock.getBranch().getId());
+                if (branchKey != null) {
+                    stockByVariant.computeIfAbsent(stock.getProductVariant().getId(), key -> new HashMap<>())
+                            .put(branchKey, stock.getQuantity());
+                }
+            }
+        }
+
+        List<ProductImportTemplate.CatalogRow> rows = variants.stream()
+                .map(variant -> {
+                    Product product = variant.getProduct();
+                    Map<String, String> values = new HashMap<>();
+                    variant.getAttributes().forEach(pva -> values.put(
+                            SearchText.normalize(pva.getAttributeValue().getAttribute().getName()),
+                            pva.getAttributeValue().getValue()));
+                    return new ProductImportTemplate.CatalogRow(
+                            product.getName(),
+                            product.getDescription(),
+                            product.getCategory().getName(),
+                            variant.getSku(),
+                            variant.getBarcode(),
+                            variant.getPrice(),
+                            values,
+                            stockByVariant.getOrDefault(variant.getId(), Map.of()));
+                })
+                .toList();
+
+        List<String> attributes = attributeNames.values().stream().sorted(String.CASE_INSENSITIVE_ORDER).toList();
+        return ProductImportTemplate.build(attributes, branches.stream().map(Branch::getName).toList(), rows);
     }
 
     @Override
