@@ -14,10 +14,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByEmail(String email);
 
-    boolean existsByEmail(String email);
+    // Usuario y email se comparan sin distinguir mayúsculas: "Juan" y "juan" son el mismo para el
+    // login, así que tampoco pueden existir los dos (índices únicos sobre lower() en V2).
+    boolean existsByEmailIgnoreCase(String email);
 
-    // El usuario se compara sin distinguir mayúsculas: "Juan" y "juan" son el mismo para el
-    // login, así que tampoco pueden existir los dos.
     @EntityGraph(attributePaths = {
             "role",
             "role.permissions",
@@ -46,7 +46,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("permission") Permission permission);
 
     // Usuario y email son únicos en toda la plataforma: no se filtra por empresa.
-    boolean existsByEmailAndIdNot(String email, Long id);
+    boolean existsByEmailIgnoreCaseAndIdNot(String email, Long id);
 
     boolean existsByUsernameIgnoreCaseAndIdNot(String username, Long id);
 }

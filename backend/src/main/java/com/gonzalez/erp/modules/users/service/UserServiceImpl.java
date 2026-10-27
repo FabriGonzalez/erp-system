@@ -55,7 +55,7 @@ public class UserServiceImpl implements UserService {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
         // Usuario y email son únicos en toda la plataforma (el login es por usuario), no por empresa.
-        if (userRepository.existsByEmail(request.email())) {
+        if (userRepository.existsByEmailIgnoreCase(request.email())) {
             throw new UserEmailAlreadyExistsException(request.email());
         }
         if (userRepository.existsByUsernameIgnoreCase(request.username())) {
@@ -89,8 +89,8 @@ public class UserServiceImpl implements UserService {
                 && !Objects.equals(currentRoleId, request.roleId())) {
             throw new AccessDeniedException("You cannot change your own role");
         }
-        if (!user.getEmail().equals(request.email())
-                && userRepository.existsByEmailAndIdNot(request.email(), id)) {
+        if (!user.getEmail().equalsIgnoreCase(request.email())
+                && userRepository.existsByEmailIgnoreCaseAndIdNot(request.email(), id)) {
             throw new UserEmailAlreadyExistsException(request.email());
         }
         if (!user.getUsername().equalsIgnoreCase(request.username())

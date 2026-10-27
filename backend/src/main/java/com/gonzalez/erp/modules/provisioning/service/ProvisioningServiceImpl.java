@@ -117,7 +117,7 @@ public class ProvisioningServiceImpl implements ProvisioningService {
             throw new UserUsernameAlreadyExistsException(
                     request.adminUsername());
         }
-        if (userRepository.existsByEmail(request.adminEmail())) {
+        if (userRepository.existsByEmailIgnoreCase(request.adminEmail())) {
             throw new UserEmailAlreadyExistsException(
                     request.adminEmail());
         }
