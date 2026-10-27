@@ -47,7 +47,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.text.Normalizer;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -595,7 +594,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     /*
-     * El SKU de cada variante: el que vino o, si vino vacío, uno generado con baseSku. Si la
+     * El SKU de cada variante: el que vino o, si vino vacío, uno generado con Skus.base. Si la
      * base ya la usa otra variante de la empresa (activa o no) o de este mismo pedido, se le
      * suma -2, -3… El formulario no lo puede generar: no tiene los SKU del resto de la empresa.
      */
@@ -622,38 +621,16 @@ public class ProductServiceImpl implements ProductService {
             List<String> valueNames = attributeValueIdsByVariant.get(i).stream()
                     .map(valueId -> attributeValueRepository.getReferenceById(valueId).getValue())
                     .toList();
-            String base = baseSku(productName, valueNames);
+            String base = Skus.base(productName, valueNames);
 
             Set<String> taken = new HashSet<>(variantRepository.findSkusWithBase(companyId, base));
-            String candidate = base;
-            int suffix = 2;
-            while (taken.contains(candidate) || reserved.contains(candidate)) {
-                candidate = base + "-" + suffix;
-                suffix++;
-            }
+            String candidate = Skus.firstFree(base, sku -> taken.contains(sku) || reserved.contains(sku));
 
             reserved.add(candidate);
             skus.add(candidate);
         }
 
         return skus;
-    }
-
-    /** "SKU-" + 2 letras del nombre y de cada valor, sin tildes: "Remera", M, Rojo → SKU-RE-M-RO. */
-    static String baseSku(String productName, List<String> valueNames) {
-        List<String> parts = new ArrayList<>();
-        parts.add(skuPart(productName));
-        valueNames.forEach(valueName -> parts.add(skuPart(valueName)));
-        parts.removeIf(String::isEmpty);
-
-        return parts.isEmpty() ? "SKU" : "SKU-" + String.join("-", parts);
-    }
-
-    private static String skuPart(String value) {
-        String letters = Normalizer.normalize(value == null ? "" : value, Normalizer.Form.NFD)
-                .replaceAll("\\p{M}", "")
-                .replaceAll("[^a-zA-Z0-9]", "");
-        return letters.substring(0, Math.min(2, letters.length())).toUpperCase(Locale.ROOT);
     }
 
     private void validateSkuUnique(

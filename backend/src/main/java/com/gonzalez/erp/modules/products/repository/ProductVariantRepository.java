@@ -41,4 +41,23 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
             "LEFT JOIN FETCH av.attribute " +
             "WHERE pv.product.id IN :productIds")
     List<ProductVariant> findByProductIdInWithAttributes(@Param("productIds") Collection<Long> productIds);
+
+    /** Todos los SKU de la empresa, activos o no (la importación genera los que faltan). */
+    @Query("SELECT pv.sku FROM ProductVariant pv WHERE pv.company.id = :companyId")
+    List<String> findSkusByCompanyId(@Param("companyId") Long companyId);
+
+    /** Variantes de la empresa por SKU sin distinguir mayúsculas; :skus en mayúsculas. */
+    @Query("SELECT DISTINCT pv FROM ProductVariant pv " +
+            "JOIN FETCH pv.product p " +
+            "JOIN FETCH p.category " +
+            "LEFT JOIN FETCH pv.attributes pva " +
+            "LEFT JOIN FETCH pva.attributeValue av " +
+            "LEFT JOIN FETCH av.attribute " +
+            "WHERE pv.company.id = :companyId AND UPPER(pv.sku) IN :skus")
+    List<ProductVariant> findByCompanyIdAndUpperSkuIn(
+            @Param("companyId") Long companyId,
+            @Param("skus") Collection<String> skus
+    );
+
+    List<ProductVariant> findByCompanyIdAndBarcodeIn(Long companyId, Collection<String> barcodes);
 }

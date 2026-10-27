@@ -133,9 +133,9 @@ class ProductSkuGenerationTest {
 
     @Test
     void theBaseTakesTwoLettersOfTheNameAndOfEachValueWithoutAccents() {
-        assertThat(ProductServiceImpl.baseSku("Remera estampada", List.of("M", "Rojo"))).isEqualTo("SKU-RE-M-RO");
-        assertThat(ProductServiceImpl.baseSku("Ñandú", List.of("Azul"))).isEqualTo("SKU-NA-AZ");
-        assertThat(ProductServiceImpl.baseSku("★", List.of())).isEqualTo("SKU");
+        assertThat(Skus.base("Remera estampada", List.of("M", "Rojo"))).isEqualTo("SKU-RE-M-RO");
+        assertThat(Skus.base("Ñandú", List.of("Azul"))).isEqualTo("SKU-NA-AZ");
+        assertThat(Skus.base("★", List.of())).isEqualTo("SKU");
     }
 
     @Test

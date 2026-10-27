@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface ProductRepository extends JpaRepository<Product, Long> {
@@ -74,4 +75,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     );
 
     Optional<Product> findByIdAndCompanyId(Long id, Long companyId);
+
+    /** Nombres de los productos de la empresa (la importación avisa si repite uno). */
+    @Query("SELECT p.name FROM Product p WHERE p.company.id = :companyId")
+    List<String> findNamesByCompanyId(@Param("companyId") Long companyId);
 }
