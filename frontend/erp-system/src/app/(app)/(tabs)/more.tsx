@@ -148,6 +148,14 @@ export default function MoreScreen() {
                                     onPress={() => router.push('/attributes' as any)}
                                 />
                             )}
+                            {canManageAttributes && (
+                                <MenuListItem
+                                    title="Importar productos"
+                                    subtitle="Cargar o actualizar el catálogo desde un Excel"
+                                    iconName={{ ios: 'square.and.arrow.down.fill', android: 'upload_file', web: 'upload_file' }}
+                                    onPress={() => router.push('/imports' as any)}
+                                />
+                            )}
                             {canManageUsers && (
                                 <MenuListItem
                                     title="Usuarios"
