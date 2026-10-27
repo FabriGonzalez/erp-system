@@ -1776,11 +1776,16 @@ grandes, deshacer una importación.
 
 ## Pendientes chicos (sin orden; sumar a la etapa afín)
 
-- **Antes de producción** (decisión del usuario: en desarrollo alcanza con `ddl-auto: update`):
-  - Migraciones (Flyway con línea base del esquema actual): `ddl-auto: update` no crea índices
-    funcionales ni actualiza los CHECK de los enums (por eso la etapa 10 no pudo sumar un tipo de
-    movimiento).
-  - Unicidad de usuario sin distinguir mayúsculas: hoy solo en el servicio; con migraciones,
-    índice único sobre `lower(username)`.
-  - `BackendApplicationTests` (test de contexto) falla desde 2026-10-06; los unitarios se corren
-    con `-Dtest=!BackendApplicationTests`.
+- **Antes de producción** — hecho (2026-10-27, `feature/pending-fixes`):
+  - ~~Migraciones con Flyway~~: hechas para producción (`V1__esquema_inicial.sql`, `validate`).
+  - ~~Unicidad de usuario sin distinguir mayúsculas~~: `V2__usuario_y_email_unicos_sin_mayusculas.sql`,
+    índices únicos sobre `lower(username)` y `lower(email)`; los servicios comparan el email con
+    `IgnoreCase` (antes "Juan@mail.com" y "juan@mail.com" podían ser dos usuarios).
+  - ~~`BackendApplicationTests` falla~~: ahora levanta un Postgres 17 con Testcontainers (se
+    saltea sin Docker), aplica las migraciones y valida entidades y `@Query`. Ya no hace falta
+    `-Dtest=!BackendApplicationTests`. El test fija UTC porque no pasa por `main()` (que ya lo
+    fija): con la zona de Windows en Argentina el driver mandaría "America/Buenos_Aires", que las
+    imágenes nuevas de Postgres rechazan.
+  - ~~Fecha del negocio en UTC~~: con la JVM en UTC, `LocalDate.now()` pasaba al día siguiente a
+    las 21 hs y una promo que vence hoy no se podía vender a la noche. Promos y pedidos usan
+    `BusinessDate.today()` (Argentina).
