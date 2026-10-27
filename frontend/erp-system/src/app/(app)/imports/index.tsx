@@ -1,6 +1,6 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { AndroidSymbol, SFSymbol, SymbolView } from 'expo-symbols';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -8,7 +8,12 @@ import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useDownloadImportTemplate, useImportProducts, usePreviewProductImport } from '@/hooks/use-import-queries';
+import {
+    useDownloadImportTemplate,
+    useExportProducts,
+    useImportProducts,
+    usePreviewProductImport,
+} from '@/hooks/use-import-queries';
 import { errorText } from '@/hooks/use-paged-list';
 import { useAuthStore } from '@/stores/auth-store';
 import { showErrorToast, showToast } from '@/stores/toast-store';
@@ -56,6 +61,7 @@ function summaryOf(result: ProductImportResult) {
 export default function ImportProductsScreen() {
     const canImport = useAuthStore((state) => hasPermission(state.user, 'ADMINISTRAR_PRODUCTOS'));
     const downloadTemplate = useDownloadImportTemplate();
+    const exportCatalog = useExportProducts();
     const preview = usePreviewProductImport();
     const importMutation = useImportProducts();
 
@@ -86,6 +92,14 @@ export default function ImportProductsScreen() {
             await downloadTemplate.mutateAsync();
         } catch (downloadError) {
             showErrorToast(downloadError, 'No se pudo descargar la plantilla.');
+        }
+    }
+
+    async function handleExport() {
+        try {
+            await exportCatalog.mutateAsync();
+        } catch (exportError) {
+            showErrorToast(exportError, 'No se pudo exportar el catálogo.');
         }
     }
 
@@ -183,39 +197,74 @@ export default function ImportProductsScreen() {
                 ) : null}
 
                 <View style={styles.card}>
-                    <Text style={styles.stepTitle}>1. Descargá la plantilla</Text>
+                    <Text style={styles.stepTitle}>1. Bajá un Excel</Text>
+                    <View style={styles.tiles}>
+                        <ActionTile
+                            icon={{ ios: 'doc.badge.plus', android: 'note_add', web: 'note_add' }}
+                            title="Plantilla vacía"
+                            description="Para cargar productos nuevos. Trae tus atributos y una columna de stock por sucursal."
+                            tint={Colors.primary}
+                            background={Colors.primaryLight}
+                            loading={downloadTemplate.isPending}
+                            onPress={handleDownloadTemplate}
+                        />
+                        <ActionTile
+                            icon={{ ios: 'tablecells', android: 'table_view', web: 'table_view' }}
+                            title="Mi catálogo"
+                            description="Tus productos activos, para cambiar precios, códigos o stock en Excel y volver a subirlo."
+                            tint={Colors.success}
+                            background={Colors.successLight}
+                            loading={exportCatalog.isPending}
+                            onPress={handleExport}
+                        />
+                    </View>
                     <Text style={styles.hint}>
-                        Trae las columnas, los atributos de tu catálogo y una columna de stock por sucursal. En la
-                        hoja &quot;Instrucciones&quot; está cómo completarla. También podés subir tu propio Excel si
-                        usa los mismos encabezados.
+                        También podés subir tu propio Excel si usa los mismos encabezados. En la hoja
+                        &quot;Instrucciones&quot; está cómo completarlo.
                     </Text>
-                    <Pressable
-                        style={({ pressed }) => [styles.secondaryButton, pressed && SharedStyles.pressed]}
-                        onPress={handleDownloadTemplate}
-                        disabled={downloadTemplate.isPending}
-                    >
-                        {downloadTemplate.isPending
-                            ? <ActivityIndicator color={Colors.primary} />
-                            : <Text style={styles.secondaryButtonText}>Descargar plantilla</Text>}
-                    </Pressable>
                 </View>
 
                 <View style={styles.card}>
-                    <Text style={styles.stepTitle}>2. Elegí el archivo</Text>
-                    <Text style={styles.hint}>
-                        Excel (.xlsx o .xls) o .csv, hasta 2 MB y 5.000 filas. Antes de guardar vas a ver qué pasa
-                        con cada fila.
-                    </Text>
-                    {file ? <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text> : null}
+                    <Text style={styles.stepTitle}>2. Subilo</Text>
                     <Pressable
-                        style={({ pressed }) => [styles.secondaryButton, pressed && SharedStyles.pressed, isBusy && styles.disabled]}
+                        style={({ pressed }) => [
+                            styles.dropZone,
+                            file && styles.dropZoneSelected,
+                            pressed && SharedStyles.pressed,
+                            isBusy && styles.disabled,
+                        ]}
                         onPress={handlePickFile}
                         disabled={isBusy}
+                        accessibilityRole="button"
                     >
-                        {preview.isPending
-                            ? <ActivityIndicator color={Colors.primary} />
-                            : <Text style={styles.secondaryButtonText}>{file ? 'Elegir otro archivo' : 'Elegir archivo'}</Text>}
+                        {preview.isPending ? (
+                            <>
+                                <ActivityIndicator color={Colors.primary} />
+                                <Text style={styles.dropZoneTitle}>Leyendo el archivo…</Text>
+                            </>
+                        ) : (
+                            <>
+                                <View style={styles.dropZoneIcon}>
+                                    <SymbolView
+                                        name={file
+                                            ? { ios: 'doc.text.fill', android: 'description', web: 'description' }
+                                            : { ios: 'square.and.arrow.up', android: 'upload_file', web: 'upload_file' }}
+                                        size={26}
+                                        tintColor={Colors.primary}
+                                    />
+                                </View>
+                                <Text style={styles.dropZoneTitle} numberOfLines={1}>
+                                    {file ? file.name : 'Elegir archivo'}
+                                </Text>
+                                <Text style={styles.dropZoneHint}>
+                                    {file
+                                        ? 'Tocá para elegir otro'
+                                        : 'Excel (.xlsx, .xls) o .csv · hasta 2 MB y 5.000 filas'}
+                                </Text>
+                            </>
+                        )}
                     </Pressable>
+                    <Text style={styles.hint}>Antes de guardar vas a ver qué pasa con cada fila.</Text>
                 </View>
 
                 {error ? (
@@ -267,11 +316,20 @@ export default function ImportProductsScreen() {
                                     onPress={handleConfirm}
                                     disabled={!canConfirm}
                                 >
-                                    {importMutation.isPending
-                                        ? <ActivityIndicator color={Colors.white} />
-                                        : <Text style={styles.primaryButtonText}>
-                                            {pendingChanges > 0 || !result.valid ? 'Importar' : 'No hay cambios para importar'}
-                                        </Text>}
+                                    {importMutation.isPending ? (
+                                        <ActivityIndicator color={Colors.white} />
+                                    ) : (
+                                        <>
+                                            <SymbolView
+                                                name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
+                                                size={20}
+                                                tintColor={Colors.white}
+                                            />
+                                            <Text style={styles.primaryButtonText}>
+                                                {pendingChanges > 0 || !result.valid ? 'Importar' : 'No hay cambios para importar'}
+                                            </Text>
+                                        </>
+                                    )}
                                 </Pressable>
 
                                 {result.variantsUnchanged > 0 ? (
@@ -296,6 +354,44 @@ export default function ImportProductsScreen() {
                 ) : null}
             </ScrollView>
         </Screen>
+    );
+}
+
+type ActionTileProps = {
+    icon: { ios: SFSymbol; android: AndroidSymbol; web: AndroidSymbol };
+    title: string;
+    description: string;
+    tint: string;
+    background: string;
+    loading: boolean;
+    onPress: () => void;
+};
+
+function ActionTile({ icon, title, description, tint, background, loading, onPress }: ActionTileProps) {
+    return (
+        <Pressable
+            style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
+            onPress={onPress}
+            disabled={loading}
+            accessibilityRole="button"
+        >
+            <View style={[styles.tileIcon, { backgroundColor: background }]}>
+                <SymbolView name={icon} size={22} tintColor={tint} />
+            </View>
+            <View style={styles.tileText}>
+                <Text style={styles.tileTitle}>{title}</Text>
+                <Text style={styles.tileDescription}>{description}</Text>
+            </View>
+            {loading ? (
+                <ActivityIndicator color={tint} />
+            ) : (
+                <SymbolView
+                    name={{ ios: 'arrow.down.circle', android: 'download', web: 'download' }}
+                    size={22}
+                    tintColor={tint}
+                />
+            )}
+        </Pressable>
     );
 }
 
@@ -359,21 +455,95 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         lineHeight: 18,
     },
-    fileName: {
-        fontSize: 14,
-        fontWeight: '600',
+    // En pantallas anchas (web) las dos tarjetas van lado a lado; en el celular, una abajo de la otra.
+    tiles: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.sm,
+    },
+    tile: {
+        flexGrow: 1,
+        flexBasis: 260,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+        padding: Spacing.md,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        backgroundColor: Colors.surface,
+    },
+    tilePressed: {
+        backgroundColor: Colors.muted,
+    },
+    tileIcon: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    tileText: {
+        flex: 1,
+        gap: 2,
+    },
+    tileTitle: {
+        fontSize: 15,
+        fontWeight: '700',
         color: Colors.text,
     },
-    secondaryButton: {
-        ...SharedStyles.buttonSecondary,
-        flex: 0,
+    tileDescription: {
+        fontSize: 12,
+        lineHeight: 16,
+        color: Colors.textSecondary,
     },
-    secondaryButtonText: SharedStyles.buttonSecondaryText,
+    dropZone: {
+        alignItems: 'center',
+        gap: Spacing.xs,
+        paddingVertical: Spacing.xl,
+        paddingHorizontal: Spacing.lg,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderStyle: 'dashed',
+        borderColor: Colors.track,
+        backgroundColor: Colors.background,
+    },
+    dropZoneSelected: {
+        borderStyle: 'solid',
+        borderColor: Colors.primary,
+        backgroundColor: Colors.primaryLight,
+    },
+    dropZoneIcon: {
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.primaryLight,
+        marginBottom: Spacing.xs,
+    },
+    dropZoneTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: Colors.text,
+        maxWidth: '100%',
+    },
+    dropZoneHint: {
+        fontSize: 12,
+        color: Colors.textSecondary,
+        textAlign: 'center',
+    },
     primaryButton: {
         ...SharedStyles.buttonPrimary,
         flex: 0,
+        height: 48,
+        flexDirection: 'row',
+        gap: Spacing.sm,
     },
-    primaryButtonText: SharedStyles.buttonPrimaryText,
+    primaryButtonText: {
+        ...SharedStyles.buttonPrimaryText,
+        fontSize: 15,
+    },
     disabled: {
         opacity: 0.5,
     },

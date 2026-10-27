@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 
 import { queryClient } from '@/services/query-client';
-import { downloadImportTemplate, importProducts, previewProductImport } from '@/services/import-service';
+import { downloadImportTemplate, exportProducts, importProducts, previewProductImport } from '@/services/import-service';
 import { ImportFile, ProductImportResult } from '@/types/product-import';
 
 import { invalidateStockViews, productKeys, promotionKeys } from './catalog-keys';
@@ -12,6 +12,12 @@ import { requireToken } from './use-paged-list';
 export function useDownloadImportTemplate() {
     return useMutation({
         mutationFn: () => downloadImportTemplate(requireToken()),
+    });
+}
+
+export function useExportProducts() {
+    return useMutation({
+        mutationFn: () => exportProducts(requireToken()),
     });
 }
 

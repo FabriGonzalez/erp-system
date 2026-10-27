@@ -71,3 +71,18 @@ export async function downloadImportTemplate(token: string): Promise<void> {
     }
     await saveResponseAsFile(response, TEMPLATE_NAME, XLSX_MIME);
 }
+
+/** El catálogo activo en el formato de la plantilla, con la fecha en el nombre ("productos-2026-10-27.xlsx"). */
+export async function exportProducts(token: string): Promise<void> {
+    const response = await apiFetch(`${IMPORTS_URL}/export`, { headers: authHeaders(token) });
+    if (!response.ok) {
+        throw await toApiError(response, { ...IMPORT_ERRORS, fallback: 'No se pudo exportar el catálogo.' });
+    }
+    await saveResponseAsFile(response, `productos-${localDate()}.xlsx`, XLSX_MIME);
+}
+
+function localDate(): string {
+    const now = new Date();
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
