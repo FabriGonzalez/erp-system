@@ -10,7 +10,6 @@ import { useAuthStore } from '@/stores/auth-store';
 import { Branch } from '@/types/branch';
 import { Category } from '@/types/category';
 import {
-    ProductAttributeValue,
     ProductFormData,
     ProductVariantAttribute,
 } from '@/types/product';
@@ -50,30 +49,6 @@ function combinationKey(attributes: ProductVariantAttribute[]) {
         .join('|');
 }
 
-function skuPart(value: string) {
-    const normalized = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '');
-    return normalized.slice(0, 2).toUpperCase();
-}
-
-function buildSku(productName: string, attributes: ProductVariantAttribute[], attributeValues: ProductAttributeValue[]) {
-    const parts = [skuPart(productName), ...attributes.map((attribute) => {
-        const value = attributeValues.find((item) => item.id === attribute.attributeValueId);
-        return skuPart(value?.name ?? '');
-    }).filter(Boolean)];
-    return `SKU-${parts.join('-')}`;
-}
-
-function uniqueSku(baseSku: string, usedSkus: Set<string>) {
-    let candidate = baseSku;
-    let suffix = 2;
-    while (usedSkus.has(candidate)) {
-        candidate = `${baseSku}-${suffix}`;
-        suffix += 1;
-    }
-    usedSkus.add(candidate);
-    return candidate;
-}
-
 // La variante única de un producto sin variantes (p. ej. un pack surtido) no tiene atributos.
 function isManualPlaceholder(variant: DraftVariant) {
     return variant.attributes.length === 0;
@@ -82,8 +57,6 @@ function isManualPlaceholder(variant: DraftVariant) {
 function generateCombinations(
     selectedValues: Record<string, string[]>,
     currentVariants: DraftVariant[],
-    productName: string,
-    attributeValues: ProductAttributeValue[],
     basePrice: string,
 ): DraftVariant[] {
     const groups = Object.entries(selectedValues).filter(
@@ -115,16 +88,6 @@ function generateCombinations(
         ]),
     );
 
-    // Únicos dentro del producto. Contra el resto de la empresa los valida el backend
-    // (VARIANT_SKU_ALREADY_EXISTS): el listado está paginado y no se tienen todos los SKU.
-    const usedSkus = new Set<string>();
-
-    for (const variant of currentVariants) {
-        if (variant.sku.trim()) {
-            usedSkus.add(variant.sku.trim().toUpperCase());
-        }
-    }
-
     const result = [...currentVariants];
 
     for (let index = 0; index < combinations.length; index++) {
@@ -137,18 +100,11 @@ function generateCombinations(
             continue;
         }
 
-        const generatedSku = uniqueSku(
-            buildSku(
-                productName,
-                attributes,
-                attributeValues,
-            ),
-            usedSkus,
-        );
-
+        // Sin SKU: lo genera el backend al guardar, único en toda la empresa (este listado
+        // está paginado y no tiene los SKU del resto).
         result.push({
             id: `variant-${Date.now()}-${index}`,
-            sku: generatedSku,
+            sku: '',
             price: basePrice,
             attributes,
             stockByBranch: {},
@@ -195,8 +151,9 @@ export function ProductForm({
     // Sin este permiso los precios quedan de solo lectura y no se pueden sumar variantes
     // (cada una nueva fija un precio): el backend lo rechaza con PRICE_PERMISSION_REQUIRED.
     const canEditPrices = useAuthStore((state) => hasPermission(state.user, 'ADMINISTRAR_PRECIOS'));
-    // El backend reconoce las variantes existentes por SKU.
+    // El backend reconoce las variantes existentes por SKU: esas no pueden quedar sin él.
     const initialSkus = new Set((initialValues?.variants ?? []).map((variant) => variant.sku.trim().toUpperCase()));
+    const initialVariantIds = new Set((initialValues?.variants ?? []).map((variant) => variant.id));
     const [isCreateAttrModalVisible, setIsCreateAttrModalVisible] = useState(false);
     const [createValueAttrId, setCreateValueAttrId] = useState<string | null>(null);
 
@@ -211,16 +168,6 @@ export function ProductForm({
     function selectCategory(id: string) {
         setCategoryId(id);
         setErrors((current) => ({ ...current, categoryId: '' }));
-    }
-
-    function updateName(value: string) {
-        setName(value);
-        // Solo las variantes nuevas siguen al nombre: el backend reconoce las existentes por SKU,
-        // y cambiárselo las reemplazaría por otras (los pedidos quedan en las viejas).
-        setVariants((current) => current.map((variant) => !initialSkus.has(variant.sku.trim().toUpperCase())
-            && (variant.sku === '' || variant.sku === buildSku(name, variant.attributes, attributeValues))
-            ? { ...variant, sku: buildSku(value, variant.attributes, attributeValues) }
-            : variant));
     }
 
     function updateVariant(index: number, field: 'sku' | 'price' | 'barcode', value: string) {
@@ -255,7 +202,7 @@ export function ProductForm({
             setErrors((current) => ({ ...current, variants: 'Seleccioná al menos un atributo y un valor para generar variantes' }));
             return;
         }
-        setVariants(generateCombinations(selectedValues, variants, name, attributeValues, basePrice));
+        setVariants(generateCombinations(selectedValues, variants, basePrice));
         setVariantMode(true);
         setErrors((current) => ({ ...current, variants: '' }));
     }
@@ -272,7 +219,7 @@ export function ProductForm({
             const sku = variant.sku.trim().toUpperCase();
             const normalizedPrice = variant.price.trim().replace(',', '.');
             const price = Number(normalizedPrice);
-            if (!sku) nextErrors.variants = 'Todas las variantes deben tener SKU';
+            if (!sku && initialVariantIds.has(variant.id)) nextErrors.variants = 'Las variantes ya guardadas tienen que conservar su SKU';
             if (sku && skuSet.has(sku)) nextErrors.variants = 'Los SKU no se pueden repetir entre variantes';
             if (!variant.price.trim() || !/^\d+(\.\d+)?$/.test(normalizedPrice) || !Number.isFinite(price)) nextErrors.variants = 'Todas las variantes deben tener un precio válido';
             // Un precio 0 dejaría pedidos de $0 que figuran "Pendiente": el backend también lo rechaza.
@@ -294,7 +241,7 @@ export function ProductForm({
             const barcode = variant.barcode?.trim() ?? '';
             if (barcode && barcodeSet.has(barcode)) nextErrors.variants = 'Los códigos de barras no se pueden repetir entre variantes';
             if (barcode) barcodeSet.add(barcode);
-            if (!canEditPrices && sku && !initialSkus.has(sku)) {
+            if (!canEditPrices && !initialSkus.has(sku)) {
                 nextErrors.variants = 'Sin el permiso "Administrar precios" no se pueden agregar variantes ni cambiar el SKU de una existente';
             }
         });
@@ -334,7 +281,7 @@ export function ProductForm({
                 <AppInput
                     style={errors.name ? styles.inputError : undefined}
                     value={name}
-                    onChangeText={updateName}
+                    onChangeText={setName}
                     editable={!isSubmitting}
                 />
 
@@ -383,7 +330,7 @@ export function ProductForm({
                             setSelectedValues({});
                             setVariants([manualVariantRef.current ?? {
                                 id: 'variant-new',
-                                sku: name.trim() ? buildSku(name, [], attributeValues) : '',
+                                sku: '',
                                 price: basePrice,
                                 attributes: [],
                                 stockByBranch: {},
@@ -508,7 +455,7 @@ export function ProductForm({
                         <View style={styles.row}>
                             <View style={styles.flex1}>
                                 <Text style={styles.smallLabel}>
-                                    SKU *
+                                    {initialVariantIds.has(variant.id) ? 'SKU *' : 'SKU (opcional)'}
                                 </Text>
 
                                 <AppInput
@@ -522,7 +469,7 @@ export function ProductForm({
                                         )
                                     }
                                     autoCapitalize="characters"
-                                    placeholder="Ej. SKU-PA-RO-44"
+                                    placeholder={initialVariantIds.has(variant.id) ? 'Ej. SKU-PA-RO-44' : 'Se genera al guardar'}
                                     editable={!isSubmitting}
                                 />
                             </View>

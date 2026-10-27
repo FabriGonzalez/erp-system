@@ -47,6 +47,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.text.Normalizer;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -236,12 +237,29 @@ public class ProductServiceImpl implements ProductService {
                         .toList()
         );
 
+        // Antes de generar SKUs: se arman con los nombres de los valores.
+        for (ProductVariantRequest vr : variantRequests) {
+            validateAttributeValueIds(
+                    vr.attributeValueIds(),
+                    companyId
+            );
+        }
+
+        List<String> skus = resolveSkus(
+                product.getName(),
+                variantRequests.stream().map(ProductVariantRequest::sku).toList(),
+                variantRequests.stream().map(ProductVariantRequest::attributeValueIds).toList(),
+                companyId
+        );
+
         Set<String> seenSkus = new HashSet<>();
         Set<String> seenBarcodes = new HashSet<>();
 
-        for (ProductVariantRequest vr : variantRequests) {
+        for (int i = 0; i < variantRequests.size(); i++) {
+            ProductVariantRequest vr = variantRequests.get(i);
+
             validateSkuUnique(
-                    vr.sku(),
+                    skus.get(i),
                     companyId,
                     null,
                     seenSkus
@@ -254,23 +272,20 @@ public class ProductServiceImpl implements ProductService {
                     seenBarcodes
             );
 
-            validateAttributeValueIds(
-                    vr.attributeValueIds(),
-                    companyId
-            );
-
             validateOneValuePerAttribute(
                     vr.attributeValueIds(),
-                    vr.sku()
+                    skus.get(i)
             );
         }
 
         List<ProductVariant> savedVariants = new ArrayList<>();
 
-        for (ProductVariantRequest vr : variantRequests) {
+        for (int i = 0; i < variantRequests.size(); i++) {
+            ProductVariantRequest vr = variantRequests.get(i);
+
             ProductVariant variant = ProductVariant.builder()
                     .product(product)
-                    .sku(vr.sku())
+                    .sku(skus.get(i))
                     .barcode(normalizeBarcode(vr.barcode()))
                     .price(vr.price())
                     .company(product.getCompany())
@@ -330,9 +345,23 @@ public class ProductServiceImpl implements ProductService {
                         .toList()
         );
 
-        Set<String> incomingSkus = variantRequests.stream()
-                .map(ProductVariantUpdateRequest::sku)
-                .collect(Collectors.toSet());
+        // Antes de generar SKUs: se arman con los nombres de los valores.
+        for (ProductVariantUpdateRequest vr : variantRequests) {
+            validateAttributeValueIds(
+                    vr.attributeValueIds(),
+                    companyId
+            );
+        }
+
+        // Uno generado nunca coincide con una existente: esas también ocupan su SKU.
+        List<String> skus = resolveSkus(
+                product.getName(),
+                variantRequests.stream().map(ProductVariantUpdateRequest::sku).toList(),
+                variantRequests.stream().map(ProductVariantUpdateRequest::attributeValueIds).toList(),
+                companyId
+        );
+
+        Set<String> incomingSkus = new HashSet<>(skus);
 
         List<ProductVariant> existingVariants =
                 variantRepository.findByProductId(product.getId());
@@ -346,10 +375,13 @@ public class ProductServiceImpl implements ProductService {
         Set<String> seenSkus = new HashSet<>();
         Set<String> seenBarcodes = new HashSet<>();
 
-        for (ProductVariantUpdateRequest vr : variantRequests) {
+        for (int i = 0; i < variantRequests.size(); i++) {
+            ProductVariantUpdateRequest vr = variantRequests.get(i);
+            String sku = skus.get(i);
+
             Optional<ProductVariant> existingForSku =
                     existingVariants.stream()
-                            .filter(v -> v.getSku().equals(vr.sku()))
+                            .filter(v -> v.getSku().equals(sku))
                             .findFirst();
 
             Long excludeId = existingForSku
@@ -357,7 +389,7 @@ public class ProductServiceImpl implements ProductService {
                     .orElse(null);
 
             validateSkuUnique(
-                    vr.sku(),
+                    sku,
                     companyId,
                     excludeId,
                     seenSkus
@@ -370,14 +402,9 @@ public class ProductServiceImpl implements ProductService {
                     seenBarcodes
             );
 
-            validateAttributeValueIds(
-                    vr.attributeValueIds(),
-                    companyId
-            );
-
             validateOneValuePerAttribute(
                     vr.attributeValueIds(),
-                    vr.sku()
+                    sku
             );
 
             // El formulario reenvía todas las variantes: reenviar el mismo precio no cuenta.
@@ -391,10 +418,13 @@ public class ProductServiceImpl implements ProductService {
 
         List<ProductVariant> savedVariants = new ArrayList<>();
 
-        for (ProductVariantUpdateRequest vr : variantRequests) {
+        for (int i = 0; i < variantRequests.size(); i++) {
+            ProductVariantUpdateRequest vr = variantRequests.get(i);
+            String sku = skus.get(i);
+
             Optional<ProductVariant> existingOpt =
                     existingVariants.stream()
-                            .filter(v -> v.getSku().equals(vr.sku()))
+                            .filter(v -> v.getSku().equals(sku))
                             .findFirst();
 
             ProductVariant variant;
@@ -403,7 +433,7 @@ public class ProductServiceImpl implements ProductService {
                 variant = existingOpt.get();
 
                 variant.update(
-                        vr.sku(),
+                        sku,
                         vr.price(),
                         normalizeBarcode(vr.barcode())
                 );
@@ -417,7 +447,7 @@ public class ProductServiceImpl implements ProductService {
             } else {
                 variant = ProductVariant.builder()
                         .product(product)
-                        .sku(vr.sku())
+                        .sku(sku)
                         .barcode(normalizeBarcode(vr.barcode()))
                         .price(vr.price())
                         .company(product.getCompany())
@@ -562,6 +592,68 @@ public class ProductServiceImpl implements ProductService {
                 );
 
         return toVariantResponses(variants, SecurityUtils.requireCurrentCompanyId());
+    }
+
+    /*
+     * El SKU de cada variante: el que vino o, si vino vacío, uno generado con baseSku. Si la
+     * base ya la usa otra variante de la empresa (activa o no) o de este mismo pedido, se le
+     * suma -2, -3… El formulario no lo puede generar: no tiene los SKU del resto de la empresa.
+     */
+    private List<String> resolveSkus(
+            String productName,
+            List<String> requestedSkus,
+            List<List<Long>> attributeValueIdsByVariant,
+            Long companyId
+    ) {
+        Set<String> reserved = requestedSkus.stream()
+                .filter(sku -> sku != null && !sku.isBlank())
+                .collect(Collectors.toCollection(HashSet::new));
+
+        List<String> skus = new ArrayList<>();
+
+        for (int i = 0; i < requestedSkus.size(); i++) {
+            String requested = requestedSkus.get(i);
+
+            if (requested != null && !requested.isBlank()) {
+                skus.add(requested);
+                continue;
+            }
+
+            List<String> valueNames = attributeValueIdsByVariant.get(i).stream()
+                    .map(valueId -> attributeValueRepository.getReferenceById(valueId).getValue())
+                    .toList();
+            String base = baseSku(productName, valueNames);
+
+            Set<String> taken = new HashSet<>(variantRepository.findSkusWithBase(companyId, base));
+            String candidate = base;
+            int suffix = 2;
+            while (taken.contains(candidate) || reserved.contains(candidate)) {
+                candidate = base + "-" + suffix;
+                suffix++;
+            }
+
+            reserved.add(candidate);
+            skus.add(candidate);
+        }
+
+        return skus;
+    }
+
+    /** "SKU-" + 2 letras del nombre y de cada valor, sin tildes: "Remera", M, Rojo → SKU-RE-M-RO. */
+    static String baseSku(String productName, List<String> valueNames) {
+        List<String> parts = new ArrayList<>();
+        parts.add(skuPart(productName));
+        valueNames.forEach(valueName -> parts.add(skuPart(valueName)));
+        parts.removeIf(String::isEmpty);
+
+        return parts.isEmpty() ? "SKU" : "SKU-" + String.join("-", parts);
+    }
+
+    private static String skuPart(String value) {
+        String letters = Normalizer.normalize(value == null ? "" : value, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .replaceAll("[^a-zA-Z0-9]", "");
+        return letters.substring(0, Math.min(2, letters.length())).toUpperCase(Locale.ROOT);
     }
 
     private void validateSkuUnique(

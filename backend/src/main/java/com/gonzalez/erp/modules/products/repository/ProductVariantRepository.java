@@ -17,6 +17,14 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
 
     boolean existsBySkuAndCompanyIdAndIdNot(String sku, Long companyId, Long id);
 
+    /**
+     * El SKU base y los que le suman un sufijo ("SKU-RE-M", "SKU-RE-M-2"…), activos o no: la
+     * unicidad también cuenta las inactivas. :base solo trae letras, números y guiones.
+     */
+    @Query("SELECT pv.sku FROM ProductVariant pv WHERE pv.company.id = :companyId " +
+            "AND (pv.sku = :base OR pv.sku LIKE CONCAT(:base, '-%'))")
+    List<String> findSkusWithBase(@Param("companyId") Long companyId, @Param("base") String base);
+
     boolean existsByBarcodeAndCompanyId(String barcode, Long companyId);
 
     boolean existsByBarcodeAndCompanyIdAndIdNot(String barcode, Long companyId, Long id);

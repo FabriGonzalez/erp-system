@@ -2,7 +2,6 @@ package com.gonzalez.erp.modules.products.dto.request;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
@@ -10,7 +9,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 public record ProductVariantUpdateRequest(
-        @NotBlank(message = "SKU is required")
+        // Las existentes se reconocen por SKU. Vacío = variante nueva con SKU generado.
         @Size(max = 50, message = "SKU must not exceed 50 characters")
         String sku,
 
