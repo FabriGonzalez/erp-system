@@ -1657,6 +1657,20 @@ facturar pedidos sin pagar del todo, CAEA, facturación automática al vender.
 Charlado el 2026-10-27. Objetivo: que un cliente nuevo cargue su catálogo (productos, variantes,
 precios y stock) desde el Excel que ya tiene, sin darlo de alta a mano.
 
+**Estado (2026-10-27): importación y plantilla commiteadas en `feature/product-import`; exportar
+sin confirmar ni hacer.** Diferencias con lo planeado abajo:
+- Límite de 2 MB (no 5) y 5.000 filas: `spring.servlet.multipart` y `MAX_ROWS`.
+- Confirmar con errores no da 422: responde 200 con `applied: false` y el mismo detalle.
+- Los movimientos de stock usan las referencias que ya existen (`PRODUCT_CREATION` al crear,
+  `PRODUCT_UPDATE` al actualizar), sin un motivo "Importación".
+- En las filas de un SKU existente, Descripción y Categoría se ignoran; Producto y los atributos
+  tienen que coincidir. Un SKU desactivado es error.
+- El esquema del SKU generado quedó en `products/service/Skus` (lo usan el alta y la importación).
+- Los nombres de las columnas los define `ProductImportTemplate.FixedColumn` y el importador los
+  reconoce desde ahí; la plantilla saltea atributos que chocarían con una columna fija o de stock.
+  Se lee la hoja "Productos" o, si no está, la primera.
+- Falta probarlo contra Postgres real (2026-10-27 Docker estaba apagado): solo tests unitarios.
+
 **Decisiones del usuario (2026-10-27).**
 - Va en la app, como una entrada más de `more.tsx` (Administración → "Importar productos").
 - Solo productos: clientes quedan fuera.
