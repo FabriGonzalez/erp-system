@@ -1658,7 +1658,11 @@ Charlado el 2026-10-27. Objetivo: que un cliente nuevo cargue su catálogo (prod
 precios y stock) desde el Excel que ya tiene, sin darlo de alta a mano.
 
 **Estado (2026-10-27): importación y plantilla commiteadas en `feature/product-import`; exportar
-sin confirmar ni hacer.** Diferencias con lo planeado abajo:
+hecho después, a pedido del usuario (esperaba que la plantilla trajera los productos).**
+Diferencias con lo planeado abajo:
+- Exportar (`GET /imports/products/export`) baja las variantes activas de productos activos, con
+  stock 0 donde no hay; reimportado sin cambios da todo UNCHANGED. Con más de 5.000 variantes el
+  archivo no se puede volver a subir entero.
 - Límite de 2 MB (no 5) y 5.000 filas: `spring.servlet.multipart` y `MAX_ROWS`.
 - Confirmar con errores no da 422: responde 200 con `applied: false` y el mismo detalle.
 - Los movimientos de stock usan las referencias que ya existen (`PRODUCT_CREATION` al crear,
