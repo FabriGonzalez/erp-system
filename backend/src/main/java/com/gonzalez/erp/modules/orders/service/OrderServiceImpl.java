@@ -2,6 +2,7 @@ package com.gonzalez.erp.modules.orders.service;
 
 import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.common.util.BusinessDate;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
 import com.gonzalez.erp.modules.branches.service.BranchAccessService;
@@ -192,7 +193,7 @@ public class OrderServiceImpl implements OrderService {
         if (request.salesType() == SalesType.WITH_PRODUCTS) {
             List<OrderItem> items = buildItemsFromRequest(orEmpty(request.items()), companyId, Map.of());
             order.updateItems(items);
-            LocalDate today = LocalDate.now();
+            LocalDate today = BusinessDate.today();
             order.updatePromos(orEmpty(request.promos()).stream()
                     .map(promoRequest -> buildNewPromo(promoRequest, companyId, today))
                     .toList());
@@ -805,7 +806,7 @@ public class OrderServiceImpl implements OrderService {
             currentIds.add(existing.getId());
         }
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = BusinessDate.today();
         List<OrderPromo> promos = new ArrayList<>();
         for (OrderPromoRequest request : requests) {
             if (request.id() == null) {

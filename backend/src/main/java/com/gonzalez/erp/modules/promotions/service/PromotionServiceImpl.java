@@ -2,6 +2,7 @@ package com.gonzalez.erp.modules.promotions.service;
 
 import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.common.util.BusinessDate;
 import com.gonzalez.erp.common.util.SearchText;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
@@ -48,7 +49,7 @@ public class PromotionServiceImpl implements PromotionService {
     public PageResponse<PromotionResponse> findAll(String query, PromotionStatus status, Pageable pageable) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
         String search = SearchText.normalize(query);
-        LocalDate today = LocalDate.now();
+        LocalDate today = BusinessDate.today();
 
         Page<Promotion> page = promotionRepository.search(
                 companyId,
@@ -136,7 +137,7 @@ public class PromotionServiceImpl implements PromotionService {
 
     private PromotionResponse toResponse(Promotion promotion) {
         List<PromotionItem> items = promotionItemRepository.findByPromotionIdInWithProduct(List.of(promotion.getId()));
-        return PromotionMapper.toResponse(promotion, items, activeVariantsByProduct(items), LocalDate.now());
+        return PromotionMapper.toResponse(promotion, items, activeVariantsByProduct(items), BusinessDate.today());
     }
 
     private Map<Long, List<ProductVariant>> activeVariantsByProduct(List<PromotionItem> items) {

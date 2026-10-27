@@ -1,5 +1,6 @@
 package com.gonzalez.erp.modules.promotions.service;
 
+import com.gonzalez.erp.common.util.BusinessDate;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.CustomUserDetails;
 import com.gonzalez.erp.modules.companies.entity.Company;
@@ -104,7 +105,7 @@ class PromotionServiceImplTest {
 
     @Test
     void createsAPromoByProductsWithTheRangeOfRegularPrices() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = BusinessDate.today();
 
         PromotionResponse response = promotionService.create(request(today, today.plusDays(7),
                 new PromotionItemRequest(BUZO_ID, 1), new PromotionItemRequest(PANTALON_ID, 1)));
@@ -119,7 +120,7 @@ class PromotionServiceImplTest {
 
     @Test
     void endDateBeforeStartDateIsRejected() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = BusinessDate.today();
 
         assertThatThrownBy(() -> promotionService.create(request(today, today.minusDays(1),
                 new PromotionItemRequest(BUZO_ID, 1))))
@@ -129,7 +130,7 @@ class PromotionServiceImplTest {
 
     @Test
     void aProductCannotRepeat() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = BusinessDate.today();
 
         assertThatThrownBy(() -> promotionService.create(request(today, today,
                 new PromotionItemRequest(BUZO_ID, 1), new PromotionItemRequest(BUZO_ID, 2))))
@@ -138,7 +139,7 @@ class PromotionServiceImplTest {
 
     @Test
     void inactiveProductsAreRejected() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = BusinessDate.today();
         pantalon.deactivate();
 
         assertThatThrownBy(() -> promotionService.create(request(today, today, new PromotionItemRequest(PANTALON_ID, 1))))
@@ -147,7 +148,7 @@ class PromotionServiceImplTest {
 
     @Test
     void aProductOfAnotherCompanyIsNotFound() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = BusinessDate.today();
 
         assertThatThrownBy(() -> promotionService.create(request(today, today, new PromotionItemRequest(99L, 1))))
                 .isInstanceOf(ResourceNotFoundException.class);

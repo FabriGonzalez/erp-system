@@ -1,5 +1,6 @@
 package com.gonzalez.erp.modules.orders.service;
 
+import com.gonzalez.erp.common.util.BusinessDate;
 import com.gonzalez.erp.config.security.CustomUserDetails;
 import com.gonzalez.erp.modules.branches.entity.Branch;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
@@ -405,7 +406,7 @@ class OrderPromoTest {
     }
 
     private static LocalDate today() {
-        return LocalDate.now();
+        return BusinessDate.today();
     }
 
     private OrderRequest walkIn(List<OrderItemRequest> items, List<OrderPromoRequest> promos) {
