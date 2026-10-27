@@ -1567,6 +1567,193 @@ para que la consuma, más lo mínimo en el ERP para atender los pedidos web.
 **Fuera de alcance.** El sitio de la tienda, cupones, costo de envío calculado, facturación
 electrónica, compra como invitado.
 
+## Etapa 23 — Facturación electrónica con ARCA (posible plan; sin fecha)
+
+Charlado el 2026-10-26; queda como posible plan, sin orden asignado. Antes de arrancar hay que
+releer el manual vigente de WSFEv1 (`wsfev1-COMPG.pdf`, v4.7 o posterior) y confirmar los puntos
+marcados "a confirmar".
+
+**Decisiones del usuario (2026-10-26).**
+- **Facturar va aparte de vender:** no se factura al crear el pedido, sino a mano desde el
+  historial de pedidos.
+- **Solo se facturan pedidos pagados del todo** (`PaymentStatus.PAID`, que ya calcula
+  `OrderMapper`), y solo los que se eligen: no todo pedido se factura.
+- **Un pedido facturado no se cancela ni se le anulan pagos** (al menos al principio): sin notas
+  de crédito en la primera versión. Si hay que anular una factura, se hace a mano en ARCA.
+- Todavía no se sabe si los clientes son monotributistas o responsables inscriptos.
+  **Propuesta:** hacer A, B y C juntas (≈ 3 semanas; solo C ≈ 2), así no se reabre el módulo.
+
+**Lo que hay hoy (relevamiento).**
+- `Company`: `legalName` y `taxId` (CUIT). Sin condición frente al IVA, inicio de actividades,
+  IIBB, domicilio fiscal ni credenciales de ARCA. `Branch` sin punto de venta.
+- `Customer`: `documentType` y `documentNumber`; sin condición frente al IVA.
+- Productos sin alícuota de IVA. Los precios se toman como finales, con IVA incluido (a confirmar).
+- `Order`: `total`, `amountPaid`, ítems, promos y `quickSaleAmount` (venta rápida sin ítems). Se
+  edita solo en `TO_PREPARE` y se cancela en `CONFIRMED` o `TO_PREPARE`; `Payment` se anula con
+  `cancelPayment` y se reparte entre pedidos con `PaymentAllocation`.
+
+**Criterios.**
+- El tipo de comprobante sale de la condición de la empresa que factura: monotributista → **C**;
+  responsable inscripto → **A** a otro inscripto (exige CUIT del cliente) o **B** a consumidor
+  final o monotributista.
+- La condición frente al IVA del receptor (`CondicionIVAReceptorId`) es obligatoria para todos los
+  tipos (RG 5616; ARCA pasa a rechazar en vez de observar, fecha a confirmar: septiembre o
+  diciembre de 2026).
+- Un pedido tiene a lo sumo una factura; facturar dos veces el mismo pedido es imposible (único en
+  la base y lock del pedido).
+- La numeración es correlativa por punto de venta y tipo: se emite de a una, con lock por punto de
+  venta. Si ARCA no responde, antes de reintentar se consulta (`FECompConsultar` /
+  `FECompUltimoAutorizado`) si el comprobante salió, para no perder ni duplicar números.
+- Fecha del comprobante: la de la venta si está dentro del margen que acepta ARCA para productos
+  (≈ 5 días, a confirmar); si no, la del día. El historial avisa los pagados por quedar fuera.
+- Por encima del monto que fija ARCA, consumidor final exige documento del comprador.
+
+### Backend
+
+1. **Datos fiscales:** en `Company`, condición frente al IVA, inicio de actividades, IIBB y
+   domicilio fiscal; punto de venta por sucursal (o por empresa, a decidir); en `Customer`,
+   condición frente al IVA y validación del CUIT (dígito verificador).
+2. **IVA (A y B):** alícuota por variante o producto (21 / 10,5 / 0 / exento, con valor por
+   defecto para lo existente); desglose de neto e IVA por alícuota desde el precio final, con
+   redondeo que cierre con lo que valida ARCA; reparto proporcional del precio de una promo entre
+   sus productos; alícuota por defecto para la venta rápida.
+3. **Conexión con ARCA:** WSAA (pedido de acceso firmado con el certificado, ticket de 12 h en
+   caché por CUIT) y WSFEv1 (`FECAESolicitar`), homologación y producción por configuración.
+   Credenciales por empresa: certificado propio (vence cada 2 años) o delegación del servicio a
+   un CUIT de la plataforma desde "Administrador de Relaciones" (a confirmar con la documentación
+   oficial). Alternativa a evaluar: Afip SDK (pago por CUIT) en lugar de implementarlo.
+4. **Comprobante:** entidad `Invoice` (pedido, tipo, punto de venta, número, fecha, CAE y su
+   vencimiento, importes, estado `PENDING` / `AUTHORIZED` / `REJECTED` con el mensaje de ARCA).
+   `POST /orders/{id}/invoice` y facturación de varios pedidos (cada uno con su resultado, sin
+   trabar al resto). PDF con el QR obligatorio (RG 4291); en la B, IVA contenido (Ley 27.743, a
+   confirmar), en la A, IVA discriminado.
+5. **Bloqueos:** pedido facturado → no se edita, no se cancela y sus pagos no se anulan (409 con
+   código propio).
+6. **Permiso nuevo** `FACTURAR`, que no se da por defecto a quien vende.
+7. **Migración** nueva `V{n}__facturacion.sql` (campos fiscales, alícuotas, `invoices`, CHECK de
+   los enums nuevos).
+
+### Frontend
+
+1. Datos fiscales de la empresa y de las sucursales (punto de venta); condición frente al IVA en
+   el formulario de cliente; alícuota en el de producto.
+2. Historial de pedidos: filtro "Pagados sin facturar", aviso de plazo, selección múltiple y
+   "Facturar"; estado de la factura y descarga del PDF en el detalle.
+3. Ocultar cancelar y anular pago en pedidos facturados.
+
+### Validación
+
+- Backend: tests de tipo de comprobante por condición, desglose y redondeo por alícuota, reparto
+  de promos, numeración con ARCA sin respuesta, doble facturación, bloqueos y aislamiento entre
+  empresas.
+- Manual: homologación de ARCA con un CUIT de prueba, una factura de cada tipo y el QR leído
+  desde el celular.
+
+**Fuera de alcance (primera versión).** Notas de crédito y débito, devoluciones parciales,
+facturar pedidos sin pagar del todo, CAEA, facturación automática al vender.
+
+## Etapa 24 — Importar productos desde Excel (intermedia, antes de las demos)
+
+Charlado el 2026-10-27. Objetivo: que un cliente nuevo cargue su catálogo (productos, variantes,
+precios y stock) desde el Excel que ya tiene, sin darlo de alta a mano.
+
+**Decisiones del usuario (2026-10-27).**
+- Va en la app, como una entrada más de `more.tsx` (Administración → "Importar productos").
+- Solo productos: clientes quedan fuera.
+- SKU opcional, generado por el backend cuando viene vacío (confirmado y ya hecho, ver abajo).
+- Exportar: ver propuesta abajo (a confirmar).
+
+**Lo que hay hoy (relevamiento).**
+- `ProductRequest` → variantes con `sku` (obligatorio, único por empresa), `price` (> 0),
+  `barcode` (opcional, único), `attributeValueIds` (por id) e `initialStock` por sucursal.
+- El nombre de producto no es único. Atributos y valores tienen unique por empresa / atributo.
+- SKU (arreglado el 2026-10-27, antes de esta etapa): antes lo armaba `ProductForm` mirando solo
+  el producto en edición, así que "Remera lisa" y "Remera estampada" en talle M daban los dos
+  `SKU-RE-M` y el segundo chocaba con 409. Ahora es opcional en `ProductVariantRequest` y
+  `ProductVariantUpdateRequest`: vacío → `ProductServiceImpl.resolveSkus` lo genera (`baseSku`,
+  mismo esquema) único en la empresa contando las inactivas (`findSkusWithBase`), con sufijo
+  `-2`, `-3`… La importación lo reutiliza.
+- Sin multipart ni librería de planillas en el backend; sin `expo-document-picker` en el frontend.
+- `StockMovementType` no tiene un tipo para importación: se usa `ADJUSTMENT` con motivo
+  "Importación" (sumar un tipo exigiría migración por el CHECK).
+
+**SKU (confirmado).** El SKU es una columna **opcional**:
+- Si viene, se respeta: si existe en la empresa, la fila **actualiza** esa variante (precio,
+  código de barras y stock); si no, la crea con ese SKU.
+- Si viene vacío, el backend lo genera con `resolveSkus`, único contra la base y contra el resto
+  del archivo (sufijo `-2`, `-3`…). Una fila sin SKU siempre crea: la
+  previsualización avisa "ya existe un producto con este nombre" para no duplicar al subir dos
+  veces el mismo archivo.
+- Para actualizar después lo que se creó sin SKU, el camino es **exportar** (abajo): el archivo
+  exportado trae los SKU generados, se edita y se vuelve a subir.
+
+**Propuesta de exportar (a confirmar).** Descargar el catálogo actual en el mismo formato de la
+plantilla (una fila por variante, con su SKU y el stock de cada sucursal). Sirve para: actualizar
+precios o stock en Excel y reimportar, tener un respaldo y llevarse los datos. Es casi gratis
+porque reusa el armado de la plantilla.
+
+**Formato del archivo** (`.xlsx` o `.csv`; la plantilla se descarga desde la pantalla).
+- Una fila por variante. Columnas fijas: `Producto`, `Descripción`, `Categoría`, `SKU`,
+  `Código de barras`, `Precio`.
+- Atributos: cualquier otra columna cuyo encabezado no sea fijo ni de stock es un atributo
+  (encabezado = atributo, celda = valor; vacía = la variante no lo usa).
+- Stock: una columna `Stock <Sucursal>` por sucursal activa (la plantilla ya las trae). Vacía =
+  no se toca (alta: 0). Es la cantidad final, no un delta.
+- Las filas con el mismo `Producto` (sin distinguir mayúsculas ni tildes) son variantes de un
+  mismo producto nuevo; dos variantes con la misma combinación de atributos es error.
+- Categorías, atributos y valores que no existen se crean (búsqueda por nombre normalizado).
+
+**Criterios.**
+- Dos pasos sin estado en el servidor: **previsualizar** (lee y valida, no guarda) y
+  **confirmar** (se reenvía el mismo archivo y se aplica en una sola transacción). Con un error
+  en cualquier fila no se guarda nada.
+- Permisos: `ADMINISTRAR_PRODUCTOS`; crear categorías exige además `ADMINISTRAR_CATEGORIAS` y
+  fijar o cambiar precios `ADMINISTRAR_PRECIOS` (reenviar el mismo precio no cuenta, como en la
+  edición). Sin el permiso, la fila da error en la previsualización.
+- Un SKU existente no cambia de producto ni de atributos: si la fila trae otros, es error.
+- Límites: 5.000 filas y 5 MB (Render gratis tiene 512 MB y POI carga el libro en memoria).
+- Sin N+1: SKUs, códigos de barras, categorías, atributos, valores y sucursales se cargan en
+  mapas una vez por archivo; el stock de las variantes existentes, en una consulta.
+
+### Backend (módulo nuevo `modules/imports`)
+
+1. Dependencia Apache POI (`poi-ooxml`) y límite de multipart en `application.yaml`.
+2. `GET /api/v1/imports/products/template` → `.xlsx` con las columnas fijas, las de stock por
+   sucursal y una hoja de instrucciones.
+3. `POST /api/v1/imports/products/preview` (multipart) → resumen (a crear / a actualizar /
+   errores) y detalle por fila: número de fila, acción, producto, SKU (el generado si vino vacío),
+   mensajes.
+4. `POST /api/v1/imports/products` (multipart) → mismo análisis; si no hay errores, aplica todo
+   en una transacción reutilizando la lógica de `ProductServiceImpl` (alta con `initialStock`;
+   cambios de stock como movimiento `ADJUSTMENT` con motivo "Importación"). Con errores, 422 con
+   el mismo detalle que la previsualización.
+5. `GET /api/v1/imports/products/export` → catálogo en el formato de la plantilla (si se
+   confirma exportar).
+6. SKU vacío: reutilizar `resolveSkus`, reservando además los SKU del resto del archivo.
+
+### Frontend
+
+1. `expo-document-picker` (versión de Expo 57); en web, el `<input type="file">` que usa.
+2. Stack nuevo `(app)/imports/` (como `promotions/` o `attributes/`, con
+   `unstable_settings = { anchor: 'index' }`) y entrada en `more.tsx` → `/imports`: descargar
+   plantilla, elegir archivo, previsualizar (resumen arriba, filas con error primero) y
+   confirmar. Errores en la propia pantalla.
+3. Servicio `import-service` con `apiFetch` (multipart, sin `Content-Type` a mano) y descarga del
+   `.xlsx` (web: blob; celular: `expo-file-system` + compartir).
+4. Al confirmar, invalidar `productKeys`, stock (`use-stock-queries`), categorías y atributos.
+
+### Validación
+
+- Backend: tests de lectura (xlsx y csv, encabezados con tildes/mayúsculas, columnas de
+  atributos y de stock), agrupado de variantes, SKU generado sin chocar, actualización por SKU,
+  permisos de precio y categoría, todo o nada ante un error, límites y aislamiento entre empresas.
+- Frontend: `npx tsc --noEmit`, eslint de los archivos tocados, `git diff --check`.
+- Manual (usuario): plantilla en web y APK, importar ~300 filas con variantes y stock en dos
+  sucursales, reimportar el exportado con precios cambiados, archivo con errores.
+
+**Fuera de alcance.** Clientes, fotos de productos, importación en segundo plano para archivos
+grandes, deshacer una importación.
+
 ---
 
 ## Pendientes chicos (sin orden; sumar a la etapa afín)
