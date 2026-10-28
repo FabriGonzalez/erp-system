@@ -23,7 +23,7 @@ const ORDER_ERRORS = {
         INSUFFICIENT_STOCK: 'No hay stock suficiente para completar la operación.',
         INVALID_STATUS_TRANSITION: 'La orden no está en un estado que permita esta operación.',
         QUICK_SALE_INVALID:
-            'La venta rápida es solo con retiro en el local y requiere un cliente registrado y un importe válido.',
+            'La venta rápida es solo con retiro en el local y necesita un importe mayor a $0.',
         CUSTOMER_INACTIVE: 'El cliente está inactivo y no puede recibir pedidos nuevos.',
         // En el alta: el pago inicial no puede superar el saldo del pedido.
         INVALID_PAYMENT: 'El pago inicial no es válido: no puede superar el total del pedido.',
@@ -129,6 +129,7 @@ function normalizeOrder(data: OrderResponse): Order {
         amountPaid: Number(data.amountPaid ?? 0),
         paymentStatus: data.paymentStatus,
         balance: Number(data.balance ?? 0),
+        paymentMethod: data.paymentMethod ?? undefined,
         status: data.status,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,

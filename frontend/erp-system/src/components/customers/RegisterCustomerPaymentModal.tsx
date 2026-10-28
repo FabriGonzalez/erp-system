@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { PaymentMethodPicker } from '@/components/orders/PaymentMethodPicker';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
-import { FilterChip } from '@/components/ui/FilterChip';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import {
@@ -11,11 +11,11 @@ import {
     useRegisterPayment,
 } from '@/hooks/use-customer-account-queries';
 import { useActiveBranch } from '@/hooks/use-branch-queries';
-import { PAYMENT_METHOD_LABELS, PaymentMethod } from '@/types/order';
+import { SharedStyles } from '@/styles/shared';
+import { PaymentMethod } from '@/types/order';
 import { Payment } from '@/types/payment';
 import { formatCurrency } from '@/utils/format';
 
-const PAYMENT_METHODS = Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[];
 
 type RegisterCustomerPaymentModalProps = {
     visible: boolean;
@@ -105,16 +105,8 @@ export function RegisterCustomerPaymentModal({
                         editable={!isSubmitting}
                     />
 
-                    <View style={styles.methods}>
-                        {PAYMENT_METHODS.map((item) => (
-                            <FilterChip
-                                key={item}
-                                label={PAYMENT_METHOD_LABELS[item]}
-                                selected={method === item}
-                                onPress={() => !isSubmitting && setMethod(item)}
-                            />
-                        ))}
-                    </View>
+                    <Text style={SharedStyles.fieldLabel}>Medio de pago</Text>
+                    <PaymentMethodPicker value={method} onChange={setMethod} disabled={isSubmitting} />
 
                     {error && <Text style={styles.error}>{error}</Text>}
 
@@ -177,11 +169,6 @@ const styles = StyleSheet.create({
     summary: {
         color: Colors.textSecondary,
         fontSize: 14,
-    },
-    methods: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: Spacing.xs,
     },
     error: {
         color: Colors.error,

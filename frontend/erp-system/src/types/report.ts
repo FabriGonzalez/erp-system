@@ -19,7 +19,7 @@ export type DashboardResponse = {
     salesByBranch: { branchId: number; branchName: string; orderCount: number; total: number }[];
     collections: {
         byMethod: { method: PaymentMethod; total: number }[];
-        walkInSalesTotal: number | null;
+        withoutMethodTotal: number | null;
     };
     debt: { totalDebt: number; debtorCount: number };
     topProducts: {
@@ -84,8 +84,10 @@ export type Dashboard = {
     previousSales: SalesSummary;
     salesByBranch: BranchSales[];
     collections: {
+        // Pagos de clientes y ventas sin cliente, por medio.
         byMethod: { method: PaymentMethod; total: number }[];
-        walkInSalesTotal: number;
+        // Ventas sin cliente de antes de guardar su medio.
+        withoutMethodTotal: number;
     };
     debt: { totalDebt: number; debtorCount: number };
     topProducts: TopProduct[];

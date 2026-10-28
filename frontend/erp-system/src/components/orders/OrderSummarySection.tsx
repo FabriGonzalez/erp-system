@@ -7,20 +7,20 @@ import {
     View
 } from 'react-native';
 
-import { StatusBadge } from '@/components/ui/StatusBadge';
+import { PaymentMethodPicker } from '@/components/orders/PaymentMethodPicker';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import {
     DeliveryType,
-    PAYMENT_METHOD_LABELS,
-    PaymentMethod,
+    ORDER_STATUS_LABELS,
 } from '@/types/order';
+import { orderStatusTone } from '@/utils/status';
 import { AppInput } from '../ui/AppInput';
 
-const PAYMENT_METHODS = Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[];
 
 type OrderSummarySectionProps = {
     total: number;
@@ -104,8 +104,8 @@ export function OrderSummarySection({
 
     return (
         <View style={styles.container}>
+            <Text style={SharedStyles.sectionTitle}>Resumen del pedido</Text>
             <View style={styles.summaryCard}>
-                <Text style={[SharedStyles.cardTitle, styles.summaryTitle]}>Resumen del pedido</Text>
 
                 <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Sucursal:</Text>
@@ -121,9 +121,9 @@ export function OrderSummarySection({
 
                 <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Estado inicial:</Text>
-                    <StatusBadge
-                        status={isPickup ? 'CONFIRMED' : 'TO_PREPARE'}
-                        showDot={false}
+                    <StatusPill
+                        label={ORDER_STATUS_LABELS[isPickup ? 'CONFIRMED' : 'TO_PREPARE']}
+                        tone={orderStatusTone(isPickup ? 'CONFIRMED' : 'TO_PREPARE')}
                     />
                 </View>
 
@@ -223,31 +223,9 @@ export function OrderSummarySection({
                             </View>
                         )}
 
-                        {!isAnonymousCustomer && effectiveAmountPaid > 0 && (
-                            <View style={styles.methodOptions}>
-                                {PAYMENT_METHODS.map((method) => (
-                                    <Pressable
-                                        key={method}
-                                        style={[
-                                            styles.methodOption,
-                                            paymentMethod === method && styles.paymentOptionActive,
-                                        ]}
-                                        onPress={() => setPaymentMethod(method)}
-                                        accessibilityRole="button"
-                                        accessibilityState={{ selected: paymentMethod === method }}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.methodOptionText,
-                                                paymentMethod === method && styles.paymentOptionTextActive,
-                                            ]}
-                                        >
-                                            {PAYMENT_METHOD_LABELS[method]}
-                                        </Text>
-                                    </Pressable>
-                                ))}
-                            </View>
-                        )}
+                        {/* Siempre se elige: sin cliente queda en el pedido, con cliente va en el pago. */}
+                        <Text style={styles.entregaTitle}>Medio de pago</Text>
+                        <PaymentMethodPicker value={paymentMethod} onChange={setPaymentMethod} disabled={isSubmitting} />
                     </>
                 )}
             </View>
@@ -290,14 +268,11 @@ const styles = StyleSheet.create({
     },
     summaryCard: {
         backgroundColor: Colors.surface,
-        borderRadius: 12,
+        borderRadius: Radius.lg,
         padding: Spacing.md,
         borderWidth: 1,
         borderColor: Colors.border,
         marginBottom: Spacing.lg,
-    },
-    summaryTitle: {
-        marginBottom: Spacing.md,
     },
     summaryRow: {
         flexDirection: 'row',
@@ -353,7 +328,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: Colors.surface,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         borderWidth: 1,
         borderColor: Colors.border,
         paddingHorizontal: Spacing.md,
@@ -375,25 +350,6 @@ const styles = StyleSheet.create({
         borderWidth: 0,
         backgroundColor: 'transparent',
         paddingHorizontal: 0,
-    },
-    methodOptions: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: Spacing.xs,
-        marginBottom: Spacing.md,
-    },
-    methodOption: {
-        borderWidth: 1,
-        borderColor: Colors.border,
-        borderRadius: 8,
-        paddingVertical: Spacing.xs,
-        paddingHorizontal: Spacing.sm,
-        backgroundColor: Colors.surface,
-    },
-    methodOptionText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: Colors.textSecondary,
     },
     actionsContainer: {
         gap: Spacing.sm,
@@ -417,7 +373,7 @@ const styles = StyleSheet.create({
         flex: 1,
         borderWidth: 1,
         borderColor: Colors.border,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         paddingVertical: Spacing.md,
         alignItems: 'center',
         backgroundColor: Colors.surface,

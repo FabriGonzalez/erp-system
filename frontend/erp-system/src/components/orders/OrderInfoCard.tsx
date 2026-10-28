@@ -6,7 +6,7 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { StatTile } from '@/components/ui/StatTile';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { SharedStyles } from '@/styles/shared';
-import { DELIVERY_TYPE_LABELS, Order, PAYMENT_STATUS_LABELS } from '@/types/order';
+import { DELIVERY_TYPE_LABELS, Order, PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS } from '@/types/order';
 import { formatAddress } from '@/utils/address';
 import { formatCurrency } from '@/utils/format';
 import { paymentStatusTone } from '@/utils/status';
@@ -43,6 +43,9 @@ export function OrderInfoCard({ order }: OrderInfoCardProps) {
                         />
                     ) : null}
                     <InfoRow label="Sucursal" value={order.branchName} />
+                    {order.paymentMethod ? (
+                        <InfoRow label="Medio de pago" value={PAYMENT_METHOD_LABELS[order.paymentMethod]} />
+                    ) : null}
                     <InfoRow
                         label="Cobro"
                         value={(

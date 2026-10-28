@@ -18,13 +18,13 @@ type DraftPayment = {
 
 /**
  * Opciones de pago del alta. Las ventas sin cliente se cobran completas en el
- * backend, así que no envían crédito ni pago.
+ * backend: no envían crédito ni pago, solo el medio.
  */
 export function toOrderPaymentOptions(
     draft: DraftPayment
-): Pick<OrderRequest, 'applyCredit' | 'initialPayment'> {
+): Pick<OrderRequest, 'applyCredit' | 'initialPayment' | 'paymentMethod'> {
     if (toBackendCustomerId(draft.customer) === undefined) {
-        return {};
+        return { paymentMethod: draft.paymentMethod };
     }
 
     const amount = Number.isFinite(draft.amountPaid) ? Math.max(0, draft.amountPaid) : 0;

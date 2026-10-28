@@ -41,7 +41,7 @@ function normalizeDashboard(data: DashboardResponse): Dashboard {
                 method: item.method,
                 total: Number(item.total),
             })),
-            walkInSalesTotal: Number(data.collections.walkInSalesTotal ?? 0),
+            withoutMethodTotal: Number(data.collections.withoutMethodTotal ?? 0),
         },
         debt: {
             totalDebt: Number(data.debt.totalDebt),

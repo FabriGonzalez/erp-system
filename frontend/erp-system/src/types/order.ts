@@ -87,6 +87,8 @@ export type Order = {
     amountPaid: number;
     paymentStatus: PaymentStatus;
     balance: number;
+    // Medio de una venta sin cliente; con cliente el medio está en sus pagos.
+    paymentMethod?: PaymentMethod;
     status: OrderStatus;
     createdAt: string;
     updatedAt: string;
@@ -139,6 +141,8 @@ export type OrderRequest = {
     applyCredit?: boolean;
     // Solo con cliente: pago cobrado ahora, asignado a esta orden.
     initialPayment?: InitialPaymentRequest;
+    // Solo sin cliente (obligatorio): con qué pagó; la venta se cobra completa al crearse.
+    paymentMethod?: PaymentMethod;
 };
 
 export type OrderUpdateRequest = {
@@ -210,6 +214,7 @@ export type OrderResponse = {
     amountPaid?: number | string | null;
     paymentStatus: PaymentStatus;
     balance?: number | string | null;
+    paymentMethod?: PaymentMethod | null;
     createdAt: string;
     updatedAt: string;
     items?: OrderItemResponse[] | null;

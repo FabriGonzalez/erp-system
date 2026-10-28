@@ -135,15 +135,17 @@ export default function ReportsScreen() {
                 {error ? <Text style={styles.inlineError}>{error}</Text> : null}
                 {renderSales(dashboard)}
 
-                <Card title="Cobranzas" note="Pagos registrados de clientes, por medio de pago.">
+                <Card title="Cobranzas" note="Pagos de clientes y ventas a consumidor final, por medio de pago.">
                     {dashboard.collections.byMethod.map((item) => (
                         <Row key={item.method} label={PAYMENT_METHOD_LABELS[item.method]} value={formatCurrency(item.total)} />
                     ))}
-                    <Row
-                        label="Ventas sin cliente"
-                        detail="Cobradas al vender, sin medio registrado"
-                        value={formatCurrency(dashboard.collections.walkInSalesTotal)}
-                    />
+                    {dashboard.collections.withoutMethodTotal > 0 ? (
+                        <Row
+                            label="Sin medio registrado"
+                            detail="Ventas a consumidor final anteriores a registrar el medio"
+                            value={formatCurrency(dashboard.collections.withoutMethodTotal)}
+                        />
+                    ) : null}
                 </Card>
 
                 <Card title="Deuda de clientes" note="De toda la empresa: no depende del período ni de la sucursal.">

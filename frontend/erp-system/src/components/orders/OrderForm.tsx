@@ -10,7 +10,7 @@ import { OrderSummarySection } from './OrderSummarySection';
 
 import { AppInput } from '@/components/ui/AppInput';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useCustomerAccountSummary } from '@/hooks/use-customer-account-summary';
 import { useCustomer, useCustomerAddresses } from '@/hooks/use-customer-queries';
@@ -181,7 +181,8 @@ export function OrderForm({
         // Solo en el alta: al editar el cliente queda fijo.
         if (flow === 'operations') return;
 
-        const requireRegisteredCustomer = isShipment || effectiveSalesType === 'QUICK_SALE';
+        // Solo el envío necesita un cliente registrado (su dirección); la venta rápida puede ser a consumidor final.
+        const requireRegisteredCustomer = isShipment;
         router.push({
             pathname: CUSTOMER_PICKER_ROUTES[flow].selectCustomer,
             params: requireRegisteredCustomer ? { allowAnonymous: 'false' } : undefined,
@@ -235,7 +236,7 @@ export function OrderForm({
             return false;
         }
 
-        if ((isShipment || effectiveSalesType === 'QUICK_SALE') && customer.id === CUSTOMER_ANONYMOUS.id) {
+        if (isShipment && customer.id === CUSTOMER_ANONYMOUS.id) {
             setFormError('Debes seleccionar un cliente registrado.');
             return false;
         }
@@ -281,7 +282,7 @@ export function OrderForm({
         isShippingBlocked ||
         isCustomerInactive ||
         (effectiveSalesType === 'WITH_PRODUCTS' ? !hasProducts : quickSaleAmount <= 0) ||
-        ((isShipment || effectiveSalesType === 'QUICK_SALE') && customer.id === CUSTOMER_ANONYMOUS.id);
+        (isShipment && customer.id === CUSTOMER_ANONYMOUS.id);
 
     return (
         <ScrollView
@@ -304,7 +305,7 @@ export function OrderForm({
                 pendingOrders={accountSummary?.pendingOrders ?? 0}
                 applyCredit={applyCredit}
                 onToggleApplyCredit={isEditing ? undefined : setApplyCredit}
-                requireRegisteredCustomer={isShipment || effectiveSalesType === 'QUICK_SALE'}
+                requireRegisteredCustomer={isShipment}
                 onSelectCustomer={isEditing ? () => {} : handleSelectCustomer}
             />
 
@@ -351,21 +352,23 @@ export function OrderForm({
                     onUpdatePromoQuantity={handleUpdatePromoQuantity}
                 />
             ) : (
-                <View style={styles.quickSaleCard}>
-                    <Text style={SharedStyles.sectionTitle}>Venta Rápida</Text>
-                    <Text style={styles.inputLabel}>
-                        Importe total de la venta <Text style={styles.required}>*</Text>
-                    </Text>
-                    <View style={styles.currencyInputRow}>
-                        <Text style={styles.currencyPrefix}>$</Text>
-                        <AppInput
-                            style={styles.amountInput}
-                            value={quickSaleInput}
-                            onChangeText={handleQuickSaleInputChange}
-                            keyboardType="numeric"
-                            placeholder="0.00"
-                            editable={!isSubmitting}
-                        />
+                <View style={styles.quickSale}>
+                    <Text style={SharedStyles.sectionTitle}>Venta rápida</Text>
+                    <View style={[SharedStyles.card, styles.quickSaleCard]}>
+                        <Text style={SharedStyles.fieldLabel}>
+                            Importe total de la venta <Text style={styles.required}>*</Text>
+                        </Text>
+                        <View style={styles.currencyInputRow}>
+                            <Text style={styles.currencyPrefix}>$</Text>
+                            <AppInput
+                                style={styles.amountInput}
+                                value={quickSaleInput}
+                                onChangeText={handleQuickSaleInputChange}
+                                keyboardType="numeric"
+                                placeholder="0.00"
+                                editable={!isSubmitting}
+                            />
+                        </View>
                     </View>
                 </View>
             )}
@@ -393,8 +396,8 @@ const styles = StyleSheet.create({
         paddingBottom: Spacing.xxl * 2,
     },
     errorBox: {
-        backgroundColor: '#FEE2E2',
-        borderRadius: 10,
+        backgroundColor: Colors.errorLight,
+        borderRadius: Radius.md,
         padding: Spacing.md,
         borderWidth: 1,
         borderColor: Colors.errorBorder,
@@ -405,19 +408,11 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
     },
-    quickSaleCard: {
-        backgroundColor: Colors.surface,
-        borderRadius: 12,
-        padding: Spacing.lg,
-        borderWidth: 1,
-        borderColor: Colors.border,
+    quickSale: {
         marginBottom: Spacing.lg,
     },
-    inputLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.text,
-        marginBottom: Spacing.xs,
+    quickSaleCard: {
+        gap: Spacing.sm,
     },
     required: {
         color: Colors.error,
@@ -426,7 +421,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: Colors.surface,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         borderWidth: 1,
         borderColor: Colors.border,
         paddingHorizontal: Spacing.md,
