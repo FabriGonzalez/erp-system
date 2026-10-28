@@ -1,0 +1,15 @@
+diff --git a/node_modules/expo-symbols/build/SymbolView.js b/node_modules/expo-symbols/build/SymbolView.js
+index 6b352b5..899952d 100644
+--- a/node_modules/expo-symbols/build/SymbolView.js
++++ b/node_modules/expo-symbols/build/SymbolView.js
+@@ -32,7 +32,9 @@ export function SymbolView(props) {
+     if (!loaded) {
+         return _jsx(View, { style: style });
+     }
+-    return (_jsx(View, { style: style, children: _jsx(Text, { style: {
++    // El ícono no sigue el tamaño de letra del sistema: si creciera, se saldría de su caja de
++    // size x size y quedaría corrido. Centrado por si la caja viene más grande por style.
++    return (_jsx(View, { style: [{ alignItems: 'center', justifyContent: 'center' }, style], children: _jsx(Text, { allowFontScaling: false, style: {
+                 fontFamily: font.name,
+                 color: props.tintColor ?? DEFAULT_SYMBOL_COLOR,
+                 fontSize: size,
