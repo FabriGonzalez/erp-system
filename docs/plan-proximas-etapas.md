@@ -1803,6 +1803,14 @@ grandes, deshacer una importación.
   - ~~Fecha del negocio en UTC~~: con la JVM en UTC, `LocalDate.now()` pasaba al día siguiente a
     las 21 hs y una promo que vence hoy no se podía vender a la noche. Promos y pedidos usan
     `BusinessDate.today()` (Argentina).
+- ~~Tests de aislamiento entre empresas~~ (2026-10-28): `TenantIsolationTests` levanta la API con
+  un Postgres de Testcontainers, arma dos empresas y el admin de A intenta leer 24 recursos de B,
+  hacer 55 operaciones con sus ids (editar, desactivar, venderle, cobrarle, transferir, asignar
+  usuarios, usar su categoría/atributo/promo/dirección en lo propio, suspender la empresa) y buscar
+  datos de B en 25 listados y en la exportación a Excel. Todo da 403/404 (o el rechazo de la
+  dirección de envío, que responde igual exista o no) y los datos de B quedan idénticos. Se
+  comprobó que detecta una fuga sacando a propósito el filtro de empresa de categorías. Un endpoint
+  nuevo que reciba ids se suma a `readPathsOfB()` o a `attacks()`.
 
 ## Etapa 25 — Rediseño visual (estilo "A") y estilos compartidos — EN CURSO
 
@@ -1955,3 +1963,49 @@ header de la pila y la barra de pestañas siguen a todo el ancho. Propuesta orig
 `maxWidth` (~720) en pantallas anchas: arregla todas las pantallas de una; (2) después, en las
 principales, layouts propios para ancho grande (p. ej. Ventas en dos columnas, la barra de pestañas
 como menú lateral en escritorio). Archivos `.web.tsx` solo si una pantalla cambia por completo.
+
+## Etapa 26 — Lanzamiento (con el primer pago / VPS propio)
+
+Pedido del usuario (2026-10-28): juntar acá lo que no se puede hacer hasta tener un cliente que
+pague o un VPS propio. Hasta entonces las demos siguen en Render + Neon (`docs/deploy.md` §11). No
+es funcionalidad nueva: es lo que hace falta para que un comercio use el ERP todos los días sin
+riesgo de perder datos.
+
+**Antes de arrancar (no espera al lanzamiento).** Conviene hacerlo ya, mientras se hacen demos:
+- **Actualizaciones sin APK nuevo (EAS Update / `expo-updates`).** Solo los APK compilados con
+  `expo-updates` pueden recibir actualizaciones por aire: si los clientes instalan un APK sin eso,
+  cada arreglo es compilar y reinstalar en cada celular. Sumarlo antes del APK que se reparta.
+- **Errores en producción (Sentry, plan gratis)** en la app y en el backend: hoy un error en el
+  celular de alguien no llega a ningún lado.
+- **Web en Render Static Site** (propuesto el 2026-10-28): rewrite `/*` → `/index.html` y
+  `CORS_ALLOWED_ORIGINS` en el backend.
+
+**Con el primer pago / VPS.**
+1. **Servidor.** Elegir el VPS (Oracle quedó descartado) y levantar `deploy/docker-compose.prod.yml`
+   (Postgres + backend + Caddy). Reescribir la §4 de `docs/deploy.md`, que está escrita para
+   Oracle. Pasar los datos de Neon solo si hay algo que conservar (pg_dump / pg_restore); si no,
+   producción arranca vacía, como estaba decidido.
+2. **Dominio propio** (p. ej. `.com.ar`) en vez de DuckDNS/Render. `EXPO_PUBLIC_API_URL` queda fija
+   al compilar: el APK definitivo tiene que apuntar al dominio desde el principio, así cambiar de
+   servidor después no obliga a reinstalar la app.
+3. **Backups fuera del servidor.** `deploy/backup.sh` ya hace el dump diario (14 días), pero queda
+   dentro de la VM: si se pierde la VM se pierden con ella. Copiarlos a otro lado (Backblaze B2,
+   Cloudflare R2 o Drive con `rclone`), probar **una vez** restaurar en una base vacía y anotar el
+   procedimiento. Backup a mano antes de cada actualización (§5 de deploy.md).
+4. **Seguridad del servidor.** SSH solo con clave, firewall con 80/443 y SSH, actualizaciones
+   automáticas del sistema, Postgres sin puerto público, secretos (`JWT_SECRET`, contraseña de la
+   base, del platform admin) solo en el `.env` del servidor, rotación de logs de Docker.
+5. **Monitoreo mínimo.** Un chequeo de disponibilidad (UptimeRobot o similar) que avise si la API
+   se cae, y alerta de disco lleno (los backups y los logs crecen).
+6. **Mails (necesita el dominio).** Elegir proveedor (Resend, Brevo…), SPF/DKIM en el dominio y
+   hacer "Olvidé mi contraseña" (pendiente desde las decisiones multi-empresa). La tienda web (22B)
+   usa lo mismo: resolverlo una sola vez.
+7. **Distribución de la app.** Play Store (cuenta de desarrollador, pago único) en vez de pasar el
+   APK a mano; iPhone sigue por la web salvo que algún cliente lo pida (App Store es pago anual).
+8. **Alta de un cliente.** Checklist: provisionar la empresa desde el panel, sucursales, usuarios y
+   roles, importar productos desde Excel (etapa 24), probar una venta y un cobro con ellos.
+9. **Negocio (no es código).** Precio y forma de cobro (abono mensual), qué pasa si no paga (la
+   suspensión de empresa ya existe), términos de uso y política de privacidad (se guardan datos de
+   los clientes de cada comercio), y cómo se pide soporte.
+10. **Render y Neon.** Al migrar, dejarlos solo para demos o darlos de baja; que ningún APK de
+    cliente quede apuntando ahí.
