@@ -5,7 +5,10 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'rea
 import { TransferStatusBadge } from '@/components/transfers/TransferStatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { HeaderButton } from '@/components/ui/HeaderButton';
+import { IconBadge } from '@/components/ui/IconBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
@@ -26,72 +29,59 @@ export default function TransfersScreen() {
 
         return (
             <Pressable
-                style={({ pressed }) => [styles.card, isCancelled && styles.cancelledCard, pressed && SharedStyles.pressed]}
+                style={({ pressed }) => [
+                    SharedStyles.card,
+                    SharedStyles.listItem,
+                    isCancelled && SharedStyles.listItemInactive,
+                    pressed && SharedStyles.listItemPressed,
+                ]}
                 onPress={() => router.push({ pathname: '/transfers/[id]', params: { id: item.id } })}
+                accessibilityRole="button"
             >
-                <View style={styles.cardTopRow}>
-                    <Text style={styles.transferNumber}>Transferencia #{item.id}</Text>
-                    <TransferStatusBadge status={item.status} />
+                <IconBadge
+                    icon={{ ios: 'arrow.left.arrow.right', android: 'swap_horiz', web: 'swap_horiz' }}
+                    tone="teal"
+                    size={44}
+                />
+                <View style={SharedStyles.listItemTexts}>
+                    <View style={styles.route}>
+                        <Text style={[SharedStyles.listItemTitle, styles.branchName]} numberOfLines={1}>
+                            {item.originBranchName}
+                        </Text>
+                        <SymbolView
+                            name={{ ios: 'arrow.right', android: 'arrow_forward', web: 'arrow_forward' }}
+                            size={14}
+                            tintColor={Colors.textSecondary}
+                        />
+                        <Text style={[SharedStyles.listItemTitle, styles.branchName]} numberOfLines={1}>
+                            {item.destinationBranchName}
+                        </Text>
+                    </View>
+                    <Text style={SharedStyles.listItemMeta}>
+                        #{item.id} · {item.items.length} {item.items.length === 1 ? 'producto' : 'productos'} · {item.totalUnits}{' '}
+                        {item.totalUnits === 1 ? 'unidad' : 'unidades'}
+                    </Text>
+                    <Text style={SharedStyles.listItemMeta} numberOfLines={1}>
+                        {formatDateTime(item.createdAt)} · {item.createdByUsername}
+                    </Text>
                 </View>
-
-                <View style={styles.route}>
-                    <Text style={styles.branchName} numberOfLines={1}>{item.originBranchName}</Text>
-                    <SymbolView
-                        name={{ ios: 'arrow.right', android: 'arrow_forward', web: 'arrow_forward' }}
-                        size={16}
-                        tintColor={Colors.textSecondary}
-                    />
-                    <Text style={styles.branchName} numberOfLines={1}>{item.destinationBranchName}</Text>
-                </View>
-
-                <Text style={styles.secondaryText}>
-                    {item.items.length} {item.items.length === 1 ? 'producto' : 'productos'} · {item.totalUnits}{' '}
-                    {item.totalUnits === 1 ? 'unidad' : 'unidades'}
-                </Text>
-                <Text style={styles.secondaryText}>
-                    {formatDateTime(item.createdAt)} · {item.createdByUsername}
-                </Text>
+                <TransferStatusBadge status={item.status} />
             </Pressable>
         );
     }
 
     return (
         <Screen style={styles.screen}>
-            <View style={[SharedStyles.topBar, SharedStyles.topBarElevated]}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [styles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-
-                <View style={styles.titleContainer}>
-                    <Text style={styles.screenTitle}>Transferencias</Text>
-                    <Text style={styles.screenSubtitle}>
-                        {list.isInitialLoading
-                            ? 'Cargando...'
-                            : `${list.totalElements} ${list.totalElements === 1 ? 'transferencia' : 'transferencias'}`}
-                    </Text>
-                </View>
-
-                {canTransfer ? (
-                    <Pressable
-                        style={({ pressed }) => [styles.createButton, pressed && SharedStyles.pressed]}
-                        onPress={() => router.push('/transfers/new')}
-                    >
-                        <SymbolView
-                            name={{ ios: 'plus', android: 'add', web: 'add' }}
-                            size={18}
-                            tintColor={Colors.white}
-                        />
-                        <Text style={styles.createButtonText}>Nueva</Text>
-                    </Pressable>
-                ) : null}
-            </View>
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow={list.isInitialLoading
+                    ? 'Cargando...'
+                    : `${list.totalElements} ${list.totalElements === 1 ? 'transferencia' : 'transferencias'}`}
+                title="Transferencias"
+                right={canTransfer ? (
+                    <HeaderButton label="Nueva" accessibilityLabel="Nueva transferencia" onPress={() => router.push('/transfers/new')} />
+                ) : undefined}
+            />
 
             {list.isInitialLoading ? (
                 <LoadingState label="Cargando transferencias..." />
@@ -102,7 +92,7 @@ export default function TransfersScreen() {
                     data={list.items}
                     keyExtractor={(item) => item.id}
                     renderItem={renderItem}
-                    contentContainerStyle={list.items.length === 0 ? SharedStyles.listEmpty : styles.listContainer}
+                    contentContainerStyle={SharedStyles.pageList}
                     showsVerticalScrollIndicator={false}
                     onEndReached={list.loadMore}
                     onEndReachedThreshold={0.4}
@@ -126,78 +116,12 @@ const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
-        marginRight: Spacing.xs,
-    },
-    titleContainer: {
-        flex: 1,
-    },
-    screenTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    screenSubtitle: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    createButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.primary,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
-        borderRadius: 8,
-        gap: 6,
-    },
-    createButtonText: {
-        color: Colors.white,
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    listContainer: {
-        padding: Spacing.lg,
-        gap: Spacing.md,
-    },
-    card: {
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        gap: Spacing.xs,
-    },
-    cancelledCard: {
-        opacity: 0.7,
-    },
-    cardTopRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    transferNumber: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
-    },
     route: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: Spacing.sm,
-        marginVertical: 2,
+        gap: Spacing.xs,
     },
     branchName: {
         flexShrink: 1,
-        fontSize: 15,
-        fontWeight: '600',
-        color: Colors.text,
-    },
-    secondaryText: {
-        fontSize: 13,
-        color: Colors.textSecondary,
     },
 });

@@ -1,14 +1,20 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ResetPasswordModal } from '@/components/users/ResetPasswordModal';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { HeaderButton } from '@/components/ui/HeaderButton';
+import { InfoRow } from '@/components/ui/InfoRow';
+import { ListGroup } from '@/components/ui/ListGroup';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { MenuListItem } from '@/components/ui/MenuListItem';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { StatusPill } from '@/components/ui/StatusPill';
+import { SwitchRow } from '@/components/ui/SwitchRow';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
 import { useBranches } from '@/hooks/use-branch-queries';
 import {
     useCompanyUser,
@@ -82,55 +88,32 @@ export default function UserDetailScreen() {
 
     return (
         <Screen style={styles.screen}>
-            <View style={[SharedStyles.topBar, SharedStyles.topBarElevated]}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [styles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow={`@${user.username}${isMe ? ' · vos' : ''}`}
+                title={user.fullName}
+                right={(
+                    <HeaderButton
+                        label="Editar"
+                        icon={{ ios: 'pencil', android: 'edit', web: 'edit' }}
+                        accessibilityLabel="Editar usuario"
+                        onPress={() => router.push({ pathname: '/users/[id]/edit', params: { id: user.id } })}
                     />
-                </Pressable>
-                <View style={styles.titleContainer}>
-                    <Text style={styles.screenTitle} numberOfLines={1}>{user.fullName}</Text>
-                    <Text style={styles.screenSubtitle}>@{user.username}{isMe ? ' · vos' : ''}</Text>
-                </View>
-                <Pressable
-                    style={({ pressed }) => [styles.editButton, pressed && SharedStyles.pressed]}
-                    onPress={() => router.push({ pathname: '/users/[id]/edit', params: { id: user.id } })}
-                >
-                    <Text style={styles.editButtonText}>Editar</Text>
-                </Pressable>
-            </View>
-
-            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-                <View style={styles.card}>
-                    <Row label="Email" value={user.email} />
-                    <Row label="Rol" value={user.roleName} />
-                    <Row label="Estado" value={user.active ? 'Activo' : 'Inactivo'} />
-                </View>
-
-                {!isMe && (
-                    <View style={styles.card}>
-                        <ActionRow
-                            title="Cambiar contraseña"
-                            subtitle="Elegís la nueva; se cierran sus sesiones."
-                            onPress={() => setPasswordModalVisible(true)}
-                        />
-                        <ActionRow
-                            title={user.active ? 'Desactivar usuario' : 'Activar usuario'}
-                            subtitle={user.active ? 'No va a poder iniciar sesión.' : 'Vuelve a poder iniciar sesión.'}
-                            danger={user.active}
-                            busy={setActive.isPending}
-                            onPress={() => void handleToggleActive()}
-                        />
-                    </View>
                 )}
+            />
 
-                <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Sucursales</Text>
+            <ScrollView contentContainerStyle={SharedStyles.pageContent} showsVerticalScrollIndicator={false}>
+                <ListGroup>
+                    <InfoRow label="Email" value={user.email} />
+                    <InfoRow label="Rol" value={<StatusPill label={user.roleName} tone="primary" />} />
+                    <InfoRow
+                        label="Estado"
+                        value={<StatusPill label={user.active ? 'Activo' : 'Inactivo'} tone={user.active ? 'success' : 'neutral'} />}
+                    />
+                </ListGroup>
+
+                <View style={SharedStyles.pageSection}>
+                    <SectionHeader title="Sucursales" />
                     <Text style={styles.hint}>
                         Solo puede operar en las sucursales que tenga asignadas.
                     </Text>
@@ -141,25 +124,51 @@ export default function UserDetailScreen() {
                     ) : branchOptions.length === 0 ? (
                         <Text style={styles.hint}>No hay sucursales activas.</Text>
                     ) : (
-                        branchOptions.map((branch) => {
-                            const pending = toggleBranch.isPending && toggleBranch.variables?.branch.id === branch.id;
-                            const assigned = pending ? toggleBranch.variables!.assign : assignedIds.has(branch.id);
-                            return (
-                                <View key={branch.id} style={styles.branchRow}>
-                                    <Text style={styles.branchName}>
-                                        {branch.name}
-                                        {branch.active === false ? ' (inactiva)' : ''}
-                                    </Text>
-                                    <Switch
+                        <ListGroup>
+                            {branchOptions.map((branch) => {
+                                const pending = toggleBranch.isPending && toggleBranch.variables?.branch.id === branch.id;
+                                const assigned = pending ? toggleBranch.variables!.assign : assignedIds.has(branch.id);
+                                return (
+                                    <SwitchRow
+                                        key={branch.id}
+                                        title={branch.name}
+                                        subtitle={branch.active === false ? 'Inactiva' : undefined}
                                         value={assigned}
                                         disabled={toggleBranch.isPending}
                                         onValueChange={(value) => void handleToggleBranch(branch, value)}
                                     />
-                                </View>
-                            );
-                        })
+                                );
+                            })}
+                        </ListGroup>
                     )}
                 </View>
+
+                {!isMe && (
+                    <View style={SharedStyles.pageSection}>
+                        <SectionHeader title="Acciones" />
+                        <ListGroup>
+                            <MenuListItem
+                                title="Cambiar contraseña"
+                                subtitle="Elegís la nueva; se cierran sus sesiones."
+                                iconName={{ ios: 'key', android: 'key', web: 'key' }}
+                                tone="warning"
+                                onPress={() => setPasswordModalVisible(true)}
+                            />
+                            <MenuListItem
+                                title={user.active ? 'Desactivar usuario' : 'Activar usuario'}
+                                subtitle={user.active ? 'No va a poder iniciar sesión.' : 'Vuelve a poder iniciar sesión.'}
+                                iconName={user.active
+                                    ? { ios: 'person.crop.circle.badge.xmark', android: 'person_off', web: 'person_off' }
+                                    : { ios: 'person.crop.circle.badge.checkmark', android: 'how_to_reg', web: 'how_to_reg' }}
+                                tone="success"
+                                danger={user.active}
+                                showChevron={false}
+                                badge={setActive.isPending ? <ActivityIndicator color={Colors.primary} /> : undefined}
+                                onPress={() => void handleToggleActive()}
+                            />
+                        </ListGroup>
+                    </View>
+                )}
 
                 {actionError && <Text style={styles.errorText}>{actionError}</Text>}
             </ScrollView>
@@ -175,153 +184,13 @@ export default function UserDetailScreen() {
     );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-    return (
-        <View style={styles.row}>
-            <Text style={styles.rowLabel}>{label}</Text>
-            <Text style={styles.rowValue}>{value}</Text>
-        </View>
-    );
-}
-
-function ActionRow({
-    title,
-    subtitle,
-    danger = false,
-    busy = false,
-    onPress,
-}: {
-    title: string;
-    subtitle: string;
-    danger?: boolean;
-    busy?: boolean;
-    onPress: () => void;
-}) {
-    return (
-        <Pressable
-            onPress={onPress}
-            disabled={busy}
-            style={({ pressed }) => [styles.actionRow, pressed && SharedStyles.pressed]}
-        >
-            <View style={styles.actionText}>
-                <Text style={[styles.actionTitle, danger && styles.danger]}>{title}</Text>
-                <Text style={styles.hint}>{subtitle}</Text>
-            </View>
-            {busy ? (
-                <ActivityIndicator color={Colors.primary} />
-            ) : (
-                <SymbolView
-                    name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                    size={18}
-                    tintColor={Colors.textSecondary}
-                />
-            )}
-        </Pressable>
-    );
-}
-
 const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
-        marginRight: Spacing.xs,
-    },
-    titleContainer: {
-        flex: 1,
-    },
-    screenTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    screenSubtitle: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    editButton: {
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-    editButtonText: {
-        color: Colors.text,
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    content: {
-        padding: Spacing.lg,
-        gap: Spacing.md,
-    },
-    card: {
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        gap: Spacing.sm,
-    },
-    cardTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    row: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        gap: Spacing.md,
-    },
-    rowLabel: {
-        fontSize: 14,
-        color: Colors.textSecondary,
-    },
-    rowValue: {
-        flexShrink: 1,
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.text,
-        textAlign: 'right',
-    },
-    actionRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-        paddingVertical: Spacing.xs,
-    },
-    actionText: {
-        flex: 1,
-        gap: 2,
-    },
-    actionTitle: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: Colors.text,
-    },
-    danger: {
-        color: Colors.error,
-    },
     hint: {
         fontSize: 13,
         color: Colors.textSecondary,
-    },
-    branchRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        borderTopWidth: 1,
-        borderTopColor: Colors.muted,
-        paddingTop: Spacing.sm,
-    },
-    branchName: {
-        flexShrink: 1,
-        fontSize: 15,
-        color: Colors.text,
     },
     errorText: {
         color: Colors.error,

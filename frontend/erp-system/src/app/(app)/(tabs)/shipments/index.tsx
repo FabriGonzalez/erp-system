@@ -1,101 +1,93 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
+import { OrderRow } from '@/components/orders/OrderRow';
+import { BranchChip } from '@/components/ui/BranchChip';
+import { HeroAction } from '@/components/ui/HeroAction';
+import { ListGroup } from '@/components/ui/ListGroup';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { StatTile } from '@/components/ui/StatTile';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
+import { useOrders } from '@/hooks/use-order-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
-import { hasPermission } from '@/utils/permissions';
+import { formatToday } from '@/utils/format';
+import { hasAnyPermission, hasPermission, ORDER_READ_PERMISSIONS } from '@/utils/permissions';
+
+const PENDING_PREVIEW = 3;
 
 export default function ShipmentsScreen() {
-    const canCreate = useAuthStore((state) => hasPermission(state.user, 'CREAR_PEDIDOS'));
+    const user = useAuthStore((state) => state.user);
+    const canCreate = hasPermission(user, 'CREAR_PEDIDOS');
+    const canSeeOrders = hasAnyPermission(user, ORDER_READ_PERMISSIONS);
+    const activeBranch = useActiveBranch();
 
-    function handleCreateShipment() {
-        router.push('/shipments/new');
-    }
+    // Mismos filtros que la lista "A preparar": comparten la caché.
+    const toPrepare = useOrders(
+        { status: 'TO_PREPARE', deliveryType: 'SHIPPING', branchId: activeBranch?.id },
+        { enabled: canSeeOrders },
+    );
+    const pending = toPrepare.items.slice(0, PENDING_PREVIEW);
 
     return (
         <Screen style={styles.screen}>
-            <View style={SharedStyles.topBar}>
-                <View>
-                    <Text style={SharedStyles.screenTitle}>Envíos</Text>
-                    <Text style={SharedStyles.screenSubtitle}>
-                        Gestión y preparación de envíos
-                    </Text>
-                </View>
+            <PageHeader eyebrow={formatToday()} title="Envíos" right={<BranchChip />} />
 
-                {canCreate && (
-                    <Pressable
-                        onPress={handleCreateShipment}
-                        accessibilityRole="button"
-                        accessibilityLabel="Crear nuevo envío"
-                        hitSlop={6}
-                        style={({ pressed }) => [
-                            SharedStyles.addButton,
-                            pressed && SharedStyles.pressed,
-                        ]}
-                    >
-                        <View style={SharedStyles.addIconContainer}>
-                            <SymbolView
-                                name={{
-                                    ios: 'plus',
-                                    android: 'add',
-                                    web: 'add',
-                                }}
-                                size={24}
-                                tintColor={Colors.white}
-                            />
-                        </View>
+            <ScrollView
+                contentContainerStyle={SharedStyles.pageContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={toPrepare.isRefreshing}
+                        onRefresh={toPrepare.refresh}
+                        tintColor={Colors.primary}
+                    />
+                }
+            >
+                {canCreate ? (
+                    <HeroAction
+                        icon={{ ios: 'shippingbox.fill', android: 'local_shipping', web: 'local_shipping' }}
+                        title="Nuevo envío"
+                        subtitle="Productos, cliente y dirección de entrega"
+                        onPress={() => router.push('/shipments/new')}
+                    />
+                ) : null}
 
-                        <Text style={SharedStyles.addButtonText}>
-                            Nuevo envío
-                        </Text>
-                    </Pressable>
-                )}
-            </View>
-
-            <View style={styles.content}>
-                <Text style={styles.sectionTitle}>Trabajo pendiente</Text>
-
-                <Pressable
-                    onPress={() => router.push('/shipments/to-prepare')}
-                    style={({ pressed }) => [
-                        styles.action,
-                        pressed && SharedStyles.pressed,
-                    ]}
-                >
-                    <View style={styles.actionIcon}>
-                        <SymbolView
-                            name={{
-                                ios: 'shippingbox',
-                                android: 'local_shipping',
-                                web: 'local_shipping',
-                            }}
-                            size={22}
-                            tintColor={Colors.primary}
+                {canSeeOrders ? (
+                    <View style={SharedStyles.statRow}>
+                        <StatTile
+                            label="A preparar"
+                            value={toPrepare.isInitialLoading ? '…' : String(toPrepare.totalElements)}
+                            icon={{ ios: 'shippingbox', android: 'inventory_2', web: 'inventory_2' }}
+                            tone="warning"
+                            onPress={() => router.push('/shipments/to-prepare')}
                         />
                     </View>
+                ) : null}
 
-                    <View style={styles.actionContent}>
-                        <Text style={styles.actionTitle}>A preparar</Text>
-                        <Text style={styles.actionSubtitle}>
-                            Envíos que requieren preparación
-                        </Text>
+                {pending.length > 0 ? (
+                    <View style={SharedStyles.pageSection}>
+                        <SectionHeader
+                            title="Para preparar"
+                            actionLabel="Ver todos"
+                            onAction={() => router.push('/shipments/to-prepare')}
+                        />
+                        <ListGroup>
+                            {pending.map((order) => (
+                                <OrderRow
+                                    key={order.id}
+                                    order={order}
+                                    show="status"
+                                    onPress={() => router.push({ pathname: '/shipments/[id]', params: { id: order.id } })}
+                                />
+                            ))}
+                        </ListGroup>
                     </View>
-
-                    <SymbolView
-                        name={{
-                            ios: 'chevron.right',
-                            android: 'arrow_forward',
-                            web: 'arrow_forward',
-                        }}
-                        size={20}
-                        tintColor={Colors.textSecondary}
-                    />
-                </Pressable>
-            </View>
+                ) : null}
+            </ScrollView>
         </Screen>
     );
 }
@@ -103,54 +95,5 @@ export default function ShipmentsScreen() {
 const styles = StyleSheet.create({
     screen: {
         padding: 0,
-    },
-
-    content: {
-        flex: 1,
-        paddingHorizontal: Spacing.lg,
-        paddingTop: Spacing.lg,
-    },
-
-    sectionTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.textSecondary,
-        marginBottom: Spacing.sm,
-    },
-
-    action: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.surface,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        borderRadius: 10,
-        padding: Spacing.md,
-    },
-
-    actionIcon: {
-        width: 42,
-        height: 42,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 8,
-        backgroundColor: Colors.background,
-        marginRight: Spacing.md,
-    },
-
-    actionContent: {
-        flex: 1,
-    },
-
-    actionTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-
-    actionSubtitle: {
-        fontSize: 13,
-        color: Colors.textSecondary,
-        marginTop: 2,
     },
 });

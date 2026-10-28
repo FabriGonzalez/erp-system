@@ -1,5 +1,4 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -7,8 +6,11 @@ import { PromotionStatusBadge } from '@/components/promotions/PromotionStatusBad
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { FilterChip } from '@/components/ui/FilterChip';
+import { HeaderButton } from '@/components/ui/HeaderButton';
+import { IconBadge } from '@/components/ui/IconBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { NotFound } from '@/components/ui/NotFound';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { Colors } from '@/constants/colors';
@@ -47,64 +49,52 @@ export default function PromotionsScreen() {
 
         return (
             <Pressable
-                style={({ pressed }) => [styles.card, item.status !== 'ACTIVE' && styles.dimmedCard, pressed && SharedStyles.pressed]}
+                style={({ pressed }) => [
+                    SharedStyles.card,
+                    SharedStyles.listItem,
+                    item.status !== 'ACTIVE' && SharedStyles.listItemInactive,
+                    pressed && SharedStyles.listItemPressed,
+                ]}
                 onPress={() => router.push({ pathname: '/promotions/[id]', params: { id: item.id } })}
+                accessibilityRole="button"
             >
-                <View style={styles.cardTopRow}>
-                    <Text style={styles.promoName} numberOfLines={1}>{item.name}</Text>
+                <IconBadge
+                    icon={{ ios: 'tag', android: 'sell', web: 'sell' }}
+                    tone="rose"
+                    size={44}
+                />
+                <View style={SharedStyles.listItemTexts}>
+                    <Text style={SharedStyles.listItemTitle} numberOfLines={1}>{item.name}</Text>
+                    <Text style={SharedStyles.listItemMeta} numberOfLines={2}>{unitsLabel}</Text>
+                    <Text style={SharedStyles.listItemMeta}>
+                        Del {formatDay(item.startDate)} al {formatDay(item.endDate)}
+                    </Text>
+                    <View style={styles.priceRow}>
+                        <Text style={styles.price}>{formatCurrency(item.price)}</Text>
+                        {savings > 0 ? (
+                            <Text style={styles.savings}>Ahorro desde {formatCurrency(savings)}</Text>
+                        ) : null}
+                    </View>
+                </View>
+                <View style={styles.status}>
                     <PromotionStatusBadge status={item.status} />
                 </View>
-                <Text style={styles.secondaryText} numberOfLines={2}>{unitsLabel}</Text>
-                <View style={styles.priceRow}>
-                    <Text style={styles.price}>{formatCurrency(item.price)}</Text>
-                    {savings > 0 ? (
-                        <Text style={styles.savings}>Ahorro desde {formatCurrency(savings)}</Text>
-                    ) : null}
-                </View>
-                <Text style={styles.secondaryText}>
-                    Del {formatDay(item.startDate)} al {formatDay(item.endDate)}
-                </Text>
             </Pressable>
         );
     }
 
     return (
         <Screen style={styles.screen}>
-            <View style={[SharedStyles.topBar, SharedStyles.topBarElevated]}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [styles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow={list.isInitialLoading
+                    ? 'Cargando...'
+                    : `${list.totalElements} ${list.totalElements === 1 ? 'promo' : 'promos'}`}
+                title="Promociones"
+                right={<HeaderButton label="Nueva" accessibilityLabel="Nueva promo" onPress={() => router.push('/promotions/new')} />}
+            />
 
-                <View style={styles.titleContainer}>
-                    <Text style={styles.screenTitle}>Promociones</Text>
-                    <Text style={styles.screenSubtitle}>
-                        {list.isInitialLoading
-                            ? 'Cargando...'
-                            : `${list.totalElements} ${list.totalElements === 1 ? 'promo' : 'promos'}`}
-                    </Text>
-                </View>
-
-                <Pressable
-                    style={({ pressed }) => [styles.createButton, pressed && SharedStyles.pressed]}
-                    onPress={() => router.push('/promotions/new')}
-                >
-                    <SymbolView
-                        name={{ ios: 'plus', android: 'add', web: 'add' }}
-                        size={18}
-                        tintColor={Colors.white}
-                    />
-                    <Text style={styles.createButtonText}>Nueva</Text>
-                </Pressable>
-            </View>
-
-            <View style={styles.filters}>
+            <View style={SharedStyles.pageToolbar}>
                 <SearchBar value={query} onChangeText={setQuery} placeholder="Buscar promo por nombre..." />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                     {STATUS_FILTERS.map((option) => (
@@ -127,7 +117,7 @@ export default function PromotionsScreen() {
                     data={list.items}
                     keyExtractor={(item) => item.id}
                     renderItem={renderItem}
-                    contentContainerStyle={list.items.length === 0 ? SharedStyles.listEmpty : styles.listContainer}
+                    contentContainerStyle={SharedStyles.pageList}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                     onEndReached={list.loadMore}
@@ -154,91 +144,26 @@ const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
-        marginRight: Spacing.xs,
-    },
-    titleContainer: {
-        flex: 1,
-    },
-    screenTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    screenSubtitle: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    createButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.primary,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
-        borderRadius: 8,
-        gap: 6,
-    },
-    createButtonText: {
-        color: Colors.white,
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    filters: {
-        paddingHorizontal: Spacing.lg,
-        paddingTop: Spacing.md,
-        gap: Spacing.sm,
-    },
     chips: {
         gap: Spacing.xs,
     },
-    listContainer: {
-        padding: Spacing.lg,
-        gap: Spacing.md,
-    },
-    card: {
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        gap: Spacing.xs,
-    },
-    dimmedCard: {
-        opacity: 0.75,
-    },
-    cardTopRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: Spacing.sm,
-    },
-    promoName: {
-        flex: 1,
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
+    status: {
+        alignSelf: 'flex-start',
     },
     priceRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: Spacing.sm,
+        flexWrap: 'wrap',
+        columnGap: Spacing.sm,
     },
     price: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.primary,
+        fontSize: 15,
+        fontWeight: '800',
+        color: Colors.text,
     },
     savings: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '600',
         color: Colors.successDark,
-    },
-    secondaryText: {
-        fontSize: 13,
-        color: Colors.textSecondary,
     },
 });

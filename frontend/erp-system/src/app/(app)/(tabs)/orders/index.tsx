@@ -1,111 +1,110 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
+import { OrderRow } from '@/components/orders/OrderRow';
+import { ActionCard } from '@/components/ui/ActionCard';
+import { BranchChip } from '@/components/ui/BranchChip';
+import { HeroAction } from '@/components/ui/HeroAction';
+import { ListGroup } from '@/components/ui/ListGroup';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { StatTile } from '@/components/ui/StatTile';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
+import { useOrders } from '@/hooks/use-order-queries';
+import { useDashboard } from '@/hooks/use-report-queries';
+import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
+import { SalesType } from '@/types/order';
+import { formatCurrency, formatToday } from '@/utils/format';
+import { hasAnyPermission, ORDER_READ_PERMISSIONS } from '@/utils/permissions';
+
+const RECENT_SALES = 3;
 
 export default function SalesScreen() {
+    const user = useAuthStore((state) => state.user);
+    const activeBranch = useActiveBranch();
+    const branchId = activeBranch?.id ?? null;
+    const canSeeOrders = hasAnyPermission(user, ORDER_READ_PERMISSIONS);
+
+    // El resumen del día sale de Reportes: sin VER_REPORTES no se pide ni se muestra.
+    const report = useDashboard('today', branchId);
+    const recentSales = useOrders(
+        { branchId: branchId ?? undefined, deliveryType: 'LOCAL_PICKUP' },
+        { enabled: canSeeOrders },
+    );
+
+    function startSale(salesType: SalesType) {
+        router.push({ pathname: '/orders/new', params: { salesType } });
+    }
+
+    function refresh() {
+        report.refresh();
+        recentSales.refresh();
+    }
+
+    const sales = report.dashboard?.sales;
+    const recent = recentSales.items.slice(0, RECENT_SALES);
+
     return (
         <Screen style={styles.screen}>
-            <View style={SharedStyles.topBar}>
-                <View>
-                    <Text style={SharedStyles.screenTitle}>Vender</Text>
-                    <Text style={SharedStyles.screenSubtitle}>
-                        Iniciá una operación de venta
-                    </Text>
-                </View>
-            </View>
+            <PageHeader eyebrow={formatToday()} title="Vender" right={<BranchChip />} />
 
-            <View style={styles.content}>
-                <Text style={styles.sectionTitle}>Nueva venta</Text>
-
-                <Pressable
-                    onPress={() =>
-                        router.push({
-                            pathname: '/orders/new',
-                            params: { salesType: 'WITH_PRODUCTS' },
-                        })
-                    }
-                    style={({ pressed }) => [
-                        styles.action,
-                        pressed && SharedStyles.pressed,
-                    ]}
-                >
-                    <View style={styles.actionIcon}>
-                        <SymbolView
-                            name={{
-                                ios: 'cart',
-                                android: 'shopping_cart',
-                                web: 'shopping_cart',
-                            }}
-                            size={22}
-                            tintColor={Colors.primary}
-                        />
-                    </View>
-
-                    <View style={styles.actionContent}>
-                        <Text style={styles.actionTitle}>Nueva venta</Text>
-                        <Text style={styles.actionSubtitle}>
-                            Cargar productos, cliente y pago
-                        </Text>
-                    </View>
-
-                    <SymbolView
-                        name={{
-                            ios: 'chevron.right',
-                            android: 'arrow_forward',
-                            web: 'arrow_forward',
-                        }}
-                        size={20}
-                        tintColor={Colors.textSecondary}
+            <ScrollView
+                contentContainerStyle={SharedStyles.pageContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={report.isRefreshing || recentSales.isRefreshing}
+                        onRefresh={refresh}
+                        tintColor={Colors.primary}
                     />
-                </Pressable>
+                }
+            >
+                <HeroAction
+                    icon={{ ios: 'cart.fill', android: 'shopping_cart', web: 'shopping_cart' }}
+                    title="Nueva venta"
+                    subtitle="Productos, cliente y pago"
+                    onPress={() => startSale('WITH_PRODUCTS')}
+                />
+                <ActionCard
+                    icon={{ ios: 'bolt.fill', android: 'bolt', web: 'bolt' }}
+                    tone="warning"
+                    title="Venta rápida"
+                    subtitle="Solo el importe, sin cargar productos"
+                    onPress={() => startSale('QUICK_SALE')}
+                />
 
-                <Pressable
-                    onPress={() =>
-                        router.push({
-                            pathname: '/orders/new',
-                            params: { salesType: 'QUICK_SALE' },
-                        })
-                    }                    
-                    style={({ pressed }) => [
-                        styles.action,
-                        pressed && SharedStyles.pressed,
-                    ]}
-                >
-                    <View style={styles.actionIcon}>
-                        <SymbolView
-                            name={{
-                                ios: 'bolt',
-                                android: 'bolt',
-                                web: 'bolt',
-                            }}
-                            size={22}
-                            tintColor={Colors.primary}
+                {sales ? (
+                    <View style={SharedStyles.pageSection}>
+                        <SectionHeader title={activeBranch ? `Hoy en ${activeBranch.name}` : 'Hoy'} />
+                        <View style={SharedStyles.statRow}>
+                            <StatTile label="Vendido" value={formatCurrency(sales.total)} />
+                            <StatTile label="Ventas" value={String(sales.orderCount)} />
+                        </View>
+                    </View>
+                ) : null}
+
+                {recent.length > 0 ? (
+                    <View style={SharedStyles.pageSection}>
+                        <SectionHeader
+                            title="Últimas ventas"
+                            actionLabel="Ver todas"
+                            onAction={() => router.push('/operations' as any)}
                         />
+                        <ListGroup>
+                            {recent.map((order) => (
+                                <OrderRow
+                                    key={order.id}
+                                    order={order}
+                                    onPress={() => router.push({ pathname: '/operations/[id]', params: { id: order.id } })}
+                                />
+                            ))}
+                        </ListGroup>
                     </View>
-
-                    <View style={styles.actionContent}>
-                        <Text style={styles.actionTitle}>Venta rápida</Text>
-                        <Text style={styles.actionSubtitle}>
-                            Registrar una venta por importe
-                        </Text>
-                    </View>
-
-                    <SymbolView
-                        name={{
-                            ios: 'chevron.right',
-                            android: 'arrow_forward',
-                            web: 'arrow_forward',
-                        }}
-                        size={20}
-                        tintColor={Colors.textSecondary}
-                    />
-                </Pressable>
-            </View>
+                ) : null}
+            </ScrollView>
         </Screen>
     );
 }
@@ -113,55 +112,5 @@ export default function SalesScreen() {
 const styles = StyleSheet.create({
     screen: {
         padding: 0,
-    },
-
-    content: {
-        flex: 1,
-        paddingHorizontal: Spacing.lg,
-        paddingTop: Spacing.lg,
-        gap: Spacing.sm,
-    },
-
-    sectionTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.textSecondary,
-        marginBottom: Spacing.xs,
-    },
-
-    action: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.surface,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        borderRadius: 10,
-        padding: Spacing.md,
-    },
-
-    actionIcon: {
-        width: 42,
-        height: 42,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 8,
-        backgroundColor: Colors.background,
-        marginRight: Spacing.md,
-    },
-
-    actionContent: {
-        flex: 1,
-    },
-
-    actionTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-
-    actionSubtitle: {
-        fontSize: 13,
-        color: Colors.textSecondary,
-        marginTop: 2,
     },
 });

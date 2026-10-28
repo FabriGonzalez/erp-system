@@ -14,6 +14,7 @@ import { Spacing } from '@/constants/spacing';
 import { useOrderActions } from '@/hooks/use-order-actions';
 import { useOrder } from '@/hooks/use-order-queries';
 import { useAuthStore } from '@/stores/auth-store';
+import { SharedStyles } from '@/styles/shared';
 import { hasPermission } from '@/utils/permissions';
 
 export default function OperationDetailScreen() {
@@ -58,7 +59,7 @@ export default function OperationDetailScreen() {
     return (
         <Screen style={styles.screen}>
             <OrderHeader order={currentOrder} />
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={SharedStyles.pageContent}>
                 <OrderInfoCard order={currentOrder} />
                 <OrderProducts order={currentOrder} />
                 <OrderTimeline order={currentOrder} />
@@ -81,6 +82,5 @@ export default function OperationDetailScreen() {
 
 const styles = StyleSheet.create({
     screen: { padding: 0 },
-    scrollContent: { padding: Spacing.lg, paddingBottom: Spacing.xxl * 2, gap: Spacing.md },
     errorText: { color: Colors.error, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, fontSize: 13 },
 });

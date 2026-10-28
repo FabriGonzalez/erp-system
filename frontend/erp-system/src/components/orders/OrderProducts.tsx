@@ -1,7 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { Radius, Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 
 import { formatCurrency } from '@/utils/format';
@@ -15,79 +16,79 @@ export function OrderProducts({ order }: OrderProductsProps) {
     const isQuickSale = order.salesType === 'QUICK_SALE';
 
     return (
-        <View style={SharedStyles.card}>
-            <Text style={[SharedStyles.cardTitle, styles.sectionTitle]}>
-                {isQuickSale ? 'Venta Rápida' : 'Productos'}
-            </Text>
-
-            {isQuickSale ? (
-                <View style={styles.productRow}>
-                    <View style={styles.productInfo}>
-                        <Text style={styles.productName}>Importe total manual</Text>
-                        <Text style={styles.productDetail}>Sin detalle de productos</Text>
+        <View style={SharedStyles.pageSection}>
+            <SectionHeader title={isQuickSale ? 'Venta rápida' : 'Productos'} />
+            <View style={[SharedStyles.card, styles.card]}>
+                {isQuickSale ? (
+                    <View style={styles.productRow}>
+                        <View style={styles.productInfo}>
+                            <Text style={styles.productName}>Importe total manual</Text>
+                            <Text style={styles.productDetail}>Sin detalle de productos</Text>
+                        </View>
+                        <Text style={styles.productSubtotal}>
+                            {formatCurrency(order.total)}
+                        </Text>
                     </View>
-                    <Text style={styles.productSubtotal}>
+                ) : (
+                    [...order.items.map((item) => (
+                        <View key={item.id} style={styles.productRow}>
+                            <View style={styles.productInfo}>
+                                <Text style={styles.productName} numberOfLines={1}>
+                                    {item.productName}
+                                </Text>
+
+                                <Text style={styles.productDetail}>
+                                    {item.quantity} × {formatCurrency(item.unitPrice)}
+                                </Text>
+                            </View>
+
+                            <Text style={styles.productSubtotal}>
+                                {formatCurrency(item.subtotal)}
+                            </Text>
+                        </View>
+                    )),
+                    // Como se vendió: nombre, precio y componentes no cambian con la promo.
+                    ...order.promos.map((promo) => (
+                        <View key={`promo-${promo.id}`} style={styles.productRow}>
+                            <View style={styles.productInfo}>
+                                <Text style={styles.productName} numberOfLines={1}>
+                                    Promo: {promo.name}
+                                </Text>
+
+                                {promo.components.map((component) => (
+                                    <Text key={component.variantId} style={styles.productDetail} numberOfLines={1}>
+                                        {component.quantity * promo.quantity}× {component.productName}
+                                        {component.variantName ? ` (${component.variantName})` : ''}
+                                    </Text>
+                                ))}
+
+                                <Text style={styles.productDetail}>
+                                    {promo.quantity} × {formatCurrency(promo.unitPrice)}
+                                </Text>
+                            </View>
+
+                            <Text style={styles.productSubtotal}>
+                                {formatCurrency(promo.subtotal)}
+                            </Text>
+                        </View>
+                    ))]
+                )}
+
+                <View style={styles.totalRow}>
+                    <Text style={styles.totalLabel}>Total</Text>
+                    <Text style={styles.totalValue}>
                         {formatCurrency(order.total)}
                     </Text>
                 </View>
-            ) : (
-                [...order.items.map((item) => (
-                    <View key={item.id} style={styles.productRow}>
-                        <View style={styles.productInfo}>
-                            <Text style={styles.productName} numberOfLines={1}>
-                                {item.productName}
-                            </Text>
-
-                            <Text style={styles.productDetail}>
-                                {item.quantity} × {formatCurrency(item.unitPrice)}
-                            </Text>
-                        </View>
-
-                        <Text style={styles.productSubtotal}>
-                            {formatCurrency(item.subtotal)}
-                        </Text>
-                    </View>
-                )),
-                // Como se vendió: nombre, precio y componentes no cambian con la promo.
-                ...order.promos.map((promo) => (
-                    <View key={`promo-${promo.id}`} style={styles.productRow}>
-                        <View style={styles.productInfo}>
-                            <Text style={styles.productName} numberOfLines={1}>
-                                Promo: {promo.name}
-                            </Text>
-
-                            {promo.components.map((component) => (
-                                <Text key={component.variantId} style={styles.productDetail} numberOfLines={1}>
-                                    {component.quantity * promo.quantity}× {component.productName}
-                                    {component.variantName ? ` (${component.variantName})` : ''}
-                                </Text>
-                            ))}
-
-                            <Text style={styles.productDetail}>
-                                {promo.quantity} × {formatCurrency(promo.unitPrice)}
-                            </Text>
-                        </View>
-
-                        <Text style={styles.productSubtotal}>
-                            {formatCurrency(promo.subtotal)}
-                        </Text>
-                    </View>
-                ))]
-            )}
-
-            <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>
-                    {formatCurrency(order.total)}
-                </Text>
             </View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    sectionTitle: {
-        marginBottom: Spacing.md,
+    card: {
+        borderRadius: Radius.lg,
+        paddingVertical: Spacing.sm,
     },
 
     productRow: {
@@ -138,7 +139,7 @@ const styles = StyleSheet.create({
 
     totalValue: {
         fontSize: 20,
-        fontWeight: '700',
-        color: Colors.primary,
+        fontWeight: '800',
+        color: Colors.text,
     },
 });

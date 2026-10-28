@@ -1,5 +1,4 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
 import {
     ActivityIndicator,
@@ -17,13 +16,17 @@ import { ProductsFilterChips } from '@/components/products/ProductsFilterChips';
 import { ProductsSearchBar } from '@/components/products/ProductsSearchBar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { HeaderButton } from '@/components/ui/HeaderButton';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { StatTile } from '@/components/ui/StatTile';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useCategories } from '@/hooks/use-category-queries';
 import { useProducts } from '@/hooks/use-product-queries';
+import { useDashboard } from '@/hooks/use-report-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
 import { StatusFilter, StockFilter } from '@/types/product';
@@ -60,6 +63,16 @@ export default function ProductsScreen() {
         branchId,
     });
 
+    // Los mismos filtros que deja "Sin stock" al tocarlo: comparten la caché.
+    const outOfStock = useProducts({ stock: 'OUT_OF_STOCK', branchId });
+    // El stock bajo sale de Reportes: sin VER_REPORTES no se pide ni se muestra.
+    const lowStock = useDashboard('today', activeBranch?.id ?? null).dashboard?.lowStock;
+
+    function showOutOfStock() {
+        resetFilters();
+        setStockFilter('OUT_OF_STOCK');
+    }
+
     function resetFilters() {
         setSearchQuery('');
         setStockFilter('ALL');
@@ -88,38 +101,30 @@ export default function ProductsScreen() {
 
     return (
         <Screen style={styles.screen}>
-            <View style={SharedStyles.topBar}>
-                <View>
-                    <Text style={SharedStyles.screenTitle}>Productos</Text>
-                    <Text style={SharedStyles.screenSubtitle}>
-                        {activeBranch ? `Stock: ${activeBranch.name}` : 'Catálogo general'}
-                    </Text>
-                </View>
+            <PageHeader
+                eyebrow={activeBranch ? `Stock de ${activeBranch.name}` : 'Stock de todas las sucursales'}
+                title="Productos"
+                right={canCreate ? (
+                    <HeaderButton label="Nuevo" accessibilityLabel="Crear producto" onPress={handleCreateProduct} />
+                ) : undefined}
+            />
 
-                {canCreate && (
-                    <Pressable
-                        onPress={handleCreateProduct}
-                        accessibilityRole="button"
-                        accessibilityLabel="Crear producto"
-                        hitSlop={6}
-                        style={({ pressed }) => [
-                            SharedStyles.addButton,
-                            pressed && SharedStyles.pressed,
-                        ]}
-                    >
-                        <View style={SharedStyles.addIconContainer}>
-                            <SymbolView name={{
-                                ios: 'plus',
-                                android: 'add',
-                                web: 'add',
-                            }}
-                                size={24}
-                                tintColor={Colors.white}
-                            />
-                        </View>
-                        <Text style={SharedStyles.addButtonText}>Crear producto</Text>
-                    </Pressable>
-                )}
+            <View style={[SharedStyles.statRow, styles.stats]}>
+                <StatTile
+                    label="Sin stock"
+                    value={outOfStock.isInitialLoading ? '…' : String(outOfStock.totalElements)}
+                    icon={{ ios: 'xmark.bin', android: 'remove_shopping_cart', web: 'remove_shopping_cart' }}
+                    tone="danger"
+                    onPress={showOutOfStock}
+                />
+                {lowStock ? (
+                    <StatTile
+                        label="Stock bajo"
+                        value={String(lowStock.count)}
+                        icon={{ ios: 'exclamationmark.triangle', android: 'warning', web: 'warning' }}
+                        tone="warning"
+                    />
+                ) : null}
             </View>
 
             <ProductsSearchBar
@@ -221,6 +226,11 @@ export default function ProductsScreen() {
 const styles = StyleSheet.create({
     screen: {
         padding: 0,
+    },
+
+    stats: {
+        paddingHorizontal: Spacing.lg,
+        paddingVertical: Spacing.xs,
     },
 
     resultsBar: {

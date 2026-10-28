@@ -1,8 +1,10 @@
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 import { Order, SHIPPING_STATUS_FLOW } from '@/types/order';
 import { SymbolView } from 'expo-symbols';
+
+import { SectionHeader } from '@/components/ui/SectionHeader';
 import { StyleSheet, Text, View } from 'react-native';
 
 type OrderTimelineProps = {
@@ -56,99 +58,102 @@ export function OrderTimeline({ order }: OrderTimelineProps) {
             : SHIPPING_STATUS_FLOW;
 
     return (
-        <View style={SharedStyles.card}>
-            <Text style={[SharedStyles.cardTitle, styles.title]}>Estado del pedido</Text>
+        <View style={SharedStyles.pageSection}>
+            <SectionHeader title="Estado del pedido" />
+            <View style={[SharedStyles.card, styles.card]}>
 
-            {isCancelled && (
-                <View style={styles.cancelledBanner}>
-                    <SymbolView
-                        name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
-                        size={20}
-                        tintColor={Colors.error}
-                    />
-                    <Text style={styles.cancelledText}>Pedido cancelado</Text>
-                </View>
-            )}
-
-            {steps.map((label, index) => {
-                const statusKey = statusSteps[index];
-                const isCompleted = completed.includes(statusKey);
-                const isCurrent = current === statusKey;
-                const isLast = index === steps.length - 1;
-
-                let circleBg = Colors.border;
-                let circleBorder = Colors.track;
-                let labelColor = Colors.textSecondary;
-                let lineColor = Colors.border;
-
-                if (isCancelled) {
-                    circleBg = Colors.muted;
-                    circleBorder = Colors.border;
-                    labelColor = Colors.track;
-                } else if (isCompleted) {
-                    circleBg = Colors.success;
-                    circleBorder = Colors.success;
-                    labelColor = Colors.success;
-                    lineColor = Colors.success;
-                } else if (isCurrent) {
-                    circleBg = Colors.primary;
-                    circleBorder = Colors.primary;
-                    labelColor = Colors.text;
-                }
-
-                return (
-                    <View key={index} style={styles.stepContainer}>
-                        <View style={styles.stepLeft}>
-                            <View
-                                style={[
-                                    styles.circle,
-                                    { backgroundColor: circleBg, borderColor: circleBorder },
-                                ]}
-                            >
-                                {isCompleted && !isCancelled ? (
-                                    <SymbolView
-                                        name={{
-                                            ios: 'checkmark',
-                                            android: 'check',
-                                            web: 'check',
-                                        }}
-                                        size={14}
-                                        tintColor={Colors.white}
-                                    />
-                                ) : isCurrent && !isCancelled ? (
-                                    <View style={styles.currentDot} />
-                                ) : null}
-                            </View>
-                            {!isLast && (
-                                <View style={[styles.line, { backgroundColor: lineColor }]} />
-                            )}
-                        </View>
-
-                        <View style={styles.stepContent}>
-                            <Text
-                                style={[
-                                    styles.stepLabel,
-                                    { color: labelColor },
-                                    isCurrent && styles.stepLabelCurrent,
-                                    isCompleted && !isCancelled && styles.stepLabelCompleted,
-                                ]}
-                            >
-                                {label}
-                            </Text>
-                            {isCurrent && !isCancelled && (
-                                <Text style={styles.currentLabel}>Estado actual</Text>
-                            )}
-                        </View>
+                {isCancelled && (
+                    <View style={styles.cancelledBanner}>
+                        <SymbolView
+                            name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
+                            size={20}
+                            tintColor={Colors.error}
+                        />
+                        <Text style={styles.cancelledText}>Pedido cancelado</Text>
                     </View>
-                );
-            })}
+                )}
+
+                {steps.map((label, index) => {
+                    const statusKey = statusSteps[index];
+                    const isCompleted = completed.includes(statusKey);
+                    const isCurrent = current === statusKey;
+                    const isLast = index === steps.length - 1;
+
+                    let circleBg = Colors.border;
+                    let circleBorder = Colors.track;
+                    let labelColor = Colors.textSecondary;
+                    let lineColor = Colors.border;
+
+                    if (isCancelled) {
+                        circleBg = Colors.muted;
+                        circleBorder = Colors.border;
+                        labelColor = Colors.track;
+                    } else if (isCompleted) {
+                        circleBg = Colors.success;
+                        circleBorder = Colors.success;
+                        labelColor = Colors.success;
+                        lineColor = Colors.success;
+                    } else if (isCurrent) {
+                        circleBg = Colors.primary;
+                        circleBorder = Colors.primary;
+                        labelColor = Colors.text;
+                    }
+
+                    return (
+                        <View key={index} style={styles.stepContainer}>
+                            <View style={styles.stepLeft}>
+                                <View
+                                    style={[
+                                        styles.circle,
+                                        { backgroundColor: circleBg, borderColor: circleBorder },
+                                    ]}
+                                >
+                                    {isCompleted && !isCancelled ? (
+                                        <SymbolView
+                                            name={{
+                                                ios: 'checkmark',
+                                                android: 'check',
+                                                web: 'check',
+                                            }}
+                                            size={14}
+                                            tintColor={Colors.white}
+                                        />
+                                    ) : isCurrent && !isCancelled ? (
+                                        <View style={styles.currentDot} />
+                                    ) : null}
+                                </View>
+                                {!isLast && (
+                                    <View style={[styles.line, { backgroundColor: lineColor }]} />
+                                )}
+                            </View>
+
+                            <View style={styles.stepContent}>
+                                <Text
+                                    style={[
+                                        styles.stepLabel,
+                                        { color: labelColor },
+                                        isCurrent && styles.stepLabelCurrent,
+                                        isCompleted && !isCancelled && styles.stepLabelCompleted,
+                                    ]}
+                                >
+                                    {label}
+                                </Text>
+                                {isCurrent && !isCancelled && (
+                                    <Text style={styles.currentLabel}>Estado actual</Text>
+                                )}
+                            </View>
+                        </View>
+                    );
+                })}
+            </View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    title: {
-        marginBottom: Spacing.lg,
+    card: {
+        borderRadius: Radius.lg,
+        paddingBottom: Spacing.xs,
     },
     cancelledBanner: {
         flexDirection: 'row',

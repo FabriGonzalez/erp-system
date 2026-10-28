@@ -1,10 +1,87 @@
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { StyleSheet } from 'react-native';
 
 export const SharedStyles = StyleSheet.create({
     pressed: {
         opacity: 0.7,
+    },
+
+    // Sombra de lo que se destaca (la tarjeta principal, el botón "Nuevo").
+    raised: {
+        boxShadow: '0 10px 24px -12px rgba(15, 23, 42, 0.45)',
+    },
+
+    // Contenido de las pantallas principales (Ventas, Envíos, Más): columna con aire entre bloques.
+    pageContent: {
+        paddingHorizontal: Spacing.lg,
+        paddingTop: Spacing.sm,
+        paddingBottom: Spacing.xl,
+        gap: Spacing.md,
+    },
+
+    // Bloque con título de sección y su contenido.
+    pageSection: {
+        gap: Spacing.sm,
+        marginTop: Spacing.xs,
+    },
+
+    // Fila de contadores (StatTile).
+    statRow: {
+        flexDirection: 'row',
+        gap: Spacing.sm,
+    },
+
+    // Barra de búsqueda y filtros debajo del PageHeader.
+    pageToolbar: {
+        paddingHorizontal: Spacing.lg,
+        paddingTop: Spacing.xs,
+        paddingBottom: Spacing.md,
+        gap: Spacing.sm,
+    },
+
+    // Listado debajo del PageHeader: tarjetas separadas, con lugar al final.
+    pageList: {
+        paddingHorizontal: Spacing.lg,
+        paddingTop: Spacing.xs,
+        paddingBottom: Spacing.xxl * 2,
+        gap: Spacing.sm,
+        flexGrow: 1,
+    },
+
+    // Tarjeta de un listado (cliente, producto, stock): ícono, textos y estado en fila.
+    // Va junto con `card`.
+    listItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+        padding: Spacing.md,
+        borderRadius: Radius.lg,
+    },
+
+    listItemPressed: {
+        backgroundColor: Colors.muted,
+    },
+
+    listItemInactive: {
+        opacity: 0.7,
+    },
+
+    listItemTexts: {
+        flex: 1,
+        minWidth: 0,
+        gap: 3,
+    },
+
+    listItemTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: Colors.text,
+    },
+
+    listItemMeta: {
+        fontSize: 12,
+        color: Colors.textSecondary,
     },
 
     header: {
@@ -132,7 +209,7 @@ export const SharedStyles = StyleSheet.create({
 
     card: {
         backgroundColor: Colors.surface,
-        borderRadius: 14,
+        borderRadius: Radius.lg,
         padding: Spacing.lg,
         borderWidth: 1,
         borderColor: Colors.border,
@@ -236,7 +313,7 @@ export const SharedStyles = StyleSheet.create({
         flex: 1,
         minWidth: 100,
         height: 44,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: Colors.primary,
@@ -252,7 +329,7 @@ export const SharedStyles = StyleSheet.create({
         flex: 1,
         minWidth: 100,
         height: 44,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         borderWidth: 1,
         borderColor: Colors.border,
         alignItems: 'center',
@@ -269,7 +346,7 @@ export const SharedStyles = StyleSheet.create({
     buttonDanger: {
         width: '100%',
         height: 44,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: Colors.errorLight,
@@ -291,7 +368,7 @@ export const SharedStyles = StyleSheet.create({
         backgroundColor: Colors.primary,
         paddingHorizontal: Spacing.lg,
         paddingVertical: Spacing.sm,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         gap: 8,
     },
 
@@ -312,7 +389,7 @@ export const SharedStyles = StyleSheet.create({
 
     buttonSubmit: {
         height: 50,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: Colors.primary,
@@ -326,7 +403,7 @@ export const SharedStyles = StyleSheet.create({
 
     buttonCancel: {
         height: 48,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         alignItems: 'center',
         justifyContent: 'center',
     },

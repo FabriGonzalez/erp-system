@@ -1,10 +1,16 @@
 import { StyleSheet, Text, View, Pressable } from 'react-native';
-import { SymbolView } from 'expo-symbols';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { PaymentStatusBadge } from '@/components/orders/PaymentStatusBadge';
-import { StatusBadge } from '@/components/ui/StatusBadge';
-import { Order, DELIVERY_TYPE_LABELS } from '@/types/order';
+import { SharedStyles } from '@/styles/shared';
+import {
+    DELIVERY_TYPE_LABELS,
+    ORDER_STATUS_LABELS,
+    Order,
+    PAYMENT_STATUS_LABELS,
+} from '@/types/order';
+import { formatCurrency } from '@/utils/format';
+import { orderStatusTone, paymentStatusTone } from '@/utils/status';
 
 type OrderCardProps = {
     order: Order;
@@ -24,146 +30,75 @@ function formatDate(isoDate: string): string {
     return date.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) + ` · ${time}`;
 }
 
+function detailOf(order: Order): string {
+    if (order.salesType === 'QUICK_SALE') return 'Venta rápida';
+    return [
+        `${order.items.length} ${order.items.length === 1 ? 'producto' : 'productos'}`,
+        order.promos.length > 0
+            ? `${order.promos.length} ${order.promos.length === 1 ? 'promo' : 'promos'}`
+            : null,
+    ].filter(Boolean).join(' · ');
+}
+
 export function OrderCard({ order, onPress }: OrderCardProps) {
     // Al cancelar se revierten los pagos: el estado de pago ya no dice nada.
     const showPayment = order.status !== 'CANCELLED';
 
     return (
         <Pressable
-            style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+            style={({ pressed }) => [SharedStyles.card, SharedStyles.listItem, pressed && SharedStyles.listItemPressed]}
             onPress={onPress}
+            accessibilityRole="button"
+            accessibilityLabel={`Pedido ${order.orderNumber}, ${order.customerName}`}
         >
-            <View style={styles.headerRow}>
-                <Text style={styles.orderNumber}>{order.orderNumber}</Text>
-                <StatusBadge status={order.status} />
-            </View>
-
-            <View style={styles.body}>
-                <Text style={styles.customerName} numberOfLines={1}>
-                    {order.customerName}
+            <View style={SharedStyles.listItemTexts}>
+                <Text style={SharedStyles.listItemTitle} numberOfLines={1}>{order.customerName}</Text>
+                <Text style={SharedStyles.listItemMeta} numberOfLines={1}>
+                    #{order.orderNumber} · {formatDate(order.createdAt)}
                 </Text>
-                <View style={styles.deliveryBadge}>
-                    <Text style={styles.deliveryText}>
-                        {DELIVERY_TYPE_LABELS[order.deliveryType]}
-                    </Text>
+                <Text style={SharedStyles.listItemMeta} numberOfLines={1}>
+                    {DELIVERY_TYPE_LABELS[order.deliveryType]} · {detailOf(order)}
+                </Text>
+                <View style={styles.pills}>
+                    <StatusPill label={ORDER_STATUS_LABELS[order.status]} tone={orderStatusTone(order.status)} />
+                    {showPayment ? (
+                        <StatusPill
+                            label={PAYMENT_STATUS_LABELS[order.paymentStatus]}
+                            tone={paymentStatusTone(order.paymentStatus)}
+                        />
+                    ) : null}
                 </View>
-                {showPayment && <PaymentStatusBadge status={order.paymentStatus} />}
             </View>
-
-            <View style={styles.footerRow}>
-                <View style={styles.footerLeft}>
-                    <Text style={styles.itemsCount}>
-                        {order.salesType === 'QUICK_SALE'
-                            ? 'Venta rápida'
-                            : [
-                                `${order.items.length} ${order.items.length === 1 ? 'producto' : 'productos'}`,
-                                order.promos.length > 0
-                                    ? `${order.promos.length} ${order.promos.length === 1 ? 'promo' : 'promos'}`
-                                    : null,
-                            ].filter(Boolean).join(' · ')}
-                    </Text>
-                    <Text style={styles.total}>${order.total.toLocaleString('es-AR')}</Text>
-                    {showPayment && order.balance > 0 && (
-                        <Text style={styles.balance}>Saldo ${order.balance.toLocaleString('es-AR')}</Text>
-                    )}
-                </View>
-                <View style={styles.footerRight}>
-                    <Text style={styles.date}>{formatDate(order.createdAt)}</Text>
-                    <SymbolView
-                        name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                        size={16}
-                        tintColor={Colors.textSecondary}
-                    />
-                </View>
+            <View style={styles.amounts}>
+                <Text style={styles.total}>{formatCurrency(order.total)}</Text>
+                {showPayment && order.balance > 0 ? (
+                    <Text style={styles.balance}>Saldo {formatCurrency(order.balance)}</Text>
+                ) : null}
             </View>
         </Pressable>
     );
 }
 
 const styles = StyleSheet.create({
-    card: {
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        padding: Spacing.lg,
-        marginBottom: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 3,
-        elevation: 1,
-    },
-    pressed: {
-        opacity: 0.85,
-        transform: [{ scale: 0.99 }],
-    },
-    headerRow: {
+    pills: {
         flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: Spacing.sm,
+        flexWrap: 'wrap',
+        gap: Spacing.xs,
+        marginTop: 2,
     },
-    orderNumber: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    body: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-        marginBottom: Spacing.md,
-    },
-    customerName: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: Colors.text,
-        flex: 1,
-    },
-    deliveryBadge: {
-        backgroundColor: Colors.muted,
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 2,
-        borderRadius: 6,
-    },
-    deliveryText: {
-        fontSize: 11,
-        fontWeight: '600',
-        color: Colors.textSecondary,
-    },
-    footerRow: {
-        flexDirection: 'row',
+    amounts: {
+        alignSelf: 'flex-start',
         alignItems: 'flex-end',
-        justifyContent: 'space-between',
-        paddingTop: Spacing.sm,
-        borderTopWidth: 1,
-        borderTopColor: Colors.muted,
-    },
-    footerLeft: {
         gap: 2,
     },
-    itemsCount: {
-        fontSize: 12,
-        color: Colors.textSecondary,
-    },
     total: {
-        fontSize: 18,
-        fontWeight: '700',
+        fontSize: 16,
+        fontWeight: '800',
         color: Colors.text,
     },
     balance: {
         fontSize: 12,
         fontWeight: '600',
         color: Colors.error,
-    },
-    footerRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    date: {
-        fontSize: 12,
-        color: Colors.textSecondary,
     },
 });

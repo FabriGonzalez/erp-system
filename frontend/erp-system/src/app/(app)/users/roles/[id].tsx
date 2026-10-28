@@ -1,15 +1,17 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { RoleForm, toRoleRequest, validateRole } from '@/components/users/RoleForm';
 import { AppButton } from '@/components/ui/AppButton';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { ListGroup } from '@/components/ui/ListGroup';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { MenuListItem } from '@/components/ui/MenuListItem';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import {
     useAssignablePermissions,
     useRole,
@@ -78,7 +80,7 @@ export default function RoleDetailScreen() {
 
         return (
             <>
-                <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+                <ScrollView contentContainerStyle={SharedStyles.pageContent} keyboardShouldPersistTaps="handled">
                     {role.system && (
                         <View style={styles.notice}>
                             <Text style={styles.noticeText}>
@@ -116,15 +118,21 @@ export default function RoleDetailScreen() {
                     )}
 
                     {!role.system && (
-                        <Pressable
-                            onPress={() => void handleToggleActive()}
-                            disabled={isBusy}
-                            style={({ pressed }) => [styles.toggleActive, pressed && SharedStyles.pressed]}
-                        >
-                            <Text style={[styles.toggleActiveText, role.active && styles.danger]}>
-                                {role.active ? 'Desactivar rol' : 'Activar rol'}
-                            </Text>
-                        </Pressable>
+                        <ListGroup>
+                            <MenuListItem
+                                title={role.active ? 'Desactivar rol' : 'Activar rol'}
+                                subtitle={role.active
+                                    ? 'Sus usuarios se quedan sin permisos'
+                                    : 'Sus usuarios recuperan los permisos'}
+                                iconName={role.active
+                                    ? { ios: 'pause.circle', android: 'block', web: 'block' }
+                                    : { ios: 'play.circle', android: 'check_circle', web: 'check_circle' }}
+                                tone="success"
+                                danger={role.active}
+                                showChevron={false}
+                                onPress={() => void handleToggleActive()}
+                            />
+                        </ListGroup>
                     )}
                 </ScrollView>
 
@@ -143,20 +151,7 @@ export default function RoleDetailScreen() {
 
     return (
         <Screen style={styles.screen}>
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle} numberOfLines={1}>{role?.name ?? 'Rol'}</Text>
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader onBack={() => router.back()} eyebrow="Rol" title={role?.name ?? 'Rol'} />
 
             {renderBody()}
         </Screen>
@@ -167,13 +162,9 @@ const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    content: {
-        padding: Spacing.lg,
-        gap: Spacing.md,
-    },
     notice: {
         backgroundColor: Colors.primaryLight,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         padding: Spacing.md,
     },
     noticeText: {
@@ -187,18 +178,6 @@ const styles = StyleSheet.create({
     successText: {
         color: Colors.successDark,
         fontSize: 14,
-    },
-    toggleActive: {
-        alignSelf: 'center',
-        padding: Spacing.md,
-    },
-    toggleActiveText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: Colors.primary,
-    },
-    danger: {
-        color: Colors.error,
     },
     footer: {
         padding: Spacing.lg,

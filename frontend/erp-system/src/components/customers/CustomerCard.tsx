@@ -2,8 +2,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 
 import { Avatar } from '@/components/ui/Avatar';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 import { Customer } from '@/types/customer';
 import { getInitials } from '@/utils/format';
@@ -15,11 +15,18 @@ type CustomerCardProps = {
 
 export function CustomerCard({ customer, onPress }: CustomerCardProps) {
     const addressCount = customer.addressCount;
+    const contact = [customer.phone, customer.email].filter(Boolean).join(' · ');
 
     return (
         <Pressable
-            style={({ pressed }) => [SharedStyles.rowCard, styles.card, pressed && SharedStyles.pressed]}
+            style={({ pressed }) => [
+                SharedStyles.card,
+                SharedStyles.listItem,
+                !customer.active && SharedStyles.listItemInactive,
+                pressed && SharedStyles.listItemPressed,
+            ]}
             onPress={onPress}
+            accessibilityRole="button"
         >
             <Avatar
                 name={customer.name}
@@ -27,32 +34,22 @@ export function CustomerCard({ customer, onPress }: CustomerCardProps) {
                 size={44}
                 fontWeight="700"
                 fontSize={16}
-                style={styles.avatar}
+                backgroundColor={Colors.violetLight}
+                textColor={Colors.violet}
             />
 
-            <View style={styles.info}>
-                <View style={styles.nameRow}>
-                    <Text style={styles.name}>{customer.name}</Text>
-                    {!customer.active ? (
-                        <View style={styles.inactiveBadge}>
-                            <Text style={styles.inactiveBadgeText}>Inactivo</Text>
-                        </View>
-                    ) : null}
-                </View>
-                {customer.email ? (
-                    <Text style={styles.detailText}>{customer.email}</Text>
+            <View style={SharedStyles.listItemTexts}>
+                <Text style={SharedStyles.listItemTitle} numberOfLines={1}>{customer.name}</Text>
+                {contact ? (
+                    <Text style={SharedStyles.listItemMeta} numberOfLines={1}>{contact}</Text>
                 ) : null}
-                {customer.phone ? (
-                    <Text style={styles.detailText}>{customer.phone}</Text>
-                ) : null}
-
-                <View style={styles.addressBadge}>
+                <View style={styles.addressRow}>
                     <SymbolView
                         name={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
                         size={12}
                         tintColor={Colors.textSecondary}
                     />
-                    <Text style={styles.addressBadgeText}>
+                    <Text style={SharedStyles.listItemMeta}>
                         {addressCount === 0
                             ? 'Sin direcciones'
                             : addressCount === 1
@@ -62,61 +59,20 @@ export function CustomerCard({ customer, onPress }: CustomerCardProps) {
                 </View>
             </View>
 
+            {!customer.active ? <StatusPill label="Inactivo" tone="neutral" /> : null}
             <SymbolView
                 name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                size={20}
-                tintColor={Colors.textSecondary}
+                size={18}
+                tintColor={Colors.textTertiary}
             />
         </Pressable>
     );
 }
 
 const styles = StyleSheet.create({
-    card: {
-        marginBottom: Spacing.sm,
-    },
-    avatar: {
-        marginRight: Spacing.md,
-    },
-    info: {
-        flex: 1,
-    },
-    nameRow: {
+    addressRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: Spacing.xs,
-        marginBottom: 2,
-    },
-    name: {
-        flexShrink: 1,
-        fontSize: 16,
-        fontWeight: '600',
-        color: Colors.text,
-    },
-    inactiveBadge: {
-        backgroundColor: Colors.muted,
-        paddingHorizontal: 6,
-        paddingVertical: 1,
-        borderRadius: 4,
-    },
-    inactiveBadgeText: {
-        fontSize: 11,
-        fontWeight: '600',
-        color: Colors.textSecondary,
-    },
-    detailText: {
-        fontSize: 13,
-        color: Colors.textSecondary,
-        marginTop: 1,
-    },
-    addressBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 6,
         gap: 4,
-    },
-    addressBadgeText: {
-        fontSize: 12,
-        color: Colors.textSecondary,
     },
 });

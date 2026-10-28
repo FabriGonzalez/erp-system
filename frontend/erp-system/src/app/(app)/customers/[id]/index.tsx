@@ -1,5 +1,4 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { AndroidSymbol, SFSymbol, SymbolView } from 'expo-symbols';
 import { useState } from 'react';
 import {
     ActivityIndicator,
@@ -12,13 +11,21 @@ import {
 } from 'react-native';
 
 import { AddressSummary } from '@/components/customers/AddressSummary';
-import { Avatar } from '@/components/ui/Avatar';
+import { ActionChip } from '@/components/ui/ActionChip';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { HeaderButton } from '@/components/ui/HeaderButton';
+import { IconBadge } from '@/components/ui/IconBadge';
+import { InfoRow } from '@/components/ui/InfoRow';
+import { ListGroup } from '@/components/ui/ListGroup';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { MenuListItem } from '@/components/ui/MenuListItem';
 import { NotFound } from '@/components/ui/NotFound';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import {
     useCustomer,
     useCustomerAddresses,
@@ -32,7 +39,7 @@ import { SharedStyles } from '@/styles/shared';
 import { CustomerAddress, documentTypeLabel } from '@/types/customer';
 import { addressToDraft, toAddressRequest } from '@/utils/address';
 import { confirmAction } from '@/utils/confirm';
-import { formatCurrency, getInitials } from '@/utils/format';
+import { formatCurrency } from '@/utils/format';
 import { CUSTOMER_ACCOUNT_READ_PERMISSIONS, hasAnyPermission, hasPermission } from '@/utils/permissions';
 
 export default function CustomerDetailScreen() {
@@ -158,51 +165,40 @@ export default function CustomerDetailScreen() {
         await runAction(() => setAddressActive.mutateAsync({ addressId: address.id, active: !address.active }));
     }
 
+    const accountPill = summary
+        ? summary.debt > 0
+            ? <StatusPill label={`Debe ${formatCurrency(summary.debt)}`} tone="danger" />
+            : summary.credit > 0
+                ? <StatusPill label={`A favor ${formatCurrency(summary.credit)}`} tone="success" />
+                : <StatusPill label="Al día" tone="success" />
+        : summaryLoading
+            ? <ActivityIndicator size="small" color={Colors.primary} />
+            : undefined;
+
     return (
         <Screen style={styles.screen}>
-            <View style={[SharedStyles.header, styles.header]}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [
-                        SharedStyles.backButton,
-                        pressed && SharedStyles.pressed,
-                    ]}
-                >
-                    <SymbolView
-                        name={{
-                            ios: 'chevron.left',
-                            android: 'arrow_back',
-                            web: 'arrow_back',
-                        }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-
-                <Text style={styles.headerTitle}>
-                    Detalle del cliente
-                </Text>
-
-                {canManageCustomers ? (
-                    <Pressable
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow="Cliente"
+                title={customer.name}
+                right={canManageCustomers ? (
+                    <HeaderButton
+                        label="Editar"
+                        icon={{ ios: 'pencil', android: 'edit', web: 'edit' }}
+                        accessibilityLabel="Editar cliente"
                         onPress={() =>
                             router.push({
                                 pathname: '/customers/[id]/edit',
                                 params: { id: customer.id },
                             })
                         }
-                        style={({ pressed }) => [styles.headerAction, pressed && SharedStyles.pressed]}
-                    >
-                        <Text style={styles.headerActionText}>Editar</Text>
-                    </Pressable>
-                ) : (
-                    <View style={SharedStyles.headerSpacer} />
-                )}
-            </View>
+                    />
+                ) : undefined}
+            />
 
             <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={SharedStyles.listContent}
+                contentContainerStyle={SharedStyles.pageContent}
             >
                 {actionError ? (
                     <View style={styles.errorBox}>
@@ -210,155 +206,58 @@ export default function CustomerDetailScreen() {
                     </View>
                 ) : null}
 
-                <View style={[styles.customerCard, !customer.active && styles.inactiveCard]}>
-                    <Avatar
-                        name={customer.name}
-                        initials={getInitials(customer.name) || 'C'}
-                        size={64}
-                        fontWeight="700"
-                        fontSize={22}
-                        style={styles.avatar}
-                    />
+                {!customer.active ? <StatusPill label="Inactivo" tone="neutral" /> : null}
 
-                    <Text style={styles.customerName}>
-                        {customer.name}
-                    </Text>
-
-                    {!customer.active ? (
-                        <View style={styles.inactiveBadge}>
-                            <Text style={styles.inactiveBadgeText}>Inactivo</Text>
-                        </View>
-                    ) : null}
-
-                    {documentLabel ? (
-                        <ContactRow icon={{ ios: 'person.text.rectangle', android: 'badge', web: 'badge' }} text={documentLabel} />
-                    ) : null}
-                    {customer.email ? (
-                        <ContactRow icon={{ ios: 'envelope', android: 'email', web: 'email' }} text={customer.email} />
-                    ) : null}
-                    {customer.phone ? (
-                        <ContactRow icon={{ ios: 'phone', android: 'phone', web: 'phone' }} text={customer.phone} />
-                    ) : null}
-
-                    {customer.observations ? (
-                        <Text style={styles.observations}>{customer.observations}</Text>
-                    ) : null}
-
-                    {canManageCustomers ? (
-                        <Pressable
-                            onPress={handleToggleCustomerActive}
-                            disabled={setCustomerActive.isPending}
-                            style={({ pressed }) => [
-                                styles.statusButton,
-                                customer.active ? styles.statusButtonDanger : styles.statusButtonPrimary,
-                                (pressed || setCustomerActive.isPending) && SharedStyles.pressed,
-                            ]}
-                        >
-                            {setCustomerActive.isPending ? (
-                                <ActivityIndicator size="small" color={customer.active ? Colors.error : Colors.primary} />
-                            ) : (
-                                <Text style={[styles.statusButtonText, { color: customer.active ? Colors.error : Colors.primary }]}>
-                                    {customer.active ? 'Desactivar cliente' : 'Reactivar cliente'}
-                                </Text>
-                            )}
-                        </Pressable>
-                    ) : null}
-                </View>
-
-                {canViewAccount ? (
-                    <Pressable
-                        onPress={() =>
-                            router.push({
-                                pathname: '/customers/[id]/debts',
-                                params: { id: customer.id },
-                            })
-                        }
-                        style={({ pressed }) => [styles.accountCard, pressed && SharedStyles.pressed]}
-                    >
-                        <View style={styles.sectionHeaderText}>
-                            <Text style={styles.accountTitle}>Cuenta corriente</Text>
-                            {summary ? (
-                                <>
-                                    <Text
-                                        style={[
-                                            styles.accountBalance,
-                                            summary.debt > 0 && styles.accountDebt,
-                                            summary.debt <= 0 && summary.credit > 0 && styles.accountCredit,
-                                        ]}
-                                    >
-                                        {summary.debt > 0
-                                            ? `Debe ${formatCurrency(summary.debt)}`
-                                            : summary.credit > 0
-                                                ? `Saldo a favor ${formatCurrency(summary.credit)}`
-                                                : 'Al día'}
-                                    </Text>
-                                    {summary.pendingOrders > 0 ? (
-                                        <Text style={styles.sectionSubtitle}>
-                                            {summary.pendingOrders}{' '}
-                                            {summary.pendingOrders === 1
-                                                ? 'pedido con saldo pendiente'
-                                                : 'pedidos con saldo pendiente'}
-                                        </Text>
-                                    ) : null}
-                                </>
-                            ) : summaryLoading ? (
-                                <ActivityIndicator size="small" color={Colors.primary} style={styles.accountLoader} />
-                            ) : (
-                                <Text style={styles.sectionSubtitle}>Ver pendientes, pagos y movimientos</Text>
-                            )}
-                        </View>
-                        <SymbolView
-                            name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                            size={18}
-                            tintColor={Colors.textSecondary}
-                        />
-                    </Pressable>
+                {documentLabel || customer.email || customer.phone || customer.observations ? (
+                    <View style={SharedStyles.pageSection}>
+                        <SectionHeader title="Contacto" />
+                        <ListGroup>
+                            {documentLabel ? <InfoRow label="Documento" value={documentLabel} /> : null}
+                            {customer.email ? <InfoRow label="Email" value={customer.email} /> : null}
+                            {customer.phone ? <InfoRow label="Teléfono" value={customer.phone} /> : null}
+                            {customer.observations ? (
+                                <Text style={styles.observations}>{customer.observations}</Text>
+                            ) : null}
+                        </ListGroup>
+                    </View>
                 ) : null}
 
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <View style={styles.sectionHeaderText}>
-                            <Text style={styles.sectionTitle}>
-                                Direcciones
-                            </Text>
-                            <Text style={styles.sectionSubtitle}>
-                                {customer.addressCount === 0
-                                    ? 'No hay direcciones activas'
-                                    : `${customer.addressCount} ${customer.addressCount === 1
-                                        ? 'dirección activa'
-                                        : 'direcciones activas'
-                                    }`}
-                            </Text>
-                        </View>
+                {canViewAccount ? (
+                    <ListGroup>
+                        <MenuListItem
+                            title="Cuenta corriente"
+                            subtitle={summary && summary.pendingOrders > 0
+                                ? `${summary.pendingOrders} ${summary.pendingOrders === 1
+                                    ? 'pedido con saldo pendiente'
+                                    : 'pedidos con saldo pendiente'}`
+                                : 'Pendientes, pagos y movimientos'}
+                            iconName={{ ios: 'creditcard', android: 'account_balance_wallet', web: 'account_balance_wallet' }}
+                            tone="warning"
+                            badge={accountPill}
+                            onPress={() =>
+                                router.push({
+                                    pathname: '/customers/[id]/debts',
+                                    params: { id: customer.id },
+                                })
+                            }
+                        />
+                    </ListGroup>
+                ) : null}
 
-                        {canEditAddresses ? (
-                            <Pressable
-                                style={({ pressed }) => [
-                                    styles.addButton,
-                                    pressed && SharedStyles.pressed,
-                                ]}
-                                onPress={() =>
-                                    router.push({
-                                        pathname: '/customers/[id]/add-address',
-                                        params: { id: customer.id },
-                                    })
-                                }
-                            >
-                                <SymbolView
-                                    name={{
-                                        ios: 'plus',
-                                        android: 'add',
-                                        web: 'add',
-                                    }}
-                                    size={17}
-                                    tintColor={Colors.white}
-                                />
-                                <Text style={styles.addButtonText}>
-                                    Agregar
-                                </Text>
-                            </Pressable>
-                        ) : null}
-                    </View>
+                <View style={SharedStyles.pageSection}>
+                    <SectionHeader
+                        title={customer.addressCount === 0
+                            ? 'Direcciones'
+                            : `Direcciones (${customer.addressCount} ${customer.addressCount === 1 ? 'activa' : 'activas'})`}
+                        actionLabel={canEditAddresses ? 'Agregar' : undefined}
+                        onAction={canEditAddresses
+                            ? () =>
+                                router.push({
+                                    pathname: '/customers/[id]/add-address',
+                                    params: { id: customer.id },
+                                })
+                            : undefined}
+                    />
 
                     {inactiveCount > 0 ? (
                         <View style={styles.toggleRow}>
@@ -368,7 +267,8 @@ export default function CustomerDetailScreen() {
                             <Switch
                                 value={showInactive}
                                 onValueChange={setShowInactive}
-                                trackColor={{ true: Colors.primary, false: Colors.border }}
+                                trackColor={{ true: Colors.primary, false: Colors.track }}
+                                thumbColor={Colors.white}
                             />
                         </View>
                     ) : null}
@@ -376,22 +276,17 @@ export default function CustomerDetailScreen() {
                     {addressesLoading && addresses.length === 0 ? (
                         <ActivityIndicator color={Colors.primary} style={styles.addressesLoader} />
                     ) : addressesError && addresses.length === 0 ? (
-                        <View style={styles.emptyAddresses}>
+                        <View style={[SharedStyles.card, styles.emptyAddresses]}>
                             <Text style={styles.emptyDescription}>{addressesError}</Text>
                             <Pressable onPress={reloadAddresses} style={styles.retryLink}>
                                 <Text style={styles.retryLinkText}>Reintentar</Text>
                             </Pressable>
                         </View>
                     ) : visibleAddresses.length === 0 ? (
-                        <View style={styles.emptyAddresses}>
-                            <SymbolView
-                                name={{
-                                    ios: 'mappin.slash',
-                                    android: 'location_off',
-                                    web: 'location_off',
-                                }}
-                                size={24}
-                                tintColor={Colors.textSecondary}
+                        <View style={[SharedStyles.card, styles.emptyAddresses]}>
+                            <IconBadge
+                                icon={{ ios: 'mappin.slash', android: 'location_off', web: 'location_off' }}
+                                tone="neutral"
                             />
                             <Text style={styles.emptyTitle}>
                                 Sin direcciones
@@ -406,29 +301,22 @@ export default function CustomerDetailScreen() {
                             {visibleAddresses.map((address) => (
                                 <View
                                     key={address.id}
-                                    style={[styles.addressCard, !address.active && styles.inactiveCard]}
+                                    style={[SharedStyles.card, styles.addressCard, !address.active && SharedStyles.listItemInactive]}
                                 >
                                     <View style={styles.addressRow}>
-                                        <View style={styles.addressIcon}>
-                                            <SymbolView
-                                                name={{
-                                                    ios: 'mappin',
-                                                    android: 'location_on',
-                                                    web: 'location_on',
-                                                }}
-                                                size={18}
-                                                tintColor={Colors.primary}
-                                            />
-                                        </View>
-
+                                        <IconBadge
+                                            icon={{ ios: 'mappin', android: 'location_on', web: 'location_on' }}
+                                            tone={address.isMain ? 'primary' : 'neutral'}
+                                        />
                                         <AddressSummary address={address} />
                                     </View>
 
                                     {canEditAddresses ? (
                                         <View style={styles.addressActions}>
                                             {address.active ? (
-                                                <AddressAction
+                                                <ActionChip
                                                     label="Editar"
+                                                    icon={{ ios: 'pencil', android: 'edit', web: 'edit' }}
                                                     disabled={isAddressBusy}
                                                     onPress={() =>
                                                         router.push({
@@ -439,16 +327,21 @@ export default function CustomerDetailScreen() {
                                                 />
                                             ) : null}
                                             {address.active && !address.isMain ? (
-                                                <AddressAction
+                                                <ActionChip
                                                     label="Marcar principal"
+                                                    icon={{ ios: 'star', android: 'star', web: 'star' }}
+                                                    tone="neutral"
                                                     disabled={isAddressBusy}
                                                     onPress={() => handleSetMain(address)}
                                                 />
                                             ) : null}
                                             {canManageCustomers ? (
-                                                <AddressAction
+                                                <ActionChip
                                                     label={address.active ? 'Desactivar' : 'Reactivar'}
-                                                    destructive={address.active}
+                                                    icon={address.active
+                                                        ? { ios: 'pause.circle', android: 'block', web: 'block' }
+                                                        : { ios: 'play.circle', android: 'check_circle', web: 'check_circle' }}
+                                                    tone={address.active ? 'danger' : 'success'}
                                                     disabled={isAddressBusy}
                                                     onPress={() => handleToggleAddressActive(address)}
                                                 />
@@ -460,52 +353,32 @@ export default function CustomerDetailScreen() {
                         </View>
                     )}
                 </View>
+
+                {canManageCustomers ? (
+                    <View style={SharedStyles.pageSection}>
+                        <SectionHeader title="Acciones" />
+                        <ListGroup>
+                            <MenuListItem
+                                title={customer.active ? 'Desactivar cliente' : 'Reactivar cliente'}
+                                subtitle={customer.active
+                                    ? 'No aparece para nuevas ventas; se conservan sus pedidos'
+                                    : 'Vuelve a estar disponible para vender'}
+                                iconName={customer.active
+                                    ? { ios: 'person.crop.circle.badge.xmark', android: 'person_off', web: 'person_off' }
+                                    : { ios: 'person.crop.circle.badge.checkmark', android: 'how_to_reg', web: 'how_to_reg' }}
+                                tone="success"
+                                danger={customer.active}
+                                showChevron={false}
+                                badge={setCustomerActive.isPending
+                                    ? <ActivityIndicator size="small" color={Colors.primary} />
+                                    : undefined}
+                                onPress={() => void handleToggleCustomerActive()}
+                            />
+                        </ListGroup>
+                    </View>
+                ) : null}
             </ScrollView>
         </Screen>
-    );
-}
-
-function ContactRow({
-    icon,
-    text,
-}: {
-    icon: { ios: SFSymbol; android: AndroidSymbol; web: AndroidSymbol };
-    text: string;
-}) {
-    return (
-        <View style={styles.contactRow}>
-            <SymbolView
-                name={icon}
-                size={17}
-                tintColor={Colors.textSecondary}
-            />
-            <Text style={styles.contactText}>{text}</Text>
-        </View>
-    );
-}
-
-function AddressAction({
-    label,
-    onPress,
-    disabled,
-    destructive = false,
-}: {
-    label: string;
-    onPress: () => void;
-    disabled: boolean;
-    destructive?: boolean;
-}) {
-    return (
-        <Pressable
-            onPress={onPress}
-            disabled={disabled}
-            hitSlop={6}
-            style={({ pressed }) => [(pressed || disabled) && SharedStyles.pressed]}
-        >
-            <Text style={[styles.addressActionText, destructive && styles.addressActionDestructive]}>
-                {label}
-            </Text>
-        </Pressable>
     );
 }
 
@@ -513,180 +386,29 @@ const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    header: {
-        paddingHorizontal: Spacing.lg,
-    },
-    headerTitle: {
-        flex: 1,
-        marginLeft: Spacing.sm,
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    headerAction: {
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: Spacing.xs,
-    },
-    headerActionText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: Colors.primary,
-    },
     errorBox: {
         backgroundColor: Colors.errorLight,
         borderWidth: 1,
         borderColor: Colors.errorBorder,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         padding: Spacing.md,
-        marginBottom: Spacing.md,
     },
     errorBoxText: {
         color: Colors.error,
         fontSize: 13,
     },
-    customerCard: {
-        alignItems: 'center',
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        padding: Spacing.xl,
-    },
-    inactiveCard: {
-        opacity: 0.7,
-    },
-    avatar: {
-        marginBottom: Spacing.md,
-    },
-    customerName: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: Colors.text,
-        textAlign: 'center',
-        marginBottom: Spacing.sm,
-    },
-    inactiveBadge: {
-        backgroundColor: Colors.muted,
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 2,
-        borderRadius: 6,
-        marginBottom: Spacing.sm,
-    },
-    inactiveBadgeText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: Colors.textSecondary,
-    },
-    contactRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-        marginTop: Spacing.xs,
-    },
-    contactText: {
-        fontSize: 14,
-        color: Colors.textSecondary,
-    },
     observations: {
-        marginTop: Spacing.md,
+        paddingVertical: Spacing.md,
+        paddingHorizontal: Spacing.md + 2,
         fontSize: 13,
         lineHeight: 19,
         color: Colors.textSecondary,
-        textAlign: 'center',
         fontStyle: 'italic',
-    },
-    statusButton: {
-        marginTop: Spacing.lg,
-        minWidth: 180,
-        alignItems: 'center',
-        paddingVertical: Spacing.sm,
-        paddingHorizontal: Spacing.lg,
-        borderRadius: 8,
-        borderWidth: 1,
-    },
-    statusButtonDanger: {
-        borderColor: Colors.error,
-    },
-    statusButtonPrimary: {
-        borderColor: Colors.primary,
-    },
-    statusButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    accountCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
-        marginTop: Spacing.lg,
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        padding: Spacing.lg,
-    },
-    accountTitle: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: Colors.textSecondary,
-    },
-    accountBalance: {
-        marginTop: 2,
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    accountDebt: {
-        color: Colors.error,
-    },
-    accountCredit: {
-        color: Colors.primary,
-    },
-    accountLoader: {
-        alignSelf: 'flex-start',
-        marginTop: Spacing.xs,
-    },
-    section: {
-        marginTop: Spacing.xl,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: Spacing.md,
-    },
-    sectionHeaderText: {
-        flex: 1,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    sectionSubtitle: {
-        fontSize: 13,
-        color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    addButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        backgroundColor: Colors.primary,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
-        borderRadius: 8,
-    },
-    addButtonText: {
-        color: Colors.white,
-        fontSize: 13,
-        fontWeight: '600',
     },
     toggleRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: Spacing.sm,
     },
     toggleLabel: {
         fontSize: 13,
@@ -694,16 +416,12 @@ const styles = StyleSheet.create({
     },
     emptyAddresses: {
         alignItems: 'center',
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: Colors.border,
         padding: Spacing.xl,
     },
     emptyTitle: {
         marginTop: Spacing.sm,
         fontSize: 15,
-        fontWeight: '600',
+        fontWeight: '700',
         color: Colors.text,
     },
     emptyDescription: {
@@ -717,42 +435,21 @@ const styles = StyleSheet.create({
         gap: Spacing.sm,
     },
     addressCard: {
-        backgroundColor: Colors.surface,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: Colors.border,
         padding: Spacing.md,
+        gap: Spacing.md,
     },
     addressRow: {
         flexDirection: 'row',
         alignItems: 'center',
-    },
-    addressIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: Colors.primaryLight,
-        marginRight: Spacing.md,
+        gap: Spacing.md,
     },
     addressActions: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        justifyContent: 'flex-end',
-        gap: Spacing.lg,
-        marginTop: Spacing.sm,
-        paddingTop: Spacing.sm,
+        gap: Spacing.sm,
+        paddingTop: Spacing.md,
         borderTopWidth: 1,
         borderTopColor: Colors.border,
-    },
-    addressActionText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: Colors.primary,
-    },
-    addressActionDestructive: {
-        color: Colors.error,
     },
     addressesLoader: {
         paddingVertical: Spacing.lg,

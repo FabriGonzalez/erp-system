@@ -1,21 +1,21 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
-    Pressable,
     RefreshControl,
     StyleSheet,
-    Text,
     View,
 } from 'react-native';
 
 import { CustomerCard } from '@/components/customers/CustomerCard';
 import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { FilterChip } from '@/components/ui/FilterChip';
+import { HeaderButton } from '@/components/ui/HeaderButton';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
@@ -62,48 +62,19 @@ export default function CustomersScreen() {
 
     return (
         <Screen style={styles.screen}>
-            {/* Header / Top Bar */}
-            <View style={[SharedStyles.topBar, SharedStyles.topBarElevated]}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [styles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-
-                <View style={styles.titleContainer}>
-                    <Text style={styles.screenTitle}>Clientes</Text>
-                    <Text style={styles.screenSubtitle}>
-                        {isInitialLoading
-                            ? 'Cargando...'
-                            : `${totalElements} ${totalElements === 1 ? 'cliente' : 'clientes'}${isFiltered ? ' encontrados' : ''}`}
-                    </Text>
-                </View>
-
-                {canCreate ? (
-                    <Pressable
-                        style={({ pressed }) => [
-                            styles.createButton,
-                            pressed && SharedStyles.pressed,
-                        ]}
-                        onPress={handleCreateCustomer}
-                    >
-                        <SymbolView
-                            name={{ ios: 'plus', android: 'add', web: 'add' }}
-                            size={18}
-                            tintColor={Colors.white}
-                        />
-                        <Text style={styles.createButtonText}>Nuevo</Text>
-                    </Pressable>
-                ) : null}
-            </View>
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow={isInitialLoading
+                    ? 'Cargando...'
+                    : `${totalElements} ${totalElements === 1 ? 'cliente' : 'clientes'}${isFiltered ? ' encontrados' : ''}`}
+                title="Clientes"
+                right={canCreate ? (
+                    <HeaderButton label="Nuevo" accessibilityLabel="Nuevo cliente" onPress={handleCreateCustomer} />
+                ) : undefined}
+            />
 
             {/* Búsqueda */}
-            <View style={styles.searchContainer}>
+            <View style={SharedStyles.pageToolbar}>
                 <AppInput
                     placeholder="Buscar por nombre, teléfono, email o documento..."
                     value={searchQuery}
@@ -128,19 +99,14 @@ export default function CustomersScreen() {
             )}
 
             {!isInitialLoading && isError && (
-                <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>{error}</Text>
-                    <Pressable style={styles.retryButton} onPress={refresh}>
-                        <Text style={styles.retryButtonText}>Reintentar</Text>
-                    </Pressable>
-                </View>
+                <ErrorState message={error} onRetry={refresh} />
             )}
 
             {!isInitialLoading && !isError && (
                 <FlatList
                     data={customers}
                     keyExtractor={(item) => item.id}
-                    contentContainerStyle={styles.listContainer}
+                    contentContainerStyle={SharedStyles.pageList}
                     showsVerticalScrollIndicator={false}
                     onEndReached={loadMore}
                     onEndReachedThreshold={0.5}
@@ -194,72 +160,11 @@ const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
-        marginRight: Spacing.xs,
-    },
-    titleContainer: {
-        flex: 1,
-    },
-    screenTitle: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    screenSubtitle: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    createButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.primary,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
-        borderRadius: 8,
-        gap: 6,
-    },
-    createButtonText: {
-        color: Colors.white,
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    searchContainer: {
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.md,
-    },
-    listContainer: {
-        paddingHorizontal: Spacing.lg,
-        paddingBottom: Spacing.xxl * 2,
-    },
     footerLoader: {
         paddingVertical: Spacing.md,
     },
     filters: {
         flexDirection: 'row',
         gap: Spacing.xs,
-        marginTop: Spacing.sm,
-    },
-    errorContainer: {
-        padding: Spacing.xl,
-        alignItems: 'center',
-    },
-    errorText: {
-        color: Colors.error,
-        fontSize: 14,
-        marginBottom: Spacing.md,
-    },
-    retryButton: {
-        backgroundColor: Colors.primary,
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.sm,
-        borderRadius: 8,
-    },
-    retryButtonText: {
-        color: Colors.white,
-        fontWeight: '600',
     },
 });

@@ -1,6 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
 
 import { OrderActions } from '@/components/orders/OrderActions';
 import { OrderHeader } from '@/components/orders/OrderHeader';
@@ -9,6 +8,7 @@ import { OrderProducts } from '@/components/orders/OrderProducts';
 import { OrderTimeline } from '@/components/orders/OrderTimeline';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
@@ -32,13 +32,7 @@ export default function ShipmentDetailScreen() {
     if (!order) {
         return (
             <Screen style={styles.screen}>
-                <View style={SharedStyles.header}>
-                    <Pressable onPress={() => router.back()} style={SharedStyles.backButton}>
-                        <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={24} tintColor={Colors.text} />
-                    </Pressable>
-                    <Text style={SharedStyles.headerTitle}>Envío</Text>
-                    <View style={SharedStyles.headerSpacer} />
-                </View>
+                <PageHeader onBack={() => router.back()} title="Envío" />
                 {isLoading ? (
                     <LoadingState />
                 ) : (
@@ -64,7 +58,7 @@ export default function ShipmentDetailScreen() {
     return (
         <Screen style={styles.screen}>
             <OrderHeader order={order} />
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={SharedStyles.pageContent}>
                 <OrderInfoCard order={order} />
                 <OrderProducts order={order} />
                 <OrderTimeline order={order} />
@@ -87,6 +81,5 @@ export default function ShipmentDetailScreen() {
 
 const styles = StyleSheet.create({
     screen: { padding: 0 },
-    scrollContent: { padding: Spacing.lg, paddingBottom: Spacing.xxl * 2, gap: Spacing.md },
     errorText: { color: Colors.error, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, fontSize: 13 },
 });

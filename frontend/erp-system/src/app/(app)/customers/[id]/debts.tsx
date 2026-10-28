@@ -1,9 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { ReactElement, useState } from 'react';
 import {
     FlatList,
-    Pressable,
     RefreshControl,
     StyleSheet,
     Text,
@@ -11,14 +9,18 @@ import {
 } from 'react-native';
 
 import { RegisterCustomerPaymentModal } from '@/components/customers/RegisterCustomerPaymentModal';
-import { AppButton } from '@/components/ui/AppButton';
+import { ActionChip } from '@/components/ui/ActionChip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { FilterChip } from '@/components/ui/FilterChip';
+import { HeaderButton } from '@/components/ui/HeaderButton';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { StatTile } from '@/components/ui/StatTile';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import {
     useCancelPayment,
     useCustomerAccountSummaryQuery,
@@ -35,6 +37,7 @@ import { Payment } from '@/types/payment';
 import { confirmAction } from '@/utils/confirm';
 import { formatCurrency, formatDate, formatDateTime } from '@/utils/format';
 import { hasPermission } from '@/utils/permissions';
+import { orderStatusTone } from '@/utils/status';
 
 type Section = 'pending' | 'payments' | 'transactions';
 
@@ -67,40 +70,35 @@ export default function CustomerDebtsScreen() {
 
     return (
         <Screen style={styles.screen}>
-            <View style={[SharedStyles.topBar, SharedStyles.topBarElevated]}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [
-                        styles.backButton,
-                        pressed && SharedStyles.pressed,
-                    ]}
-                >
-                    <SymbolView
-                        name={{
-                            ios: 'chevron.left',
-                            android: 'arrow_back',
-                            web: 'arrow_back',
-                        }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow={`Cuenta corriente · ${pendingCount} ${pendingCount === 1 ? 'pedido pendiente' : 'pedidos pendientes'}`}
+                title={customer?.name ?? 'Cliente'}
+                right={canRegisterPayments ? (
+                    <HeaderButton label="Pago" accessibilityLabel="Registrar pago" onPress={() => setPaymentModalVisible(true)} />
+                ) : undefined}
+            />
 
-                <View style={styles.titleContainer}>
-                    <Text style={styles.screenTitle} numberOfLines={1}>
-                        {customer?.name ?? 'Cliente'}
-                    </Text>
-
-                    <Text style={styles.screenSubtitle}>
-                        {pendingCount}{' '}
-                        {pendingCount === 1
-                            ? 'pedido con saldo pendiente'
-                            : 'pedidos con saldo pendiente'}
-                    </Text>
+            {summary && (summary.debt > 0 || summary.credit > 0) ? (
+                <View style={[SharedStyles.statRow, styles.stats]}>
+                    {summary.debt > 0 ? (
+                        <StatTile
+                            label="Debe"
+                            value={formatCurrency(summary.debt)}
+                            icon={{ ios: 'exclamationmark.circle', android: 'error', web: 'error' }}
+                            tone="danger"
+                        />
+                    ) : null}
+                    {summary.credit > 0 ? (
+                        <StatTile
+                            label="Saldo a favor"
+                            value={formatCurrency(summary.credit)}
+                            icon={{ ios: 'checkmark.circle', android: 'check_circle', web: 'check_circle' }}
+                            tone="success"
+                        />
+                    ) : null}
                 </View>
-
-                <View style={styles.headerSpacer} />
-            </View>
+            ) : null}
 
             <View style={styles.sections}>
                 <FilterChip label="Pendientes" selected={section === 'pending'} onPress={() => setSection('pending')} />
@@ -120,28 +118,6 @@ export default function CustomerDebtsScreen() {
                     <PaymentsList list={payments} customerId={id} canCancel={canRegisterPayments} />
                 )}
                 {section === 'transactions' && <TransactionsList list={transactions} />}
-            </View>
-
-            <View style={styles.accountFooter}>
-                {summary && summary.debt > 0 && (
-                    <View style={styles.totalBanner}>
-                        <Text style={styles.totalBannerLabel}>Deuda total</Text>
-                        <Text style={styles.totalBannerAmount}>{formatCurrency(summary.debt)}</Text>
-                    </View>
-                )}
-
-                {summary && summary.credit > 0 && (
-                    <View style={styles.creditBanner}>
-                        <Text style={styles.creditLabel}>Saldo a favor</Text>
-                        <Text style={styles.creditAmount}>{formatCurrency(summary.credit)}</Text>
-                    </View>
-                )}
-
-                {canRegisterPayments && (
-                    <View style={styles.paymentButtonContainer}>
-                        <AppButton title="Registrar pago" onPress={() => setPaymentModalVisible(true)} />
-                    </View>
-                )}
             </View>
 
             {canRegisterPayments && (
@@ -189,7 +165,7 @@ function SectionList<T>({
         <FlatList
             data={list.items}
             keyExtractor={keyOf}
-            contentContainerStyle={styles.listContainer}
+            contentContainerStyle={SharedStyles.pageList}
             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => renderItem(item)}
             onEndReached={list.loadMore}
@@ -210,13 +186,13 @@ function PendingOrdersList({ list }: { list: PagedList<CustomerPendingOrder> }) 
             keyOf={(order) => order.orderId}
             empty={{ title: 'Sin deudas pendientes', description: 'Este cliente no tiene pedidos con saldo pendiente.' }}
             renderItem={(order) => (
-                <View style={styles.card}>
+                <View style={[SharedStyles.card, styles.card]}>
                     <View style={styles.cardTopRow}>
                         <View>
                             <Text style={styles.orderNumber}>{order.orderNumber}</Text>
                             <Text style={styles.secondaryText}>{formatDate(order.createdAt)}</Text>
                         </View>
-                        <Text style={styles.secondaryText}>{ORDER_STATUS_LABELS[order.status]}</Text>
+                        <StatusPill label={ORDER_STATUS_LABELS[order.status]} tone={orderStatusTone(order.status)} />
                     </View>
 
                     <Text style={styles.secondaryText}>Sucursal: {order.branchName}</Text>
@@ -275,7 +251,7 @@ function PaymentsList({
                 renderItem={(payment) => {
                     const isCancelled = payment.status === 'CANCELLED';
                     return (
-                        <View style={[styles.card, isCancelled && styles.cancelledCard]}>
+                        <View style={[SharedStyles.card, styles.card, isCancelled && SharedStyles.listItemInactive]}>
                             <View style={styles.cardTopRow}>
                                 <View>
                                     <Text style={[styles.paymentAmount, isCancelled && styles.cancelledAmount]}>
@@ -286,17 +262,15 @@ function PaymentsList({
                                     </Text>
                                 </View>
                                 {isCancelled ? (
-                                    <View style={styles.cancelledBadge}>
-                                        <Text style={styles.cancelledBadgeText}>Anulado</Text>
-                                    </View>
+                                    <StatusPill label="Anulado" tone="neutral" />
                                 ) : canCancel ? (
-                                    <Pressable
-                                        onPress={() => void handleCancel(payment)}
+                                    <ActionChip
+                                        label="Anular"
+                                        icon={{ ios: 'arrow.uturn.backward', android: 'undo', web: 'undo' }}
+                                        tone="danger"
                                         disabled={cancelPayment.isPending}
-                                        style={({ pressed }) => [pressed && SharedStyles.pressed]}
-                                    >
-                                        <Text style={styles.cancelLink}>Anular</Text>
-                                    </Pressable>
+                                        onPress={() => void handleCancel(payment)}
+                                    />
                                 ) : null}
                             </View>
 
@@ -346,7 +320,7 @@ function TransactionsList({ list }: { list: PagedList<AccountTransaction> }) {
                 const increasesDebt = transaction.amount > 0;
                 const [chargeLabel, creditLabel] = TRANSACTION_FALLBACK[transaction.type];
                 return (
-                    <View style={styles.transactionRow}>
+                    <View style={[SharedStyles.card, SharedStyles.listItem]}>
                         <View style={styles.transactionInfo}>
                             <Text style={styles.transactionTitle}>
                                 {transaction.description ?? (increasesDebt ? chargeLabel : creditLabel)}
@@ -386,49 +360,23 @@ const styles = StyleSheet.create({
         padding: 0,
     },
 
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
-        marginRight: Spacing.xs,
-    },
 
-    titleContainer: {
-        flex: 1,
-    },
 
-    screenTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: Colors.text,
-    },
 
-    screenSubtitle: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: Colors.textSecondary,
-        marginTop: 2,
-    },
 
-    headerSpacer: {
-        width: 40,
-    },
 
     sections: {
         flexDirection: 'row',
         gap: Spacing.xs,
         paddingHorizontal: Spacing.lg,
-        paddingTop: Spacing.md,
+        paddingTop: Spacing.sm,
+        paddingBottom: Spacing.md,
     },
 
     content: {
         flex: 1,
     },
 
-    listContainer: {
-        padding: Spacing.lg,
-        gap: Spacing.md,
-        paddingBottom: Spacing.lg,
-    },
 
     errorText: {
         color: Colors.error,
@@ -437,71 +385,23 @@ const styles = StyleSheet.create({
         paddingTop: Spacing.sm,
     },
 
-    accountFooter: {
-        backgroundColor: Colors.surface,
-        borderTopWidth: 1,
-        borderTopColor: Colors.border,
-    },
 
-    totalBanner: {
-        backgroundColor: Colors.error,
-        paddingVertical: Spacing.md,
+
+
+
+
+
+
+
+    stats: {
         paddingHorizontal: Spacing.lg,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        paddingBottom: Spacing.xs,
     },
-
-    totalBannerLabel: {
-        fontSize: 22,
-        fontWeight: '600',
-        color: Colors.white,
-    },
-
-    totalBannerAmount: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: Colors.white,
-    },
-
-    creditBanner: {
-        backgroundColor: Colors.successLight,
-        paddingVertical: Spacing.md,
-        paddingHorizontal: Spacing.lg,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-
-    creditLabel: {
-        fontSize: 22,
-        color: Colors.successDark,
-        fontWeight: '600',
-    },
-
-    creditAmount: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: Colors.successDark,
-    },
-
-    paymentButtonContainer: {
-        padding: Spacing.lg,
-        paddingTop: Spacing.sm,
-    },
-
     card: {
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
         padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
         gap: Spacing.sm,
     },
 
-    cancelledCard: {
-        opacity: 0.7,
-    },
 
     cardTopRow: {
         flexDirection: 'row',
@@ -523,7 +423,7 @@ const styles = StyleSheet.create({
     amountsRow: {
         flexDirection: 'row',
         backgroundColor: Colors.muted,
-        borderRadius: 10,
+        borderRadius: Radius.sm,
         padding: Spacing.md,
         gap: Spacing.sm,
     },
@@ -558,24 +458,8 @@ const styles = StyleSheet.create({
         textDecorationLine: 'line-through',
     },
 
-    cancelledBadge: {
-        backgroundColor: Colors.muted,
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 3,
-        borderRadius: 20,
-    },
 
-    cancelledBadgeText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: Colors.textSecondary,
-    },
 
-    cancelLink: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: Colors.error,
-    },
 
     allocations: {
         borderTopWidth: 1,
@@ -594,16 +478,6 @@ const styles = StyleSheet.create({
         color: Colors.text,
     },
 
-    transactionRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-        backgroundColor: Colors.surface,
-        borderRadius: 12,
-        padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
 
     transactionInfo: {
         flex: 1,

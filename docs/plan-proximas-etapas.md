@@ -1789,3 +1789,98 @@ grandes, deshacer una importación.
   - ~~Fecha del negocio en UTC~~: con la JVM en UTC, `LocalDate.now()` pasaba al día siguiente a
     las 21 hs y una promo que vence hoy no se podía vender a la noche. Promos y pedidos usan
     `BusinessDate.today()` (Argentina).
+
+## Etapa 25 — Rediseño visual (estilo "A") y estilos compartidos — EN CURSO
+
+Decidido el 2026-10-27 sobre el lienzo https://claude.ai/artifact/TcTV14bqmKLUyTgKhBFPiB (el usuario
+eligió la opción A y aprobó Envíos, Productos y Más con ese estilo). Pedido del usuario: aplicarlo a
+TODAS las pantallas y, de paso, sacar a compartido los estilos repetidos (muchos .tsx tienen 100-250
+líneas de StyleSheet al final). Rama `feature/visual-refresh` (desde `feature/pending-fixes`), sin
+commitear. Antes del APK nuevo.
+
+**El estilo.** Título grande (26/800) con un dato chico arriba (fecha, cantidad, sucursal); una sola
+acción principal por pantalla en el color principal (tarjeta grande en inicios, botón "Nuevo" en
+listados); acciones secundarias en tarjetas blancas con ícono de color suave; títulos de sección
+chicos, grises y en mayúsculas; estados en píldoras. Tonos fijos: ámbar = rápido/pendiente,
+verde = listo, rojo = falta/peligro.
+
+**Hecho (tanda 1, parcial).**
+- Tokens: `constants/tones.ts` (Tone + ToneColors), `Radius` en `constants/spacing.ts`, colores
+  textTertiary/slate/teal/violet/rose en `constants/colors.ts`; `SharedStyles.raised`,
+  `pageContent`, `pageSection`, `statRow`.
+- Componentes en `components/ui`: `icon-name.ts` (IconName), `IconBadge`, `PageHeader`,
+  `HeroAction`, `ActionCard`, `StatTile`, `StatusPill`, `SectionHeader` (reescrito; no tenía usos),
+  `ListGroup`, `BranchChip`, `HeaderButton`; `MenuListItem` rediseñado (prop `tone`, `danger` en
+  vez de `textColor`, `badge`; va dentro de `ListGroup`). `components/orders/OrderRow` (fila
+  compacta). `paymentStatusTone`/`orderStatusTone` en `utils/status.ts`; `formatToday()` en
+  `utils/format.ts`; `useOrders(filters, { enabled })`.
+- Ventas (`(tabs)/orders/index.tsx`) ya con el diseño A: resumen del día con `useDashboard('today')`
+  (solo con VER_REPORTES) y últimas 3 ventas LOCAL_PICKUP.
+- Envíos (`(tabs)/shipments/index.tsx`) con el diseño A: HeroAction "Nuevo envío" (si
+  CREAR_PEDIDOS), StatTile "A preparar" (mismos filtros que `/shipments/to-prepare`, comparten caché)
+  y las primeras 3 "Para preparar". Sin "Enviados hoy": el listado no filtra por fecha.
+- Web ancha, paso 1: `Screen` centra la columna con `MAX_CONTENT_WIDTH` (720, en
+  `constants/spacing.ts`); el style de cada pantalla se aplica a la columna.
+- Más con el diseño A: tarjeta azul con usuario/rol (→ perfil) y sucursal activa con "Cambiar";
+  secciones con `SectionHeader` + `ListGroup` y tonos; badge "N deben" de `useDashboard('today', …)`
+  (misma clave que Ventas; la deuda es de toda la empresa). Usuarios con ícono propio
+  (`manage_accounts`) para no repetir el de Clientes. `settings/profile.tsx` envuelto en `ListGroup`.
+- Productos con el diseño A: `PageHeader` (eyebrow = sucursal del stock; la cantidad ya está en la
+  barra de resultados) + `HeaderButton` "Nuevo"; StatTile "Sin stock" (toca = limpia filtros y
+  aplica ese) y "Stock bajo" (solo VER_REPORTES, no navega: Reportes es otro stack).
+  `ProductCard` en fila: ícono, nombre, categoría · variantes, precio o rango, píldora de stock
+  (umbral `LOW_STOCK_THRESHOLD`) e "Inactivo".
+- tsc y eslint OK. NO probado en la app todavía.
+
+**Falta (en orden).**
+1. ~~Envíos~~ (hecho).
+2. ~~Más~~ (hecho; ver abajo). Pedido original: `(tabs)/more.tsx`: tarjeta de color con usuario/rol (→ `/settings/profile`) y la sucursal
+   activa con "Cambiar"; secciones con `SectionHeader` + `ListGroup`, cada ítem con su `tone`
+   (Inventario teal, Clientes violet, Cuentas corrientes warning con badge "N deben" de
+   `dashboard.debt.debtorCount`, Operaciones primary, Transferencias teal, Reportes success,
+   Importar primary, Promociones rose, Categorías warning, Atributos warning, Usuarios violet,
+   Sucursales neutral, Cerrar sesión `danger`). Categorías y Atributos siguen separadas (en el
+   diseño se habían juntado; no se decidió). Sacar "Sucursal activa" y "Mi perfil" del menú (van en
+   la tarjeta). `settings/profile.tsx` también usa MenuListItem: envolverlo en `ListGroup`.
+3. ~~Productos~~ (hecho; ver abajo). Pedido original: `(tabs)/products/index.tsx`: `PageHeader` (eyebrow con la cantidad) +
+   `HeaderButton` "Nuevo"; StatTiles "Sin stock" (count de `useProducts({stock:'OUT_OF_STOCK'})`,
+   tocar = aplicar ese filtro) y "Stock bajo" (`dashboard.lowStock.count`, solo VER_REPORTES);
+   `ProductCard` rediseñada (ícono a la izquierda, StatusPill de stock) — también se usa en
+   `products/[id]/index.tsx`.
+4. ~~Tanda 2, listados~~ (hecha 2026-10-28, sin probar ni commitear): Clientes, Inventario,
+   Operaciones, A preparar, Transferencias, Usuarios, Roles, Sucursales, Categorías, Atributos,
+   Promociones y Deudores con `PageHeader` (nueva prop `onBack`: flecha a la izquierda; el dato
+   chico arriba lleva la cantidad o la sucursal) y `HeaderButton` (nueva `variant="secondary"` e
+   `icon={null}`, para Usuarios → Roles). Estilos de tarjeta de listado en `SharedStyles`
+   (`pageToolbar`, `pageList`, `listItem`, `listItemPressed`, `listItemInactive`,
+   `listItemTexts`, `listItemTitle`, `listItemMeta`; van junto con `card`). Cada tarjeta con
+   `IconBadge` o `Avatar` del tono de su sección y estados en `StatusPill`. `OrderCard`,
+   `CustomerCard` rediseñadas; `TransferStatusBadge` y `PromotionStatusBadge` ahora envuelven
+   `StatusPill`. `stockPill()` pasó de `ProductCard` a `utils/status.ts` (también Inventario).
+   Nuevo `components/ui/ActionChip` (acción chica con tono y spinner: Sucursales). Categorías y
+   Atributos: activar/desactivar con `Switch`; tocar la categoría la edita. Deudores: fila con
+   la deuda a la derecha y "A favor" solo si hay saldo a favor. Errores con `ErrorState`.
+5. Tanda 3, detalles y formularios. **Detalles hechos (2026-10-28, sin probar ni commitear):**
+   pedido (Operaciones y Envíos: `OrderHeader` con `PageHeader` y píldora de estado; cobro en
+   `StatTile`; datos, productos y estado como secciones), producto (stock y precio en `StatTile`,
+   variantes en `ListGroup`, Editar arriba, activar/desactivar en "Acciones"), cliente (contacto en
+   `InfoRow`, cuenta corriente como fila con píldora, direcciones con `ActionChip`), cuenta
+   corriente (Debe / A favor arriba, "Pago" como acción principal; se sacó el pie fijo),
+   transferencia (anular en "Acciones"), promo (Activar/Desactivar como `HeaderButton`
+   secundario), usuario (sucursales con `SwitchRow`), rol, stock (Ajustar arriba) y atributo.
+   Nuevos en `components/ui`: `InfoRow`, `SwitchRow`; `HeaderButton` con `disabled`.
+   `SharedStyles.card` y los botones compartidos pasan a `Radius.lg` / `Radius.md`.
+   **Falta:** formularios (OrderForm y sus secciones, CustomerForm, PromotionForm, ProductForm
+   con products/new y edit, transfers/new, UserForm, RoleForm, roles/new). Tanda 4: modales,
+   login, importar, reportes, settings, NotFound, resto.
+   Íconos descentrados en Android (letra del sistema agrandada): `patches/expo-symbols+57.0.2.patch`
+   (`allowFontScaling: false` y centrado), aplicado con `patch-package` en `postinstall`.
+6. Validar cada tanda: tsc, eslint, `git diff --check`; el usuario prueba en web; commit por tanda.
+   Después: merge a `feature/production-ready`, push y APK (`eas build -p android --profile apk`).
+
+**Web ancha (pregunta del usuario, 2026-10-27).** En la web todo se estira al ancho de la ventana.
+El paso (1) ya está hecho (sin `useWindowDimensions`: alcanza con `width: '100%'` + `maxWidth`); el
+header de la pila y la barra de pestañas siguen a todo el ancho. Propuesta original: (1) en `components/ui/Screen.tsx`, con `useWindowDimensions`, centrar el contenido con un
+`maxWidth` (~720) en pantallas anchas: arregla todas las pantallas de una; (2) después, en las
+principales, layouts propios para ancho grande (p. ej. Ventas en dos columnas, la barra de pestañas
+como menú lateral en escritorio). Archivos `.web.tsx` solo si una pantalla cambia por completo.

@@ -1,102 +1,87 @@
+import { SymbolView } from 'expo-symbols';
+import { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SymbolView, SFSymbol, AndroidSymbol } from 'expo-symbols';
+
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { Tone } from '@/constants/tones';
+
+import { IconBadge } from './IconBadge';
+import { IconName } from './icon-name';
 
 type MenuListItemProps = {
     title: string;
     subtitle?: string;
-    iconName?: { ios: SFSymbol; android: AndroidSymbol; web: AndroidSymbol };
+    iconName?: IconName;
+    tone?: Tone;
     onPress: () => void;
     showChevron?: boolean;
-    textColor?: string;
+    /** Para acciones destructivas (Cerrar sesión). */
+    danger?: boolean;
+    /** A la derecha, antes de la flecha: una píldora con un contador. */
+    badge?: ReactNode;
 };
 
-
+/** Una opción de menú dentro de un ListGroup. */
 export function MenuListItem({
     title,
     subtitle,
     iconName,
+    tone = 'neutral',
     onPress,
     showChevron = true,
-    textColor = Colors.text,
+    danger = false,
+    badge,
 }: MenuListItemProps) {
     return (
         <Pressable
             onPress={onPress}
-            style={({ pressed }) => [
-                styles.container,
-                pressed && styles.pressed
-            ]}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.item, pressed && styles.pressed]}
         >
-            <View style={styles.leftContent}>
-                {iconName && (
-                    <View style={styles.iconContainer}>
-                        <SymbolView
-                            name={iconName}
-                            size={20}
-                            tintColor={textColor === Colors.text ? Colors.textSecondary : textColor}
-                        />
-                    </View>
-                )}
-                <View style={styles.textContainer}>
-                    <Text style={[styles.title, { color: textColor }]}>{title}</Text>
-                    {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
-                </View>
+            {iconName ? <IconBadge icon={iconName} tone={danger ? 'danger' : tone} size={38} /> : null}
+            <View style={styles.texts}>
+                <Text style={[styles.title, danger && styles.danger]}>{title}</Text>
+                {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
             </View>
-
-            {showChevron && (
+            {badge}
+            {showChevron ? (
                 <SymbolView
                     name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                    size={16}
-                    tintColor={Colors.textSecondary}
-                    style={styles.chevron}
+                    size={18}
+                    tintColor={Colors.textTertiary}
                 />
-            )}
+            ) : null}
         </Pressable>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
+    item: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        gap: Spacing.md,
         paddingVertical: Spacing.md,
-        paddingHorizontal: Spacing.lg,
+        paddingHorizontal: Spacing.md + 2,
         backgroundColor: Colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
     },
     pressed: {
         backgroundColor: Colors.muted,
     },
-    leftContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
+    texts: {
         flex: 1,
-    },
-    iconContainer: {
-        marginRight: Spacing.md,
-        width: 28,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    textContainer: {
-        flex: 1,
-        justifyContent: 'center',
+        gap: 1,
     },
     title: {
-        fontSize: 16,
-        fontWeight: '500',
+        fontSize: 15,
+        fontWeight: '700',
+        color: Colors.text,
+    },
+    danger: {
+        color: Colors.error,
     },
     subtitle: {
         fontSize: 12,
         color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    chevron: {
-        marginLeft: Spacing.sm,
-        opacity: 0.6,
     },
 });

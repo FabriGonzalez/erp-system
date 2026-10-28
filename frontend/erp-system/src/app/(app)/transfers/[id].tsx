@@ -1,13 +1,16 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { TransferStatusBadge } from '@/components/transfers/TransferStatusBadge';
-import { AppButton } from '@/components/ui/AppButton';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { InfoRow } from '@/components/ui/InfoRow';
+import { ListGroup } from '@/components/ui/ListGroup';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { MenuListItem } from '@/components/ui/MenuListItem';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useCancelTransfer, useTransfer } from '@/hooks/use-transfer-queries';
@@ -55,79 +58,66 @@ export default function TransferDetailScreen() {
         const canCancel = canTransfer && transfer.status === 'CONFIRMED';
 
         return (
-            <>
-                <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-                    <View style={styles.card}>
-                        <View style={styles.cardTopRow}>
-                            <Text style={styles.cardTitle}>Recorrido</Text>
-                            <TransferStatusBadge status={transfer.status} />
-                        </View>
-                        <BranchRow label="Origen" name={transfer.originBranchName} />
-                        <BranchRow label="Destino" name={transfer.destinationBranchName} />
-                        <Text style={styles.secondaryText}>
-                            {formatDateTime(transfer.createdAt)} · {transfer.createdByUsername}
-                        </Text>
-                    </View>
+            <ScrollView contentContainerStyle={SharedStyles.pageContent} showsVerticalScrollIndicator={false}>
+                <View style={SharedStyles.pageSection}>
+                    <SectionHeader title="Recorrido" />
+                    <ListGroup>
+                        <InfoRow label="Origen" value={transfer.originBranchName} />
+                        <InfoRow label="Destino" value={transfer.destinationBranchName} />
+                        <InfoRow label="Fecha" value={formatDateTime(transfer.createdAt)} />
+                        <InfoRow label="Hecha por" value={transfer.createdByUsername} />
+                        <InfoRow label="Estado" value={<TransferStatusBadge status={transfer.status} />} />
+                    </ListGroup>
+                </View>
 
-                    <View style={styles.card}>
-                        <Text style={styles.cardTitle}>
-                            Productos ({transfer.totalUnits} {transfer.totalUnits === 1 ? 'unidad' : 'unidades'})
-                        </Text>
+                <View style={SharedStyles.pageSection}>
+                    <SectionHeader
+                        title={`Productos (${transfer.totalUnits} ${transfer.totalUnits === 1 ? 'unidad' : 'unidades'})`}
+                    />
+                    <ListGroup>
                         {transfer.items.map((item) => (
                             <View key={item.id} style={styles.itemRow}>
-                                <View style={styles.itemInfo}>
+                                <View style={SharedStyles.listItemTexts}>
                                     <Text style={styles.itemName}>{item.productName}</Text>
-                                    <Text style={styles.secondaryText}>SKU: {item.sku}</Text>
+                                    <Text style={SharedStyles.listItemMeta}>SKU {item.sku}</Text>
                                 </View>
                                 <Text style={styles.itemQuantity}>× {item.quantity}</Text>
                             </View>
                         ))}
-                    </View>
+                    </ListGroup>
+                </View>
 
-                    {cancelError && <Text style={styles.errorText}>{cancelError}</Text>}
-                </ScrollView>
+                {cancelError && <Text style={styles.errorText}>{cancelError}</Text>}
 
                 {canCancel && (
-                    <View style={styles.footer}>
-                        <AppButton
-                            title={cancelTransfer.isPending ? 'Anulando...' : 'Anular transferencia'}
-                            onPress={() => void handleCancel()}
-                            disabled={cancelTransfer.isPending}
-                            style={styles.cancelButton}
-                        />
+                    <View style={SharedStyles.pageSection}>
+                        <SectionHeader title="Acciones" />
+                        <ListGroup>
+                            <MenuListItem
+                                title={cancelTransfer.isPending ? 'Anulando...' : 'Anular transferencia'}
+                                subtitle={`Las unidades vuelven a ${transfer.originBranchName}`}
+                                iconName={{ ios: 'arrow.uturn.backward', android: 'undo', web: 'undo' }}
+                                danger
+                                showChevron={false}
+                                onPress={() => void handleCancel()}
+                            />
+                        </ListGroup>
                     </View>
                 )}
-            </>
+            </ScrollView>
         );
     }
 
     return (
         <Screen style={styles.screen}>
-            <View style={[SharedStyles.topBar, SharedStyles.topBarElevated]}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [styles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <Text style={styles.screenTitle}>Transferencia #{id}</Text>
-            </View>
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow="Transferencia"
+                title={`#${id}`}
+            />
 
             {renderBody()}
         </Screen>
-    );
-}
-
-function BranchRow({ label, name }: { label: string; name: string }) {
-    return (
-        <View style={styles.branchRow}>
-            <Text style={styles.branchLabel}>{label}</Text>
-            <Text style={styles.branchName}>{name}</Text>
-        </View>
     );
 }
 
@@ -135,65 +125,13 @@ const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
-        marginRight: Spacing.xs,
-    },
-    screenTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    content: {
-        padding: Spacing.lg,
-        gap: Spacing.md,
-    },
-    card: {
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        gap: Spacing.sm,
-    },
-    cardTopRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    cardTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    branchRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        gap: Spacing.md,
-    },
-    branchLabel: {
-        fontSize: 14,
-        color: Colors.textSecondary,
-    },
-    branchName: {
-        flexShrink: 1,
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.text,
-        textAlign: 'right',
-    },
     itemRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: Spacing.sm,
-        borderTopWidth: 1,
-        borderTopColor: Colors.muted,
-        paddingTop: Spacing.sm,
-    },
-    itemInfo: {
-        flex: 1,
-        gap: 2,
+        gap: Spacing.md,
+        paddingVertical: Spacing.md,
+        paddingHorizontal: Spacing.md + 2,
+        backgroundColor: Colors.surface,
     },
     itemName: {
         fontSize: 14,
@@ -202,24 +140,11 @@ const styles = StyleSheet.create({
     },
     itemQuantity: {
         fontSize: 15,
-        fontWeight: '700',
+        fontWeight: '800',
         color: Colors.text,
-    },
-    secondaryText: {
-        fontSize: 13,
-        color: Colors.textSecondary,
     },
     errorText: {
         color: Colors.error,
         fontSize: 13,
-    },
-    footer: {
-        padding: Spacing.lg,
-        backgroundColor: Colors.surface,
-        borderTopWidth: 1,
-        borderTopColor: Colors.border,
-    },
-    cancelButton: {
-        backgroundColor: Colors.error,
     },
 });

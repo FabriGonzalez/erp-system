@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/Avatar';
+import { ListGroup } from '@/components/ui/ListGroup';
 import { MenuListItem } from '@/components/ui/MenuListItem';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
@@ -83,7 +84,7 @@ export default function ProfileScreen() {
                     )}
                 </View>
 
-                <View style={styles.menu}>
+                <ListGroup>
                     <MenuListItem
                         title="Cambiar sucursal activa"
                         iconName={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
@@ -97,7 +98,7 @@ export default function ProfileScreen() {
                             onPress={() => router.push('/settings/change-password')}
                         />
                     )}
-                </View>
+                </ListGroup>
             </ScrollView>
         </Screen>
     );
@@ -163,12 +164,5 @@ const styles = StyleSheet.create({
         fontSize: 15,
         color: Colors.text,
         paddingVertical: 4,
-    },
-    menu: {
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        overflow: 'hidden',
     },
 });

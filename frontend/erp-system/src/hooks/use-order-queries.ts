@@ -38,7 +38,7 @@ export const orderKeys = {
 // --- Consultas ---
 
 /** Pedidos de la empresa que cumplen los filtros, del más nuevo al más viejo. */
-export function useOrders(filters: OrderListFilters) {
+export function useOrders(filters: OrderListFilters, options?: { enabled?: boolean }) {
     return usePagedList(
         orderKeys.list(filters),
         (page) =>
@@ -46,7 +46,7 @@ export function useOrders(filters: OrderListFilters) {
                 { ...filters, page, size: PAGE_SIZE, sort: 'createdAt,desc' },
                 requireToken(),
             ),
-        true,
+        options?.enabled ?? true,
         (order) => order.id,
     );
 }

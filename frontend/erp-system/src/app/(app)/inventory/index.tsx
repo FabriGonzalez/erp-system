@@ -1,5 +1,4 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
 import {
     ActivityIndicator,
@@ -13,16 +12,19 @@ import {
 
 import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { IconBadge } from '@/components/ui/IconBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
 import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useBranchStocks } from '@/hooks/use-stock-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
 import { Stock } from '@/types/stock';
 import { STOCK_MOVEMENT_READ_PERMISSIONS, hasAnyPermission } from '@/utils/permissions';
+import { stockPill } from '@/utils/status';
 
 export default function InventoryScreen() {
     const user = useAuthStore((state) => state.user);
@@ -43,20 +45,28 @@ export default function InventoryScreen() {
     } = useBranchStocks({ branchId: activeBranch?.id, q: query });
 
     function renderItem({ item }: { item: Stock }) {
+        const pill = stockPill(item.quantity);
         return (
             <Pressable
-                style={({ pressed }) => [styles.card, canOpenDetail && pressed && SharedStyles.pressed]}
+                style={({ pressed }) => [
+                    SharedStyles.card,
+                    SharedStyles.listItem,
+                    canOpenDetail && pressed && SharedStyles.listItemPressed,
+                ]}
                 onPress={() => router.push({ pathname: '/inventory/[stockId]', params: { stockId: item.id } })}
                 disabled={!canOpenDetail}
+                accessibilityRole={canOpenDetail ? 'button' : undefined}
             >
-                <View style={styles.cardMain}>
-                    <Text style={styles.productName}>{item.productName}</Text>
-                    <Text style={styles.detail}>SKU: {item.productVariantSku}</Text>
+                <IconBadge
+                    icon={{ ios: 'shippingbox', android: 'inventory_2', web: 'inventory_2' }}
+                    tone="teal"
+                    size={44}
+                />
+                <View style={SharedStyles.listItemTexts}>
+                    <Text style={SharedStyles.listItemTitle} numberOfLines={2}>{item.productName}</Text>
+                    <Text style={SharedStyles.listItemMeta} numberOfLines={1}>SKU {item.productVariantSku}</Text>
                 </View>
-                <View style={styles.quantityContainer}>
-                    <Text style={styles.quantity}>{item.quantity}</Text>
-                    <Text style={styles.quantityLabel}>unidades</Text>
-                </View>
+                <StatusPill label={pill.label} tone={pill.tone} />
             </Pressable>
         );
     }
@@ -86,7 +96,7 @@ export default function InventoryScreen() {
                 data={stocks}
                 keyExtractor={(item) => item.id}
                 renderItem={renderItem}
-                contentContainerStyle={styles.list}
+                contentContainerStyle={SharedStyles.pageList}
                 refreshControl={
                     <RefreshControl refreshing={isRefreshing} onRefresh={refresh} tintColor={Colors.primary} />
                 }
@@ -107,24 +117,14 @@ export default function InventoryScreen() {
 
     return (
         <Screen style={styles.container}>
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>Inventario</Text>
-                {isRefreshing ? <ActivityIndicator color={Colors.primary} /> : null}
-            </View>
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow={activeBranch ? activeBranch.name : undefined}
+                title="Inventario"
+            />
 
             {activeBranch ? (
-                <View style={styles.toolbar}>
-                    <Text style={styles.branchLabel}>Sucursal: {activeBranch.name}</Text>
+                <View style={SharedStyles.pageToolbar}>
                     <AppInput value={query} onChangeText={setQuery} placeholder="Buscar producto, SKU o código" />
                 </View>
             ) : null}
@@ -136,14 +136,4 @@ export default function InventoryScreen() {
 
 const styles = StyleSheet.create({
     container: { padding: 0 },
-    toolbar: { padding: Spacing.lg, gap: Spacing.sm, backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border },
-    branchLabel: { color: Colors.textSecondary, fontSize: 13, fontWeight: '600' },
-    list: { padding: Spacing.lg, gap: Spacing.sm, flexGrow: 1 },
-    card: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: Spacing.lg },
-    cardMain: { flex: 1 },
-    productName: { color: Colors.text, fontSize: 16, fontWeight: '700' },
-    detail: { color: Colors.textSecondary, fontSize: 13, marginTop: 3 },
-    quantityContainer: { alignItems: 'flex-end', marginLeft: Spacing.md },
-    quantity: { color: Colors.primary, fontSize: 24, fontWeight: '700' },
-    quantityLabel: { color: Colors.textSecondary, fontSize: 11 },
 });

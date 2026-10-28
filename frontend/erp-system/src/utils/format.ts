@@ -24,6 +24,13 @@ export function formatDateTime(iso: string): string {
     );
 }
 
+/** La fecha de hoy para un encabezado: "Lunes 27 de octubre". */
+export function formatToday(): string {
+    const text = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+    // "lunes, 27 de octubre" → "Lunes 27 de octubre"
+    return text.charAt(0).toUpperCase() + text.slice(1).replace(',', '');
+}
+
 /** Solo la hora local, p. ej. "15:30". */
 export function formatTime(iso: string): string {
     return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });

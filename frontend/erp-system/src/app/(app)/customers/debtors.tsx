@@ -1,5 +1,4 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import {
     FlatList,
     Pressable,
@@ -9,12 +8,13 @@ import {
     View,
 } from 'react-native';
 
+import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
 import { useDebtors } from '@/hooks/use-customer-account-queries';
 import { SharedStyles } from '@/styles/shared';
 import { formatCurrency, formatDate } from '@/utils/format';
@@ -35,39 +35,13 @@ export default function CustomerAccountsScreen() {
 
     return (
         <Screen style={styles.screen}>
-            <View style={[SharedStyles.topBar, SharedStyles.topBarElevated]}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [
-                        styles.backButton,
-                        pressed && SharedStyles.pressed,
-                    ]}
-                >
-                    <SymbolView
-                        name={{
-                            ios: 'chevron.left',
-                            android: 'arrow_back',
-                            web: 'arrow_back',
-                        }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-
-                <View style={styles.titleContainer}>
-                    <Text style={styles.screenTitle}>
-                        Cuentas corrientes
-                    </Text>
-
-                    <Text style={styles.screenSubtitle}>
-                        {!hasData
-                            ? 'Cargando...'
-                            : `${totalDebtors} ${totalDebtors === 1 ? 'cliente con deuda' : 'clientes con deuda'}`}
-                    </Text>
-                </View>
-
-                <View style={styles.headerSpacer} />
-            </View>
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow={!hasData
+                    ? 'Cargando...'
+                    : `${totalDebtors} ${totalDebtors === 1 ? 'cliente con deuda' : 'clientes con deuda'}`}
+                title="Cuentas corrientes"
+            />
 
             {isInitialLoading ? (
                 <LoadingState label="Cargando deudores..." />
@@ -87,7 +61,7 @@ export default function CustomerAccountsScreen() {
                 <FlatList
                     data={debtors}
                     keyExtractor={(item) => item.customerId}
-                    contentContainerStyle={styles.listContainer}
+                    contentContainerStyle={SharedStyles.pageList}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
                         <RefreshControl
@@ -104,8 +78,9 @@ export default function CustomerAccountsScreen() {
                     renderItem={({ item }) => (
                         <Pressable
                             style={({ pressed }) => [
-                                styles.card,
-                                pressed && styles.cardPressed,
+                                SharedStyles.card,
+                                SharedStyles.listItem,
+                                pressed && SharedStyles.listItemPressed,
                             ]}
                             onPress={() =>
                                 router.push({
@@ -115,86 +90,40 @@ export default function CustomerAccountsScreen() {
                                     },
                                 })
                             }
+                            accessibilityRole="button"
                         >
-                            <View style={styles.cardHeader}>
-                                <View style={styles.cardInfo}>
-                                    <Text
-                                        style={styles.customerName}
-                                    >
-                                        {item.customerName}
-                                    </Text>
-
-                                    <Text style={styles.ordersCount}>
-                                        {item.pendingOrders}{' '}
-                                        {item.pendingOrders === 1
-                                            ? 'pedido pendiente'
-                                            : 'pedidos pendientes'}
-                                    </Text>
-                                </View>
-
-                                <SymbolView
-                                    name={{
-                                        ios: 'chevron.right',
-                                        android: 'chevron_right',
-                                        web: 'chevron_right',
-                                    }}
-                                    size={16}
-                                    tintColor={
-                                        Colors.textSecondary
-                                    }
-                                />
-                            </View>
-
-                            <View style={styles.accountValues}>
-                                <View
-                                    style={[
-                                        styles.valueRow,
-                                        styles.debtRow,
-                                    ]}
-                                >
-                                    <Text
-                                        style={styles.debtLabel}
-                                    >
-                                        Deuda
-                                    </Text>
-
-                                    <Text
-                                        style={styles.debtAmount}
-                                    >
-                                        {formatCurrency(
-                                            item.debt,
-                                        )}
-                                    </Text>
-                                </View>
-
-                                <View
-                                    style={[
-                                        styles.valueRow,
-                                        styles.creditRow,
-                                    ]}
-                                >
-                                    <Text
-                                        style={styles.creditLabel}
-                                    >
-                                        Saldo a favor
-                                    </Text>
-
-                                    <Text
-                                        style={styles.creditAmount}
-                                    >
-                                        {formatCurrency(
-                                            item.credit,
-                                        )}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            {item.oldestPendingOrderAt ? (
-                                <Text style={styles.branches}>
-                                    Pendiente desde el{' '}
-                                    {formatDate(item.oldestPendingOrderAt)}
+                            <Avatar
+                                name={item.customerName}
+                                size={44}
+                                fontWeight="700"
+                                fontSize={16}
+                                backgroundColor={Colors.warningLight}
+                                textColor={Colors.warningTextSecondary}
+                            />
+                            <View style={SharedStyles.listItemTexts}>
+                                <Text style={SharedStyles.listItemTitle} numberOfLines={1}>
+                                    {item.customerName}
                                 </Text>
-                            ) : null}
+                                <Text style={SharedStyles.listItemMeta}>
+                                    {item.pendingOrders}{' '}
+                                    {item.pendingOrders === 1
+                                        ? 'pedido pendiente'
+                                        : 'pedidos pendientes'}
+                                </Text>
+                                {item.oldestPendingOrderAt ? (
+                                    <Text style={SharedStyles.listItemMeta}>
+                                        Desde el {formatDate(item.oldestPendingOrderAt)}
+                                    </Text>
+                                ) : null}
+                            </View>
+                            <View style={styles.amounts}>
+                                <Text style={styles.debtAmount}>{formatCurrency(item.debt)}</Text>
+                                {item.credit > 0 ? (
+                                    <Text style={styles.creditAmount}>
+                                        A favor {formatCurrency(item.credit)}
+                                    </Text>
+                                ) : null}
+                            </View>
                         </Pressable>
                     )}
                 />
@@ -207,101 +136,18 @@ const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
-        marginRight: Spacing.xs,
-    },
-    titleContainer: {
-        flex: 1,
-    },
-    screenTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    screenSubtitle: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    headerSpacer: {
-        width: 40,
-    },
-    listContainer: {
-        padding: Spacing.lg,
-        gap: Spacing.md,
-        paddingBottom: Spacing.xxl * 2,
-    },
-    card: {
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-    cardPressed: {
-        opacity: 0.75,
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: Spacing.sm,
-    },
-    cardInfo: {
-        flex: 1,
-    },
-    customerName: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    ordersCount: {
-        fontSize: 13,
-        color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    accountValues: {
-        gap: Spacing.xs,
-    },
-    valueRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderRadius: 8,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
-    },
-    debtRow: {
-        backgroundColor: Colors.errorLight,
-    },
-    debtLabel: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: Colors.error,
+    amounts: {
+        alignItems: 'flex-end',
+        gap: 2,
     },
     debtAmount: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.error,
-    },
-    creditRow: {
-        backgroundColor: Colors.successLight,
-    },
-    creditLabel: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: Colors.successDark,
+        fontSize: 16,
+        fontWeight: '800',
+        color: Colors.errorDark,
     },
     creditAmount: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.successDark,
-    },
-    branches: {
-        marginTop: Spacing.sm,
         fontSize: 12,
-        color: Colors.textSecondary,
+        fontWeight: '600',
+        color: Colors.successDark,
     },
 });

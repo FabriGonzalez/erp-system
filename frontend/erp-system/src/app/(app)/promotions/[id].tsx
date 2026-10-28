@@ -1,21 +1,18 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { PromotionForm } from '@/components/promotions/PromotionForm';
-import { PromotionStatusBadge } from '@/components/promotions/PromotionStatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { HeaderButton } from '@/components/ui/HeaderButton';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { NotFound } from '@/components/ui/NotFound';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
-import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
 import { usePromotion, useSavePromotion, useSetPromotionActive } from '@/hooks/use-promotion-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { showErrorToast, showToast } from '@/stores/toast-store';
-import { SharedStyles } from '@/styles/shared';
-import { PromotionRequest } from '@/types/promotion';
+import { PROMOTION_STATUS_LABELS, PromotionRequest } from '@/types/promotion';
 import { confirmAction } from '@/utils/confirm';
 import { hasPermission } from '@/utils/permissions';
 
@@ -73,33 +70,20 @@ export default function EditPromotionScreen() {
 
     return (
         <Screen style={styles.screen}>
-            <View style={[SharedStyles.topBar, SharedStyles.topBarElevated]}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [styles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <View style={styles.titleContainer}>
-                    <Text style={styles.screenTitle} numberOfLines={1}>{promotion?.name ?? 'Promo'}</Text>
-                    {promotion ? <PromotionStatusBadge status={promotion.status} /> : null}
-                </View>
-                {promotion ? (
-                    <Pressable
-                        onPress={() => void handleToggleActive()}
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow={promotion ? `Promo · ${PROMOTION_STATUS_LABELS[promotion.status]}` : 'Promo'}
+                title={promotion?.name ?? 'Promo'}
+                right={promotion ? (
+                    <HeaderButton
+                        label={promotion.active ? 'Desactivar' : 'Activar'}
+                        icon={null}
+                        variant="secondary"
                         disabled={setActive.isPending}
-                        style={({ pressed }) => [styles.toggleButton, pressed && SharedStyles.pressed]}
-                    >
-                        <Text style={[styles.toggleText, promotion.active && styles.deactivateText]}>
-                            {promotion.active ? 'Desactivar' : 'Activar'}
-                        </Text>
-                    </Pressable>
-                ) : null}
-            </View>
+                        onPress={() => void handleToggleActive()}
+                    />
+                ) : undefined}
+            />
 
             {promotion ? (
                 <PromotionForm
@@ -128,35 +112,5 @@ export default function EditPromotionScreen() {
 const styles = StyleSheet.create({
     screen: {
         padding: 0,
-    },
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
-        marginRight: Spacing.xs,
-    },
-    titleContainer: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-    },
-    screenTitle: {
-        flexShrink: 1,
-        fontSize: 20,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    toggleButton: {
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: Spacing.xs,
-        borderRadius: 8,
-    },
-    toggleText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.primary,
-    },
-    deactivateText: {
-        color: Colors.error,
     },
 });

@@ -1,14 +1,16 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { StockAdjustModal } from '@/components/inventory/StockAdjustModal';
-import { AppButton } from '@/components/ui/AppButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { HeaderButton } from '@/components/ui/HeaderButton';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { StatTile } from '@/components/ui/StatTile';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useStockMovements } from '@/hooks/use-stock-movement-queries';
@@ -19,6 +21,7 @@ import { Stock } from '@/types/stock';
 import { StockMovement } from '@/types/stock-movement';
 import { formatDateTime } from '@/utils/format';
 import { hasPermission } from '@/utils/permissions';
+import { stockPill } from '@/utils/status';
 import { formatStockDelta, stockMovementReference, stockMovementTitle } from '@/utils/stock-movement-labels';
 
 export default function StockDetailScreen() {
@@ -35,7 +38,7 @@ export default function StockDetailScreen() {
         const deltaStyle = item.quantity > 0 ? styles.deltaUp : item.quantity < 0 ? styles.deltaDown : null;
 
         return (
-            <View style={styles.movementCard}>
+            <View style={[SharedStyles.card, styles.movementCard]}>
                 <View style={styles.movementTopRow}>
                     <Text style={styles.movementTitle}>{stockMovementTitle(item)}</Text>
                     <Text style={[styles.delta, deltaStyle]}>{formatStockDelta(item.quantity)}</Text>
@@ -54,21 +57,18 @@ export default function StockDetailScreen() {
     }
 
     function renderHeader(current: Stock) {
+        const pill = stockPill(current.quantity);
         return (
             <View style={styles.header}>
-                <View style={styles.stockCard}>
-                    <View style={styles.stockInfo}>
-                        <Text style={styles.productName}>{current.productName}</Text>
-                        <Text style={styles.secondaryText}>SKU: {current.productVariantSku}</Text>
-                        <Text style={styles.secondaryText}>Sucursal: {current.branchName}</Text>
-                    </View>
-                    <View style={styles.quantityContainer}>
-                        <Text style={styles.quantity}>{current.quantity}</Text>
-                        <Text style={styles.quantityLabel}>unidades</Text>
-                    </View>
+                <View style={SharedStyles.statRow}>
+                    <StatTile
+                        label={`Unidades en ${current.branchName}`}
+                        value={String(current.quantity)}
+                        icon={{ ios: 'shippingbox', android: 'inventory_2', web: 'inventory_2' }}
+                        tone={pill.tone}
+                    />
                 </View>
-                {canAdjust ? <AppButton title="Ajustar stock" onPress={() => setIsAdjusting(true)} /> : null}
-                <Text style={styles.sectionTitle}>Historial</Text>
+                <SectionHeader title="Historial" />
             </View>
         );
     }
@@ -87,7 +87,7 @@ export default function StockDetailScreen() {
                 keyExtractor={(item) => item.id}
                 renderItem={renderMovement}
                 ListHeaderComponent={renderHeader(stock)}
-                contentContainerStyle={styles.list}
+                contentContainerStyle={SharedStyles.pageList}
                 showsVerticalScrollIndicator={false}
                 onEndReached={movements.loadMore}
                 onEndReachedThreshold={0.4}
@@ -117,19 +117,19 @@ export default function StockDetailScreen() {
 
     return (
         <Screen style={styles.screen}>
-            <View style={[SharedStyles.topBar, SharedStyles.topBarElevated]}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [styles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow={stock ? `SKU ${stock.productVariantSku}` : 'Stock'}
+                title={stock?.productName ?? 'Stock'}
+                right={stock && canAdjust ? (
+                    <HeaderButton
+                        label="Ajustar"
+                        icon={{ ios: 'plusminus', android: 'exposure', web: 'exposure' }}
+                        accessibilityLabel="Ajustar stock"
+                        onPress={() => setIsAdjusting(true)}
                     />
-                </Pressable>
-                <Text style={styles.screenTitle}>Stock</Text>
-            </View>
+                ) : undefined}
+            />
 
             {renderBody()}
 
@@ -144,67 +144,12 @@ const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
-        marginRight: Spacing.xs,
-    },
-    screenTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    list: {
-        padding: Spacing.lg,
-        gap: Spacing.sm,
-        flexGrow: 1,
-    },
     header: {
         gap: Spacing.md,
         marginBottom: Spacing.xs,
     },
-    stockCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-    stockInfo: {
-        flex: 1,
-        gap: 2,
-    },
-    productName: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    quantityContainer: {
-        alignItems: 'flex-end',
-        marginLeft: Spacing.md,
-    },
-    quantity: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: Colors.primary,
-    },
-    quantityLabel: {
-        fontSize: 11,
-        color: Colors.textSecondary,
-    },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
-    },
     movementCard: {
-        backgroundColor: Colors.surface,
-        borderRadius: 12,
         padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
         gap: 4,
     },
     movementTopRow: {
@@ -216,12 +161,12 @@ const styles = StyleSheet.create({
     movementTitle: {
         flexShrink: 1,
         fontSize: 15,
-        fontWeight: '600',
+        fontWeight: '700',
         color: Colors.text,
     },
     delta: {
         fontSize: 16,
-        fontWeight: '700',
+        fontWeight: '800',
         color: Colors.textSecondary,
     },
     deltaUp: {

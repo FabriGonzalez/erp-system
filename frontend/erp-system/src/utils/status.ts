@@ -1,5 +1,46 @@
 import { Colors } from '@/constants/colors';
+import { Tone } from '@/constants/tones';
 import { OrderStatus, PaymentStatus } from '@/types/order';
+import { LOW_STOCK_THRESHOLD } from '@/utils/report-periods';
+
+/** Píldora de stock, con el mismo umbral que "Stock bajo" en Reportes y en Productos. */
+export function stockPill(stock: number): { label: string; tone: Tone } {
+    if (stock <= 0) {
+        return { label: 'Sin stock', tone: 'danger' };
+    }
+    if (stock <= LOW_STOCK_THRESHOLD) {
+        return { label: `Bajo (${stock})`, tone: 'warning' };
+    }
+    return { label: `Stock ${stock}`, tone: 'success' };
+}
+
+/** Tono de la píldora de pago (StatusPill), con el mismo criterio que getPaymentStatusColor. */
+export function paymentStatusTone(status: PaymentStatus): Tone {
+    switch (status) {
+        case 'PAID':
+            return 'success';
+        case 'PARTIAL':
+            return 'warning';
+        default:
+            return 'danger';
+    }
+}
+
+/** Tono de la píldora de estado del pedido, con el mismo criterio que getStatusBadgeColor. */
+export function orderStatusTone(status: OrderStatus): Tone {
+    switch (status) {
+        case 'CONFIRMED':
+            return 'primary';
+        case 'TO_PREPARE':
+            return 'warning';
+        case 'SHIPPED':
+            return 'violet';
+        case 'CANCELLED':
+            return 'danger';
+        default:
+            return 'neutral';
+    }
+}
 
 export function getPaymentStatusColor(status: PaymentStatus): { bg: string; text: string } {
     switch (status) {
