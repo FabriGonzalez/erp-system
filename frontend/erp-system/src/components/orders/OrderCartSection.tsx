@@ -1,355 +1,260 @@
 import { SymbolView } from 'expo-symbols';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { IconName } from '@/components/ui/icon-name';
 import { Colors } from '@/constants/colors';
 import { Radius, Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 import { OrderItem, OrderPromo } from '@/types/order';
+import { formatCurrency } from '@/utils/format';
+
+export type CatalogTab = 'PRODUCTS' | 'PROMOS';
 
 type OrderCartSectionProps = {
     items: OrderItem[];
     promos: OrderPromo[];
-    onAddProducts: () => void;
+    onAddProducts: (tab: CatalogTab) => void;
     onUpdateQuantity: (productId: string, variantId: string, newQuantity: number) => void;
-    onRemoveItem: (productId: string, variantId: string) => void;
     onUpdatePromoQuantity: (lineId: string, newQuantity: number) => void;
 };
 
+const MINUS: IconName = { ios: 'minus', android: 'remove', web: 'remove' };
+const TRASH: IconName = { ios: 'trash', android: 'delete', web: 'delete' };
+const PLUS: IconName = { ios: 'plus', android: 'add', web: 'add' };
+
+/** Botones para agregar productos o promos y el ticket con cantidades y subtotales. */
 export function OrderCartSection({
     items,
     promos,
     onAddProducts,
     onUpdateQuantity,
-    onRemoveItem,
     onUpdatePromoQuantity,
 }: OrderCartSectionProps) {
-    const totalAmount = items.reduce((sum, item) => sum + item.subtotal, 0)
-        + promos.reduce((sum, promo) => sum + promo.subtotal, 0);
-    const linesCount = items.length + promos.length;
+    const isEmpty = items.length === 0 && promos.length === 0;
 
     return (
         <View style={styles.container}>
-            <View style={styles.headerRow}>
-                <Text style={[SharedStyles.sectionTitle, { marginBottom: 0 }]}>Productos en el pedido ({linesCount})</Text>
-                <Pressable onPress={onAddProducts} style={styles.addBtnHeader}>
+            <View style={styles.actions}>
+                <Pressable
+                    style={({ pressed }) => [styles.action, styles.actionWide, pressed && SharedStyles.listItemPressed]}
+                    onPress={() => onAddProducts('PRODUCTS')}
+                >
                     <SymbolView
-                        name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }}
-                        size={16}
+                        name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
+                        size={18}
                         tintColor={Colors.primary}
                     />
-                    <Text style={styles.addBtnHeaderText}>
-                        {linesCount === 0 ? 'Seleccionar' : 'Modificar'}
-                    </Text>
+                    <Text style={styles.actionText}>Agregar producto</Text>
+                </Pressable>
+                <Pressable
+                    style={({ pressed }) => [styles.action, pressed && SharedStyles.listItemPressed]}
+                    onPress={() => onAddProducts('PROMOS')}
+                >
+                    <SymbolView name={{ ios: 'tag', android: 'sell', web: 'sell' }} size={16} tintColor={Colors.rose} />
+                    <Text style={[styles.actionText, styles.promoActionText]}>Promo</Text>
                 </Pressable>
             </View>
 
-            {linesCount === 0 ? (
-                <Pressable
-                    style={({ pressed }) => [styles.emptyCartBox, pressed && SharedStyles.pressed]}
-                    onPress={onAddProducts}
-                >
-                    <SymbolView
-                        name={{ ios: 'cart', android: 'shopping_cart', web: 'shopping_cart' }}
-                        size={32}
-                        tintColor={Colors.textSecondary}
-                    />
-                    <Text style={styles.emptyCartTitle}>No agregaste productos aún</Text>
-                    <Text style={styles.emptyCartSub}>
-                        Tocá aquí para explorar el catálogo y agregar productos o promos al pedido
-                    </Text>
-                    <View style={styles.selectProductsButton}>
-                        <Text style={styles.selectProductsButtonText}>+ Agregar productos</Text>
-                    </View>
-                </Pressable>
+            {isEmpty ? (
+                <View style={[SharedStyles.card, styles.empty]}>
+                    <Text style={styles.emptyTitle}>Todavía no hay productos</Text>
+                    <Text style={styles.emptyText}>Agregá productos o promos para armar la venta.</Text>
+                </View>
             ) : (
-                <View style={styles.cartContainer}>
-                    {items.map((item) => (
-                        <View key={item.id} style={styles.itemRow}>
-                            <View style={styles.itemMainInfo}>
-                                <Text style={styles.itemName}>{item.productName}</Text>
-                                <Text style={styles.itemSku}>SKU: {item.productSku}</Text>
-                                <Text style={styles.itemUnitPrice}>
-                                    ${item.unitPrice.toLocaleString('es-AR')} c/u
-                                </Text>
-                            </View>
-
-                            <View style={styles.itemQuantityAndSubtotal}>
-                                <View style={styles.quantityControls}>
-                                    <Pressable
-                                        style={styles.qtyBtn}
-                                        onPress={() => onUpdateQuantity(item.productId, item.variantId, item.quantity - 1)}
-                                    >
-                                        <SymbolView
-                                            name={{ ios: 'minus', android: 'remove', web: 'remove' }}
-                                            size={14}
-                                            tintColor={Colors.text}
-                                        />
-                                    </Pressable>
-
-                                    <Text style={styles.qtyText}>{item.quantity}</Text>
-
-                                    <Pressable
-                                        style={styles.qtyBtn}
-                                        onPress={() => onUpdateQuantity(item.productId, item.variantId, item.quantity + 1)}
-                                    >
-                                        <SymbolView
-                                            name={{ ios: 'plus', android: 'add', web: 'add' }}
-                                            size={14}
-                                            tintColor={Colors.text}
-                                        />
-                                    </Pressable>
-                                </View>
-
-                                <Text style={styles.subtotalText}>
-                                    ${item.subtotal.toLocaleString('es-AR')}
-                                </Text>
-                            </View>
-                        </View>
-                    ))}
-
-                    {promos.map((promo) => (
-                        <View key={promo.id} style={styles.itemRow}>
-                            <View style={styles.itemMainInfo}>
-                                <View style={styles.promoTitleRow}>
-                                    <Text style={styles.promoTag}>PROMO</Text>
-                                    <Text style={[styles.itemName, styles.promoName]}>{promo.name}</Text>
-                                </View>
-                                {promo.components.map((component) => (
-                                    <Text key={component.variantId} style={styles.itemSku} numberOfLines={1}>
-                                        {component.quantity}× {component.productName}
-                                        {component.variantName ? ` (${component.variantName})` : ''}
-                                    </Text>
-                                ))}
-                                <Text style={styles.itemUnitPrice}>
-                                    ${promo.unitPrice.toLocaleString('es-AR')} c/u
-                                </Text>
-                            </View>
-
-                            <View style={styles.itemQuantityAndSubtotal}>
-                                <View style={styles.quantityControls}>
-                                    <Pressable
-                                        style={styles.qtyBtn}
-                                        onPress={() => onUpdatePromoQuantity(promo.id, promo.quantity - 1)}
-                                    >
-                                        <SymbolView
-                                            name={{ ios: 'minus', android: 'remove', web: 'remove' }}
-                                            size={14}
-                                            tintColor={Colors.text}
-                                        />
-                                    </Pressable>
-
-                                    <Text style={styles.qtyText}>{promo.quantity}</Text>
-
-                                    <Pressable
-                                        style={styles.qtyBtn}
-                                        onPress={() => onUpdatePromoQuantity(promo.id, promo.quantity + 1)}
-                                    >
-                                        <SymbolView
-                                            name={{ ios: 'plus', android: 'add', web: 'add' }}
-                                            size={14}
-                                            tintColor={Colors.text}
-                                        />
-                                    </Pressable>
-                                </View>
-
-                                <Text style={styles.subtotalText}>
-                                    ${promo.subtotal.toLocaleString('es-AR')}
-                                </Text>
-                            </View>
-                        </View>
-                    ))}
-
-                    <View style={styles.cartFooter}>
-                        <Text style={styles.cartTotalLabel}>Subtotal pedido:</Text>
-                        <Text style={styles.cartTotalValue}>
-                            ${totalAmount.toLocaleString('es-AR')}
-                        </Text>
-                    </View>
-
-                    <Pressable
-                        style={({ pressed }) => [styles.addMoreBtn, pressed && SharedStyles.pressed]}
-                        onPress={onAddProducts}
-                    >
-                        <SymbolView
-                            name={{ ios: 'plus', android: 'add', web: 'add' }}
-                            size={16}
-                            tintColor={Colors.primary}
+                <View style={[SharedStyles.card, styles.ticket]}>
+                    {items.map((item, index) => (
+                        <TicketLine
+                            key={item.id}
+                            first={index === 0}
+                            title={item.productName}
+                            details={[`${item.productSku} · ${formatCurrency(item.unitPrice)} c/u`]}
+                            quantity={item.quantity}
+                            subtotal={item.subtotal}
+                            onChange={(quantity) => onUpdateQuantity(item.productId, item.variantId, quantity)}
                         />
-                        <Text style={styles.addMoreBtnText}>Agregar más productos</Text>
-                    </Pressable>
+                    ))}
+                    {promos.map((promo, index) => (
+                        <TicketLine
+                            key={promo.id}
+                            first={items.length === 0 && index === 0}
+                            isPromo
+                            title={promo.name}
+                            details={promo.components.map((component) =>
+                                `${component.quantity}× ${component.productName}${component.variantName ? ` (${component.variantName})` : ''}`)}
+                            quantity={promo.quantity}
+                            subtotal={promo.subtotal}
+                            onChange={(quantity) => onUpdatePromoQuantity(promo.id, quantity)}
+                        />
+                    ))}
                 </View>
             )}
         </View>
     );
 }
 
+type TicketLineProps = {
+    first: boolean;
+    isPromo?: boolean;
+    title: string;
+    details: string[];
+    quantity: number;
+    subtotal: number;
+    /** Con 0 el store saca la línea. */
+    onChange: (quantity: number) => void;
+};
+
+function TicketLine({ first, isPromo = false, title, details, quantity, subtotal, onChange }: TicketLineProps) {
+    const isLast = quantity <= 1;
+
+    return (
+        <View style={[styles.line, !first && styles.lineDivider]}>
+            <View style={styles.lineTexts}>
+                <View style={styles.lineTitleRow}>
+                    {isPromo ? <Text style={styles.promoTag}>PROMO</Text> : null}
+                    <Text style={styles.lineTitle} numberOfLines={2}>{title}</Text>
+                </View>
+                {details.map((detail) => (
+                    <Text key={detail} style={styles.lineDetail} numberOfLines={1}>{detail}</Text>
+                ))}
+            </View>
+
+            <View style={styles.stepper}>
+                <Pressable
+                    style={styles.stepperButton}
+                    onPress={() => onChange(quantity - 1)}
+                    accessibilityLabel={isLast ? `Quitar ${title}` : `Una menos de ${title}`}
+                >
+                    <SymbolView name={isLast ? TRASH : MINUS} size={16} tintColor={isLast ? Colors.errorDark : Colors.text} />
+                </Pressable>
+                <Text style={styles.stepperText}>{quantity}</Text>
+                <Pressable
+                    style={styles.stepperButton}
+                    onPress={() => onChange(quantity + 1)}
+                    accessibilityLabel={`Una más de ${title}`}
+                >
+                    <SymbolView name={PLUS} size={16} tintColor={Colors.text} />
+                </Pressable>
+            </View>
+
+            <Text style={styles.subtotal}>{formatCurrency(subtotal)}</Text>
+        </View>
+    );
+}
+
 const styles = StyleSheet.create({
     container: {
-        marginBottom: Spacing.lg,
+        gap: Spacing.md,
     },
-    headerRow: {
+    actions: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: Spacing.xs + 2,
+        gap: Spacing.sm,
     },
-    addBtnHeader: {
+    action: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
+        justifyContent: 'center',
+        gap: Spacing.sm,
+        minHeight: 48,
+        paddingHorizontal: Spacing.md,
+        borderRadius: Radius.md,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        backgroundColor: Colors.surface,
     },
-    addBtnHeaderText: {
-        fontSize: 13,
-        fontWeight: '600',
+    actionWide: {
+        flex: 1,
+    },
+    actionText: {
+        fontSize: 14,
+        fontWeight: '700',
         color: Colors.primary,
     },
-    emptyCartBox: {
-        backgroundColor: Colors.surface,
-        borderRadius: Radius.lg,
-        padding: Spacing.xl,
+    promoActionText: {
+        color: Colors.rose,
+    },
+    empty: {
         alignItems: 'center',
-        borderWidth: 1,
-        borderStyle: 'dashed',
-        borderColor: Colors.border,
+        gap: 4,
+        paddingVertical: Spacing.xl,
     },
-    emptyCartTitle: {
+    emptyTitle: {
         fontSize: 15,
-        fontWeight: '600',
+        fontWeight: '700',
         color: Colors.text,
-        marginTop: Spacing.sm,
     },
-    emptyCartSub: {
+    emptyText: {
         fontSize: 13,
         color: Colors.textSecondary,
         textAlign: 'center',
-        marginTop: 4,
-        marginBottom: Spacing.md,
     },
-    selectProductsButton: {
-        backgroundColor: Colors.primaryLight,
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.sm,
-        borderRadius: Radius.sm,
+    ticket: {
+        padding: 0,
     },
-    selectProductsButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.primary,
-    },
-    cartContainer: {
-        backgroundColor: Colors.surface,
-        borderRadius: Radius.lg,
-        padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-    itemRow: {
+    line: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: Spacing.sm,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
+        gap: Spacing.sm,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm + 2,
     },
-    itemMainInfo: {
+    lineDivider: {
+        borderTopWidth: 1,
+        borderTopColor: Colors.muted,
+    },
+    lineTexts: {
         flex: 1,
-        paddingRight: Spacing.sm,
+        minWidth: 0,
+        gap: 2,
     },
-    itemName: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.text,
-    },
-    promoTitleRow: {
+    lineTitleRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        marginBottom: 2,
+    },
+    lineTitle: {
+        flexShrink: 1,
+        fontSize: 14,
+        fontWeight: '700',
+        color: Colors.text,
+    },
+    lineDetail: {
+        fontSize: 12,
+        color: Colors.textSecondary,
     },
     promoTag: {
         fontSize: 10,
-        fontWeight: '700',
-        color: Colors.successDark,
-        backgroundColor: Colors.successLight,
+        fontWeight: '800',
+        color: Colors.rose,
+        backgroundColor: Colors.roseLight,
+        borderRadius: 6,
         paddingHorizontal: 6,
-        paddingVertical: 1,
-        borderRadius: 4,
+        paddingVertical: 2,
         overflow: 'hidden',
     },
-    promoName: {
-        flexShrink: 1,
-    },
-    itemSku: {
-        fontSize: 12,
-        color: Colors.textSecondary,
-        marginTop: 1,
-    },
-    itemUnitPrice: {
-        fontSize: 12,
-        color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    itemQuantityAndSubtotal: {
-        alignItems: 'flex-end',
-        gap: 6,
-    },
-    quantityControls: {
+    stepper: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colors.muted,
-        borderRadius: 6,
-        paddingHorizontal: 4,
-        paddingVertical: 2,
-    },
-    qtyBtn: {
-        width: 28,
-        height: 28,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    qtyText: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: Colors.text,
-        paddingHorizontal: 8,
-    },
-    subtotalText: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    cartFooter: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingTop: Spacing.md,
-        paddingBottom: Spacing.sm,
-    },
-    cartTotalLabel: {
-        fontSize: 14,
-        color: Colors.textSecondary,
-        fontWeight: '500',
-    },
-    cartTotalValue: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.primary,
-    },
-    addMoreBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: Colors.background,
         borderRadius: Radius.sm,
-        paddingVertical: Spacing.sm,
-        gap: 6,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        marginTop: Spacing.xs,
+        backgroundColor: Colors.muted,
     },
-    addMoreBtnText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: Colors.primary,
+    stepperButton: {
+        width: 38,
+        height: 38,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    stepperText: {
+        minWidth: 20,
+        textAlign: 'center',
+        fontSize: 15,
+        fontWeight: '800',
+        color: Colors.text,
+    },
+    subtotal: {
+        minWidth: 72,
+        textAlign: 'right',
+        fontSize: 14,
+        fontWeight: '800',
+        color: Colors.text,
     },
 });

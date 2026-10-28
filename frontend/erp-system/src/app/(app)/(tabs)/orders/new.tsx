@@ -122,7 +122,6 @@ export default function NewOrderScreen() {
                 mode="SALE"
                 initialSalesType={salesType}
                 onSubmitOrder={handleSubmitOrder}
-                onCancel={handleCancel}
                 isSubmitting={isSubmitting}
                 submitLabel="Crear venta"
             />

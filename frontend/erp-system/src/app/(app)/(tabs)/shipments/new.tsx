@@ -102,7 +102,6 @@ export default function NewShipmentScreen() {
             <OrderForm
                 mode="SHIPMENT"
                 onSubmitOrder={handleSubmitOrder}
-                onCancel={handleCancel}
                 isSubmitting={isSubmitting}
                 submitLabel="Crear Envío"
             />

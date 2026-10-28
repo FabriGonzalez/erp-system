@@ -142,9 +142,6 @@ export default function ProductDetailScreen() {
                                                 : 'Variante única'}
                                         </Text>
                                         <Text style={SharedStyles.listItemMeta}>SKU {variant.sku}</Text>
-                                        {variant.barcode ? (
-                                            <Text style={SharedStyles.listItemMeta}>Código de barras {variant.barcode}</Text>
-                                        ) : null}
                                     </View>
                                     <View style={styles.variantRight}>
                                         <Text style={styles.variantPrice}>{formatCurrency(variant.price)}</Text>

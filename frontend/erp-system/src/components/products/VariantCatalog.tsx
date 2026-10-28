@@ -99,7 +99,7 @@ export function VariantCatalog({
         <>
             <View style={styles.searchBox}>
                 <AppInput
-                    placeholder="Buscar por nombre, SKU o código de barras..."
+                    placeholder="Buscar por nombre o SKU..."
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                 />

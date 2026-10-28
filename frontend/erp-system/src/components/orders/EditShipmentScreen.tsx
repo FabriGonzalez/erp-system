@@ -111,7 +111,7 @@ export function EditShipmentScreen({ flow }: EditShipmentScreenProps) {
                 title="Editar envío"
             />
             {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
-            <OrderForm initialOrder={order} mode="SHIPMENT" flow={flow} onSubmitOrder={handleSubmit} onCancel={handleCancel} isSubmitting={isSubmitting} submitLabel="Guardar Cambios" />
+            <OrderForm initialOrder={order} mode="SHIPMENT" flow={flow} onSubmitOrder={handleSubmit} isSubmitting={isSubmitting} submitLabel="Guardar Cambios" />
         </Screen>
     );
 }

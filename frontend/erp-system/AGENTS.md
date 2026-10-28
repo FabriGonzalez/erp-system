@@ -146,7 +146,7 @@ El frontend gestiona productos con variantes, atributos y stock por sucursal.
 
 El dominio de producto incluye:
 - Producto: `id`, `name`, `categoryId`, `active`, `variants`, y metadatos opcionales.
-- Variante: `id`, `sku`, `price`, `attributes`, `stockByBranch`, y metadatos opcionales. `barcode` es opcional y único por empresa (409 `VARIANT_BARCODE_ALREADY_EXISTS`); la búsqueda de productos y de stock también busca por él.
+- Variante: `id`, `sku`, `price`, `attributes`, `stockByBranch`, y metadatos opcionales. `barcode` es opcional y único por empresa (409 `VARIANT_BARCODE_ALREADY_EXISTS`); la búsqueda de productos y de stock también busca por él. **El frontend no lo muestra ni lo edita por ahora** (2026-10-28; queda preparado en el backend y en la plantilla de Excel): al editar un producto se reenvía el que ya tenga cada variante, porque el backend lo pisa con lo que llega.
 
 Los IDs de API pueden llegar como números; el dominio del frontend puede normalizarlos a strings según los helpers ya existentes. Conservá esa convención dentro de cada capa y evitá comparaciones inconsistentes entre `number` y `string`.
 

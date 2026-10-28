@@ -1,12 +1,13 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { OrderAddressSection, OrderEditAddressSection } from './OrderAddressSection';
-import { OrderCartSection } from './OrderCartSection';
-import { OrderCustomerSection } from './OrderCustomerSection';
+import { CatalogTab, OrderCartSection } from './OrderCartSection';
+import { OrderCustomerNotices } from './OrderCustomerNotices';
+import { OrderPaymentSection, PaymentMode } from './OrderPaymentSection';
 import { OrderSalesTypeSection } from './OrderSalesTypeSection';
-import { OrderSummarySection } from './OrderSummarySection';
+import { OrderTotalCard } from './OrderTotalCard';
 
 import { AppInput } from '@/components/ui/AppInput';
 import { Colors } from '@/constants/colors';
@@ -20,6 +21,7 @@ import { SharedStyles } from '@/styles/shared';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import { Order, OrderCreationMode } from '@/types/order';
 import { draftVariantIds, promoLimit } from '@/utils/draft-stock';
+import { formatCurrency } from '@/utils/format';
 import { CUSTOMER_PICKER_ROUTES, ORDER_FORM_ROUTES, OrderFlow } from '@/utils/order-routes';
 
 const INACTIVE_CUSTOMER_MESSAGE = 'El cliente seleccionado está inactivo. Elegí otro cliente para continuar.';
@@ -30,8 +32,8 @@ type OrderFormProps = {
     flow?: OrderFlow;
     initialOrder?: Order;
     initialSalesType?: 'WITH_PRODUCTS' | 'QUICK_SALE';
+    // Cancelar es la flecha del encabezado de cada pantalla.
     onSubmitOrder: () => void;
-    onCancel: () => void;
     isSubmitting?: boolean;
     submitLabel?: string;
 };
@@ -42,7 +44,6 @@ export function OrderForm({
     initialOrder,
     initialSalesType,
     onSubmitOrder,
-    onCancel,
     isSubmitting = false,
     submitLabel = 'Crear Pedido',
 }: OrderFormProps) {
@@ -58,13 +59,15 @@ export function OrderForm({
         originalUnits,
         applyCredit,
         setApplyCredit,
+        paymentMethod,
+        setPaymentMethod,
+        setAmountPaid,
         initNewOrder,
         initEditOrder,
         reset: resetDraft,
         setSalesType,
         setQuickSaleAmount,
         updateItemQuantity,
-        removeItem,
         updatePromoQuantity,
     } = useOrderDraftStore();
 
@@ -74,9 +77,10 @@ export function OrderForm({
     const [quickSaleInput, setQuickSaleInput] = useState(
         quickSaleAmount > 0 ? String(quickSaleAmount) : '',
     );
+    const [paymentMode, setPaymentMode] = useState<PaymentMode>('TOTAL');
+    const [partialAmount, setPartialAmount] = useState('');
 
     const branchId = activeBranch?.id ?? '';
-    const branchName = activeBranch?.name ?? 'Sin sucursal activa';
     // Stock de lo que hay en el carrito (sueltos y variantes de las promos), sin depender de
     // qué páginas del catálogo se cargaron.
     const { stockOf } = useVariantStock(branchId, draftVariantIds(items, promos));
@@ -173,9 +177,19 @@ export function OrderForm({
     const customerCredit = accountSummary?.credit ?? 0;
     const customerDebt = accountSummary?.debt ?? 0;
     // Estimación del saldo a favor que el backend aplicará a esta orden.
-    const creditApplied = !isEditing && applyCredit
+    const isAnonymousCustomer = customer.id === CUSTOMER_ANONYMOUS.id;
+    const creditApplied = !isEditing && applyCredit && !isAnonymousCustomer
         ? Math.min(customerCredit, Math.max(0, totalAmount))
         : 0;
+    const amountToCharge = Math.max(0, totalAmount) - creditApplied;
+    // Las ventas sin cliente se cobran completas al crearse.
+    const effectivePaymentMode: PaymentMode = isAnonymousCustomer ? 'TOTAL' : paymentMode;
+    const parsedPartial = Number(partialAmount);
+    const amountPaid = effectivePaymentMode === 'TOTAL'
+        ? amountToCharge
+        : Math.min(Number.isFinite(parsedPartial) ? Math.max(0, parsedPartial) : 0, amountToCharge);
+    const unitsCount = items.reduce((sum, item) => sum + item.quantity, 0)
+        + promos.reduce((sum, promo) => sum + promo.quantity, 0);
 
     function handleSelectCustomer() {
         // Solo en el alta: al editar el cliente queda fijo.
@@ -200,8 +214,8 @@ export function OrderForm({
         });
     }
 
-    function handleAddProducts() {
-        router.push(routes.selectProducts);
+    function handleAddProducts(tab: CatalogTab) {
+        router.push({ pathname: routes.selectProducts, params: { tab } });
     }
 
     function handleUpdateQuantity(productId: string, variantId: string, newQty: number) {
@@ -275,6 +289,8 @@ export function OrderForm({
             return;
         }
 
+        // La pantalla lee el importe del store en el momento del envío; al editar no se registran pagos.
+        setAmountPaid(isEditing ? 0 : amountPaid);
         onSubmitOrder();
     }
 
@@ -284,116 +300,157 @@ export function OrderForm({
         (effectiveSalesType === 'WITH_PRODUCTS' ? !hasProducts : quickSaleAmount <= 0) ||
         (isShipment && customer.id === CUSTOMER_ANONYMOUS.id);
 
+    const isQuickSale = effectiveSalesType === 'QUICK_SALE';
+
     return (
-        <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContainer}
-            keyboardShouldPersistTaps="handled"
-        >
-            {formError ? (
-                <View style={styles.errorBox}>
-                    <Text style={styles.errorBoxText}>
-                        {formError}
-                    </Text>
-                </View>
-            ) : null}
-
-            <OrderCustomerSection
-                customer={currentCustomer}
-                customerCredit={customerCredit}
-                customerDebt={customerDebt}
-                pendingOrders={accountSummary?.pendingOrders ?? 0}
-                applyCredit={applyCredit}
-                onToggleApplyCredit={isEditing ? undefined : setApplyCredit}
-                requireRegisteredCustomer={isShipment}
-                onSelectCustomer={isEditing ? () => {} : handleSelectCustomer}
-            />
-
-            {isCustomerInactive ? (
-                <View style={styles.errorBox}>
-                    <Text style={styles.errorBoxText}>{INACTIVE_CUSTOMER_MESSAGE}</Text>
-                </View>
-            ) : null}
-
-            {needsAddress && (
-                <OrderAddressSection
-                    customer={currentCustomer}
-                    selectedAddress={selectedAddress}
-                    isSelectedAddressUnavailable={isAddressUnavailable}
-                    onSelectAddress={handleSelectAddress}
-                    onAddCustomerAddress={handleAddCustomerAddress}
-                />
-            )}
-
-            {isShipping && isEditing && (
-                <OrderEditAddressSection
-                    currentAddress={initialOrder?.shippingAddress}
-                    selectedAddress={selectedAddress}
-                    isSelectedAddressUnavailable={isAddressUnavailable}
-                    onSelectAddress={handleSelectAddress}
-                />
-            )}
-
-            {!isShipment && !initialSalesType && (
-                <OrderSalesTypeSection
-                    salesType={salesType}
-                    onChangeSalesType={setSalesType}
-                    disabled={isSubmitting}
-                />
-            )}
-
-            {effectiveSalesType === 'WITH_PRODUCTS' ? (
-                <OrderCartSection
-                    items={items}
-                    promos={promos}
-                    onAddProducts={handleAddProducts}
-                    onUpdateQuantity={handleUpdateQuantity}
-                    onRemoveItem={removeItem}
-                    onUpdatePromoQuantity={handleUpdatePromoQuantity}
-                />
-            ) : (
-                <View style={styles.quickSale}>
-                    <Text style={SharedStyles.sectionTitle}>Venta rápida</Text>
-                    <View style={[SharedStyles.card, styles.quickSaleCard]}>
-                        <Text style={SharedStyles.fieldLabel}>
-                            Importe total de la venta <Text style={styles.required}>*</Text>
+        <View style={styles.container}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContainer}
+                keyboardShouldPersistTaps="handled"
+            >
+                {formError ? (
+                    <View style={styles.errorBox}>
+                        <Text style={styles.errorBoxText}>
+                            {formError}
                         </Text>
-                        <View style={styles.currencyInputRow}>
-                            <Text style={styles.currencyPrefix}>$</Text>
-                            <AppInput
-                                style={styles.amountInput}
-                                value={quickSaleInput}
-                                onChangeText={handleQuickSaleInputChange}
-                                keyboardType="numeric"
-                                placeholder="0.00"
-                                editable={!isSubmitting}
-                            />
+                    </View>
+                ) : null}
+
+                <OrderTotalCard
+                    total={totalAmount}
+                    unitsCount={isQuickSale ? undefined : unitsCount}
+                    deliveryType={effectiveDeliveryType}
+                    customer={currentCustomer}
+                    requireRegisteredCustomer={isShipment}
+                    onSelectCustomer={isEditing ? undefined : handleSelectCustomer}
+                />
+
+                <OrderCustomerNotices
+                    customer={currentCustomer}
+                    customerCredit={customerCredit}
+                    customerDebt={customerDebt}
+                    pendingOrders={accountSummary?.pendingOrders ?? 0}
+                    applyCredit={applyCredit}
+                    onToggleApplyCredit={isEditing ? undefined : setApplyCredit}
+                />
+
+                {isCustomerInactive ? (
+                    <View style={styles.errorBox}>
+                        <Text style={styles.errorBoxText}>{INACTIVE_CUSTOMER_MESSAGE}</Text>
+                    </View>
+                ) : null}
+
+                {needsAddress && (
+                    <OrderAddressSection
+                        customer={currentCustomer}
+                        selectedAddress={selectedAddress}
+                        isSelectedAddressUnavailable={isAddressUnavailable}
+                        onSelectAddress={handleSelectAddress}
+                        onAddCustomerAddress={handleAddCustomerAddress}
+                    />
+                )}
+
+                {isShipping && isEditing && (
+                    <OrderEditAddressSection
+                        currentAddress={initialOrder?.shippingAddress}
+                        selectedAddress={selectedAddress}
+                        isSelectedAddressUnavailable={isAddressUnavailable}
+                        onSelectAddress={handleSelectAddress}
+                    />
+                )}
+
+                {!isShipment && !initialSalesType && (
+                    <OrderSalesTypeSection
+                        salesType={salesType}
+                        onChangeSalesType={setSalesType}
+                        disabled={isSubmitting}
+                    />
+                )}
+
+                {!isQuickSale ? (
+                    <OrderCartSection
+                        items={items}
+                        promos={promos}
+                        onAddProducts={handleAddProducts}
+                        onUpdateQuantity={handleUpdateQuantity}
+                        onUpdatePromoQuantity={handleUpdatePromoQuantity}
+                    />
+                ) : (
+                    <View>
+                        <Text style={SharedStyles.sectionTitle}>Venta rápida</Text>
+                        <View style={[SharedStyles.card, styles.quickSaleCard]}>
+                            <Text style={SharedStyles.fieldLabel}>
+                                Importe total de la venta <Text style={styles.required}>*</Text>
+                            </Text>
+                            <View style={styles.currencyInputRow}>
+                                <Text style={styles.currencyPrefix}>$</Text>
+                                <AppInput
+                                    style={styles.amountInput}
+                                    value={quickSaleInput}
+                                    onChangeText={handleQuickSaleInputChange}
+                                    keyboardType="numeric"
+                                    placeholder="0.00"
+                                    editable={!isSubmitting}
+                                />
+                            </View>
                         </View>
                     </View>
-                </View>
-            )}
+                )}
 
-            <OrderSummarySection
-                total={totalAmount}
-                creditApplied={creditApplied}
-                showPayment={!isEditing}
-                itemsCount={effectiveSalesType === 'WITH_PRODUCTS' ? items.length + promos.length : 0}
-                deliveryType={effectiveDeliveryType}
-                branchName={branchName}
-                isSubmitting={isSubmitting}
-                submitLabel={submitLabel}
-                onSubmit={handleSubmit}
-                onCancel={onCancel}
-                disabled={isFormInvalid}
-            />
-        </ScrollView>
+                {!isEditing ? (
+                    <OrderPaymentSection
+                        creditApplied={creditApplied}
+                        amountToCharge={amountToCharge}
+                        isAnonymousCustomer={isAnonymousCustomer}
+                        paymentMode={effectivePaymentMode}
+                        onChangePaymentMode={setPaymentMode}
+                        partialAmount={partialAmount}
+                        onChangePartialAmount={setPartialAmount}
+                        paymentMethod={paymentMethod}
+                        onChangePaymentMethod={setPaymentMethod}
+                        disabled={isSubmitting}
+                    />
+                ) : null}
+            </ScrollView>
+
+            <View style={styles.footer}>
+                <Pressable
+                    style={({ pressed }) => [
+                        styles.submit,
+                        (isSubmitting || isFormInvalid) && styles.submitDisabled,
+                        pressed && styles.submitPressed,
+                    ]}
+                    onPress={handleSubmit}
+                    disabled={isSubmitting || isFormInvalid}
+                    accessibilityRole="button"
+                >
+                    {isSubmitting ? (
+                        <View style={styles.submitting}>
+                            <ActivityIndicator size="small" color={Colors.white} />
+                            <Text style={styles.submitText}>Procesando...</Text>
+                        </View>
+                    ) : (
+                        <>
+                            <Text style={styles.submitText}>{submitLabel}</Text>
+                            <Text style={styles.submitTotal}>{formatCurrency(Math.max(0, totalAmount))}</Text>
+                        </>
+                    )}
+                </Pressable>
+            </View>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+    },
     scrollContainer: {
         padding: Spacing.lg,
-        paddingBottom: Spacing.xxl * 2,
+        paddingTop: Spacing.xs,
+        paddingBottom: Spacing.xl,
+        gap: Spacing.lg,
     },
     errorBox: {
         backgroundColor: Colors.errorLight,
@@ -401,15 +458,51 @@ const styles = StyleSheet.create({
         padding: Spacing.md,
         borderWidth: 1,
         borderColor: Colors.errorBorder,
-        marginBottom: Spacing.lg,
     },
     errorBoxText: {
         color: Colors.error,
         fontSize: 14,
         fontWeight: '600',
     },
-    quickSale: {
-        marginBottom: Spacing.lg,
+    footer: {
+        paddingHorizontal: Spacing.lg,
+        paddingTop: Spacing.md,
+        paddingBottom: Spacing.lg,
+        backgroundColor: Colors.surface,
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
+    },
+    submit: {
+        minHeight: 56,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: Spacing.lg,
+        borderRadius: Radius.lg,
+        backgroundColor: Colors.primary,
+    },
+    submitDisabled: {
+        opacity: 0.5,
+    },
+    submitPressed: {
+        backgroundColor: Colors.primaryDark,
+    },
+    submitting: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: Spacing.sm,
+    },
+    submitText: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: Colors.white,
+    },
+    submitTotal: {
+        fontSize: 19,
+        fontWeight: '800',
+        color: Colors.white,
     },
     quickSaleCard: {
         gap: Spacing.sm,

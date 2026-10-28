@@ -125,7 +125,7 @@ export default function InventoryScreen() {
 
             {activeBranch ? (
                 <View style={SharedStyles.pageToolbar}>
-                    <AppInput value={query} onChangeText={setQuery} placeholder="Buscar producto, SKU o código" />
+                    <AppInput value={query} onChangeText={setQuery} placeholder="Buscar producto o SKU" />
                 </View>
             ) : null}
 

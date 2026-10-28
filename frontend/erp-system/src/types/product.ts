@@ -117,6 +117,8 @@ export type ProductFormData = {
         id?: string;
         sku: string;
         price: string;
+        // El código de barras no se muestra ni se edita por ahora, pero al editar se reenvía el
+        // que ya tenga la variante (p. ej. cargado desde Excel): el backend lo pisa con lo que llega.
         barcode?: string;
         attributes: ProductVariantAttribute[];
         stockByBranch: Record<string, number>;

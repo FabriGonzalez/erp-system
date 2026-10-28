@@ -1934,6 +1934,16 @@ verde = listo, rojo = falta/peligro.
    "Producto desactivado" en `StatusPill`, chevron si hay que elegir variante, chips de atributos
    como los de PromoVariantChooser y botón "Agregar"/contador de 40 de alto
    (`SharedStyles.addButton*`; se borraron los `addButton`/`addIconContainer` viejos, sin uso).
+   **Nueva venta, diseño B (2026-10-28, sin probar ni commitear; lienzo
+   https://claude.ai/artifact/49ZZX6zajgoaKHrUCEHC6X):** `OrderForm` arranca con `OrderTotalCard`
+   (total grande en azul, unidades, entrega y el cliente adentro, "Cambiar"), sigue con
+   `OrderCustomerNotices` (deuda / saldo a favor con switch), `OrderCartSection` ("Agregar producto" y
+   "Promo", que abre `select-products` con `tab=PROMOS`; ticket con contador y tacho en la última
+   unidad) y `OrderPaymentSection` (medio de pago, "Paga todo / Paga una parte", saldo aplicado).
+   Botón fijo al pie "{submitLabel} · $total"; Cancelar es la flecha del encabezado (sale la prop
+   `onCancel`). Se borraron `OrderCustomerSection` y `OrderSummarySection` (sucursal, tipo de entrega
+   y estado inicial ya no se muestran). Aplica también a nuevo envío y editar envío. El estado de
+   pago parcial pasó a `OrderForm`. Código de barras: fuera del frontend (ver AGENTS.md).
    Íconos descentrados en Android (letra del sistema agrandada): `patches/expo-symbols+57.0.2.patch`
    (`allowFontScaling: false` y centrado), aplicado con `patch-package` en `postinstall`.
 6. Validar cada tanda: tsc, eslint, `git diff --check`; el usuario prueba en web; commit por tanda.

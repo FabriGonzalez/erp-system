@@ -1,7 +1,8 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { CatalogTab } from '@/components/orders/OrderCartSection';
 import { OrderPromoCatalog } from '@/components/orders/OrderPromoCatalog';
 import { CartSummaryBar } from '@/components/products/CartSummaryBar';
 import { VariantCatalog } from '@/components/products/VariantCatalog';
@@ -13,11 +14,11 @@ import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { promoUnitsByVariant } from '@/utils/draft-stock';
 
-type CatalogTab = 'PRODUCTS' | 'PROMOS';
-
 export default function SelectProductsScreen() {
     const activeBranch = useActiveBranch();
-    const [tab, setTab] = useState<CatalogTab>('PRODUCTS');
+    // El botón "Promo" del pedido abre directo en la pestaña de promos.
+    const { tab: initialTab } = useLocalSearchParams<{ tab?: string }>();
+    const [tab, setTab] = useState<CatalogTab>(initialTab === 'PROMOS' ? 'PROMOS' : 'PRODUCTS');
     const originalUnits = useOrderDraftStore((state) => state.originalUnits);
     const items = useOrderDraftStore((state) => state.items);
     const promos = useOrderDraftStore((state) => state.promos);

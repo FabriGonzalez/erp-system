@@ -3,6 +3,8 @@ export const Colors = {
     primaryDark: '#1D4ED8',
 
     primaryLight: '#EFF6FF',
+    // Texto secundario sobre fondo primary (la tarjeta del total).
+    onPrimarySoft: '#DBEAFE',
 
     background: '#F8FAFC',
     surface: '#FFFFFF',
