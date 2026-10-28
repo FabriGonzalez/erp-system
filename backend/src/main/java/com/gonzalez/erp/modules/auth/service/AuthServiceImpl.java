@@ -122,4 +122,14 @@ public class AuthServiceImpl implements AuthService {
                 !current.isPasswordManagedByAdmin()
         );
     }
+
+    /**
+     * Sesión deslizante: quien usa la app recibe un token nuevo con la duración completa.
+     * Sin riesgo de extender un acceso revocado: JwtAuthFilter ya rechazó la request si el
+     * usuario está desactivado, su empresa no está activa o cambió la contraseña.
+     */
+    @Override
+    public TokenResponse refreshToken() {
+        return new TokenResponse(jwtUtil.generateToken(SecurityUtils.getCurrentUserDetails()), "Bearer");
+    }
 }

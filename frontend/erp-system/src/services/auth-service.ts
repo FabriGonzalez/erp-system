@@ -105,3 +105,22 @@ export async function getCurrentUser(token: string): Promise<CurrentUserResponse
 
     return response.json();
 }
+
+/**
+ * Token nuevo con la duración completa para la sesión actual (sesión deslizante).
+ * Un 401 ya lo resuelve apiFetch expirando la sesión.
+ */
+export async function refreshToken(token: string): Promise<TokenResponse> {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    });
+
+    if (!response.ok) {
+        throw await toApiError(response, { fallback: 'No se pudo renovar la sesión.' });
+    }
+
+    return response.json();
+}

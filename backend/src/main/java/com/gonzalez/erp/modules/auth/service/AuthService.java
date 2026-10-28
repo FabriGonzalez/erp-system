@@ -12,4 +12,6 @@ public interface AuthService {
     TokenResponse changePassword(ChangePasswordRequest request, String clientIp);
 
     CurrentUserResponse currentUser();
+
+    TokenResponse refreshToken();
 }

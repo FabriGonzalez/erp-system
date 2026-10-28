@@ -69,4 +69,15 @@ public class AuthController {
     public ResponseEntity<CurrentUserResponse> me() {
         return ResponseEntity.ok(authService.currentUser());
     }
+
+    @PostMapping("/refresh")
+    @Operation(summary = "Renovar el token",
+               description = "Devuelve un token nuevo con la duración completa para la sesión actual.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Token nuevo"),
+            @ApiResponse(responseCode = "401", description = "Sesión inválida, usuario desactivado o empresa no activa")
+    })
+    public ResponseEntity<TokenResponse> refresh() {
+        return ResponseEntity.ok(authService.refreshToken());
+    }
 }

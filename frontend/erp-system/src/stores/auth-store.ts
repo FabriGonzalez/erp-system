@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 
 import { setUnauthorizedHandler } from '@/services/api-client';
-import { getCurrentUser } from '@/services/auth-service';
+import { getCurrentUser, refreshToken } from '@/services/auth-service';
 import { clearServerCache } from '@/services/query-client';
 import { useBranchStore } from '@/stores/branch-store';
 import { CurrentUserResponse, LoginResponse, User } from '@/types/auth';
@@ -12,6 +12,11 @@ const AUTH_STORAGE_KEY = '@erp/auth-session';
 // Solo se aplica la respuesta del último refresco pedido: si al volver la app al frente se
 // piden dos seguidos, uno viejo que termine tarde no puede pisar al más nuevo.
 let latestRefreshId = 0;
+
+// El token dura 7 días y se renueva como mucho una vez por día mientras se use la app:
+// solo quien no la abre en 7 días tiene que volver a entrar.
+const TOKEN_RENEW_AFTER_MS = 24 * 60 * 60 * 1000;
+let renewingToken = false;
 
 function userFromSession(data: CurrentUserResponse, branches: User['branches']): User {
     return {
@@ -33,6 +38,8 @@ function userFromSession(data: CurrentUserResponse, branches: User['branches']):
 type StoredSession = {
     token: string;
     user: User;
+    /** Cuándo se recibió el token, con el reloj del dispositivo. Falta en sesiones anteriores. */
+    tokenIssuedAt?: number;
 };
 
 export type SessionEndReason = 'expired' | 'company_suspended' | 'company_cancelled';
@@ -40,6 +47,7 @@ export type SessionEndReason = 'expired' | 'company_suspended' | 'company_cancel
 type AuthState = {
     user: User | null;
     token: string | null;
+    tokenIssuedAt: number | null;
     isHydrated: boolean;
     sessionExpired: boolean;
     sessionEndReason: SessionEndReason;
@@ -62,6 +70,7 @@ function reasonFromErrorCode(code: string | null): SessionEndReason {
 export const useAuthStore = create<AuthState>((set) => ({
     user: null,
     token: null,
+    tokenIssuedAt: null,
     isHydrated: false,
     sessionExpired: false,
     sessionEndReason: 'expired',
@@ -73,6 +82,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         const session: StoredSession = {
             token: response.token,
             user,
+            tokenIssuedAt: Date.now(),
         };
 
         // Nada cacheado de una sesión anterior puede verse en esta (otra empresa, otro usuario).
@@ -91,6 +101,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({
             user,
             token: response.token,
+            tokenIssuedAt: session.tokenIssuedAt,
             isHydrated: true,
             sessionExpired: false,
             sessionEndReason: 'expired',
@@ -124,6 +135,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
             set({
                 token: session.token,
+                tokenIssuedAt: session.tokenIssuedAt ?? null,
                 // Las sesiones guardadas antes de que existiera el campo no lo traen.
                 user: { ...session.user, canChangePassword: session.user.canChangePassword ?? true },
                 isHydrated: true,
@@ -139,6 +151,7 @@ export const useAuthStore = create<AuthState>((set) => ({
             set({
                 user: null,
                 token: null,
+                tokenIssuedAt: null,
                 isHydrated: true,
                 sessionExpired: false,
                 isLoggingOut: false,
@@ -147,8 +160,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     },
 
     /**
-     * Trae el rol y los permisos vigentes (un admin puede haberlos cambiado). Si falla por
-     * red o 5xx se siguen usando los guardados; un 401 ya expira la sesión en apiFetch.
+     * Trae el rol y los permisos vigentes (un admin puede haberlos cambiado) y renueva el
+     * token si ya tiene un día. Si falla por red o 5xx se siguen usando los guardados; un
+     * 401 ya expira la sesión en apiFetch.
      */
     refreshUser: async () => {
         const { token } = useAuthStore.getState();
@@ -172,11 +186,14 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
 
         const refreshed = userFromSession(current, user.branches);
+        const { tokenIssuedAt } = useAuthStore.getState();
         set({ user: refreshed });
         await AsyncStorage.setItem(
             AUTH_STORAGE_KEY,
-            JSON.stringify({ token, user: refreshed } satisfies StoredSession)
+            JSON.stringify({ token, user: refreshed, tokenIssuedAt: tokenIssuedAt ?? undefined } satisfies StoredSession)
         );
+
+        await renewTokenIfOld(token);
     },
 
     expireSession: async (reason = 'expired') => {
@@ -188,6 +205,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({
             user: null,
             token: null,
+            tokenIssuedAt: null,
             sessionExpired: true,
             sessionEndReason: reason,
         });
@@ -197,7 +215,8 @@ export const useAuthStore = create<AuthState>((set) => ({
         await useBranchStore.getState().clearActiveBranch();
     },
 
-    // Cambiar la contraseña revoca los tokens anteriores; el backend devuelve uno nuevo.
+    // Cambiar la contraseña revoca los tokens anteriores y el backend devuelve uno nuevo;
+    // también se usa al renovar la sesión.
     replaceToken: async (previousToken, token) => {
         const { user, token: currentToken } = useAuthStore.getState();
         // Solo si sigue la misma sesión que hizo el pedido: si mientras tanto expiró,
@@ -206,10 +225,11 @@ export const useAuthStore = create<AuthState>((set) => ({
             return;
         }
 
-        set({ token });
+        const tokenIssuedAt = Date.now();
+        set({ token, tokenIssuedAt });
         await AsyncStorage.setItem(
             AUTH_STORAGE_KEY,
-            JSON.stringify({ token, user } satisfies StoredSession)
+            JSON.stringify({ token, user, tokenIssuedAt } satisfies StoredSession)
         );
     },
 
@@ -222,12 +242,37 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({
             user: null,
             token: null,
+            tokenIssuedAt: null,
             sessionExpired: false,
             sessionEndReason: 'expired',
             isLoggingOut: false,
         });
     },
 }));
+
+/**
+ * Sesión deslizante: pide un token nuevo si el actual se recibió hace más de un día (o no se
+ * sabe cuándo, en sesiones guardadas antes). Un fallo de red o un backend sin el endpoint
+ * deja el token como está; replaceToken descarta la respuesta si mientras tanto cambió la sesión.
+ */
+async function renewTokenIfOld(token: string) {
+    const { tokenIssuedAt } = useAuthStore.getState();
+    const age = tokenIssuedAt === null ? Infinity : Date.now() - tokenIssuedAt;
+    // Una edad negativa es un reloj atrasado después de recibirlo: se renueva igual.
+    if (renewingToken || (age >= 0 && age < TOKEN_RENEW_AFTER_MS)) {
+        return;
+    }
+
+    renewingToken = true;
+    try {
+        const response = await refreshToken(token);
+        await useAuthStore.getState().replaceToken(token, response.token);
+    } catch {
+        // Se reintenta en el próximo refreshUser.
+    } finally {
+        renewingToken = false;
+    }
+}
 
 // Un 401 de cualquier request autenticada expira la sesión. expireSession ya
 // ignora el caso sin token, el logout voluntario y los 401 repetidos.

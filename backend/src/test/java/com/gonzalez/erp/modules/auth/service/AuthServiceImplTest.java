@@ -1,5 +1,6 @@
 package com.gonzalez.erp.modules.auth.service;
 
+import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.CustomUserDetails;
 import com.gonzalez.erp.config.security.JwtUtil;
 import com.gonzalez.erp.config.security.LoginAttemptService;
@@ -36,6 +37,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -148,6 +150,25 @@ class AuthServiceImplTest {
         assertThat(user.getPassword()).isEqualTo("hash-nuevo");
         assertThat(user.getPasswordChangedAt()).isNotNull();
         verify(loginAttemptService).recordSuccess("vendedor");
+    }
+
+    @Test
+    void refreshTokenIssuesNewTokenForTheSessionUser() {
+        authenticate(user);
+        when(jwtUtil.generateToken(any())).thenReturn("token-renovado");
+
+        TokenResponse response = authService.refreshToken();
+
+        assertThat(response.token()).isEqualTo("token-renovado");
+        assertThat(response.type()).isEqualTo("Bearer");
+        verify(jwtUtil).generateToken(argThat(details -> details.getUserId().equals(5L)));
+    }
+
+    @Test
+    void refreshTokenWithoutSessionFails() {
+        assertThatThrownBy(() -> authService.refreshToken())
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(jwtUtil, never()).generateToken(any());
     }
 
     @Test

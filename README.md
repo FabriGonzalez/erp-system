@@ -73,7 +73,7 @@ Spring Boot **no lee archivos `.env`** por sí solo: tenés que definir las vari
 | Variable | Obligatoria | Descripción |
 | --- | --- | --- |
 | `JWT_SECRET` | Sí | Clave para firmar los tokens JWT. |
-| `JWT_EXPIRATION_MS` | No | Duración del token en ms (por defecto `86400000`, 24 h). |
+| `JWT_EXPIRATION_MS` | No | Duración del token en ms (por defecto `604800000`, 7 días). La app lo renueva una vez por día mientras se use, así que solo pide volver a entrar tras 7 días sin abrirla. |
 | `DB_USERNAME` / `DB_PASSWORD` | No | Credenciales de la base (por defecto `postgres` / `postgres`). |
 | `ERP_PLATFORM_ADMIN_PASSWORD` | Sí, en el primer arranque | Contraseña del usuario `platform_admin`; el arranque falla si ese usuario no existe y la variable está vacía. |
 | `ERP_PLATFORM_ADMIN_USERNAME` / `ERP_PLATFORM_ADMIN_EMAIL` | No | Por defecto `platform_admin` / `platform@erp.local`. |
