@@ -1,17 +1,20 @@
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { PaymentMethodPicker } from '@/components/orders/PaymentMethodPicker';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
+import { FormField } from '@/components/ui/FormField';
+import { InfoRow } from '@/components/ui/InfoRow';
+import { ListGroup } from '@/components/ui/ListGroup';
+import { ModalCard } from '@/components/ui/ModalCard';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import {
     useCustomerAccountSummaryQuery,
     useRegisterPayment,
 } from '@/hooks/use-customer-account-queries';
 import { useActiveBranch } from '@/hooks/use-branch-queries';
-import { SharedStyles } from '@/styles/shared';
 import { PaymentMethod } from '@/types/order';
 import { Payment } from '@/types/payment';
 import { formatCurrency } from '@/utils/format';
@@ -77,106 +80,67 @@ export function RegisterCustomerPaymentModal({
     }
 
     return (
-        <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-            <View style={styles.overlay}>
-                <View style={styles.modal}>
-                    <View style={styles.header}>
-                        <Text style={styles.title}>Registrar pago</Text>
-                        <Pressable onPress={handleClose} disabled={isSubmitting}>
-                            <Text style={styles.close}>Cerrar</Text>
-                        </Pressable>
-                    </View>
+        <ModalCard
+            visible={visible}
+            title="Registrar pago"
+            onClose={handleClose}
+            closeDisabled={isSubmitting}
+            error={error}
+            footer={[
+                <AppButton key="close" title="Cerrar" variant="secondary" onPress={handleClose} disabled={isSubmitting} />,
+                <AppButton
+                    key="save"
+                    title={isSubmitting ? 'Registrando...' : 'Confirmar pago'}
+                    onPress={() => void handleSubmit()}
+                    disabled={isSubmitting || !activeBranch}
+                />,
+            ]}
+        >
+            <ListGroup>
+                <InfoRow label="Deuda actual" value={summary ? formatCurrency(summary.debt) : '—'} />
+                <InfoRow label="Saldo a favor" value={summary ? formatCurrency(summary.credit) : '—'} />
+                <InfoRow label="Sucursal" value={activeBranch?.name ?? 'Sin sucursal activa'} />
+            </ListGroup>
 
-                    <Text style={styles.summary}>
-                        Deuda actual: {summary ? formatCurrency(summary.debt) : '—'}
+            <FormField label="Importe recibido">
+                <AppInput
+                    value={amount}
+                    onChangeText={setAmount}
+                    placeholder="0"
+                    keyboardType="decimal-pad"
+                    editable={!isSubmitting}
+                />
+            </FormField>
+
+            <FormField label="Medio de pago">
+                <PaymentMethodPicker value={method} onChange={setMethod} disabled={isSubmitting} />
+            </FormField>
+
+            {registered && (
+                <View style={styles.result}>
+                    <Text style={styles.success}>
+                        Pago de {formatCurrency(registered.amount)} registrado.
                     </Text>
-                    <Text style={styles.summary}>
-                        Saldo a favor: {summary ? formatCurrency(summary.credit) : '—'}
-                    </Text>
-                    <Text style={styles.summary}>
-                        Sucursal: {activeBranch?.name ?? 'sin sucursal activa'}
-                    </Text>
-
-                    <AppInput
-                        value={amount}
-                        onChangeText={setAmount}
-                        placeholder="Importe recibido"
-                        keyboardType="decimal-pad"
-                        editable={!isSubmitting}
-                    />
-
-                    <Text style={SharedStyles.fieldLabel}>Medio de pago</Text>
-                    <PaymentMethodPicker value={method} onChange={setMethod} disabled={isSubmitting} />
-
-                    {error && <Text style={styles.error}>{error}</Text>}
-
-                    {registered && (
-                        <View style={styles.result}>
-                            <Text style={styles.success}>
-                                Pago de {formatCurrency(registered.amount)} registrado.
-                            </Text>
-                            {registered.allocations.map((allocation) => (
-                                <Text key={allocation.orderId} style={styles.resultLine}>
-                                    {allocation.orderNumber}: {formatCurrency(allocation.amount)}
-                                </Text>
-                            ))}
-                            {registered.unallocatedAmount > 0 && (
-                                <Text style={styles.resultLine}>
-                                    Quedó como saldo a favor: {formatCurrency(registered.unallocatedAmount)}
-                                </Text>
-                            )}
-                        </View>
+                    {registered.allocations.map((allocation) => (
+                        <Text key={allocation.orderId} style={styles.resultLine}>
+                            {allocation.orderNumber}: {formatCurrency(allocation.amount)}
+                        </Text>
+                    ))}
+                    {registered.unallocatedAmount > 0 && (
+                        <Text style={styles.resultLine}>
+                            Quedó como saldo a favor: {formatCurrency(registered.unallocatedAmount)}
+                        </Text>
                     )}
-
-                    <AppButton
-                        title={isSubmitting ? 'Registrando...' : 'Confirmar pago'}
-                        onPress={() => void handleSubmit()}
-                        disabled={isSubmitting || !activeBranch}
-                    />
                 </View>
-            </View>
-        </Modal>
+            )}
+        </ModalCard>
     );
 }
 
 const styles = StyleSheet.create({
-    overlay: {
-        flex: 1,
-        justifyContent: 'flex-end',
-        backgroundColor: 'rgba(0, 0, 0, 0.35)',
-    },
-    modal: {
-        backgroundColor: Colors.background,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        padding: Spacing.lg,
-        gap: Spacing.md,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    title: {
-        color: Colors.text,
-        fontSize: 20,
-        fontWeight: '700',
-    },
-    close: {
-        color: Colors.primary,
-        fontWeight: '600',
-    },
-    summary: {
-        color: Colors.textSecondary,
-        fontSize: 14,
-    },
-    error: {
-        color: Colors.error,
-        fontSize: 13,
-    },
     result: {
         backgroundColor: Colors.successLight,
-        borderRadius: 10,
+        borderRadius: Radius.sm,
         padding: Spacing.md,
         gap: 2,
     },

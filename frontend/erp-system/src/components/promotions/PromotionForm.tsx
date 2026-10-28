@@ -1,7 +1,6 @@
 import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CartSummaryBar } from '@/components/products/CartSummaryBar';
 import { activeVariantPrices, PromotionProductPicker } from '@/components/promotions/PromotionProductPicker';
@@ -11,6 +10,7 @@ import { DateField } from '@/components/ui/DateField';
 import { FormField } from '@/components/ui/FormField';
 import { FormFooter } from '@/components/ui/FormFooter';
 import { FormSection } from '@/components/ui/FormSection';
+import { ModalScreen } from '@/components/ui/ModalScreen';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Colors } from '@/constants/colors';
 import { Radius, Spacing } from '@/constants/spacing';
@@ -283,37 +283,26 @@ export function PromotionForm({ initialPromotion, onSubmit, isSubmitting, submit
                 />
             </FormFooter>
 
-            <Modal visible={isCatalogVisible} animationType="slide" onRequestClose={() => setCatalogVisible(false)}>
-                <SafeAreaView style={styles.modal}>
-                    <View style={SharedStyles.header}>
-                        <View style={SharedStyles.headerSpacer} />
-                        <Text style={styles.modalTitle}>Productos de la promo</Text>
-                        <Pressable
-                            onPress={() => setCatalogVisible(false)}
-                            style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                        >
-                            <Text style={styles.link}>Listo</Text>
-                        </Pressable>
-                    </View>
+            <ModalScreen
+                visible={isCatalogVisible}
+                title="Productos de la promo"
+                onClose={() => setCatalogVisible(false)}
+            >
+                <PromotionProductPicker
+                    getQuantity={(productId) =>
+                        components.find((component) => component.productId === productId)?.quantity ?? 0
+                    }
+                    onAdd={addProduct}
+                    onChangeQuantity={setQuantity}
+                />
 
-                    <View style={styles.modalBody}>
-                        <PromotionProductPicker
-                            getQuantity={(productId) =>
-                                components.find((component) => component.productId === productId)?.quantity ?? 0
-                            }
-                            onAdd={addProduct}
-                            onChangeQuantity={setQuantity}
-                        />
-
-                        <CartSummaryBar
-                            itemsCount={totalUnits}
-                            detail={selectionSummary}
-                            actionLabel="Listo"
-                            onPress={() => setCatalogVisible(false)}
-                        />
-                    </View>
-                </SafeAreaView>
-            </Modal>
+                <CartSummaryBar
+                    itemsCount={totalUnits}
+                    detail={selectionSummary}
+                    actionLabel="Listo"
+                    onPress={() => setCatalogVisible(false)}
+                />
+            </ModalScreen>
         </>
     );
 }
@@ -326,11 +315,6 @@ const styles = StyleSheet.create({
     hint: {
         fontSize: 13,
         color: Colors.textSecondary,
-    },
-    link: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: Colors.primary,
     },
     itemRow: {
         flexDirection: 'row',
@@ -399,18 +383,5 @@ const styles = StyleSheet.create({
     errorText: {
         color: Colors.error,
         fontSize: 13,
-    },
-    modal: {
-        flex: 1,
-        backgroundColor: Colors.background,
-    },
-    // La barra de resumen va con position absolute: se apoya en este contenedor y no en el área segura.
-    modalBody: {
-        flex: 1,
-    },
-    modalTitle: {
-        fontSize: 17,
-        fontWeight: '700',
-        color: Colors.text,
     },
 });

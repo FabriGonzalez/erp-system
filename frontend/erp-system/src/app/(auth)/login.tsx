@@ -1,20 +1,17 @@
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
+import { FormField } from '@/components/ui/FormField';
+import { IconBadge } from '@/components/ui/IconBadge';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
-import { Typography } from '@/constants/typography';
+import { Radius, Spacing } from '@/constants/spacing';
 import { login as loginService } from '@/services/auth-service';
 import { useAuthStore } from '@/stores/auth-store';
+import { SharedStyles } from '@/styles/shared';
 import { homeRoute } from '@/utils/home-route';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import {
-    ActivityIndicator,
-    StyleSheet,
-    Text,
-    View,
-} from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 
 export default function LoginScreen() {
@@ -56,150 +53,113 @@ export default function LoginScreen() {
     }
 
     return (
-        <>
-            <Screen style={styles.container}>
-                <View style={styles.form}>
-                    <View style={styles.header}>
-                        <Text style={styles.title}>ERP System</Text>
-                        <Text style={styles.subtitle}>
-                            Inicia sesión para continuar
-                        </Text>
-                    </View>
+        <Screen style={styles.container}>
+            <ScrollView
+                contentContainerStyle={styles.scroll}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+            >
+                <View style={styles.brand}>
+                    <IconBadge icon={{ ios: 'building.2.fill', android: 'store', web: 'store' }} size={64} />
+                    <Text style={styles.eyebrow}>ERP System</Text>
+                    <Text style={styles.title} accessibilityRole="header">Iniciar sesión</Text>
+                </View>
 
-                    <AppInput
-                        placeholder="Usuario"
-                        value={username}
-                        onChangeText={(text) => {
-                            setUsername(text);
-                            setErrorMsg(null);
-                        }}
-                        autoCapitalize="none"
-                        editable={!isLoading}
-                    />
+                <View style={[SharedStyles.card, styles.form]}>
+                    <FormField label="Usuario">
+                        <AppInput
+                            value={username}
+                            onChangeText={(text) => {
+                                setUsername(text);
+                                setErrorMsg(null);
+                            }}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            autoComplete="username"
+                            returnKeyType="next"
+                            editable={!isLoading}
+                        />
+                    </FormField>
 
-                    <AppInput
-                        placeholder="Contraseña"
-                        value={password}
-                        onChangeText={(text) => {
-                            setPassword(text);
-                            setErrorMsg(null);
-                        }}
-                        secureTextEntry
-                        editable={!isLoading}
-                        autoCapitalize="none"
-                        returnKeyType="done"
-                        onSubmitEditing={handleLogin}
-                    />
+                    <FormField label="Contraseña">
+                        <AppInput
+                            value={password}
+                            onChangeText={(text) => {
+                                setPassword(text);
+                                setErrorMsg(null);
+                            }}
+                            secureTextEntry
+                            autoComplete="current-password"
+                            editable={!isLoading}
+                            autoCapitalize="none"
+                            returnKeyType="done"
+                            onSubmitEditing={handleLogin}
+                        />
+                    </FormField>
 
                     {errorMsg && (
-                        <View style={styles.errorContainer}>
+                        <View style={styles.error} accessibilityRole="alert">
                             <Text style={styles.errorText}>{errorMsg}</Text>
                         </View>
                     )}
 
-                    {isLoading ? (
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator
-                                size="small"
-                                color={Colors.primary}
-                            />
-                            <Text style={styles.loadingText}>
-                                Iniciando sesión...
-                            </Text>
-                        </View>
-                    ) : (
-                        <AppButton
-                            title="Ingresar"
-                            onPress={handleLogin}
-                        />
-                    )}
-
-                    <View style={styles.footer}>
-                        <Text style={styles.footerText}>
-                            Pruebas demo ERP multi-tenant
-                        </Text>
-                    </View>
+                    <AppButton
+                        title={isLoading ? 'Ingresando...' : 'Ingresar'}
+                        onPress={handleLogin}
+                        disabled={isLoading}
+                    />
                 </View>
-            </Screen>
-        </>
+
+                <Text style={styles.footerText}>Pruebas demo ERP multi-tenant</Text>
+            </ScrollView>
+        </Screen>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
-        justifyContent: 'center',
-        paddingHorizontal: Spacing.xl,
         backgroundColor: Colors.background,
     },
-
-    header: {
-        marginBottom: Spacing.xl,
+    scroll: {
+        flexGrow: 1,
+        justifyContent: 'center',
+        padding: Spacing.lg,
+        gap: Spacing.xl,
     },
-
-    title: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: Colors.text,
-        textAlign: 'center',
+    brand: {
+        alignItems: 'center',
+        gap: Spacing.xs,
     },
-
-    subtitle: {
+    eyebrow: {
         marginTop: Spacing.sm,
-        fontSize: Typography.body,
+        fontSize: 13,
         color: Colors.textSecondary,
-        textAlign: 'center',
     },
-
+    title: {
+        fontSize: 26,
+        fontWeight: '800',
+        letterSpacing: -0.5,
+        color: Colors.text,
+    },
     form: {
         width: '100%',
         maxWidth: 420,
         alignSelf: 'center',
-        gap: Spacing.md,
-        backgroundColor: Colors.surface,
+        gap: Spacing.lg,
         padding: Spacing.xl,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 2,
     },
-
-    errorContainer: {
+    error: {
         backgroundColor: Colors.errorLight,
-        borderWidth: 1,
-        borderColor: Colors.errorBorder,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         padding: Spacing.md,
     },
-
     errorText: {
         color: Colors.error,
         fontSize: 13,
         lineHeight: 18,
     },
-
-    loadingContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: 48,
-        gap: Spacing.sm,
-    },
-
-    loadingText: {
-        color: Colors.textSecondary,
-        fontSize: 14,
-    },
-
-    footer: {
-        marginTop: Spacing.xxl,
-        alignItems: 'center',
-    },
-
     footerText: {
+        textAlign: 'center',
         color: Colors.textSecondary,
         fontSize: 12,
     },

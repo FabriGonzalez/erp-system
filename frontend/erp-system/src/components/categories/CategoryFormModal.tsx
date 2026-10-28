@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { AppButton } from '@/components/ui/AppButton';
-import { Colors } from '@/constants/colors';
+import { AppInput } from '@/components/ui/AppInput';
+import { FormField } from '@/components/ui/FormField';
+import { ModalCard } from '@/components/ui/ModalCard';
 import { Spacing } from '@/constants/spacing';
 import { useSaveCategory } from '@/hooks/use-category-queries';
 import { Category } from '@/types/category';
@@ -85,165 +87,52 @@ export function CategoryFormModal({
     }
 
     return (
-        <Modal
+        <ModalCard
             visible={visible}
-            transparent
-            animationType="fade"
-            onRequestClose={onClose}
+            title={isEdit ? 'Editar categoría' : 'Nueva categoría'}
+            onClose={onClose}
+            closeDisabled={isSubmitting}
+            error={errorMessage}
+            footer={[
+                <AppButton key="cancel" title="Cancelar" variant="secondary" onPress={onClose} disabled={isSubmitting} />,
+                <AppButton
+                    key="save"
+                    title={isSubmitting ? 'Guardando...' : isEdit ? 'Guardar' : 'Crear'}
+                    onPress={handleSubmit}
+                    disabled={isSubmitting}
+                />,
+            ]}
         >
-            <View style={styles.overlay}>
-                <View style={styles.modalContent}>
-                    <Text style={styles.modalTitle}>
-                        {isEdit ? 'Editar categoría' : 'Nueva categoría'}
-                    </Text>
+            <FormField label="Nombre *" hint={`${name.length}/100`}>
+                <AppInput
+                    value={name}
+                    onChangeText={setName}
+                    placeholder="Ej: Bebidas"
+                    maxLength={100}
+                    autoCapitalize="words"
+                    editable={!isSubmitting}
+                />
+            </FormField>
 
-                    {errorMessage ? (
-                        <View style={styles.errorContainer}>
-                            <Text style={styles.errorText}>{errorMessage}</Text>
-                        </View>
-                    ) : null}
-
-                    <View style={styles.formGroup}>
-                        <View style={styles.labelRow}>
-                            <Text style={styles.label}>
-                                Nombre <Text style={styles.required}>*</Text>
-                            </Text>
-                            <Text style={styles.counter}>{name.length}/100</Text>
-                        </View>
-                        <TextInput
-                            style={styles.input}
-                            value={name}
-                            onChangeText={setName}
-                            placeholder="Ej: Bebidas"
-                            placeholderTextColor={Colors.textSecondary}
-                            maxLength={100}
-                            autoCapitalize="words"
-                            editable={!isSubmitting}
-                        />
-                    </View>
-
-                    <View style={styles.formGroup}>
-                        <View style={styles.labelRow}>
-                            <Text style={styles.label}>Descripción</Text>
-                            <Text style={styles.counter}>{description.length}/500</Text>
-                        </View>
-                        <TextInput
-                            style={[styles.input, styles.descriptionInput]}
-                            value={description}
-                            onChangeText={setDescription}
-                            placeholder="Descripción de la categoría"
-                            placeholderTextColor={Colors.textSecondary}
-                            maxLength={500}
-                            multiline
-                            textAlignVertical="top"
-                            editable={!isSubmitting}
-                        />
-                    </View>
-
-                    <View style={styles.actions}>
-                        <Pressable
-                            onPress={onClose}
-                            style={styles.cancelButton}
-                            disabled={isSubmitting}
-                        >
-                            <Text style={styles.cancelButtonText}>Cancelar</Text>
-                        </Pressable>
-                        <AppButton
-                            title={isSubmitting ? 'Guardando...' : isEdit ? 'Guardar cambios' : 'Crear categoría'}
-                            onPress={handleSubmit}
-                            disabled={isSubmitting}
-                            style={styles.submitButton}
-                        />
-                    </View>
-                </View>
-            </View>
-        </Modal>
+            <FormField label="Descripción" hint={`${description.length}/500`}>
+                <AppInput
+                    style={styles.descriptionInput}
+                    value={description}
+                    onChangeText={setDescription}
+                    placeholder="Descripción de la categoría"
+                    maxLength={500}
+                    multiline
+                    textAlignVertical="top"
+                    editable={!isSubmitting}
+                />
+            </FormField>
+        </ModalCard>
     );
 }
 
 const styles = StyleSheet.create({
-    overlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: Spacing.lg,
-    },
-    modalContent: {
-        backgroundColor: Colors.surface,
-        borderRadius: 16,
-        padding: Spacing.xl,
-        width: '100%',
-        maxWidth: 420,
-        elevation: 8,
-    },
-    modalTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.text,
-        marginBottom: Spacing.lg,
-    },
-    errorContainer: {
-        backgroundColor: Colors.errorLight,
-        padding: Spacing.sm,
-        borderRadius: 8,
-        marginBottom: Spacing.md,
-    },
-    errorText: {
-        color: Colors.error,
-        fontSize: 13,
-    },
-    formGroup: {
-        marginBottom: Spacing.md,
-    },
-    labelRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: Spacing.xs,
-    },
-    label: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: Colors.text,
-    },
-    required: {
-        color: Colors.error,
-    },
-    counter: {
-        fontSize: 11,
-        color: Colors.textSecondary,
-    },
-    input: {
-        borderWidth: 1,
-        borderColor: Colors.border,
-        borderRadius: 8,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
-        fontSize: 15,
-        color: Colors.text,
-        backgroundColor: Colors.background,
-    },
     descriptionInput: {
-        minHeight: 88,
-    },
-    actions: {
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-        gap: Spacing.md,
-        marginTop: Spacing.lg,
-    },
-    cancelButton: {
-        paddingVertical: Spacing.sm,
-        paddingHorizontal: Spacing.md,
-    },
-    cancelButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.textSecondary,
-    },
-    submitButton: {
-        minWidth: 140,
+        height: 96,
+        paddingTop: Spacing.md,
     },
 });

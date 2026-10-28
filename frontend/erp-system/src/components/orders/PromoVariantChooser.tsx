@@ -1,13 +1,12 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/ui/AppButton';
+import { ModalScreen } from '@/components/ui/ModalScreen';
 import { Colors } from '@/constants/colors';
 import { Radius, Spacing } from '@/constants/spacing';
 import { useProduct } from '@/hooks/use-product-queries';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
-import { SharedStyles } from '@/styles/shared';
 import { OrderPromoComponent } from '@/types/order';
 import { ProductVariant } from '@/types/product';
 import { Promotion, PromotionItem } from '@/types/promotion';
@@ -75,45 +74,37 @@ export function PromoVariantChooser({ promotion, branchId, onClose, onConfirm }:
     }
 
     return (
-        <Modal visible animationType="slide" onRequestClose={onClose}>
-            <SafeAreaView style={styles.modal}>
-                <View style={SharedStyles.header}>
-                    <Pressable
-                        onPress={onClose}
-                        style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                    >
-                        <Text style={styles.link}>Cancelar</Text>
-                    </Pressable>
-                    <Text style={styles.title} numberOfLines={1}>{promotion.name}</Text>
-                    <View style={SharedStyles.headerSpacer} />
-                </View>
+        <ModalScreen
+            title={promotion.name}
+            eyebrow={`Promo · ${formatCurrency(promotion.price)}`}
+            onClose={onClose}
+            closeLabel="Cancelar"
+        >
+            <ScrollView contentContainerStyle={styles.content}>
+                {promotion.items.map((item) => (
+                    <ProductUnits
+                        key={item.productId}
+                        item={item}
+                        branchId={branchId}
+                        selected={selections[item.productId]}
+                        countChosen={countChosen}
+                        onSelect={(unit, variant) => select(item.productId, unit, variant)}
+                    />
+                ))}
+            </ScrollView>
 
-                <ScrollView contentContainerStyle={styles.content}>
-                    {promotion.items.map((item) => (
-                        <ProductUnits
-                            key={item.productId}
-                            item={item}
-                            branchId={branchId}
-                            selected={selections[item.productId]}
-                            countChosen={countChosen}
-                            onSelect={(unit, variant) => select(item.productId, unit, variant)}
-                        />
-                    ))}
-                </ScrollView>
-
-                <View style={styles.footer}>
-                    {isComplete ? (
-                        <Text style={styles.summary}>
-                            Sueltos: {formatCurrency(chosenTotal)} · Promo: {formatCurrency(promotion.price)}
-                            {chosenTotal > promotion.price ? ` · Ahorra ${formatCurrency(chosenTotal - promotion.price)}` : ''}
-                        </Text>
-                    ) : (
-                        <Text style={styles.summary}>Elegí la variante de cada unidad.</Text>
-                    )}
-                    <AppButton title="Agregar al pedido" onPress={handleConfirm} disabled={!isComplete} />
-                </View>
-            </SafeAreaView>
-        </Modal>
+            <View style={styles.footer}>
+                {isComplete ? (
+                    <Text style={styles.summary}>
+                        Sueltos: {formatCurrency(chosenTotal)} · Promo: {formatCurrency(promotion.price)}
+                        {chosenTotal > promotion.price ? ` · Ahorra ${formatCurrency(chosenTotal - promotion.price)}` : ''}
+                    </Text>
+                ) : (
+                    <Text style={styles.summary}>Elegí la variante de cada unidad.</Text>
+                )}
+                <AppButton title="Agregar al pedido" onPress={handleConfirm} disabled={!isComplete} />
+            </View>
+        </ModalScreen>
     );
 }
 
@@ -185,24 +176,10 @@ function ProductUnits({ item, branchId, selected, countChosen, onSelect }: Produ
 }
 
 const styles = StyleSheet.create({
-    modal: {
-        flex: 1,
-        backgroundColor: Colors.background,
-    },
-    title: {
-        flex: 1,
-        textAlign: 'center',
-        fontSize: 17,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    link: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: Colors.primary,
-    },
     content: {
-        padding: Spacing.lg,
+        paddingHorizontal: Spacing.lg,
+        paddingTop: Spacing.xs,
+        paddingBottom: Spacing.lg,
         gap: Spacing.md,
     },
     card: {
@@ -211,10 +188,10 @@ const styles = StyleSheet.create({
         padding: Spacing.md,
         borderWidth: 1,
         borderColor: Colors.border,
-        gap: Spacing.sm,
+        gap: Spacing.md,
     },
     productName: {
-        fontSize: 15,
+        fontSize: 16,
         fontWeight: '700',
         color: Colors.text,
     },
@@ -224,15 +201,18 @@ const styles = StyleSheet.create({
     chips: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: Spacing.xs,
+        gap: Spacing.sm,
     },
+    // Botones de buen tamaño: se eligen rápido, con el cliente esperando.
     chip: {
+        minWidth: 64,
         borderWidth: 1,
         borderColor: Colors.border,
-        borderRadius: Radius.sm,
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: Spacing.xs,
+        borderRadius: Radius.md,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
         alignItems: 'center',
+        backgroundColor: Colors.surface,
     },
     chipSelected: {
         backgroundColor: Colors.primary,

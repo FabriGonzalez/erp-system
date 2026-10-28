@@ -1,13 +1,21 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
-import { AndroidSymbol, SFSymbol, SymbolView } from 'expo-symbols';
+import { SymbolView } from 'expo-symbols';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { ActionCard } from '@/components/ui/ActionCard';
+import { AppButton } from '@/components/ui/AppButton';
+import { IconBadge } from '@/components/ui/IconBadge';
 import { NotFound } from '@/components/ui/NotFound';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { StatTile } from '@/components/ui/StatTile';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
+import { Tone } from '@/constants/tones';
 import {
     useDownloadImportTemplate,
     useExportProducts,
@@ -36,11 +44,11 @@ const MAX_VISIBLE_ROWS = 200;
 
 const ACTION_ORDER: Record<ProductImportAction, number> = { ERROR: 0, UPDATE: 1, CREATE: 2, UNCHANGED: 3 };
 
-const ACTION_BADGES: Record<ProductImportAction, { label: string; background: string; color: string }> = {
-    ERROR: { label: 'Error', background: Colors.errorSoft, color: Colors.errorDark },
-    CREATE: { label: 'Nuevo', background: Colors.successLight, color: Colors.successDark },
-    UPDATE: { label: 'Actualiza', background: Colors.primaryLight, color: Colors.primaryDark },
-    UNCHANGED: { label: 'Sin cambios', background: Colors.muted, color: Colors.textSecondary },
+const ACTION_BADGES: Record<ProductImportAction, { label: string; tone: Tone }> = {
+    ERROR: { label: 'Error', tone: 'danger' },
+    CREATE: { label: 'Nuevo', tone: 'success' },
+    UPDATE: { label: 'Actualiza', tone: 'primary' },
+    UNCHANGED: { label: 'Sin cambios', tone: 'neutral' },
 };
 
 function plural(count: number, singular: string, pluralForm: string) {
@@ -88,6 +96,7 @@ export default function ImportProductsScreen() {
     const canConfirm = Boolean(file && result?.valid && pendingChanges > 0) && !isBusy;
 
     async function handleDownloadTemplate() {
+        if (downloadTemplate.isPending) return;
         try {
             await downloadTemplate.mutateAsync();
         } catch (downloadError) {
@@ -96,6 +105,7 @@ export default function ImportProductsScreen() {
     }
 
     async function handleExport() {
+        if (exportCatalog.isPending) return;
         try {
             await exportCatalog.mutateAsync();
         } catch (exportError) {
@@ -171,24 +181,15 @@ export default function ImportProductsScreen() {
     const visibleRows = rows.slice(0, MAX_VISIBLE_ROWS);
 
     return (
-        <Screen style={styles.screen}>
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                    disabled={importMutation.isPending}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>Importar productos</Text>
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+        <Screen>
+            <PageHeader
+                title="Importar productos"
+                eyebrow="Productos desde Excel"
+                // Mientras se guarda no se sale: el resultado se vería en otra pantalla.
+                onBack={importMutation.isPending ? undefined : () => router.back()}
+            />
 
-            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={SharedStyles.pageContent} showsVerticalScrollIndicator={false}>
                 {lastImport ? (
                     <View style={styles.successBox}>
                         <Text style={styles.successTitle}>Importación lista</Text>
@@ -196,27 +197,28 @@ export default function ImportProductsScreen() {
                     </View>
                 ) : null}
 
-                <View style={styles.card}>
-                    <Text style={styles.stepTitle}>1. Bajá un Excel</Text>
+                <View style={SharedStyles.pageSection}>
+                    <SectionHeader title="1 · Bajá un Excel" />
                     <View style={styles.tiles}>
-                        <ActionTile
-                            icon={{ ios: 'doc.badge.plus', android: 'note_add', web: 'note_add' }}
-                            title="Plantilla vacía"
-                            description="Para cargar productos nuevos. Trae tus atributos y una columna de stock por sucursal."
-                            tint={Colors.primary}
-                            background={Colors.primaryLight}
-                            loading={downloadTemplate.isPending}
-                            onPress={handleDownloadTemplate}
-                        />
-                        <ActionTile
-                            icon={{ ios: 'tablecells', android: 'table_view', web: 'table_view' }}
-                            title="Mi catálogo"
-                            description="Tus productos activos, para cambiar precios, códigos o stock en Excel y volver a subirlo."
-                            tint={Colors.success}
-                            background={Colors.successLight}
-                            loading={exportCatalog.isPending}
-                            onPress={handleExport}
-                        />
+                        <View style={styles.tile}>
+                            <ActionCard
+                                icon={{ ios: 'doc.badge.plus', android: 'note_add', web: 'note_add' }}
+                                title="Plantilla vacía"
+                                subtitle="Para cargar productos nuevos. Trae tus atributos y una columna de stock por sucursal."
+                                onPress={handleDownloadTemplate}
+                                right={<DownloadIcon loading={downloadTemplate.isPending} />}
+                            />
+                        </View>
+                        <View style={styles.tile}>
+                            <ActionCard
+                                icon={{ ios: 'tablecells', android: 'table_view', web: 'table_view' }}
+                                tone="success"
+                                title="Mi catálogo"
+                                subtitle="Tus productos activos, para cambiar precios, códigos o stock en Excel y volver a subirlo."
+                                onPress={handleExport}
+                                right={<DownloadIcon loading={exportCatalog.isPending} />}
+                            />
+                        </View>
                     </View>
                     <Text style={styles.hint}>
                         También podés subir tu propio Excel si usa los mismos encabezados. En la hoja
@@ -224,8 +226,8 @@ export default function ImportProductsScreen() {
                     </Text>
                 </View>
 
-                <View style={styles.card}>
-                    <Text style={styles.stepTitle}>2. Subilo</Text>
+                <View style={SharedStyles.pageSection}>
+                    <SectionHeader title="2 · Subilo" />
                     <Pressable
                         style={({ pressed }) => [
                             styles.dropZone,
@@ -244,15 +246,12 @@ export default function ImportProductsScreen() {
                             </>
                         ) : (
                             <>
-                                <View style={styles.dropZoneIcon}>
-                                    <SymbolView
-                                        name={file
-                                            ? { ios: 'doc.text.fill', android: 'description', web: 'description' }
-                                            : { ios: 'square.and.arrow.up', android: 'upload_file', web: 'upload_file' }}
-                                        size={26}
-                                        tintColor={Colors.primary}
-                                    />
-                                </View>
+                                <IconBadge
+                                    icon={file
+                                        ? { ios: 'doc.text.fill', android: 'description', web: 'description' }
+                                        : { ios: 'square.and.arrow.up', android: 'upload_file', web: 'upload_file' }}
+                                    size={52}
+                                />
                                 <Text style={styles.dropZoneTitle} numberOfLines={1}>
                                     {file ? file.name : 'Elegir archivo'}
                                 </Text>
@@ -274,8 +273,8 @@ export default function ImportProductsScreen() {
                 ) : null}
 
                 {result ? (
-                    <View style={styles.card}>
-                        <Text style={styles.stepTitle}>3. Revisá y confirmá</Text>
+                    <View style={SharedStyles.pageSection}>
+                        <SectionHeader title="3 · Revisá y confirmá" />
 
                         {result.fileErrors.length > 0 ? (
                             <View style={styles.errorBox}>
@@ -285,12 +284,14 @@ export default function ImportProductsScreen() {
                             </View>
                         ) : (
                             <>
-                                <View style={styles.counters}>
-                                    <Counter label="Productos nuevos" value={result.productsToCreate} />
-                                    <Counter label="Variantes nuevas" value={result.variantsToCreate} />
-                                    <Counter label="A actualizar" value={result.variantsToUpdate} />
-                                    <Counter label="Sin cambios" value={result.variantsUnchanged} />
-                                    <Counter label="Con errores" value={result.rowsWithErrors} danger />
+                                <View style={SharedStyles.statRow}>
+                                    <StatTile label="Productos nuevos" value={String(result.productsToCreate)} />
+                                    <StatTile label="Variantes nuevas" value={String(result.variantsToCreate)} />
+                                </View>
+                                <View style={SharedStyles.statRow}>
+                                    <StatTile label="A actualizar" value={String(result.variantsToUpdate)} />
+                                    <StatTile label="Sin cambios" value={String(result.variantsUnchanged)} />
+                                    <StatTile label="Con errores" value={String(result.rowsWithErrors)} />
                                 </View>
 
                                 {result.categoriesToCreate.length > 0 ? (
@@ -311,38 +312,26 @@ export default function ImportProductsScreen() {
                                     </Text>
                                 ) : null}
 
-                                <Pressable
-                                    style={({ pressed }) => [styles.primaryButton, pressed && SharedStyles.pressed, !canConfirm && styles.disabled]}
+                                <AppButton
+                                    title={importMutation.isPending
+                                        ? 'Importando...'
+                                        : pendingChanges > 0 || !result.valid ? 'Importar' : 'No hay cambios para importar'}
                                     onPress={handleConfirm}
                                     disabled={!canConfirm}
-                                >
-                                    {importMutation.isPending ? (
-                                        <ActivityIndicator color={Colors.white} />
-                                    ) : (
-                                        <>
-                                            <SymbolView
-                                                name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
-                                                size={20}
-                                                tintColor={Colors.white}
-                                            />
-                                            <Text style={styles.primaryButtonText}>
-                                                {pendingChanges > 0 || !result.valid ? 'Importar' : 'No hay cambios para importar'}
-                                            </Text>
-                                        </>
-                                    )}
-                                </Pressable>
+                                />
 
                                 {result.variantsUnchanged > 0 ? (
-                                    <Pressable onPress={() => setShowUnchanged((current) => !current)}>
+                                    <Pressable
+                                        onPress={() => setShowUnchanged((current) => !current)}
+                                        style={({ pressed }) => pressed && SharedStyles.pressed}
+                                    >
                                         <Text style={styles.link}>
                                             {showUnchanged ? 'Ocultar filas sin cambios' : 'Mostrar también las filas sin cambios'}
                                         </Text>
                                     </Pressable>
                                 ) : null}
 
-                                <View style={styles.rows}>
-                                    {visibleRows.map((row) => <ImportRowCard key={row.row} row={row} />)}
-                                </View>
+                                {visibleRows.map((row) => <ImportRowCard key={row.row} row={row} />)}
                                 {rows.length > visibleRows.length ? (
                                     <Text style={styles.hint}>
                                         Se muestran {visibleRows.length} de {rows.length} filas (primero las que tienen errores).
@@ -357,50 +346,16 @@ export default function ImportProductsScreen() {
     );
 }
 
-type ActionTileProps = {
-    icon: { ios: SFSymbol; android: AndroidSymbol; web: AndroidSymbol };
-    title: string;
-    description: string;
-    tint: string;
-    background: string;
-    loading: boolean;
-    onPress: () => void;
-};
-
-function ActionTile({ icon, title, description, tint, background, loading, onPress }: ActionTileProps) {
-    return (
-        <Pressable
-            style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
-            onPress={onPress}
-            disabled={loading}
-            accessibilityRole="button"
-        >
-            <View style={[styles.tileIcon, { backgroundColor: background }]}>
-                <SymbolView name={icon} size={22} tintColor={tint} />
-            </View>
-            <View style={styles.tileText}>
-                <Text style={styles.tileTitle}>{title}</Text>
-                <Text style={styles.tileDescription}>{description}</Text>
-            </View>
-            {loading ? (
-                <ActivityIndicator color={tint} />
-            ) : (
-                <SymbolView
-                    name={{ ios: 'arrow.down.circle', android: 'download', web: 'download' }}
-                    size={22}
-                    tintColor={tint}
-                />
-            )}
-        </Pressable>
-    );
-}
-
-function Counter({ label, value, danger = false }: { label: string; value: number; danger?: boolean }) {
-    return (
-        <View style={[styles.counter, danger && value > 0 && styles.counterDanger]}>
-            <Text style={[styles.counterValue, danger && value > 0 && styles.counterValueDanger]}>{value}</Text>
-            <Text style={styles.counterLabel}>{label}</Text>
-        </View>
+/** A la derecha de una descarga: la flecha, o el spinner mientras se baja. */
+function DownloadIcon({ loading }: { loading: boolean }) {
+    return loading ? (
+        <ActivityIndicator color={Colors.primary} />
+    ) : (
+        <SymbolView
+            name={{ ios: 'arrow.down.circle', android: 'download', web: 'download' }}
+            size={22}
+            tintColor={Colors.textTertiary}
+        />
     );
 }
 
@@ -409,7 +364,7 @@ function CatalogList({ title, items, hint }: { title: string; items: string[]; h
         <View style={styles.catalogList}>
             <Text style={styles.catalogTitle}>{title}</Text>
             {items.map((item) => <Text key={item} style={styles.catalogItem}>• {item}</Text>)}
-            {hint ? <Text style={styles.hint}>{hint}</Text> : null}
+            {hint ? <Text style={styles.catalogItem}>{hint}</Text> : null}
         </View>
     );
 }
@@ -417,15 +372,14 @@ function CatalogList({ title, items, hint }: { title: string; items: string[]; h
 function ImportRowCard({ row }: { row: ProductImportRow }) {
     const badge = ACTION_BADGES[row.action];
     return (
-        <View style={[styles.rowCard, row.action === 'ERROR' && styles.rowCardError]}>
+        <View style={[SharedStyles.card, styles.rowCard, row.action === 'ERROR' && styles.rowCardError]}>
             <View style={styles.rowHeader}>
-                <Text style={styles.rowNumber}>Fila {row.row}</Text>
-                <View style={[styles.badge, { backgroundColor: badge.background }]}>
-                    <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+                <View style={SharedStyles.listItemTexts}>
+                    <Text style={SharedStyles.listItemTitle} numberOfLines={1}>{row.product ?? 'Sin nombre'}</Text>
+                    <Text style={SharedStyles.listItemMeta}>Fila {row.row}{row.sku ? ` · ${row.sku}` : ''}</Text>
                 </View>
+                <StatusPill label={badge.label} tone={badge.tone} />
             </View>
-            <Text style={styles.rowProduct} numberOfLines={1}>{row.product ?? 'Sin nombre'}</Text>
-            {row.sku ? <Text style={styles.rowSku}>{row.sku}</Text> : null}
             {row.errors.map((message) => <Text key={message} style={styles.rowError}>• {message}</Text>)}
             {row.warnings.map((message) => <Text key={message} style={styles.rowWarning}>• {message}</Text>)}
             {row.changes.map((message) => <Text key={message} style={styles.rowChange}>• {message}</Text>)}
@@ -434,26 +388,10 @@ function ImportRowCard({ row }: { row: ProductImportRow }) {
 }
 
 const styles = StyleSheet.create({
-    screen: {
-        padding: 0,
-    },
-    content: {
-        padding: Spacing.lg,
-        gap: Spacing.md,
-    },
-    card: {
-        ...SharedStyles.card,
-        gap: Spacing.sm,
-    },
-    stepTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
-    },
     hint: {
-        fontSize: 13,
+        fontSize: 12,
         color: Colors.textSecondary,
-        lineHeight: 18,
+        lineHeight: 17,
     },
     // En pantallas anchas (web) las dos tarjetas van lado a lado; en el celular, una abajo de la otra.
     tiles: {
@@ -463,66 +401,26 @@ const styles = StyleSheet.create({
     },
     tile: {
         flexGrow: 1,
-        flexBasis: 260,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
-        padding: Spacing.md,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        backgroundColor: Colors.surface,
-    },
-    tilePressed: {
-        backgroundColor: Colors.muted,
-    },
-    tileIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    tileText: {
-        flex: 1,
-        gap: 2,
-    },
-    tileTitle: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    tileDescription: {
-        fontSize: 12,
-        lineHeight: 16,
-        color: Colors.textSecondary,
+        flexBasis: 280,
     },
     dropZone: {
         alignItems: 'center',
         gap: Spacing.xs,
         paddingVertical: Spacing.xl,
         paddingHorizontal: Spacing.lg,
-        borderRadius: 12,
+        borderRadius: Radius.lg,
         borderWidth: 2,
         borderStyle: 'dashed',
         borderColor: Colors.track,
-        backgroundColor: Colors.background,
+        backgroundColor: Colors.surface,
     },
     dropZoneSelected: {
         borderStyle: 'solid',
         borderColor: Colors.primary,
         backgroundColor: Colors.primaryLight,
     },
-    dropZoneIcon: {
-        width: 52,
-        height: 52,
-        borderRadius: 26,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: Colors.primaryLight,
-        marginBottom: Spacing.xs,
-    },
     dropZoneTitle: {
+        marginTop: Spacing.xs,
         fontSize: 15,
         fontWeight: '700',
         color: Colors.text,
@@ -532,17 +430,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: Colors.textSecondary,
         textAlign: 'center',
-    },
-    primaryButton: {
-        ...SharedStyles.buttonPrimary,
-        flex: 0,
-        height: 48,
-        flexDirection: 'row',
-        gap: Spacing.sm,
-    },
-    primaryButtonText: {
-        ...SharedStyles.buttonPrimaryText,
-        fontSize: 15,
     },
     disabled: {
         opacity: 0.5,
@@ -556,9 +443,7 @@ const styles = StyleSheet.create({
     },
     successBox: {
         backgroundColor: Colors.successLight,
-        borderColor: Colors.successBorder,
-        borderWidth: 1,
-        borderRadius: 12,
+        borderRadius: Radius.lg,
         padding: Spacing.md,
         gap: Spacing.xs,
     },
@@ -573,9 +458,7 @@ const styles = StyleSheet.create({
     },
     errorBox: {
         backgroundColor: Colors.errorLight,
-        borderColor: Colors.errorBorder,
-        borderWidth: 1,
-        borderRadius: 12,
+        borderRadius: Radius.lg,
         padding: Spacing.md,
         gap: Spacing.xs,
     },
@@ -588,38 +471,9 @@ const styles = StyleSheet.create({
         fontSize: 13,
         lineHeight: 18,
     },
-    counters: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: Spacing.sm,
-    },
-    counter: {
-        minWidth: 96,
-        flexGrow: 1,
-        backgroundColor: Colors.muted,
-        borderRadius: 10,
-        padding: Spacing.sm,
-        alignItems: 'center',
-    },
-    counterDanger: {
-        backgroundColor: Colors.errorSoft,
-    },
-    counterValue: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    counterValueDanger: {
-        color: Colors.errorDark,
-    },
-    counterLabel: {
-        fontSize: 12,
-        color: Colors.textSecondary,
-        textAlign: 'center',
-    },
     catalogList: {
         backgroundColor: Colors.warningLight,
-        borderRadius: 10,
+        borderRadius: Radius.lg,
         padding: Spacing.md,
         gap: 2,
     },
@@ -633,16 +487,9 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: Colors.warningText,
     },
-    rows: {
-        gap: Spacing.sm,
-    },
     rowCard: {
-        borderWidth: 1,
-        borderColor: Colors.border,
-        borderRadius: 10,
+        gap: Spacing.xs,
         padding: Spacing.md,
-        gap: 2,
-        backgroundColor: Colors.surface,
     },
     rowCardError: {
         borderColor: Colors.errorBorder,
@@ -650,31 +497,8 @@ const styles = StyleSheet.create({
     },
     rowHeader: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-    },
-    rowNumber: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: Colors.textSecondary,
-    },
-    badge: {
-        borderRadius: 999,
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 2,
-    },
-    badgeText: {
-        fontSize: 12,
-        fontWeight: '700',
-    },
-    rowProduct: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: Colors.text,
-    },
-    rowSku: {
-        fontSize: 12,
-        color: Colors.textSecondary,
+        gap: Spacing.md,
     },
     rowError: {
         fontSize: 13,

@@ -1,23 +1,16 @@
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import {
-    ActivityIndicator,
-    FlatList,
-    Modal,
-    Pressable,
-    StyleSheet,
-    Switch,
-    Text,
-    View,
-} from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/ui/AppButton';
 import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ModalCard } from '@/components/ui/ModalCard';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
+import { ToneColors } from '@/constants/tones';
 import { useBranchUsers, useToggleBranchUser } from '@/hooks/use-branch-queries';
 import { useCompanyUsers } from '@/hooks/use-user-queries';
+import { SharedStyles } from '@/styles/shared';
 import { Branch } from '@/types/branch';
 import { CompanyUser } from '@/types/user';
 import { getInitials } from '@/utils/format';
@@ -68,228 +61,95 @@ function AssignmentModal({ branch, onClose }: { branch: Branch; onClose: () => v
     }
 
     return (
-        <Modal
-            visible
-            transparent
-            animationType="fade"
-            onRequestClose={onClose}
+        <ModalCard
+            title="Usuarios asignados"
+            subtitle={`Sucursal ${branch.name}`}
+            onClose={onClose}
+            error={errorMessage}
+            scroll={false}
+            footer={[<AppButton key="done" title="Listo" onPress={onClose} />]}
         >
-            <View style={styles.overlay}>
-                <View style={styles.modalContent}>
-                    <View style={styles.headerRow}>
-                        <View style={styles.headerTitles}>
-                            <Text style={styles.title}>Usuarios asignados</Text>
-                            <Text style={styles.subtitle}>
-                                Sucursal: <Text style={styles.branchName}>{branch.name}</Text>
-                            </Text>
-                        </View>
-                        <Pressable onPress={onClose} style={styles.closeButton}>
-                            <SymbolView
-                                name={{ ios: 'xmark', android: 'close', web: 'close' }}
-                                size={20}
-                                tintColor={Colors.textSecondary}
-                            />
-                        </Pressable>
-                    </View>
+            {isLoading ? (
+                <ActivityIndicator size="large" color={Colors.primary} style={styles.loading} />
+            ) : (
+                <FlatList
+                    data={users}
+                    keyExtractor={(item) => String(item.id)}
+                    style={styles.list}
+                    ItemSeparatorComponent={Separator}
+                    ListEmptyComponent={
+                        <EmptyState
+                            title="Sin usuarios"
+                            description="No se encontraron usuarios registrados en la empresa."
+                        />
+                    }
+                    renderItem={({ item }) => {
+                        const userId = String(item.id);
+                        const isAssigned = assignedUserIds.has(userId);
+                        const isToggling = togglingUserId === userId;
+                        const fullName = `${item.firstName} ${item.lastName}`.trim() || item.username;
 
-                    {errorMessage ? (
-                        <View style={styles.errorBanner}>
-                            <Text style={styles.errorText}>{errorMessage}</Text>
-                        </View>
-                    ) : null}
-
-                    {isLoading ? (
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="large" color={Colors.primary} />
-                            <Text style={styles.loadingText}>Cargando usuarios...</Text>
-                        </View>
-                    ) : (
-                        <FlatList
-                            data={users}
-                            keyExtractor={(item) => String(item.id)}
-                            contentContainerStyle={styles.listContainer}
-                            ListEmptyComponent={
-                                <EmptyState
-                                    title="Sin usuarios"
-                                    description="No se encontraron usuarios registrados en la empresa."
+                        return (
+                            <View style={styles.userRow}>
+                                <Avatar
+                                    initials={getInitials(fullName)}
+                                    size={38}
+                                    fontSize={13}
+                                    fontWeight="700"
+                                    backgroundColor={isAssigned ? ToneColors.violet.background : Colors.muted}
+                                    textColor={isAssigned ? ToneColors.violet.foreground : Colors.textSecondary}
                                 />
-                            }
-                            renderItem={({ item }) => {
-                                const userId = String(item.id);
-                                const isAssigned = assignedUserIds.has(userId);
-                                const isToggling = togglingUserId === userId;
-                                const fullName = `${item.firstName} ${item.lastName}`.trim() || item.username;
-
-                                return (
-                                    <View style={styles.userRow}>
-                                        <Avatar
-                                            initials={getInitials(fullName)}
-                                            size={38}
-                                            fontSize={13}
-                                            fontWeight="600"
-                                            backgroundColor={isAssigned ? Colors.primary : Colors.muted}
-                                            textColor={isAssigned ? Colors.white : Colors.textSecondary}
-                                            style={styles.avatar}
-                                        />
-
-                                        <View style={styles.userInfo}>
-                                            <Text style={styles.userName}>{fullName}</Text>
-                                            <Text style={styles.userEmail}>{item.email || item.username}</Text>
-                                            <Text style={styles.userRole}>{item.roleName}</Text>
-                                        </View>
-
-                                        <View style={styles.switchWrapper}>
-                                            {isToggling && (
-                                                <ActivityIndicator
-                                                    size="small"
-                                                    color={Colors.primary}
-                                                    style={styles.inlineSpinner}
-                                                />
-                                            )}
-                                            <Switch
-                                                value={isAssigned}
-                                                onValueChange={() => handleToggleUser(item)}
-                                                disabled={isToggling}
-                                                trackColor={{ false: Colors.track, true: Colors.primary }}
-                                                thumbColor={Colors.white}
-                                            />
-                                        </View>
-                                    </View>
-                                );
-                            }}
-                        />
-                    )}
-
-                    <View style={styles.footer}>
-                        <AppButton
-                            title="Listo"
-                            onPress={onClose}
-                            style={styles.doneButton}
-                        />
-                    </View>
-                </View>
-            </View>
-        </Modal>
+                                <View style={SharedStyles.listItemTexts}>
+                                    <Text style={styles.userName} numberOfLines={1}>{fullName}</Text>
+                                    <Text style={SharedStyles.listItemMeta} numberOfLines={1}>
+                                        {item.roleName} · {item.email || item.username}
+                                    </Text>
+                                </View>
+                                {isToggling && <ActivityIndicator size="small" color={Colors.primary} />}
+                                <Switch
+                                    value={isAssigned}
+                                    onValueChange={() => handleToggleUser(item)}
+                                    disabled={isToggling}
+                                    trackColor={{ false: Colors.track, true: Colors.primary }}
+                                    thumbColor={Colors.white}
+                                    accessibilityLabel={fullName}
+                                />
+                            </View>
+                        );
+                    }}
+                />
+            )}
+        </ModalCard>
     );
 }
 
+function Separator() {
+    return <View style={styles.separator} />;
+}
+
 const styles = StyleSheet.create({
-    overlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: Spacing.lg,
+    loading: {
+        paddingVertical: Spacing.xxl,
     },
-    modalContent: {
-        backgroundColor: Colors.surface,
-        borderRadius: 16,
-        padding: Spacing.xl,
-        width: '100%',
-        maxWidth: 460,
-        maxHeight: '80%',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-        elevation: 8,
-    },
-    headerRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: Spacing.md,
-    },
-    headerTitles: {
-        flex: 1,
-    },
-    title: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    subtitle: {
-        fontSize: 13,
-        color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    branchName: {
-        fontWeight: '600',
-        color: Colors.primary,
-    },
-    closeButton: {
-        padding: Spacing.xs,
-    },
-    errorBanner: {
-        backgroundColor: Colors.errorLight,
-        borderColor: Colors.errorBorder,
+    list: {
         borderWidth: 1,
-        borderRadius: 10,
-        padding: Spacing.md,
-        marginBottom: Spacing.sm,
+        borderColor: Colors.border,
+        borderRadius: Radius.lg,
     },
-    errorText: {
-        color: Colors.error,
-        fontSize: 13,
-    },
-    loadingContainer: {
-        padding: Spacing.xxl,
-        alignItems: 'center',
-    },
-    loadingText: {
-        marginTop: Spacing.sm,
-        fontSize: 14,
-        color: Colors.textSecondary,
-    },
-    listContainer: {
-        gap: Spacing.sm,
-        paddingVertical: Spacing.sm,
+    separator: {
+        height: 1,
+        backgroundColor: Colors.border,
     },
     userRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colors.background,
-        padding: Spacing.md,
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-    avatar: {
-        marginRight: Spacing.md,
-    },
-    userInfo: {
-        flex: 1,
-        marginRight: Spacing.sm,
+        gap: Spacing.md,
+        paddingVertical: Spacing.sm + 2,
+        paddingHorizontal: Spacing.md,
     },
     userName: {
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: '600',
         color: Colors.text,
-    },
-    userEmail: {
-        fontSize: 12,
-        color: Colors.textSecondary,
-        marginTop: 1,
-    },
-    userRole: {
-        fontSize: 11,
-        color: Colors.primary,
-        fontWeight: '500',
-        marginTop: 2,
-    },
-    switchWrapper: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-    },
-    inlineSpinner: {
-        transform: [{ scale: 0.8 }],
-    },
-    footer: {
-        marginTop: Spacing.lg,
-        alignItems: 'flex-end',
-    },
-    doneButton: {
-        minWidth: 100,
     },
 });

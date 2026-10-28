@@ -1901,9 +1901,22 @@ verde = listo, rojo = falta/peligro.
    siempre visible en el resumen del alta; el medio se ve en el detalle del pedido. Tests del
    backend: 218 OK (con Testcontainers), corridos en una copia. Backend y frontend van juntos:
    el APK nuevo necesita el backend nuevo.
-   **Falta, tanda 4:** modales (catálogo de promo y transferencia, PromoVariantChooser,
-   categorías, atributos, sucursales, stock, pagos, contraseña de usuario), login, importar,
-   reportes.
+   **Resto de la tanda 4 (2026-10-28, commiteado; falta que el usuario lo pruebe):** nuevos `components/ui/ModalCard`
+   (diálogo centrado: título, subtítulo y cerrar; cuerpo con scroll o `scroll={false}` si adentro
+   va una FlatList; error adentro; botones al pie con `FormFooter`; `KeyboardAvoidingView` igual
+   que `Screen`) y `ModalScreen` (pantalla completa con `PageHeader` y "Listo"/"Cancelar" como
+   `HeaderButton` secundario). Pasados a ellos: categoría, atributo, valor, sucursal, usuarios de
+   la sucursal, ajustar stock, registrar pago (deuda/saldo/sucursal en `InfoRow`), contraseña de
+   usuario, elegir categoría (filas en `ListGroup`), PromoVariantChooser (chips más grandes) y los
+   catálogos de promo y transferencia. `DialogHost` con los mismos radios y botones. Login:
+   `IconBadge`, título 26/800, `FormField`, scroll para el teclado (sigue siendo por usuario: el
+   backend no acepta email). Reportes: `PageHeader` con flecha y la sucursal arriba; Ventas con el
+   número grande y la variación en `StatusPill`, Pedidos/Ticket en `StatTile`, deuda y por
+   despachar en `StatTile` ("Al momento"), cobranzas, más vendidos y stock bajo (con `stockPill`)
+   en `ListGroup`. Importar: `PageHeader`, pasos como `SectionHeader`, descargas con `ActionCard`,
+   contadores en `StatTile`, filas con `StatusPill`, `AppButton` para importar.
+   No se tocaron `ProductSelectionCard` ni `OrderPromoCatalog` (tarjetas de agregar productos y
+   promos al vender): siguen con `rowCard`.
    Íconos descentrados en Android (letra del sistema agrandada): `patches/expo-symbols+57.0.2.patch`
    (`allowFontScaling: false` y centrado), aplicado con `patch-package` en `postinstall`.
 6. Validar cada tanda: tsc, eslint, `git diff --check`; el usuario prueba en web; commit por tanda.

@@ -1,8 +1,7 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CartSummaryBar } from '@/components/products/CartSummaryBar';
 import { VariantCatalog } from '@/components/products/VariantCatalog';
@@ -12,6 +11,7 @@ import { FilterChip } from '@/components/ui/FilterChip';
 import { FormField } from '@/components/ui/FormField';
 import { FormFooter } from '@/components/ui/FormFooter';
 import { FormSection } from '@/components/ui/FormSection';
+import { ModalScreen } from '@/components/ui/ModalScreen';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
@@ -259,50 +259,33 @@ export default function NewTransferScreen() {
                 />
             </FormFooter>
 
-            <Modal
+            <ModalScreen
                 visible={isCatalogVisible}
-                animationType="slide"
-                onRequestClose={() => setCatalogVisible(false)}
+                title="Productos"
+                eyebrow={`Stock de ${origin.name}`}
+                onClose={() => setCatalogVisible(false)}
             >
-                <SafeAreaView style={styles.modal}>
-                    <View style={SharedStyles.header}>
-                        <View style={SharedStyles.headerSpacer} />
-                        <View style={styles.modalTitleBox}>
-                            <Text style={styles.modalTitle}>Productos</Text>
-                            <Text style={styles.hint}>Stock de {origin.name}</Text>
-                        </View>
-                        <Pressable
-                            onPress={() => setCatalogVisible(false)}
-                            style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                        >
-                            <Text style={styles.link}>Listo</Text>
-                        </Pressable>
-                    </View>
+                <VariantCatalog
+                    branchId={originId}
+                    getSelectedQuantity={(_productId, variantId) =>
+                        items.find((item) => item.variantId === variantId)?.quantity ?? 0
+                    }
+                    onAddItem={addItem}
+                    onUpdateItemQuantity={(_productId, variantId, quantity, stock) =>
+                        setQuantity(variantId, quantity, stock)
+                    }
+                    showPrice={false}
+                    selectedLabel="a transferir"
+                    noBranchDescription="Seleccioná una sucursal activa."
+                />
 
-                    <View style={styles.modalBody}>
-                        <VariantCatalog
-                            branchId={originId}
-                            getSelectedQuantity={(_productId, variantId) =>
-                                items.find((item) => item.variantId === variantId)?.quantity ?? 0
-                            }
-                            onAddItem={addItem}
-                            onUpdateItemQuantity={(_productId, variantId, quantity, stock) =>
-                                setQuantity(variantId, quantity, stock)
-                            }
-                            showPrice={false}
-                            selectedLabel="a transferir"
-                            noBranchDescription="Seleccioná una sucursal activa."
-                        />
-
-                        <CartSummaryBar
-                            itemsCount={totalUnits}
-                            detail={selectionSummary}
-                            actionLabel="Listo"
-                            onPress={() => setCatalogVisible(false)}
-                        />
-                    </View>
-                </SafeAreaView>
-            </Modal>
+                <CartSummaryBar
+                    itemsCount={totalUnits}
+                    detail={selectionSummary}
+                    actionLabel="Listo"
+                    onPress={() => setCatalogVisible(false)}
+                />
+            </ModalScreen>
         </Screen>
     );
 }
@@ -324,11 +307,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: Spacing.xs,
-    },
-    link: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: Colors.primary,
     },
     itemRow: {
         flexDirection: 'row',
@@ -377,21 +355,5 @@ const styles = StyleSheet.create({
     errorText: {
         color: Colors.error,
         fontSize: 13,
-    },
-    modal: {
-        flex: 1,
-        backgroundColor: Colors.background,
-    },
-    // La barra de resumen va con position absolute: se apoya en este contenedor y no en el área segura.
-    modalBody: {
-        flex: 1,
-    },
-    modalTitleBox: {
-        alignItems: 'center',
-    },
-    modalTitle: {
-        fontSize: 17,
-        fontWeight: '700',
-        color: Colors.text,
     },
 });

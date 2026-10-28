@@ -1,7 +1,7 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { useAuthStore } from '@/stores/auth-store';
 import { DialogOptionStyle, useDialogStore } from '@/stores/dialog-store';
 
@@ -79,18 +79,15 @@ const styles = StyleSheet.create({
         width: '100%',
         maxWidth: 420,
         backgroundColor: Colors.surface,
-        borderRadius: 16,
-        padding: Spacing.xl,
+        borderRadius: Radius.xl,
+        padding: Spacing.lg,
         gap: Spacing.sm,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.15,
-        shadowRadius: 24,
-        elevation: 8,
+        boxShadow: '0 16px 40px -16px rgba(15, 23, 42, 0.45)',
     },
     title: {
-        fontSize: 18,
-        fontWeight: '700',
+        fontSize: 20,
+        fontWeight: '800',
+        letterSpacing: -0.3,
         color: Colors.text,
     },
     message: {
@@ -107,9 +104,9 @@ const styles = StyleSheet.create({
         flexDirection: 'column-reverse',
     },
     button: {
-        minHeight: 44,
+        minHeight: 50,
         paddingHorizontal: Spacing.md,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -128,8 +125,8 @@ const styles = StyleSheet.create({
         borderColor: Colors.border,
     },
     buttonText: {
-        fontSize: 15,
-        fontWeight: '600',
+        fontSize: 16,
+        fontWeight: '700',
     },
     buttonTextFilled: {
         color: Colors.white,

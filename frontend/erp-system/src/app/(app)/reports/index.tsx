@@ -1,15 +1,20 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { ReactNode, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { FilterChip } from '@/components/ui/FilterChip';
+import { ListGroup } from '@/components/ui/ListGroup';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { StatTile } from '@/components/ui/StatTile';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
+import { Tone } from '@/constants/tones';
 import { useMyBranches } from '@/hooks/use-branch-queries';
 import { useDashboard } from '@/hooks/use-report-queries';
 import { SharedStyles } from '@/styles/shared';
@@ -17,38 +22,41 @@ import { PAYMENT_METHOD_LABELS } from '@/types/order';
 import { Dashboard } from '@/types/report';
 import { formatCurrency, formatDateTime, formatTime } from '@/utils/format';
 import { percentChange, REPORT_PERIODS, ReportPeriod } from '@/utils/report-periods';
+import { stockPill } from '@/utils/status';
 
-function Card({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
+/** Bloque del reporte: título de sección, su contenido y una aclaración chica debajo. */
+function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
     return (
-        <View style={styles.card}>
-            <Text style={styles.cardTitle}>{title}</Text>
-            {note ? <Text style={styles.note}>{note}</Text> : null}
+        <View style={SharedStyles.pageSection}>
+            <SectionHeader title={title} />
             {children}
+            {note ? <Text style={styles.note}>{note}</Text> : null}
         </View>
     );
 }
 
-function Row({ label, value, detail }: { label: string; value: string; detail?: string }) {
+/** Fila de un ListGroup: nombre y detalle a la izquierda, importe o estado a la derecha. */
+function ReportRow({ label, detail, value }: { label: string; detail?: string; value: ReactNode }) {
     return (
         <View style={styles.row}>
-            <View style={styles.rowLabel}>
-                <Text style={styles.rowText} numberOfLines={1}>{label}</Text>
-                {detail ? <Text style={styles.secondaryText} numberOfLines={1}>{detail}</Text> : null}
+            <View style={SharedStyles.listItemTexts}>
+                <Text style={styles.rowLabel} numberOfLines={1}>{label}</Text>
+                {detail ? <Text style={SharedStyles.listItemMeta} numberOfLines={1}>{detail}</Text> : null}
             </View>
-            <Text style={styles.rowValue}>{value}</Text>
+            {typeof value === 'string' ? <Text style={styles.rowValue}>{value}</Text> : value}
         </View>
     );
 }
 
-function formatChange(change: number | null, comparison: string): { text: string; style: object | null } {
+function formatChange(change: number | null, comparison: string): { text: string; tone: Tone } {
     if (change === null) {
-        return { text: `Sin ventas para comparar con ${comparison}`, style: null };
+        return { text: `Sin ventas para comparar con ${comparison}`, tone: 'neutral' };
     }
     const rounded = Math.round(change);
     const sign = rounded > 0 ? '+' : '';
     return {
         text: `${sign}${rounded}% vs. ${comparison}`,
-        style: rounded > 0 ? styles.up : rounded < 0 ? styles.down : null,
+        tone: rounded > 0 ? 'success' : rounded < 0 ? 'danger' : 'neutral',
     };
 }
 
@@ -62,6 +70,10 @@ export default function ReportsScreen() {
     const { dashboard, isLoading, isRefreshing, error, refresh } = useDashboard(period, branchId);
     const comparison = REPORT_PERIODS.find((item) => item.value === period)?.comparison ?? '';
 
+    const branchLabel = branchId
+        ? availableBranches.find((branch) => branch.id === branchId)?.name
+        : availableBranches.length === 1 ? availableBranches[0].name : 'Todas tus sucursales';
+
     function renderSales(data: Dashboard) {
         // Hoy se compara contra el mismo tramo de ayer: de 00:00 hasta la hora de la consulta.
         const todayRange = period === 'today' ? `de 00:00 a ${formatTime(data.to)}` : null;
@@ -73,41 +85,41 @@ export default function ReportsScreen() {
 
         return (
             <>
-                <Card title="Ventas" note={todayRange ? `Hoy ${todayRange}` : undefined}>
-                    <Text style={styles.bigNumber}>{formatCurrency(data.sales.total)}</Text>
-                    <Text style={[styles.secondaryText, change.style]}>{change.text}</Text>
-                    <View style={styles.statsRow}>
-                        <View style={styles.stat}>
-                            <Text style={styles.statValue}>{data.sales.orderCount}</Text>
-                            <Text style={styles.secondaryText}>pedidos</Text>
-                        </View>
-                        <View style={styles.stat}>
-                            <Text style={styles.statValue}>{formatCurrency(data.sales.averageTicket)}</Text>
-                            <Text style={styles.secondaryText}>ticket promedio</Text>
-                        </View>
+                <Section title="Ventas" note={todayRange ? `Hoy ${todayRange}.` : undefined}>
+                    <View style={[SharedStyles.card, styles.salesCard]}>
+                        <Text style={styles.bigNumber} numberOfLines={1} adjustsFontSizeToFit>
+                            {formatCurrency(data.sales.total)}
+                        </Text>
+                        <StatusPill label={change.text} tone={change.tone} />
                     </View>
-                </Card>
+                    <View style={SharedStyles.statRow}>
+                        <StatTile label="Pedidos" value={String(data.sales.orderCount)} />
+                        <StatTile label="Ticket promedio" value={formatCurrency(data.sales.averageTicket)} />
+                    </View>
+                </Section>
 
                 {!branchId && data.salesByBranch.length > 1 ? (
-                    <Card title="Por sucursal">
-                        {data.salesByBranch.map((branch) => (
-                            <View key={branch.branchId} style={styles.barItem}>
-                                <Row
-                                    label={branch.branchName}
-                                    detail={`${branch.orderCount} pedidos`}
-                                    value={formatCurrency(branch.total)}
-                                />
-                                <View style={styles.barTrack}>
-                                    <View
-                                        style={[
-                                            styles.barFill,
-                                            { width: `${maxBranchTotal > 0 ? (branch.total / maxBranchTotal) * 100 : 0}%` },
-                                        ]}
-                                    />
+                    <Section title="Por sucursal">
+                        <View style={[SharedStyles.card, styles.branchCard]}>
+                            {data.salesByBranch.map((branch) => (
+                                <View key={branch.branchId} style={styles.barItem}>
+                                    <View style={styles.barLabels}>
+                                        <Text style={styles.rowLabel} numberOfLines={1}>{branch.branchName}</Text>
+                                        <Text style={styles.rowValue}>{formatCurrency(branch.total)}</Text>
+                                    </View>
+                                    <View style={styles.barTrack}>
+                                        <View
+                                            style={[
+                                                styles.barFill,
+                                                { width: `${maxBranchTotal > 0 ? (branch.total / maxBranchTotal) * 100 : 0}%` },
+                                            ]}
+                                        />
+                                    </View>
+                                    <Text style={SharedStyles.listItemMeta}>{branch.orderCount} pedidos</Text>
                                 </View>
-                            </View>
-                        ))}
-                    </Card>
+                            ))}
+                        </View>
+                    </Section>
                 ) : null}
             </>
         );
@@ -130,112 +142,119 @@ export default function ReportsScreen() {
             return <ErrorState message={error ?? 'No se pudieron cargar los reportes.'} onRetry={refresh} />;
         }
 
+        const oldestPending = dashboard.pendingOrders.oldestCreatedAt;
+        const remainingLowStock = dashboard.lowStock.count - dashboard.lowStock.items.length;
+
         return (
             <>
                 {error ? <Text style={styles.inlineError}>{error}</Text> : null}
                 {renderSales(dashboard)}
 
-                <Card title="Cobranzas" note="Pagos de clientes y ventas a consumidor final, por medio de pago.">
-                    {dashboard.collections.byMethod.map((item) => (
-                        <Row key={item.method} label={PAYMENT_METHOD_LABELS[item.method]} value={formatCurrency(item.total)} />
-                    ))}
-                    {dashboard.collections.withoutMethodTotal > 0 ? (
-                        <Row
-                            label="Sin medio registrado"
-                            detail="Ventas a consumidor final anteriores a registrar el medio"
-                            value={formatCurrency(dashboard.collections.withoutMethodTotal)}
+                <Section
+                    title="Al momento"
+                    note={'La deuda es de toda la empresa; deuda y envíos no dependen del período.'
+                        + (oldestPending ? ` El envío pendiente más antiguo es del ${formatDateTime(oldestPending)}.` : '')}
+                >
+                    <View style={SharedStyles.statRow}>
+                        <StatTile
+                            label={dashboard.debt.debtorCount === 1
+                                ? 'Deuda · 1 cliente'
+                                : `Deuda · ${dashboard.debt.debtorCount} clientes`}
+                            value={formatCurrency(dashboard.debt.totalDebt)}
+                            icon={{ ios: 'creditcard', android: 'account_balance_wallet', web: 'account_balance_wallet' }}
+                            tone="warning"
                         />
-                    ) : null}
-                </Card>
+                        <StatTile
+                            label="Por despachar"
+                            value={String(dashboard.pendingOrders.count)}
+                            icon={{ ios: 'shippingbox', android: 'inventory_2', web: 'inventory_2' }}
+                            tone="warning"
+                        />
+                    </View>
+                </Section>
 
-                <Card title="Deuda de clientes" note="De toda la empresa: no depende del período ni de la sucursal.">
-                    <Text style={styles.bigNumber}>{formatCurrency(dashboard.debt.totalDebt)}</Text>
-                    <Text style={styles.secondaryText}>
-                        {dashboard.debt.debtorCount === 1
-                            ? '1 cliente con deuda'
-                            : `${dashboard.debt.debtorCount} clientes con deuda`}
-                    </Text>
-                </Card>
+                <Section title="Cobranzas" note="Pagos de clientes y ventas a consumidor final, por medio de pago.">
+                    <ListGroup>
+                        {dashboard.collections.byMethod.map((item) => (
+                            <ReportRow
+                                key={item.method}
+                                label={PAYMENT_METHOD_LABELS[item.method]}
+                                value={formatCurrency(item.total)}
+                            />
+                        ))}
+                        {dashboard.collections.withoutMethodTotal > 0 ? (
+                            <ReportRow
+                                label="Sin medio registrado"
+                                detail="Ventas a consumidor final anteriores a registrar el medio"
+                                value={formatCurrency(dashboard.collections.withoutMethodTotal)}
+                            />
+                        ) : null}
+                    </ListGroup>
+                </Section>
 
-                <Card
+                <Section
                     title="Más vendidos"
                     note="Las unidades incluyen las vendidas en promos; el importe es solo el de las ventas sueltas."
                 >
                     {dashboard.topProducts.length === 0 ? (
-                        <Text style={styles.secondaryText}>Sin ventas de productos en el período.</Text>
+                        <View style={SharedStyles.card}>
+                            <Text style={styles.emptyText}>Sin ventas de productos en el período.</Text>
+                        </View>
                     ) : (
-                        dashboard.topProducts.map((product) => (
-                            <Row
-                                key={product.productVariantId}
-                                label={product.productName}
-                                detail={`${product.sku} · ${product.quantity} u.`}
-                                value={formatCurrency(product.total)}
-                            />
-                        ))
-                    )}
-                </Card>
-
-                <Card title="Pedidos por despachar" note="Envíos pendientes al momento, sin importar el período.">
-                    <Text style={styles.bigNumber}>{dashboard.pendingOrders.count}</Text>
-                    {dashboard.pendingOrders.oldestCreatedAt ? (
-                        <Text style={styles.secondaryText}>
-                            El más antiguo es del {formatDateTime(dashboard.pendingOrders.oldestCreatedAt)}
-                        </Text>
-                    ) : null}
-                </Card>
-
-                <Card
-                    title="Stock bajo"
-                    note={`Productos con ${dashboard.lowStock.threshold} unidades o menos en una sucursal.`}
-                >
-                    {dashboard.lowStock.count === 0 ? (
-                        <Text style={styles.secondaryText}>No hay productos con stock bajo.</Text>
-                    ) : (
-                        <>
-                            {dashboard.lowStock.items.map((item) => (
-                                <Row
-                                    key={item.stockId}
-                                    label={item.productName}
-                                    detail={`${item.sku} · ${item.branchName}`}
-                                    value={`${item.quantity} u.`}
+                        <ListGroup>
+                            {dashboard.topProducts.map((product) => (
+                                <ReportRow
+                                    key={product.productVariantId}
+                                    label={product.productName}
+                                    detail={`${product.sku} · ${product.quantity} u.`}
+                                    value={formatCurrency(product.total)}
                                 />
                             ))}
-                            {dashboard.lowStock.count > dashboard.lowStock.items.length ? (
-                                <Text style={styles.secondaryText}>
-                                    Y {dashboard.lowStock.count - dashboard.lowStock.items.length} más.
-                                </Text>
-                            ) : null}
-                        </>
+                        </ListGroup>
                     )}
-                </Card>
+                </Section>
+
+                <Section
+                    title="Stock bajo"
+                    note={`Productos con ${dashboard.lowStock.threshold} unidades o menos en una sucursal.`
+                        + (remainingLowStock > 0 ? ` Y ${remainingLowStock} más.` : '')}
+                >
+                    {dashboard.lowStock.count === 0 ? (
+                        <View style={SharedStyles.card}>
+                            <Text style={styles.emptyText}>No hay productos con stock bajo.</Text>
+                        </View>
+                    ) : (
+                        <ListGroup>
+                            {dashboard.lowStock.items.map((item) => {
+                                const pill = stockPill(item.quantity);
+                                return (
+                                    <ReportRow
+                                        key={item.stockId}
+                                        label={item.productName}
+                                        detail={`${item.sku} · ${item.branchName}`}
+                                        value={<StatusPill label={pill.label} tone={pill.tone} />}
+                                    />
+                                );
+                            })}
+                        </ListGroup>
+                    )}
+                </Section>
             </>
         );
     }
 
     return (
-        <Screen style={styles.screen}>
-            <View style={[SharedStyles.topBar, SharedStyles.topBarElevated]}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [styles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <Text style={styles.screenTitle}>Reportes</Text>
-            </View>
+        <Screen>
+            <PageHeader title="Reportes" eyebrow={branchLabel} onBack={() => router.back()} />
 
             <ScrollView
-                contentContainerStyle={styles.content}
+                contentContainerStyle={[SharedStyles.pageContent, styles.content]}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
                     <RefreshControl refreshing={isRefreshing} onRefresh={refresh} tintColor={Colors.primary} />
                 }
             >
-                <View style={styles.chips}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                     {REPORT_PERIODS.map((item) => (
                         <FilterChip
                             key={item.value}
@@ -244,11 +263,11 @@ export default function ReportsScreen() {
                             onPress={() => setPeriod(item.value)}
                         />
                     ))}
-                </View>
+                </ScrollView>
                 {availableBranches.length > 1 ? (
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                         <FilterChip
-                            label="Todas las sucursales"
+                            label="Todas"
                             selected={branchId === null}
                             onPress={() => setSelectedBranchId(null)}
                         />
@@ -270,108 +289,73 @@ export default function ReportsScreen() {
 }
 
 const styles = StyleSheet.create({
-    screen: {
-        padding: 0,
-    },
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
-        marginRight: Spacing.xs,
-    },
-    screenTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: Colors.text,
-    },
+    // Cargando y error ocupan el resto de la pantalla.
     content: {
-        padding: Spacing.lg,
-        gap: Spacing.md,
         flexGrow: 1,
     },
     chips: {
         flexDirection: 'row',
         gap: Spacing.sm,
     },
-    card: {
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        gap: Spacing.xs,
-    },
-    cardTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
-    },
     note: {
         fontSize: 12,
+        lineHeight: 17,
         color: Colors.textSecondary,
-        marginBottom: Spacing.xs,
+    },
+    salesCard: {
+        gap: Spacing.sm,
+        padding: Spacing.lg,
     },
     bigNumber: {
-        fontSize: 28,
-        fontWeight: '700',
-        color: Colors.primary,
-    },
-    statsRow: {
-        flexDirection: 'row',
-        gap: Spacing.lg,
-        marginTop: Spacing.sm,
-    },
-    stat: {
-        gap: 2,
-    },
-    statValue: {
-        fontSize: 18,
-        fontWeight: '700',
+        fontSize: 32,
+        fontWeight: '800',
+        letterSpacing: -0.5,
         color: Colors.text,
     },
-    row: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: Spacing.sm,
-        paddingVertical: Spacing.xs,
-    },
-    rowLabel: {
-        flex: 1,
-        gap: 2,
-    },
-    rowText: {
-        fontSize: 14,
-        color: Colors.text,
-    },
-    rowValue: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.text,
+    branchCard: {
+        gap: Spacing.md,
     },
     barItem: {
         gap: 4,
-        marginBottom: Spacing.xs,
+    },
+    barLabels: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
     },
     barTrack: {
-        height: 6,
-        borderRadius: 3,
+        height: 8,
+        borderRadius: Radius.pill,
         backgroundColor: Colors.muted,
         overflow: 'hidden',
     },
     barFill: {
-        height: 6,
-        borderRadius: 3,
+        height: 8,
+        borderRadius: Radius.pill,
         backgroundColor: Colors.primary,
     },
-    secondaryText: {
-        fontSize: 13,
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+        paddingVertical: Spacing.md,
+        paddingHorizontal: Spacing.md + 2,
+        backgroundColor: Colors.surface,
+    },
+    rowLabel: {
+        flex: 1,
+        fontSize: 15,
+        fontWeight: '600',
+        color: Colors.text,
+    },
+    rowValue: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: Colors.text,
+    },
+    emptyText: {
+        fontSize: 14,
         color: Colors.textSecondary,
-    },
-    up: {
-        color: Colors.success,
-    },
-    down: {
-        color: Colors.error,
     },
     inlineError: {
         fontSize: 13,
