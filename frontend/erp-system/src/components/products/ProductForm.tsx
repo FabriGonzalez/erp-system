@@ -39,6 +39,8 @@ type ProductFormProps = {
     onCancel: () => void;
     isSubmitting?: boolean;
     submitLabel?: string;
+    /** Solo al editar: un producto nuevo se crea siempre activo. */
+    showActiveToggle?: boolean;
 };
 
 function combinationKey(attributes: ProductVariantAttribute[]) {
@@ -122,6 +124,7 @@ export function ProductForm({
     onCancel,
     isSubmitting = false,
     submitLabel = 'Guardar Producto',
+    showActiveToggle = false,
 }: ProductFormProps) {
     // Todos los atributos y valores (de la caché compartida con Atributos) para armar variantes.
     const { attributes, attributeValues } = useAttributes();
@@ -564,30 +567,32 @@ export function ProductForm({
                 ))}
                 {errors.variants ? <Text style={styles.errorText}>{errors.variants}</Text> : null}
             </View>
-            <View style={styles.switchRow}>
-                <View style={styles.switchLabelContainer}>
-                    <Text style={styles.switchTitle}>
-                        Producto activo
-                    </Text>
+            {showActiveToggle ? (
+                <View style={styles.switchRow}>
+                    <View style={styles.switchLabelContainer}>
+                        <Text style={styles.switchTitle}>
+                            Producto activo
+                        </Text>
 
-                    <Text style={styles.switchSubtitle}>
-                        {active
-                            ? 'El producto estará visible y disponible para operaciones'
-                            : 'El producto estará desactivado para nuevos pedidos'}
-                    </Text>
+                        <Text style={styles.switchSubtitle}>
+                            {active
+                                ? 'El producto estará visible y disponible para operaciones'
+                                : 'El producto estará desactivado para nuevos pedidos'}
+                        </Text>
+                    </View>
+
+                    <Switch
+                        value={active}
+                        onValueChange={setActive}
+                        trackColor={{
+                            false: Colors.track,
+                            true: Colors.primary,
+                        }}
+                        thumbColor={Colors.white}
+                        disabled={isSubmitting}
+                    />
                 </View>
-
-                <Switch
-                    value={active}
-                    onValueChange={setActive}
-                    trackColor={{
-                        false: Colors.track,
-                        true: Colors.primary,
-                    }}
-                    thumbColor={Colors.white}
-                    disabled={isSubmitting}
-                />
-            </View>
+            ) : null}
 
             <View style={styles.actionsContainer}>
                 <Pressable

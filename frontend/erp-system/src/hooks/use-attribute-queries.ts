@@ -109,10 +109,29 @@ export type SetActiveInput = {
     active: boolean;
 };
 
+/**
+ * El switch muestra el estado de la caché: se cambia ahí antes de la request para que no vuelva
+ * a su valor anterior mientras responde el backend, y se revierte solo si la request falla.
+ * Se cancela una recarga en curso para que no pise el cambio con datos de antes.
+ */
+async function setActiveInCache<T extends { id: string; active: boolean }>(
+    queryKey: readonly unknown[],
+    id: string,
+    active: boolean,
+) {
+    await queryClient.cancelQueries({ queryKey });
+    queryClient.setQueryData<T[]>(queryKey, (current) =>
+        current?.map((item) => (item.id === id ? { ...item, active } : item)));
+}
+
 export function useSetAttributeActive() {
     return useMutation({
         mutationFn: ({ id, active }: SetActiveInput) =>
             active ? activateAttribute(id, requireToken()) : deactivateAttribute(id, requireToken()),
+        onMutate: ({ id, active }) => setActiveInCache<ProductAttribute>(attributeKeys.list(), id, active),
+        onError: (_error, { id, active }) => {
+            void setActiveInCache<ProductAttribute>(attributeKeys.list(), id, !active);
+        },
         onSuccess: syncAttribute,
     });
 }
@@ -138,6 +157,10 @@ export function useSetAttributeValueActive() {
     return useMutation({
         mutationFn: ({ id, active }: SetActiveInput) =>
             active ? activateAttributeValue(id, requireToken()) : deactivateAttributeValue(id, requireToken()),
+        onMutate: ({ id, active }) => setActiveInCache<ProductAttributeValue>(attributeKeys.values(), id, active),
+        onError: (_error, { id, active }) => {
+            void setActiveInCache<ProductAttributeValue>(attributeKeys.values(), id, !active);
+        },
         onSuccess: syncValue,
     });
 }

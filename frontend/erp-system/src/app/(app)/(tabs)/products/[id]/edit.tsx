@@ -10,7 +10,7 @@ import { NotFound } from '@/components/ui/NotFound';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { useCategories } from '@/hooks/use-category-queries';
-import { useProduct, useUpdateProduct } from '@/hooks/use-product-queries';
+import { useProduct, useSetProductActive, useUpdateProduct } from '@/hooks/use-product-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { showToast } from '@/stores/toast-store';
 import { SharedStyles } from '@/styles/shared';
@@ -24,6 +24,7 @@ export default function EditProductScreen() {
     // partir del stock actual y no de la copia en caché (podría pisar una venta reciente).
     const { product, isLoading, loadError } = useProduct(id, { fresh: true });
     const updateProduct = useUpdateProduct();
+    const setProductActive = useSetProductActive();
     const { categories } = useCategories();
     const user = useAuthStore((state) => state.user);
 
@@ -87,6 +88,10 @@ export default function EditProductScreen() {
             };
 
             await updateProduct.mutateAsync({ id: product.id, data: productRequest });
+            // El PATCH del producto no lleva el estado: activar y desactivar tienen sus endpoints.
+            if (formData.active !== undefined && formData.active !== product.active) {
+                await setProductActive.mutateAsync({ id: product.id, active: formData.active });
+            }
 
             // El toast sigue visible después de volver al detalle.
             showToast({ type: 'success', message: 'Cambios guardados.' });
@@ -155,6 +160,7 @@ export default function EditProductScreen() {
                 onCancel={() => router.back()}
                 isSubmitting={isSubmitting}
                 submitLabel="Guardar Cambios"
+                showActiveToggle
             />
         </Screen>
     );
