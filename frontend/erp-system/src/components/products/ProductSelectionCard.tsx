@@ -1,12 +1,14 @@
 import { SymbolView } from 'expo-symbols';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { IconBadge } from '@/components/ui/IconBadge';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 import { Product, ProductVariant } from '@/types/product';
-
-const LOW_STOCK_THRESHOLD = 3;
+import { formatCurrency } from '@/utils/format';
+import { stockPill } from '@/utils/status';
 
 type ProductSelectionCardProps = {
     product: Product;
@@ -49,20 +51,23 @@ export function ProductSelectionCard({
     showPrice = true,
     selectedLabel = 'en el carrito',
 }: ProductSelectionCardProps) {
+    const hasVariants = product.variants.length > 1;
     const priceFrom = Math.min(...product.variants
         .filter((variant) => (variant.stockByBranch[branchId] ?? 0) > 0)
         .map((variant) => variant.price));
+    const price = selectedVariant ? selectedVariant.price : priceFrom;
 
     // Con variante elegida se muestra su stock; sin elegir, el total del producto en la sucursal.
     const totalStock = product.variants.reduce(
         (sum, variant) => sum + Math.max(0, variant.stockByBranch[branchId] ?? 0),
         0,
     );
-    const shownStock = selectedVariant ? availableStock : totalStock;
-    const isLowStock = shownStock > 0 && shownStock <= LOW_STOCK_THRESHOLD;
-    const stockLabel = selectedVariant
-        ? `Stock: ${shownStock}${qtyInCart > 0 ? ` · ${qtyInCart} ${selectedLabel}` : ''}`
-        : `Stock total: ${shownStock}`;
+    const pill = stockPill(selectedVariant ? availableStock : totalStock);
+    const meta = selectedVariant && hasVariants
+        ? selectedVariant.sku
+        : hasVariants
+            ? `${product.variants.length} variantes`
+            : product.variants[0]?.sku ?? 'Sin variantes';
 
     // Los nombres de atributo y valor vienen en el producto: no hace falta el catálogo de
     // atributos (antes, sin cargarlo, se veía "Atributo" y el id del valor).
@@ -74,63 +79,47 @@ export function ProductSelectionCard({
 
     return (
         <Pressable
-            style={({ pressed }) => [SharedStyles.rowCard, styles.productCard, pressed && !isExpanded && SharedStyles.pressed]}
-            onPress={product.variants.length > 1 ? onSelectProduct : undefined}        >
-            <View style={styles.productMain}>
-                <Text style={styles.productName}>{product.name}</Text>
-                <Text style={styles.productSku}>{product.variants.length} {product.variants.length === 1 ? 'variante' : 'variantes'}</Text>
-                <View style={styles.productMeta}>
-                    {showPrice && (
-                        <Text style={styles.productPrice}>
-                            Desde ${priceFrom.toLocaleString('es-AR')}
-                        </Text>
-                    )}
-                    <Text style={[styles.stockText, isLowStock && styles.stockTextLow]}>
-                        {stockLabel}
-                    </Text>
+            style={({ pressed }) => [
+                SharedStyles.card,
+                styles.card,
+                pressed && hasVariants && !isExpanded && SharedStyles.listItemPressed,
+            ]}
+            onPress={hasVariants ? onSelectProduct : undefined}
+        >
+            <View style={styles.row}>
+                <IconBadge
+                    icon={{ ios: 'shippingbox', android: 'inventory_2', web: 'inventory_2' }}
+                    tone="neutral"
+                    size={44}
+                />
+                <View style={SharedStyles.listItemTexts}>
+                    <Text style={SharedStyles.listItemTitle} numberOfLines={2}>{product.name}</Text>
+                    <Text style={SharedStyles.listItemMeta} numberOfLines={1}>{meta}</Text>
+                    <View style={styles.priceRow}>
+                        {showPrice && Number.isFinite(price) ? (
+                            <Text style={styles.price}>
+                                {hasVariants && !selectedVariant ? 'Desde ' : ''}{formatCurrency(price)}
+                            </Text>
+                        ) : null}
+                        <StatusPill label={pill.label} tone={pill.tone} />
+                    </View>
+                    {selectedVariant && qtyInCart > 0 ? (
+                        <Text style={styles.inCart}>{qtyInCart} {selectedLabel}</Text>
+                    ) : null}
                 </View>
 
-                {isExpanded && product.variants.length > 1 && (
-                    <View style={styles.attributeSelection}>
-                        {attributeIds.map((attributeId) => (
-                            <View key={attributeId}>
-                                <Text style={styles.smallLabel}>
-                                    {attributeName(attributeId)}
-                                </Text>
-                                <View style={styles.optionRow}>
-                                    {attributeOptions(product, attributeId).map((valueId) => (
-                                        <Pressable
-                                            key={valueId}
-                                            style={[
-                                                styles.optionButton,
-                                                selectedAttributes[attributeId] === valueId && styles.optionButtonSelected,
-                                            ]}
-                                            onPress={(event) => {
-                                                event.stopPropagation();
-                                                onSelectAttribute(attributeId, valueId);
-                                            }}
-                                        >
-                                            <Text style={[
-                                                styles.optionText,
-                                                selectedAttributes[attributeId] === valueId && styles.optionTextSelected,
-                                            ]}
-                                            >
-                                                {valueName(valueId)}
-                                            </Text>
-                                        </Pressable>
-                                    ))}
-                                </View>
-                            </View>
-                        ))}
-                    </View>
-                )}
-            </View>
-
-            <View style={styles.cartActionContainer}>
-                {product.variants.length > 1 && !selectedVariant ? null : qtyInCart > 0 && selectedVariant ? (
-                    <View style={styles.qtyControls}>
+                {hasVariants && !selectedVariant ? (
+                    <SymbolView
+                        name={isExpanded
+                            ? { ios: 'chevron.up', android: 'expand_less', web: 'expand_less' }
+                            : { ios: 'chevron.down', android: 'expand_more', web: 'expand_more' }}
+                        size={22}
+                        tintColor={Colors.textSecondary}
+                    />
+                ) : qtyInCart > 0 && selectedVariant ? (
+                    <View style={styles.stepper}>
                         <Pressable
-                            style={styles.qtyBtn}
+                            style={styles.stepperButton}
                             onPress={(event) => {
                                 event.stopPropagation();
                                 onUpdateItemQuantity(product.id, selectedVariant.id, qtyInCart - 1, availableStock);
@@ -138,15 +127,15 @@ export function ProductSelectionCard({
                         >
                             <SymbolView
                                 name={{ ios: 'minus', android: 'remove', web: 'remove' }}
-                                size={16}
+                                size={18}
                                 tintColor={Colors.text}
                             />
                         </Pressable>
 
-                        <Text style={styles.qtyText}>{qtyInCart}</Text>
+                        <Text style={styles.stepperText}>{qtyInCart}</Text>
 
                         <Pressable
-                            style={[styles.qtyBtn, isMaxStockReached && styles.btnDisabled]}
+                            style={[styles.stepperButton, isMaxStockReached && styles.stepperButtonDisabled]}
                             onPress={(event) => {
                                 event.stopPropagation();
                                 onAddItem(product, availableStock, selectedVariant.id);
@@ -155,14 +144,14 @@ export function ProductSelectionCard({
                         >
                             <SymbolView
                                 name={{ ios: 'plus', android: 'add', web: 'add' }}
-                                size={16}
-                                tintColor={isMaxStockReached ? Colors.textSecondary : Colors.text}
+                                size={18}
+                                tintColor={Colors.text}
                             />
                         </Pressable>
                     </View>
                 ) : (
                     <Pressable
-                        style={[styles.addToCartButton, isOutOfStock && styles.btnDisabled]}
+                        style={[SharedStyles.addButton, isOutOfStock && SharedStyles.addButtonDisabled]}
                         onPress={(event) => {
                             event.stopPropagation();
                             if (selectedVariant) onAddItem(product, availableStock, selectedVariant.id);
@@ -174,142 +163,143 @@ export function ProductSelectionCard({
                             size={16}
                             tintColor={isOutOfStock ? Colors.textSecondary : Colors.white}
                         />
-                        <Text style={[styles.addToCartButtonText, isOutOfStock && styles.addButtonTextDisabled]}>
+                        <Text style={[SharedStyles.addButtonText, isOutOfStock && SharedStyles.addButtonTextDisabled]}>
                             Agregar
                         </Text>
                     </Pressable>
                 )}
             </View>
+
+            {isExpanded && hasVariants && (
+                <View style={styles.attributes}>
+                    {attributeIds.map((attributeId) => (
+                        <View key={attributeId} style={styles.attribute}>
+                            <Text style={styles.attributeName}>{attributeName(attributeId)}</Text>
+                            <View style={styles.chips}>
+                                {attributeOptions(product, attributeId).map((valueId) => {
+                                    const isSelected = selectedAttributes[attributeId] === valueId;
+                                    return (
+                                        <Pressable
+                                            key={valueId}
+                                            style={[styles.chip, isSelected && styles.chipSelected]}
+                                            onPress={(event) => {
+                                                event.stopPropagation();
+                                                onSelectAttribute(attributeId, valueId);
+                                            }}
+                                        >
+                                            <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                                                {valueName(valueId)}
+                                            </Text>
+                                        </Pressable>
+                                    );
+                                })}
+                            </View>
+                        </View>
+                    ))}
+                </View>
+            )}
         </Pressable>
     );
 }
 
 const styles = StyleSheet.create({
-    smallLabel: {
+    card: {
+        padding: Spacing.md,
+        marginBottom: Spacing.sm,
+    },
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+    },
+    priceRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: Spacing.sm,
+        marginTop: 2,
+    },
+    price: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: Colors.text,
+    },
+    inCart: {
         fontSize: 12,
         fontWeight: '600',
+        color: Colors.primary,
+    },
+    attributes: {
+        marginTop: Spacing.md,
+        paddingTop: Spacing.md,
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
+        gap: Spacing.md,
+    },
+    attribute: {
+        gap: Spacing.sm,
+    },
+    attributeName: {
+        fontSize: 12,
+        fontWeight: '700',
         color: Colors.textSecondary,
-        marginTop: Spacing.sm,
-        marginBottom: Spacing.xs,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
-    attributeSelection: {
-        marginTop: Spacing.sm,
-    },
-    optionRow: {
+    chips: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: Spacing.xs,
+        gap: Spacing.sm,
     },
-    optionButton: {
+    // Como en PromoVariantChooser: botones de buen tamaño, se eligen con el cliente esperando.
+    chip: {
+        minWidth: 56,
         borderWidth: 1,
         borderColor: Colors.border,
-        borderRadius: 8,
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: Spacing.xs,
+        borderRadius: Radius.md,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+        alignItems: 'center',
+        backgroundColor: Colors.surface,
     },
-    optionButtonSelected: {
+    chipSelected: {
         backgroundColor: Colors.primary,
         borderColor: Colors.primary,
     },
-    optionText: {
+    chipText: {
         fontSize: 13,
-        color: Colors.text,
-    },
-    optionTextSelected: {
-        color: Colors.white,
-    },
-    productCard: {
-        justifyContent: 'space-between',
-        marginBottom: Spacing.sm,
-    },
-    productMain: {
-        flex: 1,
-        paddingRight: Spacing.sm,
-    },
-    productName: {
-        fontSize: 15,
         fontWeight: '600',
         color: Colors.text,
     },
-    productSku: {
-        fontSize: 12,
-        color: Colors.textSecondary,
-        marginTop: 1,
-    },
-    productMeta: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-        marginTop: 6,
-    },
-    productPrice: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: Colors.primary,
-    },
-    stockText: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: Colors.textSecondary,
-        flexShrink: 1,
-    },
-    stockTextLow: {
-        color: Colors.warningDark,
-        fontWeight: '600',
-    },
-    cartActionContainer: {
-        justifyContent: 'center',
-        minHeight: 36,
-    },
-    addToCartButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minWidth: 96,
-        minHeight: 36,
-        backgroundColor: Colors.primary,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.xs + 2,
-        borderRadius: 8,
-        gap: 4,
-    },
-    addToCartButtonText: {
+    chipTextSelected: {
         color: Colors.white,
-        fontSize: 13,
-        fontWeight: '600',
     },
-    addButtonTextDisabled: {
-        color: Colors.textSecondary,
-    },
-    btnDisabled: {
-        opacity: 0.4,
-        backgroundColor: Colors.border,
-    },
-    qtyControls: {
+    stepper: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        minWidth: 96,
-        minHeight: 36,
+        minWidth: 104,
+        minHeight: 40,
         backgroundColor: Colors.muted,
-        borderRadius: 8,
-        paddingHorizontal: 4,
-        paddingVertical: 2,
+        borderRadius: Radius.md,
         borderWidth: 1,
         borderColor: Colors.border,
+        paddingHorizontal: 2,
     },
-    qtyBtn: {
-        width: 32,
-        height: 32,
+    stepperButton: {
+        width: 36,
+        height: 36,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 6,
+        borderRadius: Radius.sm,
     },
-    qtyText: {
+    stepperButtonDisabled: {
+        opacity: 0.35,
+    },
+    stepperText: {
         fontSize: 15,
         fontWeight: '700',
         color: Colors.text,
-        paddingHorizontal: Spacing.sm,
         minWidth: 24,
         textAlign: 'center',
     },

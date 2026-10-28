@@ -91,6 +91,34 @@ export const SharedStyles = StyleSheet.create({
         color: Colors.textSecondary,
     },
 
+    // Botón "Agregar" de las tarjetas para elegir productos y promos (venta, transferencia).
+    addButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: 104,
+        minHeight: 40,
+        backgroundColor: Colors.primary,
+        paddingHorizontal: Spacing.md,
+        borderRadius: Radius.md,
+        gap: 4,
+    },
+
+    addButtonText: {
+        color: Colors.white,
+        fontSize: 14,
+        fontWeight: '700',
+    },
+
+    addButtonDisabled: {
+        backgroundColor: Colors.border,
+        opacity: 0.6,
+    },
+
+    addButtonTextDisabled: {
+        color: Colors.textSecondary,
+    },
+
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -368,33 +396,6 @@ export const SharedStyles = StyleSheet.create({
         color: Colors.error,
         fontSize: 14,
         fontWeight: '600',
-    },
-
-    addButton: {
-        minHeight: 52,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: Colors.primary,
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.sm,
-        borderRadius: Radius.md,
-        gap: 8,
-    },
-
-    addIconContainer: {
-        width: 24,
-        height: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingTop: 5,
-    },
-
-
-    addButtonText: {
-        color: Colors.white,
-        fontSize: 16,
-        fontWeight: '700',
     },
 
     buttonSubmit: {

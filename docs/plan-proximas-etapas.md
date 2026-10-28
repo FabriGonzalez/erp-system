@@ -1454,6 +1454,14 @@ para que la consuma, más lo mínimo en el ERP para atender los pedidos web.
   desarrollo; Oracle Object Storage en producción).
 - **Envío de mails** con un proveedor (MailHog en desarrollo): verificar el email, recuperar la
   contraseña y avisar el pedido confirmado.
+- **Clientes del ERP y de la tienda separados (decisión del usuario, 2026-10-28).** Registrarse
+  en la tienda **nunca vincula** con un cliente cargado en el ERP, aunque coincida el email
+  (alguien que compró por Instagram y se registra no tiene que ver de golpe sus datos, deuda y
+  compras del local; tampoco se puede reclamar una ficha ajena sabiendo el email). Se usa la misma
+  tabla `customers` para que pedidos, pagos, envíos, cuenta corriente y reportes sirvan sin
+  cambios; la separación la garantizan la cuenta web y los endpoints de la tienda, no la tabla.
+  El local ve los dos tipos de cliente en el ERP. Una misma persona puede quedar dos veces;
+  si molesta, más adelante un "unir fichas" en el ERP (lo hace el empleado, nunca el comprador).
 
 **Lo que hay hoy (relevamiento).**
 - `SecurityConfig`: solo `/auth/login` es público; todo lo demás exige el JWT de empleado. CORS
@@ -1520,14 +1528,20 @@ para que la consuma, más lo mínimo en el ERP para atender los pedidos web.
 
 ### 22B — Cuentas de comprador y mails
 
-1. **Credenciales:** `CustomerAccountCredential` (cliente, email único por empresa, hash,
-   email verificado, último acceso). Registro crea el `Customer` de esa empresa (o lo vincula si
-   ya existe uno con ese email y sin cuenta, previa verificación).
+1. **Credenciales:** `CustomerAccountCredential` (cliente, email único entre las cuentas web de
+   la empresa, hash, email verificado, último acceso). El registro **siempre crea un `Customer`
+   nuevo** con `origin = WEB`; nunca busca ni reutiliza uno del ERP (ver decisiones).
+   `Customer.origin` (`ERP`, `WEB`; los existentes y los que se cargan en el ERP quedan `ERP`),
+   con su CHECK en la migración.
 2. **Auth:** `POST /store/auth/register`, `login`, `verify-email`, `forgot-password`,
    `reset-password` (tokens de un solo uso con vencimiento), `GET/PATCH /store/me`, direcciones
    propias (`/store/me/addresses`, reutiliza `Address`).
 3. **Mails:** servicio de mail con plantillas (proveedor configurable; MailHog en docker-compose).
-4. **Mis pedidos:** `GET /store/me/orders` y detalle (solo los propios).
+4. **Mis pedidos:** `GET /store/me/orders` y detalle: solo los del cliente de la cuenta y con
+   `channel = WEB`. Una venta que el local le cargue a esa ficha no aparece en la tienda.
+5. **Lo que la tienda nunca expone:** cuenta corriente, saldo o deuda, pagos fuera de sus
+   pedidos web, notas internas ni pedidos del local.
+6. **ERP (frontend):** marca "Web" en el listado y la ficha del cliente, y filtro por origen.
 
 ### 22C — Checkout, asignación de sucursal y Mercado Pago
 
@@ -1915,8 +1929,11 @@ verde = listo, rojo = falta/peligro.
    despachar en `StatTile` ("Al momento"), cobranzas, más vendidos y stock bajo (con `stockPill`)
    en `ListGroup`. Importar: `PageHeader`, pasos como `SectionHeader`, descargas con `ActionCard`,
    contadores en `StatTile`, filas con `StatusPill`, `AppButton` para importar.
-   No se tocaron `ProductSelectionCard` ni `OrderPromoCatalog` (tarjetas de agregar productos y
-   promos al vender): siguen con `rowCard`.
+   `ProductSelectionCard` (venta y transferencia) y `OrderPromoCatalog` (2026-10-28, probado y
+   commiteado): `IconBadge` (producto neutral, promo rose), stock con `stockPill`, ahorro y
+   "Producto desactivado" en `StatusPill`, chevron si hay que elegir variante, chips de atributos
+   como los de PromoVariantChooser y botón "Agregar"/contador de 40 de alto
+   (`SharedStyles.addButton*`; se borraron los `addButton`/`addIconContainer` viejos, sin uso).
    Íconos descentrados en Android (letra del sistema agrandada): `patches/expo-symbols+57.0.2.patch`
    (`allowFontScaling: false` y centrado), aplicado con `patch-package` en `postinstall`.
 6. Validar cada tanda: tsc, eslint, `git diff --check`; el usuario prueba en web; commit por tanda.

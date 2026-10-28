@@ -6,9 +6,11 @@ import { PromoVariantChooser } from '@/components/orders/PromoVariantChooser';
 import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { IconBadge } from '@/components/ui/IconBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
-import { Radius, Spacing } from '@/constants/spacing';
+import { Spacing } from '@/constants/spacing';
 import { usePromotions } from '@/hooks/use-promotion-queries';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
@@ -51,27 +53,28 @@ export function OrderPromoCatalog({ branchId, listPaddingBottom = Spacing.xxl * 
         const savings = promotion.regularPriceMin - promotion.price;
 
         return (
-            <View style={[SharedStyles.rowCard, styles.card, !isSellable && styles.dimmed]}>
-                <View style={styles.main}>
-                    <Text style={styles.name}>{promotion.name}</Text>
+            <View style={[SharedStyles.card, SharedStyles.listItem, !isSellable && SharedStyles.listItemInactive]}>
+                <IconBadge icon={{ ios: 'tag', android: 'sell', web: 'sell' }} tone="rose" size={44} />
+                <View style={SharedStyles.listItemTexts}>
+                    <Text style={SharedStyles.listItemTitle} numberOfLines={2}>{promotion.name}</Text>
                     {promotion.items.map((item) => (
-                        <Text key={item.id} style={styles.component} numberOfLines={1}>
+                        <Text key={item.id} style={SharedStyles.listItemMeta} numberOfLines={1}>
                             {item.quantity}× {item.productName}
                         </Text>
                     ))}
                     <View style={styles.priceRow}>
                         <Text style={styles.price}>{formatCurrency(promotion.price)}</Text>
-                        {savings > 0 ? <Text style={styles.savings}>Ahorrás desde {formatCurrency(savings)}</Text> : null}
+                        {!isSellable ? (
+                            <StatusPill label="Producto desactivado" tone="warning" />
+                        ) : savings > 0 ? (
+                            <StatusPill label={`Ahorrás desde ${formatCurrency(savings)}`} tone="success" />
+                        ) : null}
                     </View>
-                    {!isSellable ? (
-                        <Text style={[styles.stockText, styles.stockTextLow]}>Tiene un producto desactivado</Text>
-                    ) : inCart > 0 ? (
-                        <Text style={styles.stockText}>{inCart} en el carrito</Text>
-                    ) : null}
+                    {isSellable && inCart > 0 ? <Text style={styles.inCart}>{inCart} en el carrito</Text> : null}
                 </View>
 
                 <Pressable
-                    style={[styles.addButton, !isSellable && styles.btnDisabled]}
+                    style={[SharedStyles.addButton, !isSellable && SharedStyles.addButtonDisabled]}
                     onPress={() => setChoosing(promotion)}
                     disabled={!isSellable}
                 >
@@ -80,7 +83,9 @@ export function OrderPromoCatalog({ branchId, listPaddingBottom = Spacing.xxl * 
                         size={16}
                         tintColor={isSellable ? Colors.white : Colors.textSecondary}
                     />
-                    <Text style={[styles.addButtonText, !isSellable && styles.addButtonTextDisabled]}>Agregar</Text>
+                    <Text style={[SharedStyles.addButtonText, !isSellable && SharedStyles.addButtonTextDisabled]}>
+                        Agregar
+                    </Text>
                 </Pressable>
             </View>
         );
@@ -147,76 +152,23 @@ const styles = StyleSheet.create({
     },
     listContainer: {
         paddingHorizontal: Spacing.lg,
-    },
-    card: {
-        justifyContent: 'space-between',
-        marginBottom: Spacing.sm,
-    },
-    dimmed: {
-        opacity: 0.6,
-    },
-    main: {
-        flex: 1,
-        paddingRight: Spacing.sm,
-        gap: 2,
-    },
-    name: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: Colors.text,
-        marginBottom: 2,
-    },
-    component: {
-        fontSize: 12,
-        color: Colors.textSecondary,
+        gap: Spacing.sm,
     },
     priceRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        flexWrap: 'wrap',
         gap: Spacing.sm,
-        marginTop: 4,
+        marginTop: 2,
     },
     price: {
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '700',
+        color: Colors.text,
+    },
+    inCart: {
+        fontSize: 12,
+        fontWeight: '600',
         color: Colors.primary,
-    },
-    savings: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: Colors.successDark,
-    },
-    stockText: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: Colors.textSecondary,
-    },
-    stockTextLow: {
-        color: Colors.warningDark,
-        fontWeight: '600',
-    },
-    addButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minWidth: 96,
-        minHeight: 36,
-        backgroundColor: Colors.primary,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.xs + 2,
-        borderRadius: Radius.sm,
-        gap: 4,
-    },
-    addButtonText: {
-        color: Colors.white,
-        fontSize: 13,
-        fontWeight: '600',
-    },
-    addButtonTextDisabled: {
-        color: Colors.textSecondary,
-    },
-    btnDisabled: {
-        opacity: 0.4,
-        backgroundColor: Colors.border,
     },
 });
