@@ -6,18 +6,16 @@
   "build": {
     "apk": {
       "distribution": "internal",
+      "channel": "demo",
+      "environment": "preview",
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://erp-system-mtwc.onrender.com"
       }
     },
     "production": {
       "autoIncrement": true,
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://TU-SUBDOMINIO.duckdns.org"
-      }
+      "channel": "production",
+      "environment": "production"
     }
   }
 }

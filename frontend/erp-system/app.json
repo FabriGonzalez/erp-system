@@ -7,6 +7,12 @@
     "icon": "./assets/images/icon.png",
     "scheme": "erpsystem",
     "userInterfaceStyle": "automatic",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d9787d59-7889-4660-8cc2-dcf38305bec4"
+    },
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.gonzalez.erp"

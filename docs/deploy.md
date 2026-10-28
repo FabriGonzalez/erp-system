@@ -220,19 +220,55 @@ Si hay migraciones nuevas, Flyway las aplica solo al arrancar el backend. Convie
 
 ## 6. App de Android
 
-1. En `frontend/erp-system/eas.json`, reemplazar `TU-SUBDOMINIO` por el subdominio real (en los
-   dos perfiles).
-2. Desde `frontend/erp-system` en tu PC:
+La dirección del backend **no va en `eas.json`**: es la variable `EXPO_PUBLIC_API_URL` de los
+entornos de EAS, que usan tanto el build como los updates (6.1). Cada perfil de `eas.json` dice
+de qué entorno la toma y a qué canal escucha:
+
+| Perfil | Entorno de EAS | Canal | Para qué |
+|---|---|---|---|
+| `apk` | `preview` | `demo` | APK para instalar directo (demos). |
+| `production` | `production` | `production` | Clientes / Play Store. |
+
+1. Desde `frontend/erp-system` en tu PC:
    ```sh
    npm install -g eas-cli
    eas login        # cuenta gratis de Expo
-   eas init         # vincula el proyecto (agrega el projectId a app.json)
-   eas build -p android --profile apk
+   eas init         # vincula el proyecto (agrega el projectId a app.json); ya está hecho
    ```
-3. Al terminar, EAS da un link para descargar el APK. Se lo pasás a los clientes; Android pide
+2. Cargar la dirección en el entorno (una vez, o cuando cambie; `--force` la pisa):
+   ```sh
+   eas env:create --name EXPO_PUBLIC_API_URL --value https://TU-DOMINIO --environment preview \
+     --visibility plaintext --type string --non-interactive --force
+   eas env:list preview
+   ```
+   Hoy `preview` apunta al backend de Render (sección 11). `production` todavía no tiene la
+   variable: se carga con el dominio definitivo (etapa 26 del plan).
+3. Compilar: `eas build -p android --profile apk`.
+4. Al terminar, EAS da un link para descargar el APK. Se lo pasás a los clientes; Android pide
    permitir "instalar apps de origen desconocido".
 
 Para publicar en Play Store (USD 25, un único pago) se usa el perfil `production`.
+
+### 6.1 Actualizar la app sin APK nuevo (EAS Update)
+
+La app trae `expo-updates`: al abrirse se fija si hay una versión nueva del código en su canal, la
+baja en segundo plano y la usa **la próxima vez** que se abre. Para publicar un arreglo:
+
+```sh
+eas update --channel demo --environment preview --message "Qué cambió"
+```
+
+(Para clientes: `--channel production --environment production`.) Para probarlo en el celular,
+cerrar la app del todo y abrirla, hasta dos veces.
+
+Solo viaja el código JavaScript (pantallas, lógica, estilos, imágenes). `runtimeVersion` usa la
+política `fingerprint`: se calcula de todo lo nativo, así un update solo le llega a los APK con
+el mismo nativo. Si se suma una librería nativa, un permiso o un plugin, se cambia el ícono o
+`patches/` toca código nativo, la versión cambia sola y hace falta compilar e instalar un APK
+nuevo; los celulares con el APK viejo siguen con lo que tenían, sin romperse.
+
+Los APK compilados antes del 2026-10-28 no traen `expo-updates`: hay que instalar uno nuevo una
+vez. La web no usa esto: se actualiza volviendo a publicarla.
 
 ## 7. iPhone
 
@@ -357,14 +393,14 @@ puede correr a mano desde Git Bash antes de actualizar.
 
 ### 10.5 App de Android
 
-Igual que la sección 6, pero en `eas.json` va `https://mi-pc.tailXXXX.ts.net` en lugar de
-`https://TU-SUBDOMINIO.duckdns.org`.
+Igual que la sección 6, con `EXPO_PUBLIC_API_URL` = `https://mi-pc.tailXXXX.ts.net` en el
+entorno `preview`.
 
 ### 10.6 Cuando haya VPS
 
 Se sigue la sección 4 sin `docker-compose.pc.yml`. Si querés llevarte los datos de las demos,
-hacé un backup en la PC y restauralo en el VPS (4.7). La dirección cambia, así que hay que
-recompilar el APK con la nueva.
+hacé un backup en la PC y restauralo en el VPS (4.7). La dirección cambia: se actualiza la
+variable de EAS (6) y alcanza con un `eas update`, porque la dirección viaja en el código.
 
 ## 11. Demos con el celular: backend en Render, base en Neon
 
@@ -434,9 +470,9 @@ migraciones nuevas se aplican al arrancar, como en la sección 8.
 
 ### 11.3 APK
 
-Igual que la sección 6, pero en `eas.json` va la dirección de Render (`https://erp-backend-xxxx.onrender.com`)
-en lugar de `https://TU-SUBDOMINIO.duckdns.org`. Si la dirección cambia, hay que recompilar el
-APK. En el celular se entra con el administrador de la empresa de demo, creada antes desde el
+Igual que la sección 6, con `EXPO_PUBLIC_API_URL` = la dirección de Render en el entorno
+`preview` (ya cargada: `https://erp-system-mtwc.onrender.com`). Si la dirección cambia, se
+actualiza la variable y se publica un `eas update` (6.1). En el celular se entra con el administrador de la empresa de demo, creada antes desde el
 panel de plataforma (11.4).
 
 ### 11.4 Panel de plataforma (crear la empresa de demo)

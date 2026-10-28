@@ -250,7 +250,8 @@ Confirmá siempre el estado real del código antes de asumir que un módulo est�
 - El despliegue está en `deploy/` y se explica en `docs/deploy.md` (VM con Docker Compose: Postgres, backend y Caddy, que sirve la web y pasa `/api/` al backend en el mismo dominio).
 - El esquema lo manejan las migraciones de Flyway (`backend/src/main/resources/db/migration`); Hibernate solo valida (`ddl-auto: validate`). Todo cambio de una entidad va en una migración nueva `V{n}__descripcion.sql`; nunca se edita una ya aplicada.
 - Agregar un valor a un enum también exige migración: su columna tiene un `CHECK` con los valores permitidos, que `validate` no revisa.
-- La web se exporta en modo `single` (`app.json`): no agregues código que dependa del prerender estático. `EXPO_PUBLIC_API_URL` queda fija al exportar o compilar.
+- La web se exporta en modo `single` (`app.json`): no agregues código que dependa del prerender estático. `EXPO_PUBLIC_API_URL` queda fija al exportar o compilar; para Android sale de los entornos de EAS (no de `eas.json`), así la usan el build y `eas update`.
+- La app de Android se actualiza por aire con EAS Update (`docs/deploy.md` §6.1; `runtimeVersion` con política `fingerprint`). Un cambio que toque lo nativo (librería nativa, plugin o permiso en `app.json`, `patches/` sobre código nativo) exige un APK nuevo: avisalo al proponerlo.
 
 ## 11. Cómo reportar el resultado de una tarea
 

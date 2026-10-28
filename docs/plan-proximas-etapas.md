@@ -1972,9 +1972,10 @@ es funcionalidad nueva: es lo que hace falta para que un comercio use el ERP tod
 riesgo de perder datos.
 
 **Antes de arrancar (no espera al lanzamiento).** Conviene hacerlo ya, mientras se hacen demos:
-- **Actualizaciones sin APK nuevo (EAS Update / `expo-updates`).** Solo los APK compilados con
-  `expo-updates` pueden recibir actualizaciones por aire: si los clientes instalan un APK sin eso,
-  cada arreglo es compilar y reinstalar en cada celular. Sumarlo antes del APK que se reparta.
+- ~~Actualizaciones sin APK nuevo (EAS Update / `expo-updates`)~~ (2026-10-28): `runtimeVersion`
+  con política `fingerprint`, canales `demo` (perfil `apk`) y `production`, y la URL del backend
+  como variable de los entornos de EAS (sale de `eas.json`). Cómo se usa: `docs/deploy.md` §6.1.
+  El próximo APK ya lo trae; los anteriores hay que reemplazarlos una vez.
 - **Errores en producción (Sentry, plan gratis)** en la app y en el backend: hoy un error en el
   celular de alguien no llega a ningún lado.
 - **Web en Render Static Site** (propuesto el 2026-10-28): rewrite `/*` → `/index.html` y
@@ -1985,9 +1986,10 @@ riesgo de perder datos.
    (Postgres + backend + Caddy). Reescribir la §4 de `docs/deploy.md`, que está escrita para
    Oracle. Pasar los datos de Neon solo si hay algo que conservar (pg_dump / pg_restore); si no,
    producción arranca vacía, como estaba decidido.
-2. **Dominio propio** (p. ej. `.com.ar`) en vez de DuckDNS/Render. `EXPO_PUBLIC_API_URL` queda fija
-   al compilar: el APK definitivo tiene que apuntar al dominio desde el principio, así cambiar de
-   servidor después no obliga a reinstalar la app.
+2. **Dominio propio** (p. ej. `.com.ar`) en vez de DuckDNS/Render. Con EAS Update la dirección se
+   puede cambiar con un update (variable `EXPO_PUBLIC_API_URL` del entorno de EAS), pero conviene
+   que los APK de clientes apunten al dominio desde el principio: un dominio sigue igual aunque
+   cambie el servidor. Cargar la variable en el entorno `production`.
 3. **Backups fuera del servidor.** `deploy/backup.sh` ya hace el dump diario (14 días), pero queda
    dentro de la VM: si se pierde la VM se pierden con ella. Copiarlos a otro lado (Backblaze B2,
    Cloudflare R2 o Drive con `rclone`), probar **una vez** restaurar en una base vacía y anotar el
