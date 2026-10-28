@@ -156,7 +156,7 @@ public class OrderServiceImpl implements OrderService {
 
         branchAccessService.requireAccessible(request.branchId());
         validateSalesType(request.salesType(), request.deliveryType(), request.items(), request.promos(),
-                request.customerId(), request.quickSaleAmount());
+                request.quickSaleAmount());
         validatePaymentOptions(request);
 
         Customer customer = resolveCustomerOrNull(request.customerId(), companyId);
@@ -184,6 +184,7 @@ public class OrderServiceImpl implements OrderService {
                 .company(company)
                 .salesType(request.salesType())
                 .quickSaleAmount(request.salesType() == SalesType.QUICK_SALE ? request.quickSaleAmount() : null)
+                .paymentMethod(customer == null ? request.paymentMethod() : null)
                 .deliveryType(request.deliveryType())
                 .confirmedAt(confirmedAt)
                 .preparedAt(preparedAt)
@@ -275,10 +276,17 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private void validatePaymentOptions(OrderRequest request) {
-        if (request.customerId() == null
-                && (Boolean.TRUE.equals(request.applyCredit()) || request.initialPayment() != null)) {
+        if (request.customerId() == null) {
+            if (Boolean.TRUE.equals(request.applyCredit()) || request.initialPayment() != null) {
+                throw new InvalidOrderException(
+                        "Orders without customer are paid at creation; applyCredit and initialPayment are not allowed");
+            }
+            if (request.paymentMethod() == null) {
+                throw new InvalidOrderException("Orders without customer require a paymentMethod");
+            }
+        } else if (request.paymentMethod() != null) {
             throw new InvalidOrderException(
-                    "Orders without customer are paid at creation; applyCredit and initialPayment are not allowed");
+                    "paymentMethod is only for orders without customer; use initialPayment.method");
         }
     }
 
@@ -313,9 +321,6 @@ public class OrderServiceImpl implements OrderService {
 
         Order saved;
         if (order.getSalesType() == SalesType.QUICK_SALE) {
-            if (customer == null) {
-                throw new QuickSaleValidationException("QUICK_SALE requires a registered customer");
-            }
             BigDecimal quickSaleAmount = request.quickSaleAmount() != null
                     ? request.quickSaleAmount() : order.getQuickSaleAmount();
             if (quickSaleAmount == null || quickSaleAmount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -643,15 +648,13 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private void validateSalesType(SalesType salesType, DeliveryType deliveryType, List<OrderItemRequest> items,
-                                   List<OrderPromoRequest> promos, Long customerId, BigDecimal quickSaleAmount) {
+                                   List<OrderPromoRequest> promos, BigDecimal quickSaleAmount) {
         if (salesType == SalesType.QUICK_SALE) {
             // La venta rápida es solo en el local: un envío siempre lleva productos.
             if (deliveryType != DeliveryType.LOCAL_PICKUP) {
                 throw new QuickSaleValidationException("QUICK_SALE orders must be LOCAL_PICKUP");
             }
-            if (customerId == null) {
-                throw new QuickSaleValidationException("QUICK_SALE requires a registered customer");
-            }
+            // Sin cliente es una venta a consumidor final: se cobra completa al crearse.
             if (quickSaleAmount == null || quickSaleAmount.signum() <= 0) {
                 throw new QuickSaleValidationException("QUICK_SALE requires a positive quickSaleAmount");
             }

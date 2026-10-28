@@ -136,7 +136,7 @@ class OrderShippingAddressTest {
     @Test
     void quickSaleCannotBeShipped() {
         OrderRequest request = new OrderRequest(BRANCH_ID, CUSTOMER_ID, SalesType.QUICK_SALE,
-                new BigDecimal("1000"), DeliveryType.SHIPPING, ADDRESS_ID, null, null, null, null);
+                new BigDecimal("1000"), DeliveryType.SHIPPING, ADDRESS_ID, null, null, null, null, null);
         when(branchAccessService.requireAccessible(BRANCH_ID)).thenReturn(branch);
 
         assertThatThrownBy(() -> orderService.create(request))
@@ -278,7 +278,7 @@ class OrderShippingAddressTest {
 
     private OrderRequest withProducts(DeliveryType deliveryType, Long shippingAddressId) {
         return new OrderRequest(BRANCH_ID, CUSTOMER_ID, SalesType.WITH_PRODUCTS, null, deliveryType,
-                shippingAddressId, List.of(new OrderItemRequest(VARIANT_ID, 1)), null, null, null);
+                shippingAddressId, List.of(new OrderItemRequest(VARIANT_ID, 1)), null, null, null, null);
     }
 
     private Order shippingOrder() {

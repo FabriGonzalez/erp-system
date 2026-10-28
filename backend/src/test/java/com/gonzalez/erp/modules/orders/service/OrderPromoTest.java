@@ -30,6 +30,7 @@ import com.gonzalez.erp.modules.orders.entity.OrderPromo;
 import com.gonzalez.erp.modules.orders.entity.OrderPromoComponent;
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 import com.gonzalez.erp.modules.orders.entity.SalesType;
+import com.gonzalez.erp.modules.payments.entity.PaymentMethod;
 import com.gonzalez.erp.modules.orders.exception.InsufficientStockForEditException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderException;
 import com.gonzalez.erp.modules.orders.exception.QuickSaleValidationException;
@@ -270,9 +271,42 @@ class OrderPromoTest {
         when(branchAccessService.requireAccessible(BRANCH_ID)).thenReturn(branch);
         OrderRequest request = new OrderRequest(BRANCH_ID, 20L, SalesType.QUICK_SALE, new BigDecimal("500"),
                 DeliveryType.LOCAL_PICKUP, null, null, null, null,
-                List.of(newLine(PROMO_ID, 1, choice(REMERA_M, 2), choice(GORRA, 1))));
+                List.of(newLine(PROMO_ID, 1, choice(REMERA_M, 2), choice(GORRA, 1))), null);
 
         assertThatThrownBy(() -> orderService.create(request)).isInstanceOf(QuickSaleValidationException.class);
+    }
+
+    @Test
+    void aQuickSaleCanBeForAWalkInCustomerAndKeepsItsPaymentMethod() {
+        stubCreate();
+        OrderRequest request = new OrderRequest(BRANCH_ID, null, SalesType.QUICK_SALE, new BigDecimal("500"),
+                DeliveryType.LOCAL_PICKUP, null, null, null, null, null, PaymentMethod.TRANSFER);
+
+        OrderResponse response = orderService.create(request);
+
+        assertThat(response.total()).isEqualByComparingTo("500");
+        assertThat(response.customerId()).isNull();
+        assertThat(response.paymentMethod()).isEqualTo(PaymentMethod.TRANSFER);
+        // Sin cliente se cobra completa al crearse.
+        assertThat(response.balance()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void aWalkInOrderNeedsAPaymentMethod() {
+        when(branchAccessService.requireAccessible(BRANCH_ID)).thenReturn(branch);
+        OrderRequest request = new OrderRequest(BRANCH_ID, null, SalesType.QUICK_SALE, new BigDecimal("500"),
+                DeliveryType.LOCAL_PICKUP, null, null, null, null, null, null);
+
+        assertThatThrownBy(() -> orderService.create(request)).isInstanceOf(InvalidOrderException.class);
+    }
+
+    @Test
+    void anOrderWithACustomerTakesTheMethodFromItsPayment() {
+        when(branchAccessService.requireAccessible(BRANCH_ID)).thenReturn(branch);
+        OrderRequest request = new OrderRequest(BRANCH_ID, 20L, SalesType.QUICK_SALE, new BigDecimal("500"),
+                DeliveryType.LOCAL_PICKUP, null, null, null, null, null, PaymentMethod.CASH);
+
+        assertThatThrownBy(() -> orderService.create(request)).isInstanceOf(InvalidOrderException.class);
     }
 
     // --- Edición ---
@@ -411,7 +445,7 @@ class OrderPromoTest {
 
     private OrderRequest walkIn(List<OrderItemRequest> items, List<OrderPromoRequest> promos) {
         return new OrderRequest(BRANCH_ID, null, SalesType.WITH_PRODUCTS, null, DeliveryType.LOCAL_PICKUP,
-                null, items, null, null, promos);
+                null, items, null, null, promos, PaymentMethod.CASH);
     }
 
     private static PromoVariantRequest choice(Long variantId, int quantity) {

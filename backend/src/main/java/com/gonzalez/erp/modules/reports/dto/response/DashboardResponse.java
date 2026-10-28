@@ -33,8 +33,11 @@ public record DashboardResponse(
     public record BranchSales(Long branchId, String branchName, long orderCount, BigDecimal total) {
     }
 
-    /** Pagos vigentes por medio (todos los medios, en cero si no hubo) y ventas sin cliente aparte. */
-    public record CollectionsSummary(List<MethodTotal> byMethod, BigDecimal walkInSalesTotal) {
+    /**
+     * Lo cobrado por medio (todos los medios, en cero si no hubo): pagos vigentes de clientes y
+     * ventas sin cliente. Aparte, las ventas sin cliente de antes de guardar su medio.
+     */
+    public record CollectionsSummary(List<MethodTotal> byMethod, BigDecimal withoutMethodTotal) {
     }
 
     public record MethodTotal(PaymentMethod method, BigDecimal total) {

@@ -78,7 +78,7 @@ public class ReportServiceImpl implements ReportService {
         if (branchIds.isEmpty()) {
             return new DashboardResponse(from, to, previousFrom, previousTo, branchId,
                     emptySales(), emptySales(), List.of(),
-                    new CollectionsSummary(collectionsByMethod(List.of()), BigDecimal.ZERO),
+                    collections(List.of(), List.of()),
                     debtSummary, List.of(), new PendingOrders(0, null),
                     new LowStock(lowStockThreshold, 0, List.of()));
         }
@@ -96,9 +96,9 @@ public class ReportServiceImpl implements ReportService {
                         (Long) row[0], (String) row[1], toLong(row[2]), (BigDecimal) row[3]))
                 .toList());
 
-        CollectionsSummary collections = new CollectionsSummary(
-                collectionsByMethod(paymentRepository.sumActiveByMethod(companyId, branchIds, from, to)),
-                orderRepository.sumWalkInSales(companyId, branchIds, from, to));
+        CollectionsSummary collections = collections(
+                paymentRepository.sumActiveByMethod(companyId, branchIds, from, to),
+                orderRepository.sumWalkInSalesByMethod(companyId, branchIds, from, to));
 
         List<TopProduct> topProducts = topProducts(companyId, branchIds, from, to);
 
@@ -173,18 +173,29 @@ public class ReportServiceImpl implements ReportService {
         return new SalesSummary(0, BigDecimal.ZERO, BigDecimal.ZERO);
     }
 
-    // Todos los medios en el orden del enum, en cero si no hubo pagos.
-    private static List<MethodTotal> collectionsByMethod(List<Object[]> rows) {
+    /**
+     * Todos los medios en el orden del enum (en cero si no hubo): pagos más ventas sin cliente.
+     * Las ventas sin cliente sin medio (anteriores a guardarlo) van aparte.
+     */
+    private static CollectionsSummary collections(List<Object[]> paymentRows, List<Object[]> walkInRows) {
         Map<PaymentMethod, BigDecimal> totals = new EnumMap<>(PaymentMethod.class);
         for (PaymentMethod method : PaymentMethod.values()) {
             totals.put(method, BigDecimal.ZERO);
         }
-        for (Object[] row : rows) {
-            totals.put((PaymentMethod) row[0], (BigDecimal) row[1]);
+        BigDecimal withoutMethod = BigDecimal.ZERO;
+        for (Object[] row : paymentRows) {
+            totals.merge((PaymentMethod) row[0], (BigDecimal) row[1], BigDecimal::add);
         }
-        List<MethodTotal> result = new ArrayList<>();
-        totals.forEach((method, total) -> result.add(new MethodTotal(method, total)));
-        return result;
+        for (Object[] row : walkInRows) {
+            if (row[0] == null) {
+                withoutMethod = withoutMethod.add((BigDecimal) row[1]);
+            } else {
+                totals.merge((PaymentMethod) row[0], (BigDecimal) row[1], BigDecimal::add);
+            }
+        }
+        List<MethodTotal> byMethod = new ArrayList<>();
+        totals.forEach((method, total) -> byMethod.add(new MethodTotal(method, total)));
+        return new CollectionsSummary(byMethod, withoutMethod);
     }
 
     private static LowStockItem toLowStockItem(Stock stock) {

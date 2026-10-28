@@ -2,6 +2,7 @@ package com.gonzalez.erp.modules.orders.dto.request;
 
 import com.gonzalez.erp.modules.orders.entity.DeliveryType;
 import com.gonzalez.erp.modules.orders.entity.SalesType;
+import com.gonzalez.erp.modules.payments.entity.PaymentMethod;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 
@@ -34,6 +35,10 @@ public record OrderRequest(
         @Valid InitialPaymentRequest initialPayment,
 
         // Promos vigentes, sin repetir. WITH_PRODUCTS lleva al menos un ítem o una promo.
-        List<@Valid OrderPromoRequest> promos
+        List<@Valid OrderPromoRequest> promos,
+
+        // Medio con que pagó una venta sin cliente: obligatorio sin cliente, prohibido con cliente
+        // (con cliente el medio va en initialPayment).
+        PaymentMethod paymentMethod
 ) {
 }

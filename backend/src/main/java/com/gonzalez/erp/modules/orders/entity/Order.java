@@ -5,6 +5,7 @@ import com.gonzalez.erp.modules.branches.entity.Branch;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.customers.entity.Customer;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderException;
+import com.gonzalez.erp.modules.payments.entity.PaymentMethod;
 import com.gonzalez.erp.modules.users.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -68,6 +69,11 @@ public class Order extends BaseEntity {
 
     @Column(name = "quick_sale_amount", precision = 12, scale = 2)
     private BigDecimal quickSaleAmount;
+
+    // Solo en ventas sin cliente, que se cobran completas al crearse; con cliente el medio va en el pago.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", length = 30)
+    private PaymentMethod paymentMethod;
 
     @Column(nullable = false, precision = 12, scale = 2)
     @Builder.Default

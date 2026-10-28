@@ -163,7 +163,10 @@ class ReportServiceImplTest {
                 .thenReturn(List.of());
         when(paymentRepository.sumActiveByMethod(COMPANY_ID, branchIds, FROM, TO)).thenReturn(
                 List.<Object[]>of(new Object[]{PaymentMethod.CASH, new BigDecimal("700")}));
-        when(orderRepository.sumWalkInSales(COMPANY_ID, branchIds, FROM, TO)).thenReturn(new BigDecimal("1000"));
+        // Ventas sin cliente: 300 en efectivo (suman al medio) y 1000 de antes de guardar el medio.
+        when(orderRepository.sumWalkInSalesByMethod(COMPANY_ID, branchIds, FROM, TO)).thenReturn(List.of(
+                new Object[]{PaymentMethod.CASH, new BigDecimal("300")},
+                new Object[]{null, new BigDecimal("1000")}));
         when(orderRepository.findTopSellingVariants(eq(COMPANY_ID), eq(branchIds), eq(FROM), eq(TO), any()))
                 .thenReturn(List.<Object[]>of(new Object[]{5L, "Remera", "REM-M", 4L, new BigDecimal("2000")}));
         when(orderRepository.summarizeOrdersToPrepare(COMPANY_ID, branchIds))
@@ -184,8 +187,8 @@ class ReportServiceImplTest {
         assertThat(response.collections().byMethod())
                 .extracting(MethodTotal::method)
                 .containsExactly(PaymentMethod.values());
-        assertThat(response.collections().byMethod().get(0).total()).isEqualByComparingTo("700");
-        assertThat(response.collections().walkInSalesTotal()).isEqualByComparingTo("1000");
+        assertThat(response.collections().byMethod().get(0).total()).isEqualByComparingTo("1000");
+        assertThat(response.collections().withoutMethodTotal()).isEqualByComparingTo("1000");
         assertThat(response.topProducts()).singleElement()
                 .satisfies(top -> assertThat(top.quantity()).isEqualTo(4));
         assertThat(response.pendingOrders().count()).isZero();

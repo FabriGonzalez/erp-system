@@ -47,6 +47,7 @@ public final class OrderMapper {
                 amountPaid,
                 paymentStatus,
                 balance,
+                order.getPaymentMethod(),
                 order.getConfirmedAt(),
                 order.getPreparedAt(),
                 order.getShippedAt(),

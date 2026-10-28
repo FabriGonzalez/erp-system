@@ -4,6 +4,7 @@ import com.gonzalez.erp.modules.orders.entity.DeliveryType;
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 import com.gonzalez.erp.modules.orders.entity.PaymentStatus;
 import com.gonzalez.erp.modules.orders.entity.SalesType;
+import com.gonzalez.erp.modules.payments.entity.PaymentMethod;
 import com.gonzalez.erp.modules.shipments.dto.response.ShipmentResponse;
 
 import java.math.BigDecimal;
@@ -29,6 +30,8 @@ public record OrderResponse(
         BigDecimal amountPaid,
         PaymentStatus paymentStatus,
         BigDecimal balance,
+        // Medio de una venta sin cliente; null con cliente y en ventas sin cliente anteriores.
+        PaymentMethod paymentMethod,
         Instant confirmedAt,
         Instant preparedAt,
         Instant shippedAt,

@@ -119,17 +119,21 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("to") Instant to
     );
 
-    /** Total de las ventas sin cliente: se cobran al crearse y no generan un pago. */
+    /**
+     * Ventas sin cliente por medio de pago (se cobran al crearse y no generan un pago). Cada fila
+     * es [paymentMethod (PaymentMethod o null en las anteriores a guardarlo), total (BigDecimal)].
+     */
     @Query("""
-            SELECT COALESCE(SUM(o.total), 0)
+            SELECT o.paymentMethod, COALESCE(SUM(o.total), 0)
             FROM Order o
             WHERE o.company.id = :companyId
             AND o.branch.id IN :branchIds
             AND o.customer IS NULL
             AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
             AND o.createdAt >= :from AND o.createdAt < :to
+            GROUP BY o.paymentMethod
             """)
-    BigDecimal sumWalkInSales(
+    List<Object[]> sumWalkInSalesByMethod(
             @Param("companyId") Long companyId,
             @Param("branchIds") Collection<Long> branchIds,
             @Param("from") Instant from,
