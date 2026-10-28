@@ -1,15 +1,15 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
 
 import { RoleForm, toRoleRequest, validateRole } from '@/components/users/RoleForm';
 import { AppButton } from '@/components/ui/AppButton';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { FormFooter } from '@/components/ui/FormFooter';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
 import { useAssignablePermissions, useCreateRole } from '@/hooks/use-role-queries';
 import { SharedStyles } from '@/styles/shared';
 import { RoleRequest } from '@/types/role';
@@ -39,20 +39,7 @@ export default function NewRoleScreen() {
 
     return (
         <Screen style={styles.screen}>
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>Nuevo rol</Text>
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader onBack={() => router.back()} eyebrow="Roles" title="Nuevo rol" />
 
             {isLoading ? (
                 <LoadingState label="Cargando permisos..." />
@@ -60,7 +47,7 @@ export default function NewRoleScreen() {
                 <ErrorState message={error} onRetry={reload} />
             ) : (
                 <>
-                    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+                    <ScrollView contentContainerStyle={SharedStyles.pageContent} keyboardShouldPersistTaps="handled">
                         <RoleForm
                             availablePermissions={permissions}
                             disabled={createRole.isPending}
@@ -71,13 +58,13 @@ export default function NewRoleScreen() {
                         />
                         {formError && <Text style={styles.errorText}>{formError}</Text>}
                     </ScrollView>
-                    <View style={styles.footer}>
+                    <FormFooter>
                         <AppButton
                             title={createRole.isPending ? 'Guardando...' : 'Crear rol'}
                             onPress={() => void handleSave()}
                             disabled={createRole.isPending}
                         />
-                    </View>
+                    </FormFooter>
                 </>
             )}
         </Screen>
@@ -88,18 +75,8 @@ const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    content: {
-        padding: Spacing.lg,
-        gap: Spacing.md,
-    },
     errorText: {
         color: Colors.error,
         fontSize: 14,
-    },
-    footer: {
-        padding: Spacing.lg,
-        backgroundColor: Colors.surface,
-        borderTopWidth: 1,
-        borderTopColor: Colors.border,
     },
 });

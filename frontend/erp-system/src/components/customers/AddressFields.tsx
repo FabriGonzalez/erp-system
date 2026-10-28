@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { AppInput } from '@/components/ui/AppInput';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { SharedStyles } from '@/styles/shared';
 import { AddressDraft } from '@/utils/address';
 
 type AddressFieldsProps = {
@@ -24,36 +25,36 @@ export function AddressFields({ value, onChange, editable = true }: AddressField
     return (
         <View>
             <View style={styles.field}>
-                <Text style={styles.label}>Etiqueta (opcional)</Text>
+                <Text style={[SharedStyles.fieldLabel, styles.label]}>Etiqueta (opcional)</Text>
                 <AppInput placeholder="Ej. Casa, Oficina, Depósito" autoCapitalize="words" maxLength={50} {...field('label')} />
             </View>
 
             <View style={styles.row}>
                 <View style={[styles.field, styles.grow]}>
-                    <Text style={styles.label}>
+                    <Text style={[SharedStyles.fieldLabel, styles.label]}>
                         Calle <Text style={styles.required}>*</Text>
                     </Text>
                     <AppInput placeholder="Ej. Av. Colón" autoCapitalize="words" maxLength={150} {...field('street')} />
                 </View>
                 <View style={[styles.field, styles.small]}>
-                    <Text style={styles.label}>Número</Text>
+                    <Text style={[SharedStyles.fieldLabel, styles.label]}>Número</Text>
                     <AppInput placeholder="123" maxLength={20} {...field('number')} />
                 </View>
             </View>
 
             <View style={styles.row}>
                 <View style={[styles.field, styles.grow]}>
-                    <Text style={styles.label}>Piso</Text>
+                    <Text style={[SharedStyles.fieldLabel, styles.label]}>Piso</Text>
                     <AppInput placeholder="Ej. 3" maxLength={20} {...field('floor')} />
                 </View>
                 <View style={[styles.field, styles.grow]}>
-                    <Text style={styles.label}>Depto.</Text>
+                    <Text style={[SharedStyles.fieldLabel, styles.label]}>Depto.</Text>
                     <AppInput placeholder="Ej. B" maxLength={20} {...field('apartment')} />
                 </View>
             </View>
 
             <View style={styles.field}>
-                <Text style={styles.label}>
+                <Text style={[SharedStyles.fieldLabel, styles.label]}>
                     Ciudad <Text style={styles.required}>*</Text>
                 </Text>
                 <AppInput placeholder="Ej. Bahía Blanca" autoCapitalize="words" maxLength={100} {...field('city')} />
@@ -61,11 +62,11 @@ export function AddressFields({ value, onChange, editable = true }: AddressField
 
             <View style={styles.row}>
                 <View style={[styles.field, styles.grow]}>
-                    <Text style={styles.label}>Provincia</Text>
+                    <Text style={[SharedStyles.fieldLabel, styles.label]}>Provincia</Text>
                     <AppInput placeholder="Ej. Buenos Aires" autoCapitalize="words" maxLength={100} {...field('state')} />
                 </View>
                 <View style={[styles.field, styles.small]}>
-                    <Text style={styles.label}>C.P.</Text>
+                    <Text style={[SharedStyles.fieldLabel, styles.label]}>C.P.</Text>
                     <AppInput placeholder="8000" autoCapitalize="characters" maxLength={20} {...field('postalCode')} />
                 </View>
             </View>
@@ -78,10 +79,7 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.md,
     },
     label: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: Colors.text,
-        marginBottom: Spacing.xs,
+        marginBottom: Spacing.xs + 2,
     },
     required: {
         color: Colors.error,

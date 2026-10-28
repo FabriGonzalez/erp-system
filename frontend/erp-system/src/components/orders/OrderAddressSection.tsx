@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AddressSummary } from '@/components/customers/AddressSummary';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 import { Customer, CustomerAddress } from '@/types/customer';
 import { OrderShippingAddress } from '@/types/order';
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
     },
     warningCard: {
         backgroundColor: Colors.warningLight,
-        borderRadius: 12,
+        borderRadius: Radius.lg,
         padding: Spacing.md,
         borderWidth: 1,
         borderColor: '#FDE68A',
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: Colors.surface,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         paddingVertical: Spacing.sm,
         paddingHorizontal: Spacing.md,
         gap: 6,
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     },
     addressCard: {
         backgroundColor: Colors.surface,
-        borderRadius: 12,
+        borderRadius: Radius.lg,
         padding: Spacing.md,
         borderWidth: 1,
         borderColor: Colors.border,
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: Colors.surface,
-        borderRadius: 12,
+        borderRadius: Radius.lg,
         padding: Spacing.md,
         borderWidth: 1,
         borderColor: Colors.border,

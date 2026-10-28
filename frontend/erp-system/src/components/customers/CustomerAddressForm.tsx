@@ -2,8 +2,6 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
 import {
-    ActivityIndicator,
-    Pressable,
     ScrollView,
     StyleSheet,
     Text,
@@ -11,11 +9,15 @@ import {
 } from 'react-native';
 
 import { AddressFields } from '@/components/customers/AddressFields';
+import { AppButton } from '@/components/ui/AppButton';
+import { FormFooter } from '@/components/ui/FormFooter';
+import { FormSection } from '@/components/ui/FormSection';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { NotFound } from '@/components/ui/NotFound';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import {
     useCreateAddress,
     useCustomer,
@@ -143,50 +145,18 @@ function AddressFormBody({ customerId, customer, address, title, onAddressCreate
 
     return (
         <Screen style={styles.screen}>
-            <View style={[SharedStyles.header, styles.header]}>
-                <Pressable
-                    onPress={handleCancel}
-                    style={({ pressed }) => [
-                        SharedStyles.backButton,
-                        pressed && SharedStyles.pressed,
-                    ]}
-                >
-                    <SymbolView
-                        name={{
-                            ios: 'chevron.left',
-                            android: 'arrow_back',
-                            web: 'arrow_back',
-                        }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-
-                <View style={styles.headerText}>
-                    <Text style={SharedStyles.headerTitle}>
-                        {title}
-                    </Text>
-
-                    {customer ? (
-                        <Text style={styles.headerSubtitle}>
-                            {customer.name}
-                        </Text>
-                    ) : null}
-                </View>
-
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader
+                onBack={isSubmitting ? undefined : handleCancel}
+                eyebrow={customer?.name ?? 'Cliente'}
+                title={title}
+            />
 
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
-                contentContainerStyle={SharedStyles.listContent}
+                contentContainerStyle={SharedStyles.pageContent}
             >
-                <View style={SharedStyles.card}>
-                    <Text style={[SharedStyles.cardTitle, styles.sectionTitle]}>
-                        Datos de la dirección
-                    </Text>
-
+                <FormSection title="Dirección">
                     <AddressFields
                         value={draft}
                         onChange={(next) => {
@@ -195,58 +165,35 @@ function AddressFormBody({ customerId, customer, address, title, onAddressCreate
                         }}
                         editable={!isSubmitting}
                     />
+                </FormSection>
 
-                    {formError ? (
-                        <View style={styles.errorBox}>
-                            <SymbolView
-                                name={{
-                                    ios: 'exclamationmark.circle',
-                                    android: 'error',
-                                    web: 'error',
-                                }}
-                                size={18}
-                                tintColor={Colors.error}
-                            />
+                {formError ? (
+                    <View style={styles.errorBox}>
+                        <SymbolView
+                            name={{
+                                ios: 'exclamationmark.circle',
+                                android: 'error',
+                                web: 'error',
+                            }}
+                            size={18}
+                            tintColor={Colors.error}
+                        />
 
-                            <Text style={styles.errorText}>
-                                {formError}
-                            </Text>
-                        </View>
-                    ) : null}
-                </View>
-
-                <View style={styles.actions}>
-                    <Pressable
-                        onPress={handleCancel}
-                        disabled={isSubmitting}
-                        style={({ pressed }) => [
-                            SharedStyles.buttonSecondary,
-                            pressed && SharedStyles.pressed,
-                        ]}
-                    >
-                        <Text style={SharedStyles.buttonSecondaryText}>
-                            Cancelar
+                        <Text style={styles.errorText}>
+                            {formError}
                         </Text>
-                    </Pressable>
-
-                    <Pressable
-                        onPress={handleSave}
-                        disabled={isSubmitting}
-                        style={({ pressed }) => [
-                            SharedStyles.buttonPrimary,
-                            (pressed || isSubmitting) && SharedStyles.pressed,
-                        ]}
-                    >
-                        {isSubmitting ? (
-                            <ActivityIndicator size="small" color={Colors.white} />
-                        ) : (
-                            <Text style={SharedStyles.buttonPrimaryText}>
-                                Guardar dirección
-                            </Text>
-                        )}
-                    </Pressable>
-                </View>
+                    </View>
+                ) : null}
             </ScrollView>
+
+            <FormFooter>
+                <AppButton title="Cancelar" variant="secondary" onPress={handleCancel} disabled={isSubmitting} />
+                <AppButton
+                    title={isSubmitting ? 'Guardando...' : 'Guardar dirección'}
+                    onPress={() => void handleSave()}
+                    disabled={isSubmitting}
+                />
+            </FormFooter>
         </Screen>
     );
 }
@@ -255,40 +202,19 @@ const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    header: {
-        paddingHorizontal: Spacing.lg,
-    },
-    headerText: {
-        flex: 1,
-        marginLeft: Spacing.sm,
-    },
-    headerSubtitle: {
-        fontSize: 12,
-        color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    sectionTitle: {
-        marginBottom: Spacing.lg,
-    },
     errorBox: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.sm,
         padding: Spacing.md,
-        borderRadius: 10,
+        borderRadius: Radius.sm,
         backgroundColor: Colors.errorLight,
         borderWidth: 1,
-        borderColor: '#FECACA',
-        marginTop: Spacing.xs,
+        borderColor: Colors.errorBorder,
     },
     errorText: {
         flex: 1,
         fontSize: 13,
         color: Colors.error,
-    },
-    actions: {
-        flexDirection: 'row',
-        gap: Spacing.md,
-        marginTop: Spacing.lg,
     },
 });

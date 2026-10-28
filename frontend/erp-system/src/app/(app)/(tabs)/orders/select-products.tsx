@@ -1,18 +1,16 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { OrderPromoCatalog } from '@/components/orders/OrderPromoCatalog';
 import { CartSummaryBar } from '@/components/products/CartSummaryBar';
 import { VariantCatalog } from '@/components/products/VariantCatalog';
 import { FilterChip } from '@/components/ui/FilterChip';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
-import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
-import { SharedStyles } from '@/styles/shared';
 import { promoUnitsByVariant } from '@/utils/draft-stock';
 
 type CatalogTab = 'PRODUCTS' | 'PROMOS';
@@ -34,28 +32,11 @@ export default function SelectProductsScreen() {
 
     return (
         <Screen style={styles.screen}>
-            {/* Header */}
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-
-                <View style={styles.titleBox}>
-                    <Text style={styles.headerTitle}>Catálogo de Productos</Text>
-                    <Text style={styles.headerSubtitle}>
-                        Sucursal: {activeBranch?.name ?? 'Sin sucursal activa'}
-                    </Text>
-                </View>
-
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow={activeBranch ? `Stock de ${activeBranch.name}` : 'Sin sucursal activa'}
+                title="Agregar productos"
+            />
 
             <View style={styles.tabs}>
                 <FilterChip label="Productos" selected={tab === 'PRODUCTS'} onPress={() => setTab('PRODUCTS')} />
@@ -95,19 +76,6 @@ export default function SelectProductsScreen() {
 const styles = StyleSheet.create({
     screen: {
         padding: 0,
-    },
-    titleBox: {
-        alignItems: 'center',
-    },
-    headerTitle: {
-        fontSize: 17,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    headerSubtitle: {
-        fontSize: 12,
-        color: Colors.textSecondary,
-        marginTop: 1,
     },
     tabs: {
         flexDirection: 'row',

@@ -1,4 +1,4 @@
-import { StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import {
     SafeAreaView,
     SafeAreaViewProps,
@@ -13,6 +13,10 @@ type ScreenProps = SafeAreaViewProps;
  * Contenedor de cada pantalla. En pantallas anchas (web, tablet) el contenido queda en una
  * columna centrada de MAX_CONTENT_WIDTH; en el celular ocupa todo el ancho como siempre.
  * El style de cada pantalla se aplica a la columna, así padding y alineaciones no cambian.
+ *
+ * Con el teclado abierto la pantalla se achica a lo que queda visible: el campo enfocado se
+ * puede llevar a la vista y los botones de abajo (FormFooter) quedan arriba del teclado. En
+ * Android la app es edge-to-edge y la ventana ya no se achica sola. En web no hace falta.
  */
 export function Screen({
     style,
@@ -20,7 +24,10 @@ export function Screen({
     ...props
 }: ScreenProps) {
     return (
-        <View style={styles.backdrop}>
+        <KeyboardAvoidingView
+            style={styles.backdrop}
+            behavior={Platform.OS === 'web' ? undefined : 'padding'}
+        >
             <SafeAreaView
                 edges={['left', 'right']}
                 style={[
@@ -31,7 +38,7 @@ export function Screen({
             >
                 {children}
             </SafeAreaView>
-        </View>
+        </KeyboardAvoidingView>
     );
 }
 

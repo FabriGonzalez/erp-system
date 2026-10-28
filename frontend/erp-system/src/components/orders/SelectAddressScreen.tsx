@@ -5,6 +5,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AddressSummary } from '@/components/customers/AddressSummary';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
@@ -40,13 +41,7 @@ export function SelectAddressScreen({ flow }: SelectAddressScreenProps) {
 
     return (
         <Screen style={styles.screen}>
-            <View style={SharedStyles.header}>
-                <Pressable onPress={() => router.back()} style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}>
-                    <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={24} tintColor={Colors.text} />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>Seleccionar Dirección</Text>
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader onBack={() => router.back()} title="Elegir dirección" />
 
             <View style={styles.subHeader}>
                 <Text style={styles.customerName}>Cliente: {customer.name}</Text>

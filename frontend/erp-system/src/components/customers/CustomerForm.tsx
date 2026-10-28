@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
 import {
-    ActivityIndicator,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -12,11 +11,18 @@ import {
 
 import { AddressFields } from '@/components/customers/AddressFields';
 import { AddressSummary } from '@/components/customers/AddressSummary';
+import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
 import { FilterChip } from '@/components/ui/FilterChip';
+import { FormField } from '@/components/ui/FormField';
+import { FormFooter } from '@/components/ui/FormFooter';
+import { FormSection } from '@/components/ui/FormSection';
+import { IconBadge } from '@/components/ui/IconBadge';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { useCreateCustomer, useUpdateCustomer } from '@/hooks/use-customer-queries';
 import { SharedStyles } from '@/styles/shared';
 import { Customer, CustomerRequest, DOCUMENT_TYPES } from '@/types/customer';
@@ -180,274 +186,229 @@ export function CustomerForm({
 
     return (
         <Screen style={styles.screen}>
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={handleCancel}
-                    style={({ pressed }) => [
-                        SharedStyles.backButton,
-                        pressed && SharedStyles.pressed,
-                    ]}
-                    disabled={isSubmitting}
-                >
-                    <SymbolView
-                        name={{
-                            ios: 'chevron.left',
-                            android: 'arrow_back',
-                            web: 'arrow_back',
-                        }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-
-                <Text style={SharedStyles.headerTitle}>
-                    {isEdit ? 'Editar Cliente' : 'Nuevo Cliente'}
-                </Text>
-
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader
+                onBack={isSubmitting ? undefined : handleCancel}
+                eyebrow="Clientes"
+                title={isEdit ? 'Editar cliente' : 'Nuevo cliente'}
+            />
 
             <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.scrollContainer}
+                contentContainerStyle={SharedStyles.pageContent}
                 keyboardShouldPersistTaps="handled"
             >
-                <View style={styles.row}>
-                    <View style={[styles.formGroup, styles.flex1]}>
-                        <Text style={SharedStyles.sectionTitle}>Nombre</Text>
+                <FormSection title="Datos">
+                    <View style={styles.nameBlock}>
+                        <View style={styles.row}>
+                            <FormField label="Nombre" style={styles.flex1}>
+                                <AppInput
+                                    placeholder="Ej. María"
+                                    value={firstName}
+                                    onChangeText={(text) => {
+                                        setFirstName(text);
+                                        clearError('name');
+                                    }}
+                                    autoCapitalize="words"
+                                    maxLength={100}
+                                    editable={!isSubmitting}
+                                />
+                            </FormField>
+
+                            <FormField label="Apellido" style={styles.flex1}>
+                                <AppInput
+                                    placeholder="Ej. González"
+                                    value={lastName}
+                                    onChangeText={(text) => {
+                                        setLastName(text);
+                                        clearError('name');
+                                    }}
+                                    autoCapitalize="words"
+                                    maxLength={100}
+                                    editable={!isSubmitting}
+                                />
+                            </FormField>
+                        </View>
+
+                        <Text style={errors.name ? styles.errorText : styles.hint}>
+                            {errors.name || 'Completá al menos uno de los dos.'}
+                        </Text>
+                    </View>
+
+                    <FormField label="Email" error={errors.email}>
                         <AppInput
-                            placeholder="Ej. María"
-                            value={firstName}
+                            placeholder="maria@email.com"
+                            value={email}
                             onChangeText={(text) => {
-                                setFirstName(text);
-                                clearError('name');
+                                setEmail(text);
+                                clearError('email');
                             }}
-                            autoCapitalize="words"
+                            keyboardType="email-address"
+                            autoCapitalize="none"
                             maxLength={100}
                             editable={!isSubmitting}
                         />
-                    </View>
+                    </FormField>
 
-                    <View style={[styles.formGroup, styles.flex1]}>
-                        <Text style={SharedStyles.sectionTitle}>Apellido</Text>
+                    <FormField label="Teléfono">
                         <AppInput
-                            placeholder="Ej. González"
-                            value={lastName}
-                            onChangeText={(text) => {
-                                setLastName(text);
-                                clearError('name');
-                            }}
-                            autoCapitalize="words"
-                            maxLength={100}
+                            placeholder="11 1234-5678"
+                            value={phone}
+                            onChangeText={setPhone}
+                            keyboardType="phone-pad"
+                            maxLength={30}
                             editable={!isSubmitting}
                         />
-                    </View>
-                </View>
+                    </FormField>
 
-                {errors.name ? (
-                    <Text style={[styles.errorText, styles.nameError]}>
-                        {errors.name}
-                    </Text>
-                ) : (
-                    <Text style={styles.hint}>
-                        Completá al menos uno de los dos.
-                    </Text>
-                )}
+                    <FormField label="Documento" error={errors.document}>
+                        <View style={styles.chips}>
+                            {DOCUMENT_TYPES.map((type) => (
+                                <FilterChip
+                                    key={type.value}
+                                    label={type.label}
+                                    selected={documentType === type.value}
+                                    onPress={() => {
+                                        if (isSubmitting) return;
+                                        // Tocar el seleccionado lo quita (cliente sin documento).
+                                        setDocumentType((current) => (current === type.value ? '' : type.value));
+                                        clearError('document');
+                                    }}
+                                />
+                            ))}
+                        </View>
 
-                <View style={styles.formGroup}>
-                    <Text style={SharedStyles.sectionTitle}>Email</Text>
-
-                    <AppInput
-                        placeholder="maria@email.com"
-                        value={email}
-                        onChangeText={(text) => {
-                            setEmail(text);
-                            clearError('email');
-                        }}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        maxLength={100}
-                        editable={!isSubmitting}
-                    />
-
-                    {errors.email ? (
-                        <Text style={styles.errorText}>{errors.email}</Text>
-                    ) : null}
-                </View>
-
-                <View style={styles.formGroup}>
-                    <Text style={SharedStyles.sectionTitle}>Teléfono</Text>
-
-                    <AppInput
-                        placeholder="11 1234-5678"
-                        value={phone}
-                        onChangeText={setPhone}
-                        keyboardType="phone-pad"
-                        maxLength={30}
-                        editable={!isSubmitting}
-                    />
-                </View>
-
-                <View style={styles.formGroup}>
-                    <Text style={SharedStyles.sectionTitle}>Documento</Text>
-
-                    <View style={styles.chips}>
-                        {DOCUMENT_TYPES.map((type) => (
-                            <FilterChip
-                                key={type.value}
-                                label={type.label}
-                                selected={documentType === type.value}
-                                onPress={() => {
-                                    if (isSubmitting) return;
-                                    // Tocar el seleccionado lo quita (cliente sin documento).
-                                    setDocumentType((current) => (current === type.value ? '' : type.value));
+                        {documentType ? (
+                            <AppInput
+                                placeholder={NUMERIC_DOCUMENTS[documentType] ? 'Solo números' : 'Número de documento'}
+                                value={documentNumber}
+                                onChangeText={(text) => {
+                                    setDocumentNumber(text);
                                     clearError('document');
                                 }}
+                                keyboardType={NUMERIC_DOCUMENTS[documentType] ? 'number-pad' : 'default'}
+                                autoCapitalize="characters"
+                                maxLength={50}
+                                editable={!isSubmitting}
                             />
-                        ))}
-                    </View>
+                        ) : null}
+                    </FormField>
 
-                    {documentType ? (
+                    <FormField label="Observaciones">
                         <AppInput
-                            placeholder={NUMERIC_DOCUMENTS[documentType] ? 'Solo números' : 'Número de documento'}
-                            value={documentNumber}
-                            onChangeText={(text) => {
-                                setDocumentNumber(text);
-                                clearError('document');
-                            }}
-                            keyboardType={NUMERIC_DOCUMENTS[documentType] ? 'number-pad' : 'default'}
-                            autoCapitalize="characters"
-                            maxLength={50}
+                            placeholder="Notas internas sobre el cliente"
+                            value={observations}
+                            onChangeText={setObservations}
+                            multiline
+                            maxLength={1000}
+                            textAlignVertical="top"
+                            style={styles.observationsInput}
                             editable={!isSubmitting}
                         />
-                    ) : null}
-
-                    {errors.document ? (
-                        <Text style={styles.errorText}>{errors.document}</Text>
-                    ) : null}
-                </View>
-
-                <View style={styles.formGroup}>
-                    <Text style={SharedStyles.sectionTitle}>Observaciones</Text>
-
-                    <AppInput
-                        placeholder="Notas internas sobre el cliente"
-                        value={observations}
-                        onChangeText={setObservations}
-                        multiline
-                        maxLength={1000}
-                        textAlignVertical="top"
-                        style={styles.observationsInput}
-                        editable={!isSubmitting}
-                    />
-                </View>
+                    </FormField>
+                </FormSection>
 
                 {/* En la edición las direcciones se gestionan desde el detalle del cliente. */}
                 {!isEdit ? (
-                <>
-                <View style={styles.sectionHeader}>
-                    <Text style={SharedStyles.cardTitle}>
-                        Direcciones ({addresses.length})
-                    </Text>
-                    {addresses.length > 1 ? (
-                        <Text style={styles.hint}>La primera queda como principal.</Text>
-                    ) : null}
-                </View>
-
-                {addresses.map((address, index) => (
-                    <View
-                        key={index}
-                        style={styles.addressCard}
-                    >
-                        <AddressSummary
-                            address={{ ...draftToDisplayAddress(address), isMain: index === 0 }}
-                        />
-
-                        <Pressable
-                            onPress={() => handleRemoveAddress(index)}
-                            disabled={isSubmitting}
-                            hitSlop={8}
-                        >
-                            <SymbolView
-                                name={{
-                                    ios: 'trash',
-                                    android: 'delete',
-                                    web: 'delete',
-                                }}
-                                size={18}
-                                tintColor={Colors.error}
-                            />
-                        </Pressable>
-                    </View>
-                ))}
-
-                {showAddressForm ? (
-                    <View style={styles.addressFormBox}>
-                        <Text style={styles.addressFormTitle}>
-                            Nueva dirección
-                        </Text>
-
-                        <AddressFields
-                            value={addressDraft}
-                            onChange={(next) => {
-                                setAddressDraft(next);
-                                setAddrError('');
-                            }}
-                        />
-
-                        {addrError ? (
-                            <Text style={styles.errorText}>
-                                {addrError}
-                            </Text>
+                    <View style={SharedStyles.pageSection}>
+                        <SectionHeader title={`Direcciones (${addresses.length})`} />
+                        {addresses.length > 1 ? (
+                            <Text style={styles.hint}>La primera queda como principal.</Text>
                         ) : null}
 
-                        <View style={styles.addressFormActions}>
-                            <Pressable
-                                style={styles.addAddrConfirmButton}
-                                onPress={handleAddAddress}
+                        {addresses.map((address, index) => (
+                            <View
+                                key={index}
+                                style={[SharedStyles.card, SharedStyles.listItem]}
                             >
-                                <Text style={styles.addAddrConfirmText}>
+                                <IconBadge
+                                    icon={{ ios: 'mappin', android: 'location_on', web: 'location_on' }}
+                                    tone={index === 0 ? 'primary' : 'neutral'}
+                                />
+                                <AddressSummary
+                                    address={{ ...draftToDisplayAddress(address), isMain: index === 0 }}
+                                />
+
+                                <Pressable
+                                    onPress={() => handleRemoveAddress(index)}
+                                    disabled={isSubmitting}
+                                    hitSlop={8}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Quitar dirección"
+                                >
+                                    <SymbolView
+                                        name={{
+                                            ios: 'trash',
+                                            android: 'delete',
+                                            web: 'delete',
+                                        }}
+                                        size={18}
+                                        tintColor={Colors.error}
+                                    />
+                                </Pressable>
+                            </View>
+                        ))}
+
+                        {showAddressForm ? (
+                            <View style={[SharedStyles.card, styles.addressFormBox]}>
+                                <Text style={styles.addressFormTitle}>
+                                    Nueva dirección
+                                </Text>
+
+                                <AddressFields
+                                    value={addressDraft}
+                                    onChange={(next) => {
+                                        setAddressDraft(next);
+                                        setAddrError('');
+                                    }}
+                                />
+
+                                {addrError ? (
+                                    <Text style={styles.errorText}>
+                                        {addrError}
+                                    </Text>
+                                ) : null}
+
+                                <View style={styles.addressFormActions}>
+                                    <AppButton
+                                        title="Cancelar"
+                                        variant="secondary"
+                                        style={styles.flex1}
+                                        onPress={() => {
+                                            setShowAddressForm(false);
+                                            setAddressDraft(EMPTY_ADDRESS_DRAFT);
+                                            setAddrError('');
+                                        }}
+                                    />
+                                    <AppButton
+                                        title="Agregar"
+                                        style={styles.flex1}
+                                        onPress={handleAddAddress}
+                                    />
+                                </View>
+                            </View>
+                        ) : (
+                            <Pressable
+                                style={({ pressed }) => [styles.addAddressButton, pressed && SharedStyles.pressed]}
+                                onPress={() => setShowAddressForm(true)}
+                                disabled={isSubmitting}
+                                accessibilityRole="button"
+                            >
+                                <SymbolView
+                                    name={{
+                                        ios: 'plus.circle',
+                                        android: 'add_circle',
+                                        web: 'add_circle',
+                                    }}
+                                    size={20}
+                                    tintColor={Colors.primary}
+                                />
+
+                                <Text style={styles.addAddressButtonText}>
                                     Agregar dirección
                                 </Text>
                             </Pressable>
-
-                            <Pressable
-                                style={styles.cancelAddrButton}
-                                onPress={() => {
-                                    setShowAddressForm(false);
-                                    setAddressDraft(EMPTY_ADDRESS_DRAFT);
-                                    setAddrError('');
-                                }}
-                            >
-                                <Text style={styles.cancelAddrText}>
-                                    Cancelar
-                                </Text>
-                            </Pressable>
-                        </View>
+                        )}
                     </View>
-                ) : (
-                    <Pressable
-                        style={styles.addAddressButton}
-                        onPress={() => setShowAddressForm(true)}
-                        disabled={isSubmitting}
-                    >
-                        <SymbolView
-                            name={{
-                                ios: 'plus.circle',
-                                android: 'add_circle',
-                                web: 'add_circle',
-                            }}
-                            size={20}
-                            tintColor={Colors.primary}
-                        />
-
-                        <Text style={styles.addAddressButtonText}>
-                            Agregar dirección
-                        </Text>
-                    </Pressable>
-                )}
-
-                </>
                 ) : null}
 
                 {submitError ? (
@@ -455,46 +416,21 @@ export function CustomerForm({
                         <Text style={styles.submitErrorText}>{submitError}</Text>
                     </View>
                 ) : null}
-
-                <View style={styles.actionsContainer}>
-                    <Pressable
-                        style={[
-                            SharedStyles.buttonSubmit,
-                            isSubmitting &&
-                            styles.submitButtonDisabled,
-                        ]}
-                        onPress={handleSubmit}
-                        disabled={isSubmitting}
-                    >
-                        {isSubmitting ? (
-                            <View style={styles.submittingContent}>
-                                <ActivityIndicator
-                                    size="small"
-                                    color={Colors.white}
-                                />
-
-                                <Text style={SharedStyles.buttonSubmitText}>
-                                    Guardando...
-                                </Text>
-                            </View>
-                        ) : (
-                            <Text style={SharedStyles.buttonSubmitText}>
-                                {isEdit ? 'Guardar cambios' : 'Guardar cliente'}
-                            </Text>
-                        )}
-                    </Pressable>
-
-                    <Pressable
-                        style={SharedStyles.buttonCancel}
-                        onPress={handleCancel}
-                        disabled={isSubmitting}
-                    >
-                        <Text style={SharedStyles.buttonCancelText}>
-                            Cancelar
-                        </Text>
-                    </Pressable>
-                </View>
             </ScrollView>
+
+            <FormFooter>
+                <AppButton
+                    title="Cancelar"
+                    variant="secondary"
+                    onPress={handleCancel}
+                    disabled={isSubmitting}
+                />
+                <AppButton
+                    title={isSubmitting ? 'Guardando...' : isEdit ? 'Guardar cambios' : 'Guardar cliente'}
+                    onPress={handleSubmit}
+                    disabled={isSubmitting}
+                />
+            </FormFooter>
         </Screen>
     );
 }
@@ -503,12 +439,8 @@ const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    scrollContainer: {
-        padding: Spacing.lg,
-        paddingBottom: Spacing.xxl * 2,
-    },
-    formGroup: {
-        marginBottom: Spacing.lg,
+    nameBlock: {
+        gap: Spacing.xs + 2,
     },
     row: {
         flexDirection: 'row',
@@ -521,7 +453,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: Spacing.xs,
-        marginBottom: Spacing.sm,
     },
     observationsInput: {
         height: 96,
@@ -530,118 +461,49 @@ const styles = StyleSheet.create({
     hint: {
         fontSize: 12,
         color: Colors.textSecondary,
-        marginTop: -Spacing.sm,
-        marginBottom: Spacing.lg,
-    },
-    nameError: {
-        marginTop: -Spacing.sm,
-        marginBottom: Spacing.lg,
     },
     errorText: {
         fontSize: 12,
         color: Colors.error,
-        marginTop: 4,
-        fontWeight: '500',
-    },
-    sectionHeader: {
-        marginTop: Spacing.md,
-        marginBottom: Spacing.sm,
-    },
-    addressCard: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: Spacing.sm,
-        backgroundColor: Colors.surface,
-        borderRadius: 10,
-        padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        marginBottom: Spacing.sm,
     },
     addAddressButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: Colors.surface,
-        borderRadius: 10,
+        borderRadius: Radius.lg,
         paddingVertical: Spacing.md,
         borderWidth: 1,
         borderStyle: 'dashed',
         borderColor: Colors.primary,
         gap: Spacing.xs,
-        marginBottom: Spacing.xl,
     },
     addAddressButtonText: {
         fontSize: 14,
-        fontWeight: '600',
+        fontWeight: '700',
         color: Colors.primary,
     },
     addressFormBox: {
-        backgroundColor: Colors.surface,
-        borderRadius: 12,
-        padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        marginBottom: Spacing.xl,
+        gap: Spacing.md,
     },
     addressFormTitle: {
         fontSize: 15,
         fontWeight: '700',
         color: Colors.text,
-        marginBottom: Spacing.md,
     },
     addressFormActions: {
         flexDirection: 'row',
-        gap: Spacing.md,
-        marginTop: Spacing.xs,
-    },
-    addAddrConfirmButton: {
-        flex: 1,
-        backgroundColor: Colors.primary,
-        height: 40,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    addAddrConfirmText: {
-        color: Colors.white,
-        fontWeight: '600',
-        fontSize: 13,
-    },
-    cancelAddrButton: {
-        height: 40,
-        paddingHorizontal: Spacing.md,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    cancelAddrText: {
-        color: Colors.textSecondary,
-        fontWeight: '500',
-        fontSize: 13,
+        gap: Spacing.sm,
     },
     submitErrorBox: {
         backgroundColor: Colors.errorLight,
         borderWidth: 1,
         borderColor: Colors.errorBorder,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         padding: Spacing.md,
-        marginBottom: Spacing.md,
     },
     submitErrorText: {
         color: Colors.error,
         fontSize: 13,
-    },
-    actionsContainer: {
-        gap: Spacing.sm,
-        marginTop: Spacing.md,
-    },
-    submitButtonDisabled: {
-        opacity: 0.7,
-    },
-    submittingContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
     },
 });

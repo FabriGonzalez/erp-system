@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 
 type AppInputProps = TextInputProps;
 
@@ -29,7 +29,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.border,
 
-        borderRadius: 10,
+        borderRadius: Radius.md,
 
         paddingHorizontal: Spacing.md,
 

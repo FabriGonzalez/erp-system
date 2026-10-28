@@ -1,12 +1,15 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useEffect } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/Avatar';
+import { InfoRow } from '@/components/ui/InfoRow';
 import { ListGroup } from '@/components/ui/ListGroup';
 import { MenuListItem } from '@/components/ui/MenuListItem';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useActiveBranch, useMyBranches } from '@/hooks/use-branch-queries';
@@ -34,22 +37,9 @@ export default function ProfileScreen() {
 
     return (
         <Screen style={styles.container}>
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>Mi perfil</Text>
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader onBack={() => router.back()} eyebrow="Más" title="Mi perfil" />
 
-            <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView contentContainerStyle={SharedStyles.pageContent}>
                 <View style={[SharedStyles.card, styles.identity]}>
                     <Avatar name={user.name} size={64} fontSize={22} fontWeight="700" />
                     <View style={styles.identityText}>
@@ -58,16 +48,14 @@ export default function ProfileScreen() {
                     </View>
                 </View>
 
-                <View style={SharedStyles.card}>
+                <ListGroup>
                     <InfoRow label="Rol" value={user.role || 'Sin rol asignado'} />
-                    <View style={styles.divider} />
                     <InfoRow label="Empresa" value={user.company.name} />
-                    <View style={styles.divider} />
                     <InfoRow label="Sucursal activa" value={activeBranch?.name ?? 'Ninguna seleccionada'} />
-                </View>
+                </ListGroup>
 
-                <View style={SharedStyles.card}>
-                    <Text style={styles.label}>Sucursales asignadas</Text>
+                <View style={SharedStyles.pageSection}>
+                    <SectionHeader title="Sucursales asignadas" />
                     {isLoadingBranches ? (
                         <Text style={styles.secondary}>Cargando…</Text>
                     ) : branches.length === 0 ? (
@@ -75,12 +63,17 @@ export default function ProfileScreen() {
                             No tenés sucursales asignadas. Pedile a un administrador que te asigne una.
                         </Text>
                     ) : (
-                        branches.map((branch) => (
-                            <Text key={branch.id} style={styles.branch}>
-                                {branch.name}
-                                {branch.id === activeBranch?.id ? ' · activa' : ''}
-                            </Text>
-                        ))
+                        <ListGroup>
+                            {branches.map((branch) => (
+                                <InfoRow
+                                    key={branch.id}
+                                    label={branch.name}
+                                    value={branch.id === activeBranch?.id
+                                        ? <StatusPill label="Activa" tone="primary" />
+                                        : ''}
+                                />
+                            ))}
+                        </ListGroup>
                     )}
                 </View>
 
@@ -88,6 +81,7 @@ export default function ProfileScreen() {
                     <MenuListItem
                         title="Cambiar sucursal activa"
                         iconName={{ ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' }}
+                        tone="primary"
                         onPress={() => router.push('/settings/active-branch')}
                     />
                     {/* Las cuentas creadas por un administrador no cambian su propia contraseña. */}
@@ -95,6 +89,7 @@ export default function ProfileScreen() {
                         <MenuListItem
                             title="Cambiar contraseña"
                             iconName={{ ios: 'lock.fill', android: 'lock', web: 'lock' }}
+                            tone="warning"
                             onPress={() => router.push('/settings/change-password')}
                         />
                     )}
@@ -104,23 +99,9 @@ export default function ProfileScreen() {
     );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
-    return (
-        <View style={styles.row}>
-            <Text style={styles.label}>{label}</Text>
-            <Text style={styles.value}>{value}</Text>
-        </View>
-    );
-}
-
 const styles = StyleSheet.create({
     container: {
         padding: 0,
-    },
-    content: {
-        padding: Spacing.lg,
-        gap: Spacing.md,
-        paddingBottom: Spacing.xxl,
     },
     identity: {
         flexDirection: 'row',
@@ -139,30 +120,5 @@ const styles = StyleSheet.create({
     secondary: {
         fontSize: 14,
         color: Colors.textSecondary,
-    },
-    row: {
-        paddingVertical: Spacing.sm,
-    },
-    label: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: Colors.textSecondary,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-        marginBottom: 2,
-    },
-    value: {
-        fontSize: 15,
-        fontWeight: '500',
-        color: Colors.text,
-    },
-    divider: {
-        height: 1,
-        backgroundColor: Colors.muted,
-    },
-    branch: {
-        fontSize: 15,
-        color: Colors.text,
-        paddingVertical: 4,
     },
 });

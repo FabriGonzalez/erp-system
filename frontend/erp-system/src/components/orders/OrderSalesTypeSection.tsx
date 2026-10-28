@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 import { SalesType } from '@/types/order';
 
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     option: {
         flex: 1,
         height: 46,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         borderWidth: 1,
         borderColor: Colors.border,
         alignItems: 'center',

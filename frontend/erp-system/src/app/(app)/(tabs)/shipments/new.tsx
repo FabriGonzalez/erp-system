@@ -1,10 +1,10 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 import { OrderForm } from '@/components/orders/OrderForm';
 import { NotFound } from '@/components/ui/NotFound';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
@@ -13,7 +13,6 @@ import { useCreateOrder } from '@/hooks/use-order-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { showToast } from '@/stores/toast-store';
-import { SharedStyles } from '@/styles/shared';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import {
     toBackendCustomerId,
@@ -96,24 +95,7 @@ export default function NewShipmentScreen() {
 
     return (
         <Screen style={styles.container}>
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={handleCancel}
-                    style={({ pressed }) => [
-                        SharedStyles.backButton,
-                        pressed && SharedStyles.pressed,
-                    ]}
-                    disabled={isSubmitting}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>Nuevo Envío</Text>
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader onBack={isSubmitting ? undefined : handleCancel} eyebrow="Envíos" title="Nuevo envío" />
 
             {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
 

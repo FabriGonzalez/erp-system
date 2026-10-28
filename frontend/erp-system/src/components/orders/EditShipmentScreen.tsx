@@ -1,11 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 import { OrderForm } from '@/components/orders/OrderForm';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { NotFound } from '@/components/ui/NotFound';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
@@ -104,9 +105,11 @@ export function EditShipmentScreen({ flow }: EditShipmentScreenProps) {
 
     return (
         <Screen style={styles.container}>
-            <View style={SharedStyles.header}>
-                <Text style={SharedStyles.headerTitle}>Editar Envío</Text>
-            </View>
+            <PageHeader
+                onBack={isSubmitting ? undefined : handleCancel}
+                eyebrow={order.orderNumber}
+                title="Editar envío"
+            />
             {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
             <OrderForm initialOrder={order} mode="SHIPMENT" flow={flow} onSubmitOrder={handleSubmit} onCancel={handleCancel} isSubmitting={isSubmitting} submitLabel="Guardar Cambios" />
         </Screen>

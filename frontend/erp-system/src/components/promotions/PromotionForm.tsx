@@ -7,8 +7,13 @@ import { CartSummaryBar } from '@/components/products/CartSummaryBar';
 import { activeVariantPrices, PromotionProductPicker } from '@/components/promotions/PromotionProductPicker';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
+import { DateField } from '@/components/ui/DateField';
+import { FormField } from '@/components/ui/FormField';
+import { FormFooter } from '@/components/ui/FormFooter';
+import { FormSection } from '@/components/ui/FormSection';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 import { Product } from '@/types/product';
 import { Promotion, PromotionRequest } from '@/types/promotion';
@@ -43,30 +48,6 @@ function todayYmd() {
     return `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
 }
 
-/** AAAA-MM-DD → DD/MM/AAAA. */
-function toDisplayDate(ymd: string) {
-    const [year, month, day] = ymd.split('-');
-    return `${day}/${month}/${year}`;
-}
-
-/** DD/MM/AAAA → AAAA-MM-DD, o null si no es una fecha real (p. ej. 31/02). */
-function parseDisplayDate(text: string): string | null {
-    const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text.trim());
-    if (!match) return null;
-    const [, day, month, year] = match.map(Number);
-    const date = new Date(year, month - 1, day);
-    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
-    return `${year}-${pad(month)}-${pad(day)}`;
-}
-
-/** Deja solo dígitos y agrega las barras mientras se escribe. */
-function maskDate(text: string) {
-    const digits = text.replace(/[^0-9]/g, '').slice(0, 8);
-    if (digits.length <= 2) return digits;
-    if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
-}
-
 /**
  * Alta y edición de una promo: productos con su cantidad (sin stock, la promo es de toda la
  * empresa; la variante de cada unidad se elige al vender), precio fijo y vigencia.
@@ -75,8 +56,9 @@ export function PromotionForm({ initialPromotion, onSubmit, isSubmitting, submit
     const [name, setName] = useState(initialPromotion?.name ?? '');
     const [description, setDescription] = useState(initialPromotion?.description ?? '');
     const [price, setPrice] = useState(initialPromotion ? String(initialPromotion.price) : '');
-    const [startDate, setStartDate] = useState(toDisplayDate(initialPromotion?.startDate ?? todayYmd()));
-    const [endDate, setEndDate] = useState(initialPromotion ? toDisplayDate(initialPromotion.endDate) : '');
+    // AAAA-MM-DD, como las manda el backend; vacío hasta que se elige.
+    const [startDate, setStartDate] = useState(initialPromotion?.startDate ?? todayYmd());
+    const [endDate, setEndDate] = useState(initialPromotion?.endDate ?? '');
     const [components, setComponents] = useState<DraftProduct[]>(() =>
         (initialPromotion?.items ?? []).map((item) => ({
             productId: item.productId,
@@ -122,13 +104,10 @@ export function PromotionForm({ initialPromotion, onSubmit, isSubmitting, submit
     }
 
     function handleSubmit() {
-        const start = parseDisplayDate(startDate);
-        const end = parseDisplayDate(endDate);
-
         if (!name.trim()) return setFormError('Poné un nombre a la promo.');
         if (!hasPrice) return setFormError('El precio tiene que ser mayor a $0.');
-        if (!start || !end) return setFormError('Las fechas tienen que tener el formato DD/MM/AAAA.');
-        if (end < start) return setFormError('La fecha de fin no puede ser anterior a la de inicio.');
+        if (!startDate || !endDate) return setFormError('Elegí las fechas de inicio y de fin.');
+        if (endDate < startDate) return setFormError('La fecha de fin no puede ser anterior a la de inicio.');
         if (components.length === 0) return setFormError('Agregá al menos un producto.');
         if (components.some((component) => !component.available)) {
             return setFormError('Sacá los productos inactivos (marcados en rojo) para poder guardar.');
@@ -139,8 +118,8 @@ export function PromotionForm({ initialPromotion, onSubmit, isSubmitting, submit
             name: name.trim(),
             description: description.trim() || null,
             price: numericPrice,
-            startDate: start,
-            endDate: end,
+            startDate,
+            endDate,
             items: components.map((component) => ({
                 productId: Number(component.productId),
                 quantity: component.quantity,
@@ -152,93 +131,92 @@ export function PromotionForm({ initialPromotion, onSubmit, isSubmitting, submit
 
     return (
         <>
-            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-                <View style={styles.card}>
-                    <Text style={styles.label}>Nombre *</Text>
-                    <AppInput value={name} onChangeText={setName} maxLength={100} placeholder="Ej. 2 remeras + gorra" editable={!isSubmitting} />
+            <ScrollView contentContainerStyle={SharedStyles.pageContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <FormSection title="Datos">
+                    <FormField label="Nombre *">
+                        <AppInput value={name} onChangeText={setName} maxLength={100} placeholder="Ej. 2 remeras + gorra" editable={!isSubmitting} />
+                    </FormField>
 
-                    <Text style={styles.label}>Descripción</Text>
-                    <AppInput
-                        value={description}
-                        onChangeText={setDescription}
-                        maxLength={500}
-                        multiline
-                        placeholder="Opcional"
-                        editable={!isSubmitting}
+                    <FormField label="Descripción">
+                        <AppInput
+                            value={description}
+                            onChangeText={setDescription}
+                            maxLength={500}
+                            multiline
+                            placeholder="Opcional"
+                            editable={!isSubmitting}
+                        />
+                    </FormField>
+                </FormSection>
+
+                <View style={SharedStyles.pageSection}>
+                    <SectionHeader
+                        title="Productos"
+                        actionLabel={isSubmitting ? undefined : 'Agregar'}
+                        onAction={() => setCatalogVisible(true)}
                     />
-                </View>
-
-                <View style={styles.card}>
-                    <View style={styles.cardTopRow}>
-                        <Text style={styles.label}>Productos</Text>
-                        <Pressable
-                            onPress={() => setCatalogVisible(true)}
-                            disabled={isSubmitting}
-                            style={({ pressed }) => [pressed && SharedStyles.pressed]}
-                        >
-                            <Text style={styles.link}>Agregar</Text>
-                        </Pressable>
+                    <View style={[SharedStyles.card, styles.card]}>
+                        {components.length === 0 ? (
+                            <Text style={styles.hint}>
+                                Elegí los productos que lleva la promo y cuántos de cada uno. El talle, color, etc. se
+                                elige al vender.
+                            </Text>
+                        ) : (
+                            components.map((component) => (
+                                <View key={component.productId} style={styles.itemRow}>
+                                    <View style={styles.itemInfo}>
+                                        <Text style={[styles.itemName, !component.available && styles.errorInline]}>
+                                            {component.productName}
+                                        </Text>
+                                        <Text style={[styles.hint, !component.available && styles.errorInline]}>
+                                            {!component.available
+                                                ? 'Inactivo o sin variantes activas: sacalo de la promo'
+                                                : component.minPrice === component.maxPrice
+                                                    ? `${formatCurrency(component.minPrice ?? 0)} c/u`
+                                                    : `${formatCurrency(component.minPrice ?? 0)} a ${formatCurrency(component.maxPrice ?? 0)} c/u`}
+                                        </Text>
+                                    </View>
+                                    <View style={styles.qtyControls}>
+                                        <Pressable
+                                            style={styles.qtyButton}
+                                            onPress={() => setQuantity(component.productId, component.quantity - 1)}
+                                            disabled={isSubmitting}
+                                        >
+                                            <SymbolView
+                                                name={{ ios: 'minus', android: 'remove', web: 'remove' }}
+                                                size={16}
+                                                tintColor={Colors.text}
+                                            />
+                                        </Pressable>
+                                        <Text style={styles.qtyText}>{component.quantity}</Text>
+                                        <Pressable
+                                            style={[styles.qtyButton, !component.available && styles.qtyButtonDisabled]}
+                                            onPress={() => setQuantity(component.productId, component.quantity + 1)}
+                                            disabled={isSubmitting || !component.available}
+                                        >
+                                            <SymbolView
+                                                name={{ ios: 'plus', android: 'add', web: 'add' }}
+                                                size={16}
+                                                tintColor={Colors.text}
+                                            />
+                                        </Pressable>
+                                    </View>
+                                </View>
+                            ))
+                        )}
                     </View>
-
-                    {components.length === 0 ? (
-                        <Text style={styles.hint}>
-                            Elegí los productos que lleva la promo y cuántos de cada uno. El talle, color, etc. se
-                            elige al vender.
-                        </Text>
-                    ) : (
-                        components.map((component) => (
-                            <View key={component.productId} style={styles.itemRow}>
-                                <View style={styles.itemInfo}>
-                                    <Text style={[styles.itemName, !component.available && styles.errorInline]}>
-                                        {component.productName}
-                                    </Text>
-                                    <Text style={[styles.hint, !component.available && styles.errorInline]}>
-                                        {!component.available
-                                            ? 'Inactivo o sin variantes activas: sacalo de la promo'
-                                            : component.minPrice === component.maxPrice
-                                                ? `${formatCurrency(component.minPrice ?? 0)} c/u`
-                                                : `${formatCurrency(component.minPrice ?? 0)} a ${formatCurrency(component.maxPrice ?? 0)} c/u`}
-                                    </Text>
-                                </View>
-                                <View style={styles.qtyControls}>
-                                    <Pressable
-                                        style={styles.qtyButton}
-                                        onPress={() => setQuantity(component.productId, component.quantity - 1)}
-                                        disabled={isSubmitting}
-                                    >
-                                        <SymbolView
-                                            name={{ ios: 'minus', android: 'remove', web: 'remove' }}
-                                            size={16}
-                                            tintColor={Colors.text}
-                                        />
-                                    </Pressable>
-                                    <Text style={styles.qtyText}>{component.quantity}</Text>
-                                    <Pressable
-                                        style={[styles.qtyButton, !component.available && styles.qtyButtonDisabled]}
-                                        onPress={() => setQuantity(component.productId, component.quantity + 1)}
-                                        disabled={isSubmitting || !component.available}
-                                    >
-                                        <SymbolView
-                                            name={{ ios: 'plus', android: 'add', web: 'add' }}
-                                            size={16}
-                                            tintColor={Colors.text}
-                                        />
-                                    </Pressable>
-                                </View>
-                            </View>
-                        ))
-                    )}
                 </View>
 
-                <View style={styles.card}>
-                    <Text style={styles.label}>Precio de la promo *</Text>
-                    <AppInput
-                        value={price}
-                        onChangeText={(text) => setPrice(text.replace(/[^0-9.,]/g, ''))}
-                        keyboardType="decimal-pad"
-                        placeholder="0.00"
-                        editable={!isSubmitting}
-                    />
+                <FormSection title="Precio">
+                    <FormField label="Precio de la promo *">
+                        <AppInput
+                            value={price}
+                            onChangeText={(text) => setPrice(text.replace(/[^0-9.,]/g, ''))}
+                            keyboardType="decimal-pad"
+                            placeholder="0.00"
+                            editable={!isSubmitting}
+                        />
+                    </FormField>
                     <View style={styles.summaryRow}>
                         <Text style={styles.hint}>Sueltos costarían</Text>
                         <Text style={styles.summaryValue}>
@@ -265,45 +243,45 @@ export function PromotionForm({ initialPromotion, onSubmit, isSubmitting, submit
                             </Text>
                         )
                     ) : null}
-                </View>
+                </FormSection>
 
-                <View style={styles.card}>
-                    <Text style={styles.label}>Vigencia *</Text>
+                <FormSection title="Vigencia">
                     <View style={styles.datesRow}>
-                        <View style={styles.dateField}>
-                            <Text style={styles.hint}>Desde</Text>
-                            <AppInput
+                        <FormField label="Desde *">
+                            <DateField
                                 value={startDate}
-                                onChangeText={(text) => setStartDate(maskDate(text))}
-                                keyboardType="number-pad"
-                                placeholder="DD/MM/AAAA"
-                                editable={!isSubmitting}
+                                onChange={(ymd) => {
+                                    setStartDate(ymd);
+                                    setFormError(null);
+                                }}
+                                disabled={isSubmitting}
                             />
-                        </View>
-                        <View style={styles.dateField}>
-                            <Text style={styles.hint}>Hasta</Text>
-                            <AppInput
+                        </FormField>
+                        <FormField label="Hasta *">
+                            <DateField
                                 value={endDate}
-                                onChangeText={(text) => setEndDate(maskDate(text))}
-                                keyboardType="number-pad"
-                                placeholder="DD/MM/AAAA"
-                                editable={!isSubmitting}
+                                onChange={(ymd) => {
+                                    setEndDate(ymd);
+                                    setFormError(null);
+                                }}
+                                minimumDate={startDate || undefined}
+                                disabled={isSubmitting}
                             />
-                        </View>
+                        </FormField>
                     </View>
                     <Text style={styles.hint}>Los dos días incluidos. Se vende solo dentro de estas fechas.</Text>
-                </View>
+                </FormSection>
 
                 {error ? <Text style={styles.errorText}>{error}</Text> : null}
             </ScrollView>
 
-            <View style={styles.footer}>
+            <FormFooter>
                 <AppButton
                     title={isSubmitting ? 'Guardando...' : submitLabel}
                     onPress={handleSubmit}
                     disabled={isSubmitting}
                 />
-            </View>
+            </FormFooter>
 
             <Modal visible={isCatalogVisible} animationType="slide" onRequestClose={() => setCatalogVisible(false)}>
                 <SafeAreaView style={styles.modal}>
@@ -341,29 +319,9 @@ export function PromotionForm({ initialPromotion, onSubmit, isSubmitting, submit
 }
 
 const styles = StyleSheet.create({
-    content: {
-        padding: Spacing.lg,
-        gap: Spacing.md,
-    },
     card: {
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
         padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
         gap: Spacing.sm,
-    },
-    cardTopRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    label: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: Colors.textSecondary,
-        textTransform: 'uppercase',
-        letterSpacing: 0.4,
     },
     hint: {
         fontSize: 13,
@@ -399,7 +357,7 @@ const styles = StyleSheet.create({
     qtyButton: {
         width: 32,
         height: 32,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         borderWidth: 1,
         borderColor: Colors.border,
         alignItems: 'center',
@@ -433,12 +391,7 @@ const styles = StyleSheet.create({
         color: Colors.warningText,
     },
     datesRow: {
-        flexDirection: 'row',
-        gap: Spacing.md,
-    },
-    dateField: {
-        flex: 1,
-        gap: Spacing.xs,
+        gap: Spacing.lg,
     },
     errorInline: {
         color: Colors.error,
@@ -446,12 +399,6 @@ const styles = StyleSheet.create({
     errorText: {
         color: Colors.error,
         fontSize: 13,
-    },
-    footer: {
-        padding: Spacing.lg,
-        backgroundColor: Colors.surface,
-        borderTopWidth: 1,
-        borderTopColor: Colors.border,
     },
     modal: {
         flex: 1,

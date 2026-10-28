@@ -7,6 +7,8 @@ import { AppInput } from '@/components/ui/AppInput';
 import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { HeaderButton } from '@/components/ui/HeaderButton';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
@@ -49,22 +51,11 @@ export function SelectCustomerScreen({ flow }: SelectCustomerScreenProps) {
 
     return (
         <Screen style={styles.screen}>
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={24} tintColor={Colors.text} />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>Seleccionar Cliente</Text>
-                <Pressable
-                    onPress={handleCreateNewCustomer}
-                    style={({ pressed }) => [styles.newBtn, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView name={{ ios: 'plus', android: 'add', web: 'add' }} size={18} tintColor={Colors.primary} />
-                    <Text style={styles.newBtnText}>Nuevo</Text>
-                </Pressable>
-            </View>
+            <PageHeader
+                onBack={() => router.back()}
+                title="Elegir cliente"
+                right={<HeaderButton label="Nuevo" accessibilityLabel="Nuevo cliente" onPress={handleCreateNewCustomer} />}
+            />
 
             <View style={styles.searchBox}>
                 <AppInput
@@ -177,8 +168,6 @@ export function SelectCustomerScreen({ flow }: SelectCustomerScreenProps) {
 
 const styles = StyleSheet.create({
     screen: { padding: 0, backgroundColor: Colors.background },
-    newBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: Spacing.xs, paddingVertical: 4 },
-    newBtnText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
     searchBox: { padding: Spacing.lg, paddingBottom: Spacing.sm },
     listContainer: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl * 2 },
     headerComponent: { marginBottom: Spacing.md },

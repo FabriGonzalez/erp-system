@@ -2,7 +2,7 @@ import { SymbolView } from 'expo-symbols';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 import { OrderItem, OrderPromo } from '@/types/order';
 
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     },
     emptyCartBox: {
         backgroundColor: Colors.surface,
-        borderRadius: 12,
+        borderRadius: Radius.lg,
         padding: Spacing.xl,
         alignItems: 'center',
         borderWidth: 1,
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.primaryLight,
         paddingHorizontal: Spacing.lg,
         paddingVertical: Spacing.sm,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
     },
     selectProductsButtonText: {
         fontSize: 14,
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
     },
     cartContainer: {
         backgroundColor: Colors.surface,
-        borderRadius: 12,
+        borderRadius: Radius.lg,
         padding: Spacing.md,
         borderWidth: 1,
         borderColor: Colors.border,
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: Colors.background,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         paddingVertical: Spacing.sm,
         gap: 6,
         borderWidth: 1,

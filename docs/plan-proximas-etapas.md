@@ -1870,9 +1870,40 @@ verde = listo, rojo = falta/peligro.
    secundario), usuario (sucursales con `SwitchRow`), rol, stock (Ajustar arriba) y atributo.
    Nuevos en `components/ui`: `InfoRow`, `SwitchRow`; `HeaderButton` con `disabled`.
    `SharedStyles.card` y los botones compartidos pasan a `Radius.lg` / `Radius.md`.
-   **Falta:** formularios (OrderForm y sus secciones, CustomerForm, PromotionForm, ProductForm
-   con products/new y edit, transfers/new, UserForm, RoleForm, roles/new). Tanda 4: modales,
-   login, importar, reportes, settings, NotFound, resto.
+   **Formularios hechos (2026-10-28, sin probar ni commitear):** nuevos `FormField` (etiqueta,
+   aclaración o error), `FormSection` (título + tarjeta) y `FormFooter` (pie fijo con los
+   botones, mismo ancho); `AppButton` con `variant="secondary"`, alto 50 y `Radius.md`;
+   `AppInput` con `Radius.md`; `SharedStyles.fieldLabel` y `sectionTitle` con el aspecto de
+   `SectionHeader`. UserForm, RoleForm (+ roles/new y [id]), CustomerForm (Guardar y Cancelar
+   pasan al pie), CustomerAddressForm/AddressFields, PromotionForm (+ new), ProductForm (Datos,
+   Precio con el switch de variantes, Atributos, Variantes, Activo; botones al pie; chips de
+   valores con `FilterChip`), transfers/new, y el pedido: encabezados de nueva venta / nuevo
+   envío / editar envío / agregar productos / elegir cliente / elegir dirección, secciones con
+   radios del tema, resumen con `StatusPill`.
+   **Tanda 4, en curso (2026-10-28):** hechos NotFound, sucursal activa, perfil y cambiar
+   contraseña. Pedidos del usuario en el medio: (1) fechas de la promo con calendario:
+   `components/ui/DateField` (Android: `DateTimePickerAndroid.open`; iOS: calendario inline
+   debajo del campo; web: `DateField.web.tsx` con `<input type="date">`), valor AAAA-MM-DD;
+   `@react-native-community/datetimepicker` 9.1.0 (viene en Expo Go). (2) El teclado tapaba
+   los campos: `Screen` envuelve todo en `KeyboardAvoidingView` (`padding` en iOS y Android,
+   nada en web): con edge-to-edge la ventana de Android no se achica sola.
+   `react-native-keyboard-controller` se descartó: no está en Expo Go. Los `Modal` no pasan por
+   `Screen`: el teclado en los modales con inputs se ve en la tanda 4.
+   **Medio de pago siempre y venta rápida a consumidor final (pedido del usuario, 2026-10-28;
+   backend + frontend, sin commitear):** `V3__medio_de_pago_en_ventas_sin_cliente.sql` agrega
+   `orders.payment_method` (CHECK con los 4 medios), solo para ventas sin cliente (se cobran
+   completas al crearse y no generan `Payment`, que exige cliente). `OrderRequest.paymentMethod`
+   es obligatorio sin cliente y prohibido con cliente (con cliente el medio va en
+   `initialPayment`); sale en `OrderResponse.paymentMethod`. La venta rápida ya no exige
+   cliente registrado (solo el envío). Reportes: `CollectionsSummary.byMethod` suma pagos y
+   ventas sin cliente; `walkInSalesTotal` pasó a `withoutMethodTotal` (las ventas sin cliente
+   anteriores, sin medio). Frontend: `components/orders/PaymentMethodPicker` (2×2 con íconos)
+   siempre visible en el resumen del alta; el medio se ve en el detalle del pedido. Tests del
+   backend: 218 OK (con Testcontainers), corridos en una copia. Backend y frontend van juntos:
+   el APK nuevo necesita el backend nuevo.
+   **Falta, tanda 4:** modales (catálogo de promo y transferencia, PromoVariantChooser,
+   categorías, atributos, sucursales, stock, pagos, contraseña de usuario), login, importar,
+   reportes.
    Íconos descentrados en Android (letra del sistema agrandada): `patches/expo-symbols+57.0.2.patch`
    (`allowFontScaling: false` y centrado), aplicado con `patch-package` en `postinstall`.
 6. Validar cada tanda: tsc, eslint, `git diff --check`; el usuario prueba en web; commit por tanda.

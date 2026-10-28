@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { usePromotions } from '@/hooks/use-promotion-queries';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.primary,
         paddingHorizontal: Spacing.md,
         paddingVertical: Spacing.xs + 2,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         gap: 4,
     },
     addButtonText: {

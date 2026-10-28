@@ -26,6 +26,13 @@ export const SharedStyles = StyleSheet.create({
         marginTop: Spacing.xs,
     },
 
+    // Etiqueta de un campo de formulario (FormField).
+    fieldLabel: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: Colors.text,
+    },
+
     // Fila de contadores (StatTile).
     statRow: {
         flexDirection: 'row',
@@ -110,11 +117,14 @@ export const SharedStyles = StyleSheet.create({
         width: 32,
     },
 
+    // Título de una sección de formulario, igual que SectionHeader (Cliente, Productos...).
     sectionTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.text,
-        marginBottom: Spacing.xs + 2,
+        fontSize: 13,
+        fontWeight: '700',
+        color: Colors.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: Spacing.sm,
     },
 
     cardTitle: {
@@ -127,7 +137,7 @@ export const SharedStyles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: Colors.surface,
-        borderRadius: 12,
+        borderRadius: Radius.lg,
         padding: Spacing.md,
         borderWidth: 1,
         borderColor: Colors.border,

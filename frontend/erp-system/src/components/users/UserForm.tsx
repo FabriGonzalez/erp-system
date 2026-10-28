@@ -1,11 +1,14 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import { ReactNode, useState } from 'react';
-import { Pressable, ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
 import { FilterChip } from '@/components/ui/FilterChip';
+import { FormField } from '@/components/ui/FormField';
+import { FormFooter } from '@/components/ui/FormFooter';
+import { FormSection } from '@/components/ui/FormSection';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
@@ -88,161 +91,136 @@ export function UserForm({
 
     return (
         <Screen style={styles.screen}>
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>{isCreate ? 'Nuevo usuario' : 'Editar usuario'}</Text>
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow="Usuarios"
+                title={isCreate ? 'Nuevo usuario' : 'Editar usuario'}
+            />
 
             <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.content}
+                contentContainerStyle={SharedStyles.pageContent}
                 keyboardShouldPersistTaps="handled"
             >
-                <View style={styles.row}>
-                    <Field label="Nombre" style={styles.flex1}>
+                <FormSection title="Datos">
+                    <View style={styles.row}>
+                        <FormField label="Nombre" style={styles.flex1}>
+                            <AppInput
+                                placeholder="Ej. María"
+                                value={values.firstName}
+                                onChangeText={(text) => update('firstName', text)}
+                                autoCapitalize="words"
+                                maxLength={100}
+                                editable={!isSubmitting}
+                            />
+                        </FormField>
+                        <FormField label="Apellido" style={styles.flex1}>
+                            <AppInput
+                                placeholder="Ej. González"
+                                value={values.lastName}
+                                onChangeText={(text) => update('lastName', text)}
+                                autoCapitalize="words"
+                                maxLength={100}
+                                editable={!isSubmitting}
+                            />
+                        </FormField>
+                    </View>
+
+                    <FormField label="Email">
                         <AppInput
-                            placeholder="Ej. María"
-                            value={values.firstName}
-                            onChangeText={(text) => update('firstName', text)}
-                            autoCapitalize="words"
+                            placeholder="Ej. maria@empresa.com"
+                            value={values.email}
+                            onChangeText={(text) => update('email', text)}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            keyboardType="email-address"
                             maxLength={100}
                             editable={!isSubmitting}
                         />
-                    </Field>
-                    <Field label="Apellido" style={styles.flex1}>
+                    </FormField>
+                </FormSection>
+
+                <FormSection title="Acceso">
+                    <FormField label="Usuario" hint="Con este nombre inicia sesión.">
                         <AppInput
-                            placeholder="Ej. González"
-                            value={values.lastName}
-                            onChangeText={(text) => update('lastName', text)}
-                            autoCapitalize="words"
-                            maxLength={100}
-                            editable={!isSubmitting}
-                        />
-                    </Field>
-                </View>
-
-                <Field label="Usuario" hint="Con este nombre inicia sesión.">
-                    <AppInput
-                        placeholder="Ej. mgonzalez"
-                        value={values.username}
-                        onChangeText={(text) => update('username', text)}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                        maxLength={50}
-                        editable={!isSubmitting}
-                    />
-                </Field>
-
-                <Field label="Email">
-                    <AppInput
-                        placeholder="Ej. maria@empresa.com"
-                        value={values.email}
-                        onChangeText={(text) => update('email', text)}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                        keyboardType="email-address"
-                        maxLength={100}
-                        editable={!isSubmitting}
-                    />
-                </Field>
-
-                {isCreate && (
-                    <Field
-                        label="Contraseña"
-                        hint="El usuario no va a poder cambiarla: si la olvida, la cambiás vos desde su ficha."
-                    >
-                        <AppInput
-                            placeholder={`Al menos ${MIN_PASSWORD_LENGTH} caracteres`}
-                            value={password}
-                            onChangeText={(text) => {
-                                setPassword(text);
-                                setValidationError(null);
-                            }}
-                            secureTextEntry
+                            placeholder="Ej. mgonzalez"
+                            value={values.username}
+                            onChangeText={(text) => update('username', text)}
                             autoCapitalize="none"
-                            autoComplete="new-password"
-                            maxLength={MAX_PASSWORD_LENGTH}
+                            autoCorrect={false}
+                            maxLength={50}
                             editable={!isSubmitting}
                         />
-                        <AppInput
-                            placeholder="Repetir contraseña"
-                            value={confirmation}
-                            onChangeText={(text) => {
-                                setConfirmation(text);
-                                setValidationError(null);
-                            }}
-                            secureTextEntry
-                            autoCapitalize="none"
-                            autoComplete="new-password"
-                            maxLength={MAX_PASSWORD_LENGTH}
-                            editable={!isSubmitting}
-                        />
-                    </Field>
-                )}
+                    </FormField>
 
-                <Field
-                    label="Rol"
-                    hint={roleLocked ? 'No podés cambiar tu propio rol.' : 'Define qué puede hacer en la app.'}
-                >
-                    {roles.length === 0 ? (
-                        <Text style={styles.hint}>No hay roles activos. Creá uno desde Roles.</Text>
-                    ) : (
-                        <View style={styles.chips}>
-                            {roles.map((role) => (
-                                <FilterChip
-                                    key={role.id}
-                                    label={role.name}
-                                    selected={values.roleId === role.id}
-                                    onPress={() => {
-                                        if (!roleLocked && !isSubmitting) update('roleId', role.id);
-                                    }}
-                                />
-                            ))}
-                        </View>
+                    {isCreate && (
+                        <FormField
+                            label="Contraseña"
+                            hint="El usuario no va a poder cambiarla: si la olvida, la cambiás vos desde su ficha."
+                        >
+                            <AppInput
+                                placeholder={`Al menos ${MIN_PASSWORD_LENGTH} caracteres`}
+                                value={password}
+                                onChangeText={(text) => {
+                                    setPassword(text);
+                                    setValidationError(null);
+                                }}
+                                secureTextEntry
+                                autoCapitalize="none"
+                                autoComplete="new-password"
+                                maxLength={MAX_PASSWORD_LENGTH}
+                                editable={!isSubmitting}
+                            />
+                            <AppInput
+                                placeholder="Repetir contraseña"
+                                value={confirmation}
+                                onChangeText={(text) => {
+                                    setConfirmation(text);
+                                    setValidationError(null);
+                                }}
+                                secureTextEntry
+                                autoCapitalize="none"
+                                autoComplete="new-password"
+                                maxLength={MAX_PASSWORD_LENGTH}
+                                editable={!isSubmitting}
+                            />
+                        </FormField>
                     )}
-                </Field>
+
+                    <FormField
+                        label="Rol"
+                        hint={roleLocked ? 'No podés cambiar tu propio rol.' : 'Define qué puede hacer en la app.'}
+                    >
+                        {roles.length === 0 ? (
+                            <Text style={styles.hint}>No hay roles activos. Creá uno desde Roles.</Text>
+                        ) : (
+                            <View style={styles.chips}>
+                                {roles.map((role) => (
+                                    <FilterChip
+                                        key={role.id}
+                                        label={role.name}
+                                        selected={values.roleId === role.id}
+                                        onPress={() => {
+                                            if (!roleLocked && !isSubmitting) update('roleId', role.id);
+                                        }}
+                                    />
+                                ))}
+                            </View>
+                        )}
+                    </FormField>
+                </FormSection>
 
                 {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
             </ScrollView>
 
-            <View style={styles.footer}>
+            <FormFooter>
                 <AppButton
                     title={isSubmitting ? 'Guardando...' : isCreate ? 'Crear usuario' : 'Guardar cambios'}
                     onPress={handleSubmit}
                     disabled={isSubmitting}
                 />
-            </View>
+            </FormFooter>
         </Screen>
-    );
-}
-
-function Field({
-    label,
-    hint,
-    style,
-    children,
-}: {
-    label: string;
-    hint?: string;
-    style?: StyleProp<ViewStyle>;
-    children: ReactNode;
-}) {
-    return (
-        <View style={[styles.field, style]}>
-            <Text style={SharedStyles.sectionTitle}>{label}</Text>
-            {children}
-            {hint && <Text style={styles.hint}>{hint}</Text>}
-        </View>
     );
 }
 
@@ -250,19 +228,12 @@ const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    content: {
-        padding: Spacing.lg,
-        gap: Spacing.lg,
-    },
     row: {
         flexDirection: 'row',
         gap: Spacing.md,
     },
     flex1: {
         flex: 1,
-    },
-    field: {
-        gap: Spacing.sm,
     },
     hint: {
         fontSize: 13,
@@ -276,11 +247,5 @@ const styles = StyleSheet.create({
     errorText: {
         color: Colors.error,
         fontSize: 14,
-    },
-    footer: {
-        padding: Spacing.lg,
-        backgroundColor: Colors.surface,
-        borderTopWidth: 1,
-        borderTopColor: Colors.border,
     },
 });

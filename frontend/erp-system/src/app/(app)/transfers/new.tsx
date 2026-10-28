@@ -9,9 +9,13 @@ import { VariantCatalog } from '@/components/products/VariantCatalog';
 import { AppButton } from '@/components/ui/AppButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterChip } from '@/components/ui/FilterChip';
+import { FormField } from '@/components/ui/FormField';
+import { FormFooter } from '@/components/ui/FormFooter';
+import { FormSection } from '@/components/ui/FormSection';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { useActiveBranch, useBranches } from '@/hooks/use-branch-queries';
 import { useVariantStock } from '@/hooks/use-stock-queries';
 import { useCreateTransfer } from '@/hooks/use-transfer-queries';
@@ -143,19 +147,7 @@ export default function NewTransferScreen() {
     }
 
     const header = (
-        <View style={[SharedStyles.topBar, SharedStyles.topBarElevated]}>
-            <Pressable
-                onPress={() => router.back()}
-                style={({ pressed }) => [styles.backButton, pressed && SharedStyles.pressed]}
-            >
-                <SymbolView
-                    name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                    size={24}
-                    tintColor={Colors.text}
-                />
-            </Pressable>
-            <Text style={styles.screenTitle}>Nueva transferencia</Text>
-        </View>
+        <PageHeader onBack={() => router.back()} eyebrow="Transferencias" title="Nueva transferencia" />
     );
 
     if (!origin) {
@@ -174,41 +166,31 @@ export default function NewTransferScreen() {
         <Screen style={styles.screen}>
             {header}
 
-            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-                <View style={styles.card}>
-                    <Text style={styles.label}>Origen</Text>
-                    <Text style={styles.originName}>{origin.name}</Text>
-                    <Text style={styles.hint}>Es la sucursal activa.</Text>
-                </View>
+            <ScrollView contentContainerStyle={SharedStyles.pageContent} showsVerticalScrollIndicator={false}>
+                <FormSection title="Recorrido">
+                    <FormField label="Origen" hint="Es la sucursal activa.">
+                        <Text style={styles.originName}>{origin.name}</Text>
+                    </FormField>
 
-                <View style={styles.card}>
-                    <Text style={styles.label}>Destino</Text>
-                    {destinations.length === 0 ? (
-                        <Text style={styles.hint}>No hay otras sucursales activas.</Text>
-                    ) : (
-                        <View style={styles.chips}>
-                            {destinations.map((branch) => (
-                                <FilterChip
-                                    key={branch.id}
-                                    label={branch.name}
-                                    selected={destinationId === branch.id}
-                                    onPress={() => updateDraft((current) => ({ ...current, destinationId: branch.id }))}
-                                />
-                            ))}
-                        </View>
-                    )}
-                </View>
+                    <FormField label="Destino">
+                        {destinations.length === 0 ? (
+                            <Text style={styles.hint}>No hay otras sucursales activas.</Text>
+                        ) : (
+                            <View style={styles.chips}>
+                                {destinations.map((branch) => (
+                                    <FilterChip
+                                        key={branch.id}
+                                        label={branch.name}
+                                        selected={destinationId === branch.id}
+                                        onPress={() => updateDraft((current) => ({ ...current, destinationId: branch.id }))}
+                                    />
+                                ))}
+                            </View>
+                        )}
+                    </FormField>
+                </FormSection>
 
-                <View style={styles.card}>
-                    <View style={styles.cardTopRow}>
-                        <Text style={styles.label}>Productos</Text>
-                        <Pressable
-                            onPress={() => setCatalogVisible(true)}
-                            style={({ pressed }) => [pressed && SharedStyles.pressed]}
-                        >
-                            <Text style={styles.link}>Agregar</Text>
-                        </Pressable>
-                    </View>
+                <FormSection title="Productos" actionLabel="Agregar" onAction={() => setCatalogVisible(true)}>
 
                     {items.length === 0 ? (
                         <Text style={styles.hint}>Agregá los productos que salen de {origin.name}.</Text>
@@ -262,12 +244,12 @@ export default function NewTransferScreen() {
                             El stock en origen cambió: bajá las cantidades marcadas para poder transferir.
                         </Text>
                     )}
-                </View>
+                </FormSection>
 
                 {submitError && <Text style={styles.errorText}>{submitError}</Text>}
             </ScrollView>
 
-            <View style={styles.footer}>
+            <FormFooter>
                 <AppButton
                     title={createTransfer.isPending
                         ? 'Transfiriendo...'
@@ -275,7 +257,7 @@ export default function NewTransferScreen() {
                     onPress={() => void handleSubmit()}
                     disabled={!canSubmit}
                 />
-            </View>
+            </FormFooter>
 
             <Modal
                 visible={isCatalogVisible}
@@ -329,40 +311,6 @@ const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
-        marginRight: Spacing.xs,
-    },
-    screenTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    content: {
-        padding: Spacing.lg,
-        gap: Spacing.md,
-    },
-    card: {
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        gap: Spacing.sm,
-    },
-    cardTopRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    label: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: Colors.textSecondary,
-        textTransform: 'uppercase',
-        letterSpacing: 0.4,
-    },
     originName: {
         fontSize: 17,
         fontWeight: '700',
@@ -388,7 +336,7 @@ const styles = StyleSheet.create({
         gap: Spacing.sm,
         borderTopWidth: 1,
         borderTopColor: Colors.muted,
-        paddingTop: Spacing.sm,
+        paddingTop: Spacing.md,
     },
     itemInfo: {
         flex: 1,
@@ -407,7 +355,7 @@ const styles = StyleSheet.create({
     qtyButton: {
         width: 32,
         height: 32,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         borderWidth: 1,
         borderColor: Colors.border,
         alignItems: 'center',
@@ -429,12 +377,6 @@ const styles = StyleSheet.create({
     errorText: {
         color: Colors.error,
         fontSize: 13,
-    },
-    footer: {
-        padding: Spacing.lg,
-        backgroundColor: Colors.surface,
-        borderTopWidth: 1,
-        borderTopColor: Colors.border,
     },
     modal: {
         flex: 1,

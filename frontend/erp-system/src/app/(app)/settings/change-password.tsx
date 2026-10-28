@@ -1,9 +1,7 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
 import {
     ActivityIndicator,
-    Pressable,
     ScrollView,
     StyleSheet,
     Text,
@@ -12,9 +10,12 @@ import {
 
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
+import { FormField } from '@/components/ui/FormField';
+import { FormSection } from '@/components/ui/FormSection';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { changePassword } from '@/services/auth-service';
 import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
@@ -92,22 +93,9 @@ export default function ChangePasswordScreen() {
 
     return (
         <Screen style={styles.container}>
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && styles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>Cambiar contraseña</Text>
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader onBack={() => router.back()} eyebrow="Mi perfil" title="Cambiar contraseña" />
 
-            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            <ScrollView contentContainerStyle={SharedStyles.pageContent} keyboardShouldPersistTaps="handled">
                 {!canChangePassword ? (
                     <View style={styles.form}>
                         <Text style={styles.description}>
@@ -133,46 +121,52 @@ export default function ChangePasswordScreen() {
                             cambiarla se cierran tus sesiones en otros dispositivos.
                         </Text>
 
-                        <AppInput
-                            placeholder="Contraseña actual"
-                            value={currentPassword}
-                            onChangeText={(text) => {
-                                setCurrentPassword(text);
-                                clearError();
-                            }}
-                            secureTextEntry
-                            autoCapitalize="none"
-                            autoComplete="current-password"
-                            editable={!isSubmitting}
-                        />
-                        <AppInput
-                            placeholder="Nueva contraseña"
-                            value={newPassword}
-                            onChangeText={(text) => {
-                                setNewPassword(text);
-                                clearError();
-                            }}
-                            secureTextEntry
-                            autoCapitalize="none"
-                            autoComplete="new-password"
-                            maxLength={MAX_LENGTH}
-                            editable={!isSubmitting}
-                        />
-                        <AppInput
-                            placeholder="Repetir nueva contraseña"
-                            value={confirmPassword}
-                            onChangeText={(text) => {
-                                setConfirmPassword(text);
-                                clearError();
-                            }}
-                            secureTextEntry
-                            autoCapitalize="none"
-                            autoComplete="new-password"
-                            maxLength={MAX_LENGTH}
-                            editable={!isSubmitting}
-                            returnKeyType="done"
-                            onSubmitEditing={handleSubmit}
-                        />
+                        <FormSection title="Contraseña">
+                            <FormField label="Actual">
+                                <AppInput
+                                    placeholder="Contraseña actual"
+                                    value={currentPassword}
+                                    onChangeText={(text) => {
+                                        setCurrentPassword(text);
+                                        clearError();
+                                    }}
+                                    secureTextEntry
+                                    autoCapitalize="none"
+                                    autoComplete="current-password"
+                                    editable={!isSubmitting}
+                                />
+                            </FormField>
+                            <FormField label="Nueva">
+                                <AppInput
+                                    placeholder="Nueva contraseña"
+                                    value={newPassword}
+                                    onChangeText={(text) => {
+                                        setNewPassword(text);
+                                        clearError();
+                                    }}
+                                    secureTextEntry
+                                    autoCapitalize="none"
+                                    autoComplete="new-password"
+                                    maxLength={MAX_LENGTH}
+                                    editable={!isSubmitting}
+                                />
+                                <AppInput
+                                    placeholder="Repetir nueva contraseña"
+                                    value={confirmPassword}
+                                    onChangeText={(text) => {
+                                        setConfirmPassword(text);
+                                        clearError();
+                                    }}
+                                    secureTextEntry
+                                    autoCapitalize="none"
+                                    autoComplete="new-password"
+                                    maxLength={MAX_LENGTH}
+                                    editable={!isSubmitting}
+                                    returnKeyType="done"
+                                    onSubmitEditing={handleSubmit}
+                                />
+                            </FormField>
+                        </FormSection>
 
                         {errorMsg && (
                             <View style={styles.errorContainer}>
@@ -199,9 +193,6 @@ const styles = StyleSheet.create({
     container: {
         padding: 0,
     },
-    content: {
-        padding: Spacing.lg,
-    },
     form: {
         width: '100%',
         maxWidth: 420,
@@ -217,7 +208,7 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.errorLight,
         borderWidth: 1,
         borderColor: Colors.errorBorder,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         padding: Spacing.md,
     },
     errorText: {
@@ -229,7 +220,7 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.primaryLight,
         borderWidth: 1,
         borderColor: Colors.primary,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         padding: Spacing.md,
     },
     successText: {

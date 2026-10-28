@@ -5,6 +5,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { RoleForm, toRoleRequest, validateRole } from '@/components/users/RoleForm';
 import { AppButton } from '@/components/ui/AppButton';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { FormFooter } from '@/components/ui/FormFooter';
 import { ListGroup } from '@/components/ui/ListGroup';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { MenuListItem } from '@/components/ui/MenuListItem';
@@ -137,13 +138,13 @@ export default function RoleDetailScreen() {
                 </ScrollView>
 
                 {!role.system && (
-                    <View style={styles.footer}>
+                    <FormFooter>
                         <AppButton
                             title={updateRole.isPending ? 'Guardando...' : 'Guardar cambios'}
                             onPress={() => void handleSave()}
                             disabled={!draft || isBusy}
                         />
-                    </View>
+                    </FormFooter>
                 )}
             </>
         );
@@ -178,11 +179,5 @@ const styles = StyleSheet.create({
     successText: {
         color: Colors.successDark,
         fontSize: 14,
-    },
-    footer: {
-        padding: Spacing.lg,
-        backgroundColor: Colors.surface,
-        borderTopWidth: 1,
-        borderTopColor: Colors.border,
     },
 });

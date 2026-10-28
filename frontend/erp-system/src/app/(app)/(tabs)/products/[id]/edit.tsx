@@ -1,19 +1,18 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { ProductForm } from '@/components/products/ProductForm';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { NotFound } from '@/components/ui/NotFound';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { useCategories } from '@/hooks/use-category-queries';
 import { useProduct, useSetProductActive, useUpdateProduct } from '@/hooks/use-product-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { showToast } from '@/stores/toast-store';
-import { SharedStyles } from '@/styles/shared';
 import { ProductFormData } from '@/types/product';
 import { hasPermission } from '@/utils/permissions';
 
@@ -38,20 +37,7 @@ export default function EditProductScreen() {
     if (!product) {
         return (
             <Screen style={styles.container}>
-                <View style={SharedStyles.header}>
-                    <Pressable
-                        onPress={() => router.back()}
-                        style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                    >
-                        <SymbolView
-                            name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                            size={24}
-                            tintColor={Colors.text}
-                        />
-                    </Pressable>
-                    <Text style={SharedStyles.headerTitle}>Producto</Text>
-                    <View style={SharedStyles.headerSpacer} />
-                </View>
+                <PageHeader onBack={() => router.back()} title="Producto" />
                 <EmptyState
                     title="Producto no encontrado"
                     description={loadError ?? 'El producto que intentas editar no existe o fue removido.'}
@@ -117,21 +103,7 @@ export default function EditProductScreen() {
 
     return (
         <Screen style={styles.container}>
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                    disabled={isSubmitting}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>Editar Producto</Text>
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader onBack={isSubmitting ? undefined : () => router.back()} eyebrow={product.name} title="Editar producto" />
 
             {submissionError && (
                 <View style={styles.errorBanner}>

@@ -3,6 +3,9 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppInput } from '@/components/ui/AppInput';
+import { FormField } from '@/components/ui/FormField';
+import { FormSection } from '@/components/ui/FormSection';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
@@ -77,47 +80,43 @@ export function RoleForm({
 
     return (
         <View style={styles.container}>
-            <View style={styles.field}>
-                <Text style={SharedStyles.sectionTitle}>Nombre</Text>
-                <AppInput
-                    placeholder="Ej. Vendedor"
-                    value={values.name}
-                    onChangeText={(name) => update({ ...values, name })}
-                    maxLength={50}
-                    editable={editable}
-                />
-            </View>
+            <FormSection title="Datos">
+                <FormField label="Nombre">
+                    <AppInput
+                        placeholder="Ej. Vendedor"
+                        value={values.name}
+                        onChangeText={(name) => update({ ...values, name })}
+                        maxLength={50}
+                        editable={editable}
+                    />
+                </FormField>
 
-            <View style={styles.field}>
-                <Text style={SharedStyles.sectionTitle}>Código</Text>
-                <AppInput
-                    placeholder="Ej. vendedor"
-                    value={values.code}
-                    onChangeText={(code) => update({ ...values, code })}
-                    autoCorrect={false}
-                    maxLength={MAX_CODE_LENGTH}
-                    editable={editable}
-                />
-                <Text style={styles.hint}>Identificador corto y único del rol.</Text>
-            </View>
+                <FormField label="Código" hint="Identificador corto y único del rol.">
+                    <AppInput
+                        placeholder="Ej. vendedor"
+                        value={values.code}
+                        onChangeText={(code) => update({ ...values, code })}
+                        autoCorrect={false}
+                        maxLength={MAX_CODE_LENGTH}
+                        editable={editable}
+                    />
+                </FormField>
 
-            <View style={styles.field}>
-                <Text style={SharedStyles.sectionTitle}>Descripción</Text>
-                <AppInput
-                    placeholder="Opcional"
-                    value={values.description ?? ''}
-                    onChangeText={(description) => update({ ...values, description })}
-                    maxLength={200}
-                    editable={editable}
-                />
-            </View>
+                <FormField label="Descripción">
+                    <AppInput
+                        placeholder="Opcional"
+                        value={values.description ?? ''}
+                        onChangeText={(description) => update({ ...values, description })}
+                        maxLength={200}
+                        editable={editable}
+                    />
+                </FormField>
+            </FormSection>
 
-            <View style={styles.field}>
-                <Text style={SharedStyles.sectionTitle}>
-                    Permisos ({values.permissions.length} de {allPermissions.length})
-                </Text>
+            <View style={SharedStyles.pageSection}>
+                <SectionHeader title={`Permisos (${values.permissions.length} de ${allPermissions.length})`} />
                 {groupPermissions(allPermissions).map((group) => (
-                    <View key={group.title} style={styles.group}>
+                    <View key={group.title} style={[SharedStyles.card, styles.group]}>
                         <Text style={styles.groupTitle}>{group.title}</Text>
                         {group.permissions.map((permission) => {
                             const selected = values.permissions.includes(permission);
@@ -127,6 +126,8 @@ export function RoleForm({
                                     key={permission}
                                     onPress={() => togglePermission(permission)}
                                     disabled={!editable}
+                                    accessibilityRole="checkbox"
+                                    accessibilityState={{ checked: selected, disabled: !editable }}
                                     style={({ pressed }) => [styles.permissionRow, pressed && editable && SharedStyles.pressed]}
                                 >
                                     <SymbolView
@@ -134,7 +135,7 @@ export function RoleForm({
                                             ? { ios: 'checkmark.square.fill', android: 'check_box', web: 'check_box' }
                                             : { ios: 'square', android: 'check_box_outline_blank', web: 'check_box_outline_blank' }}
                                         size={22}
-                                        tintColor={selected ? Colors.primary : Colors.textSecondary}
+                                        tintColor={selected ? Colors.primary : Colors.textTertiary}
                                     />
                                     <View style={styles.permissionText}>
                                         <Text style={styles.permissionLabel}>{info.label}</Text>
@@ -152,26 +153,22 @@ export function RoleForm({
 
 const styles = StyleSheet.create({
     container: {
-        gap: Spacing.lg,
-    },
-    field: {
-        gap: Spacing.sm,
+        gap: Spacing.md,
     },
     hint: {
         fontSize: 12,
         color: Colors.textSecondary,
     },
     group: {
-        backgroundColor: Colors.surface,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: Colors.border,
+        padding: 0,
         paddingVertical: Spacing.xs,
     },
     groupTitle: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '700',
-        color: Colors.text,
+        color: Colors.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
         paddingHorizontal: Spacing.md,
         paddingTop: Spacing.sm,
         paddingBottom: Spacing.xs,

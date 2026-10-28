@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppButton } from '@/components/ui/AppButton';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { useProduct } from '@/hooks/use-product-queries';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     },
     card: {
         backgroundColor: Colors.surface,
-        borderRadius: 14,
+        borderRadius: Radius.lg,
         padding: Spacing.md,
         borderWidth: 1,
         borderColor: Colors.border,
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
     chip: {
         borderWidth: 1,
         borderColor: Colors.border,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         paddingHorizontal: Spacing.sm,
         paddingVertical: Spacing.xs,
         alignItems: 'center',

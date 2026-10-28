@@ -1,17 +1,16 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { ProductForm } from '@/components/products/ProductForm';
 import { NotFound } from '@/components/ui/NotFound';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { useCategories } from '@/hooks/use-category-queries';
 import { useCreateProduct } from '@/hooks/use-product-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { showToast } from '@/stores/toast-store';
-import { SharedStyles } from '@/styles/shared';
 import { ProductFormData } from '@/types/product';
 import { hasPermission } from '@/utils/permissions';
 
@@ -76,22 +75,7 @@ export default function NewProductScreen() {
 
     return (
         <Screen style={styles.container}>
-            {/* Header con botón Back */}
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                    disabled={isSubmitting}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>Nuevo Producto</Text>
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader onBack={isSubmitting ? undefined : () => router.back()} eyebrow="Productos" title="Nuevo producto" />
 
             {errorMessage && (
                 <View style={styles.errorBanner}>

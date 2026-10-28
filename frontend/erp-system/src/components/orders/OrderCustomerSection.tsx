@@ -3,7 +3,7 @@ import { SymbolView } from 'expo-symbols';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 import { CUSTOMER_ANONYMOUS, Customer } from '@/types/customer';
 import { formatCurrency } from '@/utils/format';
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
     creditNotice: {
         marginTop: Spacing.sm,
         padding: Spacing.md,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         backgroundColor: Colors.successLight,
         borderWidth: 1,
         borderColor: Colors.successBorder,
