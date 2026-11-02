@@ -110,6 +110,7 @@ export default function ReportsScreen() {
                         key={`${period}-${branchId ?? 'all'}`}
                         bars={chart.bars}
                         axisLabels={chart.axisLabels}
+                        currentIndex={chart.currentIndex}
                         accessibilityLabel={period === 'today' ? 'Ventas por hora' : 'Ventas por día'}
                     />
                 ) : null}

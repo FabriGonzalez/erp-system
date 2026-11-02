@@ -10,24 +10,27 @@ type SalesChartProps = {
     bars: SalesChartBar[];
     /** Etiquetas del eje, repartidas de punta a punta. */
     axisLabels: string[];
+    /** La barra de ahora, señalada mientras no se elija otra; null si no hay ninguna. */
+    currentIndex: number | null;
     accessibilityLabel: string;
 };
 
 const CHART_HEIGHT = 112;
 
 function describe(bar: SalesChartBar): string {
+    if (bar.upcoming) return `${bar.label} · todavía no llegó`;
     const orders = bar.orderCount === 1 ? '1 pedido' : `${bar.orderCount} pedidos`;
     return `${bar.label} · ${formatCurrency(bar.total)} · ${orders}`;
 }
 
 /**
  * Barras de ventas por hora o por día. El detalle de una barra se ve arriba al pasar el mouse
- * (web) o al tocarla (celular, donde no hay hover); sin elegir, el de la última (la de ahora).
+ * (web) o al tocarla (celular, donde no hay hover); sin elegir, el de la de ahora.
  */
-export function SalesChart({ bars, axisLabels, accessibilityLabel }: SalesChartProps) {
+export function SalesChart({ bars, axisLabels, currentIndex, accessibilityLabel }: SalesChartProps) {
     const [selected, setSelected] = useState<number | null>(null);
     const max = Math.max(...bars.map((bar) => bar.total), 0);
-    const highlighted = selected ?? bars.length - 1;
+    const highlighted = selected ?? currentIndex;
     // Con muchas barras (30 días) el espacio entre ellas se achica para que no queden hilos.
     const gap = bars.length > 20 ? 2 : 4;
 
@@ -35,7 +38,9 @@ export function SalesChart({ bars, axisLabels, accessibilityLabel }: SalesChartP
         <View accessibilityLabel={accessibilityLabel}>
             <Text style={[styles.detail, selected === null && styles.detailIdle]} numberOfLines={1}>
                 {/* La barra señalada siempre dice su hora o día, aunque no haya tenido ventas. */}
-                {selected === null && max === 0 ? 'Sin ventas en el período.' : describe(bars[highlighted])}
+                {highlighted === null || (selected === null && max === 0)
+                    ? 'Sin ventas en el período.'
+                    : describe(bars[highlighted])}
             </Text>
             <View style={[styles.bars, { gap }]}>
                 {bars.map((bar, index) => (
@@ -53,7 +58,9 @@ export function SalesChart({ bars, axisLabels, accessibilityLabel }: SalesChartP
                                 styles.bar,
                                 {
                                     height: max > 0 ? `${(bar.total / max) * 100}%` : 0,
-                                    backgroundColor: index === highlighted ? Colors.primary : Colors.track,
+                                    backgroundColor: index === highlighted
+                                        ? Colors.primary
+                                        : bar.upcoming ? Colors.border : Colors.track,
                                 },
                             ]}
                         />
