@@ -10,8 +10,12 @@ import java.util.List;
 
 public interface StockService {
 
-    /** Stock de la empresa; filtros opcionales: sucursal, texto (producto o SKU) y variantes. */
-    PageResponse<StockResponse> search(Long branchId, String query, List<Long> variantIds, Pageable pageable);
+    /**
+     * Stock de la empresa; filtros opcionales: sucursal, texto (producto o SKU), variantes y
+     * valores de atributo (AttributeValueFilters).
+     */
+    PageResponse<StockResponse> search(Long branchId, String query, List<Long> variantIds,
+                                       List<Long> attributeValueIds, Pageable pageable);
 
     StockResponse findById(Long id);
 

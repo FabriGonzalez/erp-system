@@ -1,15 +1,23 @@
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
+import { AttributeFilterModal } from '@/components/products/AttributeFilterModal';
 import { ProductSelectionCard } from '@/components/products/ProductSelectionCard';
 import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { FilterChip } from '@/components/ui/FilterChip';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useProducts } from '@/hooks/use-product-queries';
-import { Product } from '@/types/product';
+import { Product, ProductVariant } from '@/types/product';
+import {
+    AttributeFilter,
+    attributeFilterValueIds,
+    singleValueAttributes,
+    variantMatchesFilter,
+} from '@/utils/attribute-filter';
 
 type VariantCatalogProps = {
     /** Sucursal cuyo stock se muestra y limita las cantidades. */
@@ -49,9 +57,13 @@ export function VariantCatalog({
     const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
     // Propia de cada catálogo: no pisa la búsqueda del listado de Productos.
     const [searchQuery, setSearchQuery] = useState('');
+    const [attributeFilter, setAttributeFilter] = useState<AttributeFilter>({});
+    const [isAttributeFilterOpen, setAttributeFilterOpen] = useState(false);
+    const attributeValueIds = attributeFilterValueIds(attributeFilter);
 
-    // Activos con stock en la sucursal, filtrados en el backend. Se vuelven a pedir cada vez
-    // que se abre el catálogo: las cantidades se limitan con este stock.
+    // Activos con stock en la sucursal, filtrados en el backend (con atributos, el stock es el
+    // de las variantes que coinciden). Se vuelven a pedir cada vez que se abre el catálogo: las
+    // cantidades se limitan con este stock.
     const {
         items: products,
         isInitialLoading,
@@ -61,15 +73,26 @@ export function VariantCatalog({
         loadMore,
         refresh,
     } = useProducts(
-        { q: searchQuery, active: true, stock: 'IN_STOCK', branchId },
+        {
+            q: searchQuery,
+            active: true,
+            stock: 'IN_STOCK',
+            branchId,
+            attributeValueIds: attributeValueIds.length ? attributeValueIds : undefined,
+        },
         { enabled: Boolean(branchId), staleTime: 0 },
     );
 
+    // Se elige entre las variantes con stock que coinciden con el filtro de atributos.
+    function isSelectable(variant: ProductVariant) {
+        return (variant.stockByBranch[branchId] ?? 0) > 0 && variantMatchesFilter(variant, attributeFilter);
+    }
+
     function getSelectedVariant(product: Product) {
-        if (product.variants.length === 1 && (product.variants[0].stockByBranch[branchId] ?? 0) > 0) return product.variants[0];
+        if (product.variants.length === 1 && isSelectable(product.variants[0])) return product.variants[0];
         if (selectedProductId !== product.id) return undefined;
         return product.variants.find((variant) =>
-            (variant.stockByBranch[branchId] ?? 0) > 0 &&
+            isSelectable(variant) &&
             Object.entries(selectedAttributes).every(([attributeId, valueId]) =>
                 variant.attributes.some((attribute) =>
                     attribute.attributeId === attributeId && attribute.attributeValueId === valueId,
@@ -82,7 +105,7 @@ export function VariantCatalog({
     function attributeOptions(product: Product, attributeId: string) {
         const variantValueIds = product.variants
             .filter((variant) =>
-                (variant.stockByBranch[branchId] ?? 0) > 0 &&
+                isSelectable(variant) &&
                 variant.attributes.every((attribute) =>
                     attribute.attributeId === attributeId ||
                     !selectedAttributes[attribute.attributeId] ||
@@ -103,7 +126,28 @@ export function VariantCatalog({
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                 />
+                <View style={styles.filters}>
+                    <FilterChip
+                        label={attributeValueIds.length ? `Atributos · ${attributeValueIds.length}` : 'Atributos'}
+                        selected={attributeValueIds.length > 0}
+                        onPress={() => setAttributeFilterOpen(true)}
+                    />
+                </View>
             </View>
+
+            {isAttributeFilterOpen ? (
+                <AttributeFilterModal
+                    value={attributeFilter}
+                    onApply={(filter) => {
+                        setAttributeFilter(filter);
+                        setAttributeFilterOpen(false);
+                        // La variante a medio elegir puede no coincidir con el filtro nuevo.
+                        setSelectedProductId(null);
+                        setSelectedAttributes({});
+                    }}
+                    onClose={() => setAttributeFilterOpen(false)}
+                />
+            ) : null}
 
             {isInitialLoading ? (
                 <LoadingState label="Cargando productos..." />
@@ -137,7 +181,7 @@ export function VariantCatalog({
                         const qtyInCart = selectedVariant ? getSelectedQuantity(product.id, selectedVariant.id) : 0;
                         const attributeIds = Array.from(new Set([
                             ...product.variants
-                                .filter((variant) => (variant.stockByBranch[branchId] ?? 0) > 0)
+                                .filter(isSelectable)
                                 .flatMap((variant) => variant.attributes.map((attribute) => attribute.attributeId)),
                         ]));
                         const isExpanded = selectedProductId === product.id;
@@ -176,7 +220,8 @@ export function VariantCatalog({
                                     }
 
                                     setSelectedProductId(product.id);
-                                    setSelectedAttributes({});
+                                    // Lo que el filtro ya define (un solo valor) arranca elegido.
+                                    setSelectedAttributes(singleValueAttributes(attributeFilter));
                                 }}
                                 // Quien recibe la cantidad ya suma lo reservado: se le pasa el stock de la sucursal.
                                 onAddItem={(item, _stock, variantId) => onAddItem(item, branchStock, variantId)}
@@ -198,6 +243,10 @@ const styles = StyleSheet.create({
     searchBox: {
         padding: Spacing.lg,
         paddingBottom: Spacing.sm,
+    },
+    filters: {
+        flexDirection: 'row',
+        marginTop: Spacing.sm,
     },
     listContainer: {
         paddingHorizontal: Spacing.lg,

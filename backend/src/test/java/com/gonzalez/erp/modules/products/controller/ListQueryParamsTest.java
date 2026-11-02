@@ -56,7 +56,7 @@ class ListQueryParamsTest {
                 .andExpect(jsonPath("$.content").isArray());
 
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-        verify(productService).findAll(eq(new ProductSearchCriteria(null, null, null, null, null)), pageable.capture());
+        verify(productService).findAll(eq(new ProductSearchCriteria(null, null, null, null, null, null)), pageable.capture());
         assertThat(pageable.getValue().getPageSize()).isEqualTo(20);
         assertThat(pageable.getValue().getSort()).isEqualTo(Sort.by("name").and(Sort.by("id")));
     }
@@ -71,6 +71,7 @@ class ListQueryParamsTest {
                         .param("q", "remera")
                         .param("stock", "IN_STOCK")
                         .param("branchId", "10")
+                        .param("attributeValueIds", "5,6")
                         .param("page", "1")
                         .param("size", "50")
                         .param("sort", "createdAt,desc"))
@@ -78,7 +79,7 @@ class ListQueryParamsTest {
 
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
         verify(productService).findAll(
-                eq(new ProductSearchCriteria(true, 3L, "remera", ProductStockFilter.IN_STOCK, 10L)),
+                eq(new ProductSearchCriteria(true, 3L, "remera", ProductStockFilter.IN_STOCK, 10L, List.of(5L, 6L))),
                 pageable.capture());
         assertThat(pageable.getValue().getPageNumber()).isEqualTo(1);
         assertThat(pageable.getValue().getSort())
@@ -102,16 +103,17 @@ class ListQueryParamsTest {
 
     @Test
     void stocksAcceptAListOfVariantIds() throws Exception {
-        when(stockService.search(any(), any(), any(), any())).thenReturn(new PageResponse<>(List.of(), 0, 100, 0, 0));
+        when(stockService.search(any(), any(), any(), any(), any())).thenReturn(new PageResponse<>(List.of(), 0, 100, 0, 0));
 
         mockMvc.perform(get("/api/v1/inventory/stocks")
                         .param("branchId", "10")
+                        .param("attributeValueIds", "5,6")
                         .param("variantIds", "40,41")
                         .param("size", "100"))
                 .andExpect(status().isOk());
 
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-        verify(stockService).search(eq(10L), isNull(), eq(List.of(40L, 41L)), pageable.capture());
+        verify(stockService).search(eq(10L), isNull(), eq(List.of(40L, 41L)), eq(List.of(5L, 6L)), pageable.capture());
         assertThat(pageable.getValue().getSort())
                 .isEqualTo(Sort.by("productVariant.product.name", "productVariant.sku", "id"));
     }
@@ -121,6 +123,6 @@ class ListQueryParamsTest {
         mockMvc.perform(get("/api/v1/inventory/stocks").param("size", "0"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_STOCK_QUERY"));
-        verify(stockService, never()).search(any(), any(), any(), any());
+        verify(stockService, never()).search(any(), any(), any(), any(), any());
     }
 }

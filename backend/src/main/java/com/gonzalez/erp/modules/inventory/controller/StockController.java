@@ -40,7 +40,7 @@ public class StockController {
     @GetMapping
     @Operation(summary = "Listar stocks",
                description = "Paginado, por nombre de producto y SKU. Filtros opcionales: branchId, q (producto o SKU, "
-                       + "sin distinguir mayúsculas ni tildes) y variantIds (stock de esas variantes).")
+                       + "sin distinguir mayúsculas ni tildes), variantIds (stock de esas variantes) y attributeValueIds (variantes con esos valores).")
     @ApiResponse(responseCode = "400", description = "Parámetros de paginación inválidos",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<PageResponse<StockResponse>> search(
@@ -50,6 +50,9 @@ public class StockController {
             @RequestParam(required = false) String q,
             @Parameter(description = "IDs de variante, separados por coma")
             @RequestParam(required = false) List<Long> variantIds,
+            @Parameter(description = "IDs de valores de atributo separados por coma: la variante tiene que tener, "
+                    + "de cada atributo, alguno de los valores pedidos de ese atributo")
+            @RequestParam(required = false) List<Long> attributeValueIds,
             @Parameter(description = "Número de página, base 0")
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Tamaño de página (1 a " + MAX_PAGE_SIZE + ")")
@@ -60,7 +63,8 @@ public class StockController {
         }
         // El id desempata para que la paginación sea estable.
         Sort sort = Sort.by("productVariant.product.name", "productVariant.sku", "id");
-        return ResponseEntity.ok(stockService.search(branchId, q, variantIds, PageRequest.of(page, size, sort)));
+        return ResponseEntity.ok(stockService.search(branchId, q, variantIds, attributeValueIds,
+                PageRequest.of(page, size, sort)));
     }
 
     @PreAuthorize("hasAnyAuthority('CONSULTAR_STOCK','AJUSTAR_STOCK','TRANSFERIR_STOCK','CREAR_PEDIDOS')")

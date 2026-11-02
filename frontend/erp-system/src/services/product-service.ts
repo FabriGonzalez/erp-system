@@ -87,6 +87,7 @@ export async function getProducts(
     if (params.active !== undefined) query.set('active', String(params.active));
     if (params.stock) query.set('stock', params.stock);
     if (params.branchId) query.set('branchId', params.branchId);
+    if (params.attributeValueIds?.length) query.set('attributeValueIds', params.attributeValueIds.join(','));
 
     const response = await apiFetch(`${API_BASE_URL}/api/v1/products?${query.toString()}`, {
         method: 'GET',

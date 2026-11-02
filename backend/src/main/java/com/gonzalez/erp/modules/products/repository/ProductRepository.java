@@ -19,6 +19,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
      * sin distinguir mayúsculas ni tildes; llega en minúsculas, sin tildes y con los comodines
      * (ProductServiceImpl.normalizeSearch). El stock se suma en :branchId o, sin sucursal, en
      * toda la empresa (las mismas sucursales que trae la respuesta del producto).
+     * Con :hasAttributeFilter, una misma variante tiene que tener valores de :attributeValueIds de
+     * :attributeCount atributos distintos (uno de cada atributo pedido), y el stock se suma solo
+     * de esas variantes. Sin filtro, :attributeValueIds trae un id que no existe (IN no acepta
+     * listas vacías).
      * La respuesta usa el nombre de la categoría: se trae en la misma consulta.
      */
     @EntityGraph(attributePaths = "category")
@@ -33,14 +37,28 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                  OR EXISTS (SELECT 1 FROM ProductVariant v
                             WHERE v.product = p
                             AND (LOWER(v.sku) LIKE :search OR LOWER(v.barcode) LIKE :search)))
+            AND (:hasAttributeFilter = false
+                 OR EXISTS (SELECT 1 FROM ProductVariant v
+                            WHERE v.product = p
+                            AND (SELECT COUNT(DISTINCT va.attributeValue.attribute.id) FROM ProductVariantAttribute va
+                                 WHERE va.variant = v
+                                 AND va.attributeValue.id IN :attributeValueIds) = :attributeCount))
             AND (:onlyInStock = false
                  OR (SELECT COALESCE(SUM(s.quantity), 0) FROM Stock s
                      WHERE s.productVariant.product = p
-                     AND (:branchId IS NULL OR s.branch.id = :branchId)) > 0)
+                     AND (:branchId IS NULL OR s.branch.id = :branchId)
+                     AND (:hasAttributeFilter = false
+                          OR (SELECT COUNT(DISTINCT va.attributeValue.attribute.id) FROM ProductVariantAttribute va
+                              WHERE va.variant = s.productVariant
+                              AND va.attributeValue.id IN :attributeValueIds) = :attributeCount)) > 0)
             AND (:onlyOutOfStock = false
                  OR (SELECT COALESCE(SUM(s.quantity), 0) FROM Stock s
                      WHERE s.productVariant.product = p
-                     AND (:branchId IS NULL OR s.branch.id = :branchId)) <= 0)
+                     AND (:branchId IS NULL OR s.branch.id = :branchId)
+                     AND (:hasAttributeFilter = false
+                          OR (SELECT COUNT(DISTINCT va.attributeValue.attribute.id) FROM ProductVariantAttribute va
+                              WHERE va.variant = s.productVariant
+                              AND va.attributeValue.id IN :attributeValueIds) = :attributeCount)) <= 0)
             """,
             countQuery = """
             SELECT COUNT(p) FROM Product p
@@ -53,14 +71,28 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                  OR EXISTS (SELECT 1 FROM ProductVariant v
                             WHERE v.product = p
                             AND (LOWER(v.sku) LIKE :search OR LOWER(v.barcode) LIKE :search)))
+            AND (:hasAttributeFilter = false
+                 OR EXISTS (SELECT 1 FROM ProductVariant v
+                            WHERE v.product = p
+                            AND (SELECT COUNT(DISTINCT va.attributeValue.attribute.id) FROM ProductVariantAttribute va
+                                 WHERE va.variant = v
+                                 AND va.attributeValue.id IN :attributeValueIds) = :attributeCount))
             AND (:onlyInStock = false
                  OR (SELECT COALESCE(SUM(s.quantity), 0) FROM Stock s
                      WHERE s.productVariant.product = p
-                     AND (:branchId IS NULL OR s.branch.id = :branchId)) > 0)
+                     AND (:branchId IS NULL OR s.branch.id = :branchId)
+                     AND (:hasAttributeFilter = false
+                          OR (SELECT COUNT(DISTINCT va.attributeValue.attribute.id) FROM ProductVariantAttribute va
+                              WHERE va.variant = s.productVariant
+                              AND va.attributeValue.id IN :attributeValueIds) = :attributeCount)) > 0)
             AND (:onlyOutOfStock = false
                  OR (SELECT COALESCE(SUM(s.quantity), 0) FROM Stock s
                      WHERE s.productVariant.product = p
-                     AND (:branchId IS NULL OR s.branch.id = :branchId)) <= 0)
+                     AND (:branchId IS NULL OR s.branch.id = :branchId)
+                     AND (:hasAttributeFilter = false
+                          OR (SELECT COUNT(DISTINCT va.attributeValue.attribute.id) FROM ProductVariantAttribute va
+                              WHERE va.variant = s.productVariant
+                              AND va.attributeValue.id IN :attributeValueIds) = :attributeCount)) <= 0)
             """)
     Page<Product> search(
             @Param("companyId") Long companyId,
@@ -71,6 +103,9 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             @Param("onlyInStock") boolean onlyInStock,
             @Param("onlyOutOfStock") boolean onlyOutOfStock,
             @Param("branchId") Long branchId,
+            @Param("hasAttributeFilter") boolean hasAttributeFilter,
+            @Param("attributeValueIds") List<Long> attributeValueIds,
+            @Param("attributeCount") long attributeCount,
             Pageable pageable
     );
 

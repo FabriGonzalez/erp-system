@@ -16,10 +16,24 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 // --- Consultas ---
 
-/** Stock de una sucursal (Inventario), por producto y SKU, con búsqueda en el backend. */
-export function useBranchStocks({ branchId, q }: { branchId: string | undefined; q: string }) {
+type BranchStocksFilters = {
+    branchId: string | undefined;
+    q: string;
+    /** Ordenados: la misma selección comparte la caché. */
+    attributeValueIds?: string[];
+};
+
+/**
+ * Stock de una sucursal (Inventario), por producto y SKU, con búsqueda y filtro de atributos en
+ * el backend.
+ */
+export function useBranchStocks({ branchId, q, attributeValueIds }: BranchStocksFilters) {
     const query = useDebouncedValue(q.trim(), SEARCH_DEBOUNCE_MS);
-    const filters = { branchId, q: query || undefined };
+    const filters = {
+        branchId,
+        q: query || undefined,
+        attributeValueIds: attributeValueIds?.length ? attributeValueIds : undefined,
+    };
 
     return usePagedList(
         stockKeys.list(filters),

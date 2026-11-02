@@ -70,7 +70,9 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
      * Listado paginado del stock de la empresa. :search (producto, SKU o código de barras) llega
      * en minúsculas, sin tildes y con los comodines (StockServiceImpl.normalizeSearch). Con
      * filterVariants, solo las
-     * variantes de :variantIds (el stock de los ítems de un borrador).
+     * variantes de :variantIds (el stock de los ítems de un borrador). Con :hasAttributeFilter,
+     * solo las variantes con valores de :attributeValueIds de :attributeCount atributos distintos
+     * (AttributeValueFilters).
      */
     @Query(value = """
             SELECT s FROM Stock s
@@ -85,6 +87,10 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                          'áàäâéèëêíìïîóòöôúùüûñç', 'aaaaeeeeiiiioooouuuunc') AS String) LIKE :search
                  OR LOWER(pv.sku) LIKE :search
                  OR LOWER(pv.barcode) LIKE :search)
+            AND (:hasAttributeFilter = false
+                 OR (SELECT COUNT(DISTINCT va.attributeValue.attribute.id) FROM ProductVariantAttribute va
+                     WHERE va.variant = pv
+                     AND va.attributeValue.id IN :attributeValueIds) = :attributeCount)
             """,
             countQuery = """
             SELECT COUNT(s) FROM Stock s
@@ -98,6 +104,10 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
                          'áàäâéèëêíìïîóòöôúùüûñç', 'aaaaeeeeiiiioooouuuunc') AS String) LIKE :search
                  OR LOWER(pv.sku) LIKE :search
                  OR LOWER(pv.barcode) LIKE :search)
+            AND (:hasAttributeFilter = false
+                 OR (SELECT COUNT(DISTINCT va.attributeValue.attribute.id) FROM ProductVariantAttribute va
+                     WHERE va.variant = pv
+                     AND va.attributeValue.id IN :attributeValueIds) = :attributeCount)
             """)
     Page<Stock> search(
             @Param("companyId") Long companyId,
@@ -106,6 +116,9 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
             @Param("variantIds") Collection<Long> variantIds,
             @Param("hasSearch") boolean hasSearch,
             @Param("search") String search,
+            @Param("hasAttributeFilter") boolean hasAttributeFilter,
+            @Param("attributeValueIds") Collection<Long> attributeValueIds,
+            @Param("attributeCount") long attributeCount,
             Pageable pageable
     );
 

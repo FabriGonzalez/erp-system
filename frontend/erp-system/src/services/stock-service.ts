@@ -52,6 +52,7 @@ export async function getStocks(
     if (params.branchId) query.set('branchId', params.branchId);
     if (params.q?.trim()) query.set('q', params.q.trim());
     if (params.variantIds?.length) query.set('variantIds', params.variantIds.join(','));
+    if (params.attributeValueIds?.length) query.set('attributeValueIds', params.attributeValueIds.join(','));
 
     const response = await apiFetch(`${API_BASE_URL}/api/v1/inventory/stocks?${query.toString()}`, {
         headers: authHeaders(token),

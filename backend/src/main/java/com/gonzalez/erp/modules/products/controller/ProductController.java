@@ -25,6 +25,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/products")
 @RequiredArgsConstructor
@@ -38,7 +40,8 @@ public class ProductController {
     @GetMapping
     @Operation(summary = "Listar productos",
                description = "Paginado. q busca por nombre o SKU de alguna variante, sin distinguir mayúsculas ni tildes. "
-                       + "stock filtra por la suma de las variantes en branchId o, sin branchId, en toda la empresa. "
+                       + "stock filtra por la suma de las variantes en branchId o, sin branchId, en toda la empresa; "
+                       + "con attributeValueIds, solo de las variantes que coinciden. "
                        + "sort: name o createdAt, con ,asc o ,desc. Cada variante trae su stock por sucursal.")
     @ApiResponse(responseCode = "400", description = "Parámetros de paginación u orden inválidos",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -53,6 +56,9 @@ public class ProductController {
             @RequestParam(required = false) ProductStockFilter stock,
             @Parameter(description = "Sucursal en la que se mide el filtro de stock")
             @RequestParam(required = false) Long branchId,
+            @Parameter(description = "IDs de valores de atributo separados por coma. Una misma variante tiene que "
+                    + "tener, de cada atributo, alguno de los valores pedidos de ese atributo")
+            @RequestParam(required = false) List<Long> attributeValueIds,
             @Parameter(description = "Número de página, base 0")
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Tamaño de página (1 a " + MAX_PAGE_SIZE + ")")
@@ -63,7 +69,7 @@ public class ProductController {
                     "page must be >= 0 and size between 1 and " + MAX_PAGE_SIZE);
         }
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        ProductSearchCriteria criteria = new ProductSearchCriteria(active, categoryId, q, stock, branchId);
+        ProductSearchCriteria criteria = new ProductSearchCriteria(active, categoryId, q, stock, branchId, attributeValueIds);
         return ResponseEntity.ok(productService.findAll(criteria, pageable));
     }
 

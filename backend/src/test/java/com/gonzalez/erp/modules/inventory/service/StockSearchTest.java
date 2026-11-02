@@ -7,6 +7,9 @@ import com.gonzalez.erp.modules.branches.repository.BranchRepository;
 import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.inventory.repository.StockRepository;
+import com.gonzalez.erp.modules.products.entity.ProductAttribute;
+import com.gonzalez.erp.modules.products.entity.ProductAttributeValue;
+import com.gonzalez.erp.modules.products.repository.ProductAttributeValueRepository;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
 import com.gonzalez.erp.modules.users.entity.User;
 import org.junit.jupiter.api.AfterEach;
@@ -28,6 +31,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -45,6 +49,7 @@ class StockSearchTest {
     @Mock private ProductVariantRepository productVariantRepository;
     @Mock private BranchRepository branchRepository;
     @Mock private BranchAccessService branchAccessService;
+    @Mock private ProductAttributeValueRepository attributeValueRepository;
 
     @InjectMocks private StockServiceImpl stockService;
 
@@ -69,12 +74,12 @@ class StockSearchTest {
 
     @Test
     void withoutVariantIdsTheVariantFilterIsOff() {
-        when(stockRepository.search(COMPANY_ID, null, false, List.of(-1L), false, "%", pageable))
+        when(stockRepository.search(COMPANY_ID, null, false, List.of(-1L), false, "%", false, List.of(-1L), 0L, pageable))
                 .thenReturn(Page.empty(pageable));
 
-        stockService.search(null, "  ", List.of(), pageable);
+        stockService.search(null, "  ", List.of(), null, pageable);
 
-        verify(stockRepository).search(COMPANY_ID, null, false, List.of(-1L), false, "%", pageable);
+        verify(stockRepository).search(COMPANY_ID, null, false, List.of(-1L), false, "%", false, List.of(-1L), 0L, pageable);
     }
 
     @Test
@@ -82,12 +87,44 @@ class StockSearchTest {
         Branch branch = Branch.builder().name("Centro").company(company).build();
         branch.setId(BRANCH_ID);
         when(branchRepository.findById(BRANCH_ID)).thenReturn(Optional.of(branch));
-        when(stockRepository.search(COMPANY_ID, BRANCH_ID, true, List.of(40L, 41L), true, "%remera%", pageable))
+        when(stockRepository.search(COMPANY_ID, BRANCH_ID, true, List.of(40L, 41L), true, "%remera%", false, List.of(-1L), 0L, pageable))
                 .thenReturn(Page.empty(pageable));
 
-        stockService.search(BRANCH_ID, "Reméra", List.of(40L, 41L), pageable);
+        stockService.search(BRANCH_ID, "Reméra", List.of(40L, 41L), null, pageable);
 
-        verify(stockRepository).search(COMPANY_ID, BRANCH_ID, true, List.of(40L, 41L), true, "%remera%", pageable);
+        verify(stockRepository).search(COMPANY_ID, BRANCH_ID, true, List.of(40L, 41L), true, "%remera%", false, List.of(-1L), 0L, pageable);
+    }
+
+    @Test
+    void attributeValuesReachTheQueryWithTheirAttributeCount() {
+        ProductAttribute talle = ProductAttribute.builder().name("Talle").company(company).build();
+        talle.setId(2L);
+        ProductAttribute color = ProductAttribute.builder().name("Color").company(company).build();
+        color.setId(3L);
+        when(attributeValueRepository.findAllByCompanyIdWithAttribute(COMPANY_ID, null)).thenReturn(List.of(
+                attributeValue(20L, talle), attributeValue(21L, talle), attributeValue(30L, color)));
+        when(stockRepository.search(COMPANY_ID, null, false, List.of(-1L), false, "%", true, List.of(20L, 21L, 30L),
+                2L, pageable)).thenReturn(Page.empty(pageable));
+
+        stockService.search(null, null, null, List.of(20L, 21L, 30L), pageable);
+
+        verify(stockRepository).search(COMPANY_ID, null, false, List.of(-1L), false, "%", true,
+                List.of(20L, 21L, 30L), 2L, pageable);
+    }
+
+    @Test
+    void attributeValueOfAnotherCompanyIsNotFound() {
+        when(attributeValueRepository.findAllByCompanyIdWithAttribute(COMPANY_ID, null)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> stockService.search(null, null, null, List.of(99L), pageable))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(stockRepository, never()).search(any(), any(), anyBoolean(), any(), anyBoolean(), anyString(), anyBoolean(), any(), anyLong(), any());
+    }
+
+    private static ProductAttributeValue attributeValue(Long id, ProductAttribute attribute) {
+        ProductAttributeValue value = ProductAttributeValue.builder().attribute(attribute).value("v" + id).build();
+        value.setId(id);
+        return value;
     }
 
     @Test
@@ -98,8 +135,8 @@ class StockSearchTest {
         foreign.setId(BRANCH_ID);
         when(branchRepository.findById(BRANCH_ID)).thenReturn(Optional.of(foreign));
 
-        assertThatThrownBy(() -> stockService.search(BRANCH_ID, null, null, pageable))
+        assertThatThrownBy(() -> stockService.search(BRANCH_ID, null, null, null, pageable))
                 .isInstanceOf(ResourceNotFoundException.class);
-        verify(stockRepository, never()).search(any(), any(), anyBoolean(), any(), anyBoolean(), anyString(), any());
+        verify(stockRepository, never()).search(any(), any(), anyBoolean(), any(), anyBoolean(), anyString(), anyBoolean(), any(), anyLong(), any());
     }
 }

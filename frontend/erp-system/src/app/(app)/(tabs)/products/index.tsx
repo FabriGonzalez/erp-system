@@ -10,6 +10,7 @@ import {
     View,
 } from 'react-native';
 
+import { AttributeFilterModal } from '@/components/products/AttributeFilterModal';
 import { CategoryPills } from '@/components/products/CategoryPills';
 import { ProductCard } from '@/components/products/ProductCard';
 import { ProductsFilterChips } from '@/components/products/ProductsFilterChips';
@@ -30,6 +31,7 @@ import { useDashboard } from '@/hooks/use-report-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
 import { StatusFilter, StockFilter } from '@/types/product';
+import { AttributeFilter, attributeFilterValueIds, variantMatchesFilter } from '@/utils/attribute-filter';
 import { hasPermission } from '@/utils/permissions';
 import { productStock } from '@/utils/product-stock';
 
@@ -43,6 +45,10 @@ export default function ProductsScreen() {
     const [stockFilter, setStockFilter] = useState<StockFilter>('ALL');
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
     const [selectedCategoryId, setSelectedCategory] = useState<string | null>(null);
+    const [attributeFilter, setAttributeFilter] = useState<AttributeFilter>({});
+    const [isAttributeFilterOpen, setAttributeFilterOpen] = useState(false);
+    const attributeValueIds = attributeFilterValueIds(attributeFilter);
+    const hasAttributeFilter = attributeValueIds.length > 0;
 
     // Sin sucursal activa, el stock (y su filtro) es el total de todas las sucursales.
     const branchId = activeBranch?.id;
@@ -61,6 +67,7 @@ export default function ProductsScreen() {
         active: statusFilter === 'ALL' ? undefined : statusFilter === 'ACTIVE',
         stock: stockFilter === 'ALL' ? undefined : stockFilter,
         branchId,
+        attributeValueIds: hasAttributeFilter ? attributeValueIds : undefined,
     });
 
     // Los mismos filtros que deja "Sin stock" al tocarlo: comparten la caché.
@@ -78,6 +85,7 @@ export default function ProductsScreen() {
         setStockFilter('ALL');
         setStatusFilter('ALL');
         setSelectedCategory(null);
+        setAttributeFilter({});
     }
 
     // Editar y activar/desactivar piden ADMINISTRAR_PRODUCTOS; crear, también
@@ -97,7 +105,8 @@ export default function ProductsScreen() {
         Boolean(searchQuery) ||
         stockFilter !== 'ALL' ||
         statusFilter !== 'ALL' ||
-        selectedCategoryId !== null;
+        selectedCategoryId !== null ||
+        hasAttributeFilter;
 
     return (
         <Screen style={styles.screen}>
@@ -135,9 +144,22 @@ export default function ProductsScreen() {
             <ProductsFilterChips
                 stockFilter={stockFilter}
                 statusFilter={statusFilter}
+                attributeValueCount={attributeValueIds.length}
                 onStockChange={setStockFilter}
                 onStatusChange={setStatusFilter}
+                onOpenAttributes={() => setAttributeFilterOpen(true)}
             />
+
+            {isAttributeFilterOpen ? (
+                <AttributeFilterModal
+                    value={attributeFilter}
+                    onApply={(filter) => {
+                        setAttributeFilter(filter);
+                        setAttributeFilterOpen(false);
+                    }}
+                    onClose={() => setAttributeFilterOpen(false)}
+                />
+            ) : null}
 
             <CategoryPills
                 categories={categories}
@@ -212,7 +234,10 @@ export default function ProductsScreen() {
                     renderItem={({ item }) => (
                         <ProductCard
                             product={item}
-                            stock={productStock(item, branchId)}
+                            stock={productStock(item, branchId, hasAttributeFilter ? attributeFilter : undefined)}
+                            matchingVariants={hasAttributeFilter
+                                ? item.variants.filter((variant) => variantMatchesFilter(variant, attributeFilter)).length
+                                : undefined}
                             canEdit={canEdit}
                             onPress={() => handleEditProduct(item.id)}
                         />

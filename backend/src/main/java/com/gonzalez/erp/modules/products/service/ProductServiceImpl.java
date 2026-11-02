@@ -70,6 +70,8 @@ public class ProductServiceImpl implements ProductService {
     public PageResponse<ProductResponse> findAll(ProductSearchCriteria criteria, Pageable pageable) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
         String search = SearchText.normalize(criteria.query());
+        AttributeValueFilters.Resolved attributes =
+                AttributeValueFilters.resolve(criteria.attributeValueIds(), companyId, attributeValueRepository);
 
         Page<Product> page = productRepository.search(
                 companyId,
@@ -80,6 +82,9 @@ public class ProductServiceImpl implements ProductService {
                 criteria.stock() == ProductStockFilter.IN_STOCK,
                 criteria.stock() == ProductStockFilter.OUT_OF_STOCK,
                 criteria.branchId(),
+                attributes.active(),
+                attributes.ids(),
+                attributes.attributeCount(),
                 pageable);
 
         List<Product> products = page.getContent();

@@ -12,11 +12,13 @@ import { stockPill } from '@/utils/status';
 type ProductCardProps = {
     product: Product;
     stock: number;
+    /** Con filtro de atributos: cuántas variantes coinciden (stock ya es solo de esas). */
+    matchingVariants?: number;
     canEdit?: boolean;
     onPress?: () => void;
 };
 
-export function ProductCard({ product, stock, canEdit = false, onPress }: ProductCardProps) {
+export function ProductCard({ product, stock, matchingVariants, canEdit = false, onPress }: ProductCardProps) {
     const pill = stockPill(stock);
     const prices = product.variants.map((variant) => variant.price).filter(Number.isFinite);
     const lowestPrice = prices.length ? Math.min(...prices) : 0;
@@ -28,6 +30,9 @@ export function ProductCard({ product, stock, canEdit = false, onPress }: Produc
         ? product.variants[0]?.sku ?? 'Sin variantes'
         : `${product.variants.length} variantes`;
     const meta = product.categoryName ? `${product.categoryName} · ${variantsLabel}` : variantsLabel;
+    const matchLabel = matchingVariants !== undefined && product.variants.length > 1
+        ? `${matchingVariants} de ${product.variants.length} variantes coinciden`
+        : null;
 
     return (
         <Pressable
@@ -49,6 +54,9 @@ export function ProductCard({ product, stock, canEdit = false, onPress }: Produc
             <View style={styles.texts}>
                 <Text style={styles.name} numberOfLines={2}>{product.name}</Text>
                 <Text style={styles.meta} numberOfLines={1}>{meta}</Text>
+                {matchLabel ? (
+                    <Text style={styles.match} numberOfLines={1}>{matchLabel}</Text>
+                ) : null}
                 {product.description ? (
                     <Text style={styles.meta} numberOfLines={1}>{product.description}</Text>
                 ) : null}
@@ -90,6 +98,11 @@ const styles = StyleSheet.create({
     meta: {
         fontSize: 12,
         color: Colors.textSecondary,
+    },
+    match: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: Colors.primary,
     },
     price: {
         fontSize: 14,

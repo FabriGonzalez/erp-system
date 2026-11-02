@@ -10,19 +10,23 @@ import {
     View,
 } from 'react-native';
 
+import { AttributeFilterModal } from '@/components/products/AttributeFilterModal';
 import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { FilterChip } from '@/components/ui/FilterChip';
 import { IconBadge } from '@/components/ui/IconBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
+import { Spacing } from '@/constants/spacing';
 import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useBranchStocks } from '@/hooks/use-stock-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
 import { Stock } from '@/types/stock';
+import { AttributeFilter, attributeFilterValueIds } from '@/utils/attribute-filter';
 import { STOCK_MOVEMENT_READ_PERMISSIONS, hasAnyPermission } from '@/utils/permissions';
 import { stockPill } from '@/utils/status';
 
@@ -33,6 +37,9 @@ export default function InventoryScreen() {
     // pide los permisos de movimientos, que incluyen AJUSTAR_STOCK.
     const canOpenDetail = hasAnyPermission(user, STOCK_MOVEMENT_READ_PERMISSIONS);
     const [query, setQuery] = useState('');
+    const [attributeFilter, setAttributeFilter] = useState<AttributeFilter>({});
+    const [isAttributeFilterOpen, setAttributeFilterOpen] = useState(false);
+    const attributeValueIds = attributeFilterValueIds(attributeFilter);
     // Cada sucursal y búsqueda tiene su caché: una respuesta de la sucursal anterior no se mezcla.
     const {
         items: stocks,
@@ -42,7 +49,7 @@ export default function InventoryScreen() {
         error,
         loadMore,
         refresh,
-    } = useBranchStocks({ branchId: activeBranch?.id, q: query });
+    } = useBranchStocks({ branchId: activeBranch?.id, q: query, attributeValueIds });
 
     function renderItem({ item }: { item: Stock }) {
         const pill = stockPill(item.quantity);
@@ -106,8 +113,8 @@ export default function InventoryScreen() {
                 ListEmptyComponent={
                     <EmptyState
                         title="Sin stock registrado"
-                        description={query.trim()
-                            ? 'Ningún producto coincide con la búsqueda.'
+                        description={query.trim() || attributeValueIds.length
+                            ? 'Ningún producto coincide con la búsqueda o los filtros.'
                             : `${activeBranch.name} no tiene registros de stock.`}
                     />
                 }
@@ -126,7 +133,25 @@ export default function InventoryScreen() {
             {activeBranch ? (
                 <View style={SharedStyles.pageToolbar}>
                     <AppInput value={query} onChangeText={setQuery} placeholder="Buscar producto o SKU" />
+                    <View style={styles.filters}>
+                        <FilterChip
+                            label={attributeValueIds.length ? `Atributos · ${attributeValueIds.length}` : 'Atributos'}
+                            selected={attributeValueIds.length > 0}
+                            onPress={() => setAttributeFilterOpen(true)}
+                        />
+                    </View>
                 </View>
+            ) : null}
+
+            {isAttributeFilterOpen ? (
+                <AttributeFilterModal
+                    value={attributeFilter}
+                    onApply={(filter) => {
+                        setAttributeFilter(filter);
+                        setAttributeFilterOpen(false);
+                    }}
+                    onClose={() => setAttributeFilterOpen(false)}
+                />
             ) : null}
 
             {renderBody()}
@@ -136,4 +161,5 @@ export default function InventoryScreen() {
 
 const styles = StyleSheet.create({
     container: { padding: 0 },
+    filters: { flexDirection: 'row', marginTop: Spacing.sm },
 });

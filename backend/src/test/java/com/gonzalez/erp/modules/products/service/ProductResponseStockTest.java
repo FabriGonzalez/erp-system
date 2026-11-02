@@ -109,7 +109,7 @@ class ProductResponseStockTest {
         ProductVariant remeraM = variant(40L, remera, "REM-M");
         ProductVariant buzoL = variant(41L, buzo, "BUZ-L");
         Pageable pageable = PageRequest.of(0, 20);
-        when(productRepository.search(COMPANY_ID, null, null, false, "%", false, false, null, pageable))
+        when(productRepository.search(COMPANY_ID, null, null, false, "%", false, false, null, false, List.of(-1L), 0L, pageable))
                 .thenReturn(new PageImpl<>(List.of(remera, buzo), pageable, 2));
         when(variantRepository.findByProductIdInWithAttributes(List.of(20L, 21L)))
                 .thenReturn(List.of(remeraM, buzoL));
@@ -129,11 +129,11 @@ class ProductResponseStockTest {
     @Test
     void listingSearchesWithoutAccentsAndPassesTheStockFilter() {
         Pageable pageable = PageRequest.of(0, 20);
-        when(productRepository.search(COMPANY_ID, true, 30L, true, "%camion rojo%", true, false, CENTRO_ID, pageable))
+        when(productRepository.search(COMPANY_ID, true, 30L, true, "%camion rojo%", true, false, CENTRO_ID, false, List.of(-1L), 0L, pageable))
                 .thenReturn(Page.empty(pageable));
 
         PageResponse<ProductResponse> response = productService.findAll(
-                new ProductSearchCriteria(true, 30L, "  Camión   ROJO ", ProductStockFilter.IN_STOCK, CENTRO_ID),
+                new ProductSearchCriteria(true, 30L, "  Camión   ROJO ", ProductStockFilter.IN_STOCK, CENTRO_ID, null),
                 pageable);
 
         assertThat(response.content()).isEmpty();
@@ -144,17 +144,17 @@ class ProductResponseStockTest {
     @Test
     void outOfStockFilterWithoutBranchUsesTheCompanyTotal() {
         Pageable pageable = PageRequest.of(0, 20);
-        when(productRepository.search(COMPANY_ID, null, null, false, "%", false, true, null, pageable))
+        when(productRepository.search(COMPANY_ID, null, null, false, "%", false, true, null, false, List.of(-1L), 0L, pageable))
                 .thenReturn(Page.empty(pageable));
 
-        productService.findAll(new ProductSearchCriteria(null, null, "   ", ProductStockFilter.OUT_OF_STOCK, null),
+        productService.findAll(new ProductSearchCriteria(null, null, "   ", ProductStockFilter.OUT_OF_STOCK, null, null),
                 pageable);
 
-        verify(productRepository).search(COMPANY_ID, null, null, false, "%", false, true, null, pageable);
+        verify(productRepository).search(COMPANY_ID, null, null, false, "%", false, true, null, false, List.of(-1L), 0L, pageable);
     }
 
     private static ProductSearchCriteria noFilters() {
-        return new ProductSearchCriteria(null, null, null, null, null);
+        return new ProductSearchCriteria(null, null, null, null, null, null);
     }
 
     @Test

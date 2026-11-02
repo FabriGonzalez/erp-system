@@ -129,7 +129,7 @@ export type StockFilter = 'ALL' | 'IN_STOCK' | 'OUT_OF_STOCK';
 
 /**
  * Filtros del listado paginado de productos. stock se mide en branchId o, sin sucursal, en el
- * total de la empresa.
+ * total de la empresa; con attributeValueIds, solo sobre las variantes que coinciden.
  */
 export type ProductListParams = {
     q?: string;
@@ -137,6 +137,8 @@ export type ProductListParams = {
     active?: boolean;
     stock?: Exclude<StockFilter, 'ALL'>;
     branchId?: string;
+    /** Una misma variante tiene que tener, de cada atributo, alguno de estos valores. */
+    attributeValueIds?: string[];
 };
 
 export type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
