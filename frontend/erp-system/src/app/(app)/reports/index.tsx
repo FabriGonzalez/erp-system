@@ -22,8 +22,8 @@ import { chooseAction } from '@/stores/dialog-store';
 import { SharedStyles } from '@/styles/shared';
 import { PAYMENT_METHOD_LABELS } from '@/types/order';
 import { Dashboard } from '@/types/report';
-import { formatCurrency, formatTime } from '@/utils/format';
-import { percentChange, REPORT_PERIODS, ReportPeriod, salesChartData } from '@/utils/report-periods';
+import { formatCurrency } from '@/utils/format';
+import { REPORT_PERIODS, ReportPeriod, salesChartData } from '@/utils/report-periods';
 
 // Más vendidos: los primeros a la vista; "Ver todos" muestra los 10 que trae el backend.
 const TOP_PRODUCTS_PREVIEW = 5;
@@ -42,14 +42,6 @@ function Section({ title, action, note, children }: {
             {note ? <Text style={styles.note}>{note}</Text> : null}
         </View>
     );
-}
-
-function formatChange(change: number): { text: string; color: string } {
-    const rounded = Math.round(change);
-    return {
-        text: `${rounded > 0 ? '+' : ''}${rounded}%`,
-        color: rounded > 0 ? Colors.successDark : rounded < 0 ? Colors.errorDark : Colors.textSecondary,
-    };
 }
 
 export default function ReportsScreen() {
@@ -82,13 +74,6 @@ export default function ReportsScreen() {
     }
 
     function renderSalesCard(data: Dashboard) {
-        const periodInfo = REPORT_PERIODS.find((item) => item.value === period);
-        // Hoy se compara contra el mismo tramo de ayer: de 00:00 hasta la hora de la consulta.
-        const comparison = period === 'today'
-            ? `ayer de 00:00 a ${formatTime(data.to)}`
-            : periodInfo?.comparison ?? '';
-        const changeValue = percentChange(data.sales.total, data.previousSales.total);
-        const change = changeValue === null ? null : formatChange(changeValue);
         const chart = salesChartData(data.salesSeries, period);
 
         return (
@@ -117,20 +102,14 @@ export default function ReportsScreen() {
                     <Text style={styles.bigNumber} numberOfLines={1} adjustsFontSizeToFit>
                         {formatCurrency(data.sales.total)}
                     </Text>
-                    {change ? (
-                        <Text style={styles.comparison}>
-                            <Text style={[styles.change, { color: change.color }]}>{change.text}</Text>
-                            {` vs. ${comparison}`}
-                        </Text>
-                    ) : (
-                        <Text style={styles.comparison}>Sin ventas para comparar con {comparison}</Text>
-                    )}
                 </View>
 
-                {chart.values.length > 0 ? (
+                {chart.bars.length > 0 ? (
                     <SalesChart
-                        values={chart.values}
-                        labels={chart.labels}
+                        // Otro período u otra sucursal son otras barras: lo elegido no sigue valiendo.
+                        key={`${period}-${branchId ?? 'all'}`}
+                        bars={chart.bars}
+                        axisLabels={chart.axisLabels}
                         accessibilityLabel={period === 'today' ? 'Ventas por hora' : 'Ventas por día'}
                     />
                 ) : null}
@@ -353,13 +332,6 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         letterSpacing: -0.5,
         color: Colors.text,
-    },
-    comparison: {
-        fontSize: 13,
-        color: Colors.textSecondary,
-    },
-    change: {
-        fontWeight: '700',
     },
     cardStats: {
         flexDirection: 'row',

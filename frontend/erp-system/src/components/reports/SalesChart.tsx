@@ -1,51 +1,85 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
 import { Radius, Spacing } from '@/constants/spacing';
+import { formatCurrency } from '@/utils/format';
+import { SalesChartBar } from '@/utils/report-periods';
 
 type SalesChartProps = {
-    /** Importe de cada tramo, en orden. */
-    values: number[];
+    bars: SalesChartBar[];
     /** Etiquetas del eje, repartidas de punta a punta. */
-    labels: string[];
+    axisLabels: string[];
     accessibilityLabel: string;
 };
 
 const CHART_HEIGHT = 112;
 
-/** Barras de ventas por hora o por día; la última (la de ahora) va resaltada. */
-export function SalesChart({ values, labels, accessibilityLabel }: SalesChartProps) {
-    const max = Math.max(...values, 0);
+function describe(bar: SalesChartBar): string {
+    const orders = bar.orderCount === 1 ? '1 pedido' : `${bar.orderCount} pedidos`;
+    return `${bar.label} · ${formatCurrency(bar.total)} · ${orders}`;
+}
+
+/**
+ * Barras de ventas por hora o por día. El detalle de una barra se ve arriba al pasar el mouse
+ * (web) o al tocarla (celular, donde no hay hover); sin elegir, el de la última (la de ahora).
+ */
+export function SalesChart({ bars, axisLabels, accessibilityLabel }: SalesChartProps) {
+    const [selected, setSelected] = useState<number | null>(null);
+    const max = Math.max(...bars.map((bar) => bar.total), 0);
+    const highlighted = selected ?? bars.length - 1;
     // Con muchas barras (30 días) el espacio entre ellas se achica para que no queden hilos.
-    const gap = values.length > 20 ? 2 : 4;
+    const gap = bars.length > 20 ? 2 : 4;
 
     return (
-        <View accessible accessibilityRole="image" accessibilityLabel={accessibilityLabel}>
+        <View accessibilityLabel={accessibilityLabel}>
+            <Text style={[styles.detail, selected === null && styles.detailIdle]} numberOfLines={1}>
+                {/* La barra señalada siempre dice su hora o día, aunque no haya tenido ventas. */}
+                {selected === null && max === 0 ? 'Sin ventas en el período.' : describe(bars[highlighted])}
+            </Text>
             <View style={[styles.bars, { gap }]}>
-                {values.map((value, index) => (
-                    <View
+                {bars.map((bar, index) => (
+                    <Pressable
                         key={index}
-                        style={[
-                            styles.bar,
-                            {
-                                height: max > 0 ? `${(value / max) * 100}%` : 0,
-                                backgroundColor: index === values.length - 1 ? Colors.primary : Colors.track,
-                            },
-                        ]}
-                    />
+                        onPress={() => setSelected((current) => (current === index ? null : index))}
+                        onHoverIn={() => setSelected(index)}
+                        onHoverOut={() => setSelected(null)}
+                        accessibilityRole="button"
+                        accessibilityLabel={describe(bar)}
+                        style={styles.slot}
+                    >
+                        <View
+                            style={[
+                                styles.bar,
+                                {
+                                    height: max > 0 ? `${(bar.total / max) * 100}%` : 0,
+                                    backgroundColor: index === highlighted ? Colors.primary : Colors.track,
+                                },
+                            ]}
+                        />
+                    </Pressable>
                 ))}
             </View>
             <View style={styles.axis}>
-                {labels.map((label, index) => (
+                {axisLabels.map((label, index) => (
                     <Text key={index} style={styles.axisLabel}>{label}</Text>
                 ))}
             </View>
-            {max === 0 ? <Text style={styles.empty}>Sin ventas en el período.</Text> : null}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
+    detail: {
+        marginBottom: Spacing.sm,
+        fontSize: 13,
+        fontWeight: '700',
+        color: Colors.text,
+    },
+    detailIdle: {
+        fontWeight: '400',
+        color: Colors.textSecondary,
+    },
     bars: {
         height: CHART_HEIGHT,
         flexDirection: 'row',
@@ -53,8 +87,13 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: Colors.border,
     },
-    bar: {
+    // Toda la columna es tocable, no solo la barra: una barra baja sería difícil de acertar.
+    slot: {
         flex: 1,
+        height: '100%',
+        justifyContent: 'flex-end',
+    },
+    bar: {
         // Un tramo sin ventas igual se ve, como una raya sobre el eje.
         minHeight: 2,
         borderTopLeftRadius: Radius.sm / 2,
@@ -67,15 +106,6 @@ const styles = StyleSheet.create({
     },
     axisLabel: {
         fontSize: 11,
-        color: Colors.textSecondary,
-    },
-    empty: {
-        position: 'absolute',
-        top: CHART_HEIGHT / 2 - 10,
-        left: 0,
-        right: 0,
-        textAlign: 'center',
-        fontSize: 13,
         color: Colors.textSecondary,
     },
 });

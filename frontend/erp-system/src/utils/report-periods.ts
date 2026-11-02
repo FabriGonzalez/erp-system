@@ -2,15 +2,10 @@ import { SalesBucket, SalesPoint } from '@/types/report';
 
 export type ReportPeriod = 'today' | '7d' | '30d';
 
-export const REPORT_PERIODS: {
-    value: ReportPeriod;
-    label: string;
-    comparison: string;
-    bucket: SalesBucket;
-}[] = [
-    { value: 'today', label: 'Hoy', comparison: 'ayer', bucket: 'HOUR' },
-    { value: '7d', label: '7 días', comparison: 'los 7 días anteriores', bucket: 'DAY' },
-    { value: '30d', label: '30 días', comparison: 'los 30 días anteriores', bucket: 'DAY' },
+export const REPORT_PERIODS: { value: ReportPeriod; label: string; bucket: SalesBucket }[] = [
+    { value: 'today', label: 'Hoy', bucket: 'HOUR' },
+    { value: '7d', label: '7 días', bucket: 'DAY' },
+    { value: '30d', label: '30 días', bucket: 'DAY' },
 ];
 
 const DAYS: Record<ReportPeriod, number> = { today: 1, '7d': 7, '30d': 30 };
@@ -38,18 +33,22 @@ export function periodBucket(period: ReportPeriod): SalesBucket {
     return REPORT_PERIODS.find((item) => item.value === period)?.bucket ?? 'DAY';
 }
 
-/** Variación porcentual; null si el período anterior fue 0 (no hay contra qué comparar). */
-export function percentChange(current: number, previous: number): number | null {
-    if (previous === 0) return null;
-    return ((current - previous) / previous) * 100;
-}
-
-function pointLabel(from: string, period: ReportPeriod): string {
+/** Etiqueta corta, para el eje. */
+function axisLabel(from: string, period: ReportPeriod): string {
     const date = new Date(from);
     if (period === 'today') return `${date.getHours()} h`;
     if (period === '7d') return WEEKDAYS[date.getDay()];
     return `${date.getDate()}/${date.getMonth() + 1}`;
 }
+
+/** Etiqueta del detalle de una barra: "15 a 16 h", "lun 27/10". */
+function barLabel(from: string, period: ReportPeriod): string {
+    const date = new Date(from);
+    if (period === 'today') return `${date.getHours()} a ${date.getHours() + 1} h`;
+    return `${WEEKDAYS[date.getDay()]} ${date.getDate()}/${date.getMonth() + 1}`;
+}
+
+export type SalesChartBar = { label: string; total: number; orderCount: number };
 
 /**
  * Barras y etiquetas del eje (primera, del medio y última). Hoy se saltean las horas de la
@@ -62,7 +61,11 @@ export function salesChartData(series: SalesPoint[], period: ReportPeriod) {
         ? points
         : [points[0], points[Math.floor((points.length - 1) / 2)], points[points.length - 1]];
     return {
-        values: points.map((point) => point.total),
-        labels: edges.map((point) => pointLabel(point.from, period)),
+        bars: points.map((point): SalesChartBar => ({
+            label: barLabel(point.from, period),
+            total: point.total,
+            orderCount: point.orderCount,
+        })),
+        axisLabels: edges.map((point) => axisLabel(point.from, period)),
     };
 }

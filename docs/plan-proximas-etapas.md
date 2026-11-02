@@ -2100,8 +2100,8 @@ alertas"). Quedó como plan porque otra sesión estaba tocando el backend.
 1. `PageHeader` (eyebrow = sucursal o "Todas tus sucursales") con un botón de sucursal a la
    derecha que abre `chooseAction` con "Todas" y las sucursales del usuario (reemplaza la fila de
    chips).
-2. Tarjeta de ventas: total grande, variación en color (`percentChange`) "vs. ayer a esta hora /
-   los N días anteriores", control segmentado Hoy / 7 d / 30 d dentro de la tarjeta (reemplaza
+2. Tarjeta de ventas: total grande (sin comparación con el período anterior: el usuario la sacó
+   el 2026-11-02; el backend sigue mandando `previousSales`), control segmentado Hoy / 7 d / 30 d dentro de la tarjeta (reemplaza
    los chips de período), **gráfico de barras** (por hora en Hoy, por día en 7 y 30 días; la
    última barra resaltada) con eje de pocas etiquetas, y abajo Pedidos y Ticket promedio.
 3. "Para atender": tres tarjetas chicas con un punto de color (rojo stock bajo, ámbar por
