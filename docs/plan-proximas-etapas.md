@@ -2077,3 +2077,81 @@ web (22) viene después.
    los clientes de cada comercio), y cómo se pide soporte.
 10. **Render y Neon.** Al migrar, dejarlos como staging (demos y pruebas de la tienda web, ver
     etapa 22); que ningún APK de cliente quede apuntando ahí.
+
+## Etapa 27 — Reportes como dashboard (propuesta C) — HECHA, SIN PROBAR EN LA APP
+
+Pedido del usuario (2026-11-02): la pantalla de Reportes está muy cargada (seis secciones
+apiladas); que sea un dashboard más prolijo, manejado con filtros. Se hicieron tres propuestas en
+el lienzo https://claude.ai/artifact/ToXYGyAtqzwYTVWa9tiJhS y eligió la **C** ("Gráfico +
+alertas"). Quedó como plan porque otra sesión estaba tocando el backend.
+
+**Hecho (2026-11-02, sin commitear).** Como estaba planeado, con estas decisiones:
+- Backend: enum `reports/dto/request/SalesBucket`; `findSalesInRange` trae los pedidos uno por
+  uno y el servicio los agrupa (como mucho `MAX_SERIES_POINTS` = 400 tramos; más → 400
+  `INVALID_REPORT_RANGE`). Sin sucursales la serie igual trae los tramos en cero.
+- Frontend: `bucket` sale de `REPORT_PERIODS` y se manda siempre (Ventas, Más y Productos usan
+  la misma clave de `useDashboard`). Hoy el gráfico arranca en la primera hora con ventas. Las
+  tres tarjetas de "Para atender" son `StatTile` y abren `components/reports/AttentionModal`.
+  Componentes nuevos: `SalesChart`, `CollectionsBar` y `BarList` (sucursales y más vendidos).
+- Validado: `ReportServiceImplTest` (17), `BackendApplicationTests` y `TenantIsolationTests`,
+  `tsc` y ESLint. Falta probarlo en la app.
+
+**La pantalla (de arriba a abajo).**
+1. `PageHeader` (eyebrow = sucursal o "Todas tus sucursales") con un botón de sucursal a la
+   derecha que abre `chooseAction` con "Todas" y las sucursales del usuario (reemplaza la fila de
+   chips).
+2. Tarjeta de ventas: total grande, variación en color (`percentChange`) "vs. ayer a esta hora /
+   los N días anteriores", control segmentado Hoy / 7 d / 30 d dentro de la tarjeta (reemplaza
+   los chips de período), **gráfico de barras** (por hora en Hoy, por día en 7 y 30 días; la
+   última barra resaltada) con eje de pocas etiquetas, y abajo Pedidos y Ticket promedio.
+3. "Para atender": tres tarjetas chicas con un punto de color (rojo stock bajo, ámbar por
+   despachar y deuda) que abren un **modal** cada una (ver abajo).
+4. "Cobranzas · total cobrado": una barra apilada por medio de pago con leyenda en 2 columnas
+   (medio · %, importe). "Sin medio registrado" va como un segmento más (gris) si es > 0.
+5. "Por sucursal": barras horizontales, solo con "Todas" y más de una sucursal (como hoy).
+6. "Más vendidos": 5 con barra proporcional a las unidades y "Ver todos" que despliega los 10
+   que ya devuelve el backend.
+Las notas chicas actuales (promos en más vendidos, deuda de toda la empresa, envío más antiguo)
+se conservan, pero dentro del modal o como texto chico, no debajo de cada sección.
+
+**Modales de "Para atender" (sin navegar a otro stack).** Navegar a Inventario, Envíos o
+Deudores desde el stack de Reportes rompe el back (ver la nota sobre stacks); re-exportar esas
+pantallas no alcanza porque desde ellas se sigue navegando (al cliente, al pedido). Por eso:
+- **Stock bajo:** la lista que ya trae el dashboard (`lowStock.items`, hasta 20) + "y N más".
+- **Por despachar:** `useOrders({ status: 'TO_PREPARE', branchId })` paginado; mismo criterio que
+  `summarizeOrdersToPrepare` (cualquier tipo de entrega, sin `deliveryType`). Con "Todas",
+  verificar que `useOrders` sin `branchId` traiga todas las sucursales accesibles, como el
+  dashboard. Filas de solo lectura (número, cliente, sucursal, total, antigüedad).
+- **Deuda:** `useDebtors()` (paginado, de mayor a menor; es de toda la empresa, igual que
+  `dashboard.debt`). Filas de solo lectura.
+Dentro de un `Modal` los errores se muestran en el propio modal (no toasts).
+
+**Backend: serie de ventas.** Parámetro nuevo `bucket` (`HOUR` | `DAY`, opcional; sin él no hay
+serie) en `GET /api/v1/reports/dashboard` y campo `salesSeries: [{ from, orderCount, total }]` en
+la respuesta: tramos de 1 h o 24 h desde `from` hasta `to`, **incluidos los vacíos** (en cero).
+No hace falta zona horaria: el frontend ya manda `from` en la medianoche local, así que los tramos
+caen en horas/días locales (solo se correría con horario de verano, que Argentina no tiene).
+Mismo criterio de venta que `sumSalesByBranch` (estado distinto de `CANCELLED`, `createdAt` en
+[from, to), sucursales accesibles o `branchId`). Agrupar en SQL (nativa con
+`floor(extract(epoch from (created_at - :from)) / :seconds)`) o traer `(createdAt, total)` y
+agrupar en Java; elegir mirando el volumen. Validar que la cantidad de tramos no se dispare
+(p. ej. `HOUR` con un rango de más de 2 días → 400 `INVALID_REPORT_RANGE`).
+
+**Archivos (12).**
+- Backend (5): `reports/dto/response/DashboardResponse.java` (`salesSeries` + record del tramo),
+  `reports/controller/ReportController.java` (`bucket`), `reports/service/ReportService.java` +
+  `ReportServiceImpl.java` (armar los tramos), `orders/repository/OrderRepository.java` (consulta),
+  `ReportServiceImplTest.java` (tramos vacíos, bordes de from/to, sucursal, validación). Si el
+  enum del bucket va en un archivo propio, son 6.
+- Frontend (7): `types/report.ts`, `services/report-service.ts` (mandar `bucket`, normalizar),
+  `utils/report-periods.ts` (bucket por período y etiquetas del eje), `app/(app)/reports/index.tsx`,
+  `components/reports/SalesChart.tsx` y `components/reports/CollectionsBar.tsx` (nuevos, con
+  `View`, sin librería de gráficos), y este plan. Los tres modales pueden ir en
+  `components/reports/AttentionModal.tsx` (uno con variantes) para no pasar de 20.
+- Sin cambios nativos: alcanza con EAS Update, pero **el backend tiene que estar desplegado antes**
+  (Render) o la app nueva ve el gráfico vacío. `useDashboard` debería tolerar `salesSeries`
+  ausente (se trata como sin serie) para que app y backend no tengan que salir juntos.
+
+**Orden.** Paso 1 backend + tests (cuando la otra sesión termine con el backend); paso 2
+frontend. Probar: los tres períodos, una sucursal y "Todas", un período sin ventas (barras en
+cero, sin dividir por 0), y los tres modales con lista vacía y con más de una página.

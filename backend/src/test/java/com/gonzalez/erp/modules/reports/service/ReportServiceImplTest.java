@@ -12,8 +12,10 @@ import com.gonzalez.erp.modules.inventory.repository.StockRepository;
 import com.gonzalez.erp.modules.orders.repository.OrderRepository;
 import com.gonzalez.erp.modules.payments.entity.PaymentMethod;
 import com.gonzalez.erp.modules.payments.repository.PaymentRepository;
+import com.gonzalez.erp.modules.reports.dto.request.SalesBucket;
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse;
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.MethodTotal;
+import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.SalesPoint;
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.TopProduct;
 import com.gonzalez.erp.modules.reports.exception.InvalidReportRangeException;
 import com.gonzalez.erp.modules.users.entity.User;
@@ -95,9 +97,9 @@ class ReportServiceImplTest {
 
     @Test
     void fromMustBeBeforeTo() {
-        assertThatThrownBy(() -> reportService.getDashboard(TO, FROM, null, null, 5))
+        assertThatThrownBy(() -> reportService.getDashboard(TO, FROM, null, null, 5, null))
                 .isInstanceOf(InvalidReportRangeException.class);
-        assertThatThrownBy(() -> reportService.getDashboard(FROM, FROM, null, null, 5))
+        assertThatThrownBy(() -> reportService.getDashboard(FROM, FROM, null, null, 5, null))
                 .isInstanceOf(InvalidReportRangeException.class);
     }
 
@@ -105,15 +107,15 @@ class ReportServiceImplTest {
     void rangeCannotBeLongerThan366Days() {
         Instant to = FROM.plus(Duration.ofDays(367));
 
-        assertThatThrownBy(() -> reportService.getDashboard(FROM, to, null, null, 5))
+        assertThatThrownBy(() -> reportService.getDashboard(FROM, to, null, null, 5, null))
                 .isInstanceOf(InvalidReportRangeException.class);
     }
 
     @Test
     void thresholdMustBeInRange() {
-        assertThatThrownBy(() -> reportService.getDashboard(FROM, TO, null, null, -1))
+        assertThatThrownBy(() -> reportService.getDashboard(FROM, TO, null, null, -1, null))
                 .isInstanceOf(InvalidReportRangeException.class);
-        assertThatThrownBy(() -> reportService.getDashboard(FROM, TO, null, null, 1001))
+        assertThatThrownBy(() -> reportService.getDashboard(FROM, TO, null, null, 1001, null))
                 .isInstanceOf(InvalidReportRangeException.class);
     }
 
@@ -121,7 +123,7 @@ class ReportServiceImplTest {
     void branchNotAssignedToTheUserIsForbidden() {
         when(branchAccessService.requireAccessible(NORTE_ID)).thenThrow(new BranchAccessDeniedException(NORTE_ID));
 
-        assertThatThrownBy(() -> reportService.getDashboard(FROM, TO, null, NORTE_ID, 5))
+        assertThatThrownBy(() -> reportService.getDashboard(FROM, TO, null, NORTE_ID, 5, null))
                 .isInstanceOf(AccessDeniedException.class);
         verifyNoInteractions(orderRepository);
     }
@@ -130,7 +132,7 @@ class ReportServiceImplTest {
     void branchOfAnotherCompanyIsNotFound() {
         when(branchAccessService.requireAccessible(99L)).thenThrow(new ResourceNotFoundException("Branch not found"));
 
-        assertThatThrownBy(() -> reportService.getDashboard(FROM, TO, null, 99L, 5))
+        assertThatThrownBy(() -> reportService.getDashboard(FROM, TO, null, 99L, 5, null))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -140,7 +142,7 @@ class ReportServiceImplTest {
         when(customerBalanceService.getDebtSummary(COMPANY_ID))
                 .thenReturn(new CustomerDebtSummaryResponse(new BigDecimal("1500"), 2));
 
-        DashboardResponse response = reportService.getDashboard(FROM, TO, null, null, 5);
+        DashboardResponse response = reportService.getDashboard(FROM, TO, null, null, 5, null);
 
         assertThat(response.sales().orderCount()).isZero();
         assertThat(response.sales().averageTicket()).isEqualByComparingTo("0");
@@ -174,7 +176,7 @@ class ReportServiceImplTest {
         when(stockRepository.findLowStock(eq(COMPANY_ID), eq(branchIds), anyInt(), any()))
                 .thenReturn(Page.empty());
 
-        DashboardResponse response = reportService.getDashboard(FROM, TO, null, null, 5);
+        DashboardResponse response = reportService.getDashboard(FROM, TO, null, null, 5, null);
 
         assertThat(response.previousFrom()).isEqualTo(PREVIOUS_FROM);
         assertThat(response.previousTo()).isEqualTo(FROM);
@@ -205,7 +207,7 @@ class ReportServiceImplTest {
         when(stockRepository.findLowStock(eq(COMPANY_ID), eq(List.of(NORTE_ID)), anyInt(), any()))
                 .thenReturn(Page.empty());
 
-        DashboardResponse response = reportService.getDashboard(FROM, TO, null, NORTE_ID, 5);
+        DashboardResponse response = reportService.getDashboard(FROM, TO, null, NORTE_ID, 5, null);
 
         assertThat(response.branchId()).isEqualTo(NORTE_ID);
         verify(orderRepository).sumSalesByBranch(COMPANY_ID, List.of(NORTE_ID), FROM, TO);
@@ -225,7 +227,7 @@ class ReportServiceImplTest {
         when(stockRepository.findLowStock(eq(COMPANY_ID), eq(List.of(CENTRO_ID)), anyInt(), any()))
                 .thenReturn(Page.empty());
 
-        DashboardResponse response = reportService.getDashboard(FROM, to, PREVIOUS_FROM, null, 5);
+        DashboardResponse response = reportService.getDashboard(FROM, to, PREVIOUS_FROM, null, 5, null);
 
         assertThat(response.previousFrom()).isEqualTo(PREVIOUS_FROM);
         assertThat(response.previousTo()).isEqualTo(previousTo);
@@ -236,7 +238,7 @@ class ReportServiceImplTest {
     void previousPeriodCannotOverlapTheCurrentOne() {
         Instant overlapping = FROM.minus(Duration.ofHours(12));
 
-        assertThatThrownBy(() -> reportService.getDashboard(FROM, TO, overlapping, null, 5))
+        assertThatThrownBy(() -> reportService.getDashboard(FROM, TO, overlapping, null, 5, null))
                 .isInstanceOf(InvalidReportRangeException.class);
     }
 
@@ -264,7 +266,7 @@ class ReportServiceImplTest {
         when(stockRepository.findLowStock(eq(COMPANY_ID), eq(branchIds), anyInt(), any()))
                 .thenReturn(Page.empty());
 
-        DashboardResponse response = reportService.getDashboard(FROM, TO, null, null, 5);
+        DashboardResponse response = reportService.getDashboard(FROM, TO, null, null, 5, null);
 
         // Buzo: 3 sueltos + 2 en promos; el importe es solo el de los sueltos.
         assertThat(response.topProducts())
@@ -275,5 +277,102 @@ class ReportServiceImplTest {
                         tuple("GOR-U", 1L));
         assertThat(response.topProducts().get(0).total()).isEqualByComparingTo("9000");
         assertThat(response.topProducts().get(2).total()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void seriesHasEveryHourIncludingTheEmptyOnes() {
+        List<Long> branchIds = List.of(CENTRO_ID);
+        stubEmptyDashboard(branchIds);
+        when(orderRepository.findSalesInRange(COMPANY_ID, branchIds, FROM, TO)).thenReturn(List.of(
+                new Object[]{FROM.plus(Duration.ofMinutes(30)), new BigDecimal("100")},
+                new Object[]{FROM.plus(Duration.ofMinutes(60)), new BigDecimal("200")},
+                new Object[]{FROM.plus(Duration.ofMinutes(119)), new BigDecimal("50")}));
+
+        DashboardResponse response = reportService.getDashboard(FROM, TO, null, null, 5, SalesBucket.HOUR);
+
+        assertThat(response.salesSeries()).hasSize(24);
+        assertThat(response.salesSeries().get(0).orderCount()).isEqualTo(1);
+        assertThat(response.salesSeries().get(0).total()).isEqualByComparingTo("100");
+        // La venta de las 01:00 justas es del segundo tramo, no del primero.
+        assertThat(response.salesSeries().get(1).orderCount()).isEqualTo(2);
+        assertThat(response.salesSeries().get(1).total()).isEqualByComparingTo("250");
+        assertThat(response.salesSeries().get(2).orderCount()).isZero();
+        assertThat(response.salesSeries().get(2).total()).isEqualByComparingTo("0");
+        assertThat(response.salesSeries().get(3).from()).isEqualTo(FROM.plus(Duration.ofHours(3)));
+    }
+
+    @Test
+    void todayUntilNowEndsWithAShorterLastHour() {
+        Instant now = FROM.plus(Duration.ofMinutes(15 * 60 + 42));
+        List<Long> branchIds = List.of(CENTRO_ID);
+        stubEmptyDashboard(branchIds);
+        when(orderRepository.findSalesInRange(COMPANY_ID, branchIds, FROM, now)).thenReturn(List.<Object[]>of(
+                new Object[]{FROM.plus(Duration.ofMinutes(15 * 60 + 40)), new BigDecimal("900")}));
+
+        DashboardResponse response = reportService.getDashboard(FROM, now, PREVIOUS_FROM, null, 5, SalesBucket.HOUR);
+
+        assertThat(response.salesSeries()).hasSize(16);
+        assertThat(response.salesSeries().get(15).from()).isEqualTo(FROM.plus(Duration.ofHours(15)));
+        assertThat(response.salesSeries().get(15).total()).isEqualByComparingTo("900");
+    }
+
+    @Test
+    void dailySeriesForThirtyDays() {
+        Instant to = FROM.plus(Duration.ofDays(30));
+        List<Long> branchIds = List.of(CENTRO_ID);
+        stubEmptyDashboard(branchIds);
+        when(orderRepository.findSalesInRange(COMPANY_ID, branchIds, FROM, to)).thenReturn(List.<Object[]>of(
+                new Object[]{to.minusSeconds(1), new BigDecimal("10")}));
+
+        DashboardResponse response = reportService.getDashboard(FROM, to, null, null, 5, SalesBucket.DAY);
+
+        assertThat(response.salesSeries()).hasSize(30)
+                .extracting(SalesPoint::orderCount)
+                .containsOnly(0L, 1L);
+        assertThat(response.salesSeries().get(29).orderCount()).isEqualTo(1);
+    }
+
+    @Test
+    void withoutBucketTheSeriesIsEmptyAndNotQueried() {
+        List<Long> branchIds = List.of(CENTRO_ID);
+        stubEmptyDashboard(branchIds);
+
+        DashboardResponse response = reportService.getDashboard(FROM, TO, null, null, 5, null);
+
+        assertThat(response.salesSeries()).isEmpty();
+        verify(orderRepository, never()).findSalesInRange(any(), any(), any(), any());
+    }
+
+    @Test
+    void userWithoutBranchesGetsAnEmptySeriesWithEveryBucket() {
+        when(branchAccessService.accessibleBranchIds()).thenReturn(List.of());
+        when(customerBalanceService.getDebtSummary(COMPANY_ID))
+                .thenReturn(new CustomerDebtSummaryResponse(BigDecimal.ZERO, 0));
+
+        DashboardResponse response = reportService.getDashboard(FROM, TO, null, null, 5, SalesBucket.HOUR);
+
+        assertThat(response.salesSeries()).hasSize(24)
+                .allSatisfy(point -> assertThat(point.orderCount()).isZero());
+        verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    void tooManyPointsIsInvalid() {
+        Instant to = FROM.plus(Duration.ofDays(30));
+
+        assertThatThrownBy(() -> reportService.getDashboard(FROM, to, null, null, 5, SalesBucket.HOUR))
+                .isInstanceOf(InvalidReportRangeException.class);
+        verifyNoInteractions(orderRepository);
+    }
+
+    /** Lo que siempre se consulta, vacío: para los tests que solo miran la serie. */
+    private void stubEmptyDashboard(List<Long> branchIds) {
+        when(branchAccessService.accessibleBranchIds()).thenReturn(branchIds);
+        when(customerBalanceService.getDebtSummary(COMPANY_ID))
+                .thenReturn(new CustomerDebtSummaryResponse(BigDecimal.ZERO, 0));
+        when(orderRepository.summarizeOrdersToPrepare(COMPANY_ID, branchIds))
+                .thenReturn(List.<Object[]>of(new Object[]{0L, null}));
+        when(stockRepository.findLowStock(eq(COMPANY_ID), eq(branchIds), anyInt(), any()))
+                .thenReturn(Page.empty());
     }
 }

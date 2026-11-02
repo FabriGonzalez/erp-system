@@ -120,6 +120,25 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     );
 
     /**
+     * Ventas una por una, para la serie del dashboard: [createdAt (Instant), total (BigDecimal)].
+     * Se agrupan en tramos en el servicio; el rango tiene un tope de tramos.
+     */
+    @Query("""
+            SELECT o.createdAt, o.total
+            FROM Order o
+            WHERE o.company.id = :companyId
+            AND o.branch.id IN :branchIds
+            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.createdAt >= :from AND o.createdAt < :to
+            """)
+    List<Object[]> findSalesInRange(
+            @Param("companyId") Long companyId,
+            @Param("branchIds") Collection<Long> branchIds,
+            @Param("from") Instant from,
+            @Param("to") Instant to
+    );
+
+    /**
      * Ventas sin cliente por medio de pago (se cobran al crearse y no generan un pago). Cada fila
      * es [paymentMethod (PaymentMethod o null en las anteriores a guardarlo), total (BigDecimal)].
      */

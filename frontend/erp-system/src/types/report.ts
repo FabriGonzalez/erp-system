@@ -2,6 +2,9 @@ import { PaymentMethod } from '@/types/order';
 
 // --- API: GET /api/v1/reports/dashboard (montos BigDecimal → number) ---
 
+/** Largo de los tramos de la serie de ventas, contados desde from. */
+export type SalesBucket = 'HOUR' | 'DAY';
+
 type SalesSummaryResponse = {
     orderCount: number;
     total: number;
@@ -17,6 +20,8 @@ export type DashboardResponse = {
     sales: SalesSummaryResponse;
     previousSales: SalesSummaryResponse;
     salesByBranch: { branchId: number; branchName: string; orderCount: number; total: number }[];
+    // Opcional: un backend anterior a la serie no la manda.
+    salesSeries?: { from: string; orderCount: number; total: number }[];
     collections: {
         byMethod: { method: PaymentMethod; total: number }[];
         withoutMethodTotal: number | null;
@@ -56,6 +61,13 @@ export type BranchSales = {
     total: number;
 };
 
+/** Un tramo de la serie: desde from, una hora o un día. */
+export type SalesPoint = {
+    from: string;
+    orderCount: number;
+    total: number;
+};
+
 export type TopProduct = {
     productVariantId: string;
     productName: string;
@@ -83,6 +95,8 @@ export type Dashboard = {
     sales: SalesSummary;
     previousSales: SalesSummary;
     salesByBranch: BranchSales[];
+    // Vacía si el backend no la mandó.
+    salesSeries: SalesPoint[];
     collections: {
         // Pagos de clientes y ventas sin cliente, por medio.
         byMethod: { method: PaymentMethod; total: number }[];

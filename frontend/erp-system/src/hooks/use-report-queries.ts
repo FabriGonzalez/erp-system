@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getDashboard } from '@/services/report-service';
 import { useAuthStore } from '@/stores/auth-store';
 import { hasPermission } from '@/utils/permissions';
-import { LOW_STOCK_THRESHOLD, periodRange, ReportPeriod } from '@/utils/report-periods';
+import { LOW_STOCK_THRESHOLD, periodBucket, periodRange, ReportPeriod } from '@/utils/report-periods';
 
 import { errorText, requireToken } from './use-paged-list';
 
@@ -27,7 +27,12 @@ export function useDashboard(period: ReportPeriod, branchId: string | null) {
         queryKey: reportKeys.dashboard(period, branchId),
         queryFn: () =>
             getDashboard(
-                { ...periodRange(period), branchId, lowStockThreshold: LOW_STOCK_THRESHOLD },
+                {
+                    ...periodRange(period),
+                    branchId,
+                    lowStockThreshold: LOW_STOCK_THRESHOLD,
+                    bucket: periodBucket(period),
+                },
                 requireToken()
             ),
         enabled,

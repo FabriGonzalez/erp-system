@@ -9,7 +9,8 @@ import java.util.List;
 /**
  * Resumen del dashboard para [from, to) sobre las sucursales asignadas al usuario (o solo
  * branchId); previousSales es [previousFrom, previousTo). La deuda es de toda la empresa y los
- * pedidos por despachar son la foto actual: ninguno de los dos depende del rango.
+ * pedidos por despachar son la foto actual: ninguno de los dos depende del rango. salesSeries está
+ * vacía si no se pidió un bucket.
  */
 public record DashboardResponse(
         Instant from,
@@ -20,6 +21,7 @@ public record DashboardResponse(
         SalesSummary sales,
         SalesSummary previousSales,
         List<BranchSales> salesByBranch,
+        List<SalesPoint> salesSeries,
         CollectionsSummary collections,
         DebtSummary debt,
         List<TopProduct> topProducts,
@@ -31,6 +33,10 @@ public record DashboardResponse(
     }
 
     public record BranchSales(Long branchId, String branchName, long orderCount, BigDecimal total) {
+    }
+
+    /** Un tramo de la serie: [from, from + largo del bucket), recortado a to el último. */
+    public record SalesPoint(Instant from, long orderCount, BigDecimal total) {
     }
 
     /**

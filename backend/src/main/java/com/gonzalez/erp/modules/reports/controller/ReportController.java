@@ -1,6 +1,7 @@
 package com.gonzalez.erp.modules.reports.controller;
 
 import com.gonzalez.erp.common.dto.ErrorResponse;
+import com.gonzalez.erp.modules.reports.dto.request.SalesBucket;
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse;
 import com.gonzalez.erp.modules.reports.service.ReportService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,7 +37,8 @@ public class ReportController {
                description = "Ventas, cobranzas, más vendidos y stock bajo de [from, to) en las sucursales asignadas "
                        + "al usuario (o solo branchId), comparadas con un período de la misma duración "
                        + "(por defecto, el inmediatamente anterior). "
-                       + "La deuda de clientes es de toda la empresa y los pedidos por despachar son la foto actual.")
+                       + "La deuda de clientes es de toda la empresa y los pedidos por despachar son la foto actual. "
+                       + "Con bucket, salesSeries trae las ventas en tramos de una hora o un día desde from.")
     @ApiResponse(responseCode = "400", description = "Rango o umbral inválido",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @ApiResponse(responseCode = "403", description = "Sin VER_REPORTES o sucursal no asignada al usuario",
@@ -54,7 +56,10 @@ public class ReportController {
             @Parameter(description = "Sucursal; si no se envía, se suman todas las asignadas")
             @RequestParam(required = false) Long branchId,
             @Parameter(description = "Cantidad hasta la que un stock cuenta como bajo (0 a 1000)")
-            @RequestParam(defaultValue = "5") int lowStockThreshold) {
-        return ResponseEntity.ok(reportService.getDashboard(from, to, previousFrom, branchId, lowStockThreshold));
+            @RequestParam(defaultValue = "5") int lowStockThreshold,
+            @Parameter(description = "Largo de los tramos de salesSeries (HOUR o DAY). Sin él, la serie va vacía")
+            @RequestParam(required = false) SalesBucket bucket) {
+        return ResponseEntity.ok(
+                reportService.getDashboard(from, to, previousFrom, branchId, lowStockThreshold, bucket));
     }
 }

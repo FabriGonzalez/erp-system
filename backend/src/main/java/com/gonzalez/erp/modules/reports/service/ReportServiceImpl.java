@@ -9,6 +9,7 @@ import com.gonzalez.erp.modules.inventory.repository.StockRepository;
 import com.gonzalez.erp.modules.orders.repository.OrderRepository;
 import com.gonzalez.erp.modules.payments.entity.PaymentMethod;
 import com.gonzalez.erp.modules.payments.repository.PaymentRepository;
+import com.gonzalez.erp.modules.reports.dto.request.SalesBucket;
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse;
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.BranchSales;
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.CollectionsSummary;
@@ -17,6 +18,7 @@ import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.LowStock;
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.LowStockItem;
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.MethodTotal;
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.PendingOrders;
+import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.SalesPoint;
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.SalesSummary;
 import com.gonzalez.erp.modules.reports.dto.response.DashboardResponse.TopProduct;
 import com.gonzalez.erp.modules.reports.exception.InvalidReportRangeException;
@@ -32,6 +34,7 @@ import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -47,6 +50,8 @@ public class ReportServiceImpl implements ReportService {
     static final int MAX_LOW_STOCK_THRESHOLD = 1000;
     static final int TOP_PRODUCTS_LIMIT = 10;
     static final int LOW_STOCK_ITEMS_LIMIT = 20;
+    // Alcanza para un año por día o dos semanas por hora; más tramos no se leen en un gráfico.
+    static final int MAX_SERIES_POINTS = 400;
 
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
@@ -56,8 +61,8 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     public DashboardResponse getDashboard(Instant from, Instant to, Instant requestedPreviousFrom, Long branchId,
-                                          int lowStockThreshold) {
-        validate(from, to, lowStockThreshold);
+                                          int lowStockThreshold, SalesBucket bucket) {
+        validate(from, to, lowStockThreshold, bucket);
         Duration length = Duration.between(from, to);
         Instant previousFrom = requestedPreviousFrom != null ? requestedPreviousFrom : from.minus(length);
         Instant previousTo = previousFrom.plus(length);
@@ -78,6 +83,7 @@ public class ReportServiceImpl implements ReportService {
         if (branchIds.isEmpty()) {
             return new DashboardResponse(from, to, previousFrom, previousTo, branchId,
                     emptySales(), emptySales(), List.of(),
+                    salesSeries(from, to, bucket, List.of()),
                     collections(List.of(), List.of()),
                     debtSummary, List.of(), new PendingOrders(0, null),
                     new LowStock(lowStockThreshold, 0, List.of()));
@@ -96,6 +102,10 @@ public class ReportServiceImpl implements ReportService {
                         (Long) row[0], (String) row[1], toLong(row[2]), (BigDecimal) row[3]))
                 .toList());
 
+        List<SalesPoint> salesSeries = bucket == null
+                ? List.of()
+                : salesSeries(from, to, bucket, orderRepository.findSalesInRange(companyId, branchIds, from, to));
+
         CollectionsSummary collections = collections(
                 paymentRepository.sumActiveByMethod(companyId, branchIds, from, to),
                 orderRepository.sumWalkInSalesByMethod(companyId, branchIds, from, to));
@@ -113,7 +123,7 @@ public class ReportServiceImpl implements ReportService {
                 lowStockPage.getContent().stream().map(ReportServiceImpl::toLowStockItem).toList());
 
         return new DashboardResponse(from, to, previousFrom, previousTo, branchId,
-                sales, previousSales, salesByBranch, collections, debtSummary,
+                sales, previousSales, salesByBranch, salesSeries, collections, debtSummary,
                 topProducts, pendingOrders, lowStock);
     }
 
@@ -143,12 +153,47 @@ public class ReportServiceImpl implements ReportService {
                 .toList();
     }
 
-    private static void validate(Instant from, Instant to, int lowStockThreshold) {
+    /**
+     * Tramos de [from, to) del largo del bucket, todos aunque estén vacíos; el último termina en
+     * to aunque sea más corto (hoy hasta la hora de la consulta). Sin bucket, ninguno.
+     */
+    private static List<SalesPoint> salesSeries(Instant from, Instant to, SalesBucket bucket, List<Object[]> sales) {
+        if (bucket == null) {
+            return List.of();
+        }
+        int points = pointCount(from, to, bucket);
+        long[] counts = new long[points];
+        BigDecimal[] totals = new BigDecimal[points];
+        Arrays.fill(totals, BigDecimal.ZERO);
+        long lengthMillis = bucket.length().toMillis();
+        for (Object[] row : sales) {
+            int index = (int) (Duration.between(from, (Instant) row[0]).toMillis() / lengthMillis);
+            counts[index]++;
+            totals[index] = totals[index].add((BigDecimal) row[1]);
+        }
+        List<SalesPoint> series = new ArrayList<>(points);
+        for (int i = 0; i < points; i++) {
+            series.add(new SalesPoint(from.plus(bucket.length().multipliedBy(i)), counts[i], totals[i]));
+        }
+        return series;
+    }
+
+    private static int pointCount(Instant from, Instant to, SalesBucket bucket) {
+        long lengthMillis = bucket.length().toMillis();
+        long rangeMillis = Duration.between(from, to).toMillis();
+        return (int) ((rangeMillis + lengthMillis - 1) / lengthMillis);
+    }
+
+    private static void validate(Instant from, Instant to, int lowStockThreshold, SalesBucket bucket) {
         if (!from.isBefore(to)) {
             throw new InvalidReportRangeException("from must be before to");
         }
         if (Duration.between(from, to).compareTo(MAX_RANGE) > 0) {
             throw new InvalidReportRangeException("The range cannot be longer than " + MAX_RANGE.toDays() + " days");
+        }
+        if (bucket != null && pointCount(from, to, bucket) > MAX_SERIES_POINTS) {
+            throw new InvalidReportRangeException(
+                    "The sales series cannot have more than " + MAX_SERIES_POINTS + " points; use a longer bucket");
         }
         if (lowStockThreshold < 0 || lowStockThreshold > MAX_LOW_STOCK_THRESHOLD) {
             throw new InvalidReportRangeException(

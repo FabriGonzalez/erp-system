@@ -1,6 +1,6 @@
 import { API_BASE_URL, apiFetch } from '@/services/api-client';
 import { BRANCH_ACCESS_ERRORS, parseResponse } from '@/services/api-error';
-import { Dashboard, DashboardResponse } from '@/types/report';
+import { Dashboard, DashboardResponse, SalesBucket } from '@/types/report';
 
 const REPORT_ERRORS = {
     byCode: {
@@ -35,6 +35,11 @@ function normalizeDashboard(data: DashboardResponse): Dashboard {
             branchName: branch.branchName,
             orderCount: Number(branch.orderCount),
             total: Number(branch.total),
+        })),
+        salesSeries: (data.salesSeries ?? []).map((point) => ({
+            from: point.from,
+            orderCount: Number(point.orderCount),
+            total: Number(point.total),
         })),
         collections: {
             byMethod: data.collections.byMethod.map((item) => ({
@@ -76,7 +81,7 @@ function normalizeDashboard(data: DashboardResponse): Dashboard {
 
 /**
  * Dashboard de [from, to) comparado con [previousFrom, previousFrom + duración).
- * Sin branchId suma todas las sucursales asignadas al usuario.
+ * Sin branchId suma todas las sucursales asignadas al usuario; bucket pide la serie de ventas.
  */
 export async function getDashboard(
     params: {
@@ -85,6 +90,7 @@ export async function getDashboard(
         previousFrom: Date;
         branchId: string | null;
         lowStockThreshold: number;
+        bucket: SalesBucket;
     },
     token: string
 ): Promise<Dashboard> {
@@ -93,6 +99,7 @@ export async function getDashboard(
         to: params.to.toISOString(),
         previousFrom: params.previousFrom.toISOString(),
         lowStockThreshold: String(params.lowStockThreshold),
+        bucket: params.bucket,
     });
     if (params.branchId) query.set('branchId', params.branchId);
 
