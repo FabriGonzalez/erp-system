@@ -5,6 +5,7 @@ import {
     createCategory,
     deactivateCategory,
     getAllCategories,
+    setCategoryAttribute,
     updateCategory,
 } from '@/services/category-service';
 import { queryClient } from '@/services/query-client';
@@ -82,5 +83,42 @@ export function useSetCategoryActive() {
         mutationFn: ({ id, active }: SetCategoryActiveInput) =>
             active ? activateCategory(id, requireToken()) : deactivateCategory(id, requireToken()),
         onSuccess: syncCategory,
+    });
+}
+
+export type SetCategoryAttributeInput = {
+    categoryId: string;
+    attributeId: string;
+    assigned: boolean;
+};
+
+function withAttribute(categories: Category[] | undefined, input: SetCategoryAttributeInput) {
+    return categories?.map((category) => {
+        if (category.id !== input.categoryId) return category;
+        const others = category.attributeIds.filter((id) => id !== input.attributeId);
+        return { ...category, attributeIds: input.assigned ? [...others, input.attributeId] : others };
+    });
+}
+
+/**
+ * Asigna o quita un atributo de una categoría desde la pantalla del atributo. Se marca en la
+ * caché antes de la respuesta y se deshace solo si falla; cancelar las cargas pendientes evita
+ * que una lista vieja pise el cambio.
+ */
+export function useSetCategoryAttribute() {
+    return useMutation({
+        mutationFn: ({ categoryId, attributeId, assigned }: SetCategoryAttributeInput) =>
+            setCategoryAttribute(categoryId, attributeId, assigned, requireToken()),
+        onMutate: async (input) => {
+            await queryClient.cancelQueries({ queryKey: categoryKeys.list() });
+            queryClient.setQueryData<Category[]>(categoryKeys.list(), (current) => withAttribute(current, input));
+        },
+        onError: (_error, input) => {
+            queryClient.setQueryData<Category[]>(
+                categoryKeys.list(),
+                (current) => withAttribute(current, { ...input, assigned: !input.assigned }),
+            );
+        },
+        onSettled: () => queryClient.invalidateQueries({ queryKey: categoryKeys.list() }),
     });
 }

@@ -165,3 +165,27 @@ export async function deactivateCategory(
 
     return normalizeCategory(raw);
 }
+
+/**
+ * Permite (o deja de permitir) un atributo en las variantes de los productos de la categoría.
+ * Endpoint: POST | DELETE /api/v1/categories/{id}/attributes/{attributeId} → 204 sin body.
+ */
+export async function setCategoryAttribute(
+    categoryId: string,
+    attributeId: string,
+    assigned: boolean,
+    token: string
+): Promise<void> {
+    const response = await apiFetch(
+        `${API_BASE_URL}/api/v1/categories/${categoryId}/attributes/${attributeId}`,
+        {
+            method: assigned ? 'POST' : 'DELETE',
+            headers: authHeaders(token),
+        }
+    );
+
+    await handleResponse<void>(
+        response,
+        assigned ? 'No se pudo asignar la categoría.' : 'No se pudo quitar la categoría.'
+    );
+}

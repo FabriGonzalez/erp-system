@@ -22,4 +22,6 @@ public interface CategoryService {
 
     /** Suma atributos a los que ya tiene la categoría (la importación de Excel). */
     void addAttributes(Long id, Collection<Long> attributeIds);
+
+    void removeAttribute(Long id, Long attributeId);
 }

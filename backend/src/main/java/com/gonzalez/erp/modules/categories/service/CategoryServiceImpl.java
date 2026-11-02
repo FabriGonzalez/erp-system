@@ -112,6 +112,12 @@ public class CategoryServiceImpl implements CategoryService {
         category.addAttributes(findAttributesOrThrow(attributeIds, SecurityUtils.requireCurrentCompanyId()));
     }
 
+    @Override
+    @Transactional
+    public void removeAttribute(Long id, Long attributeId) {
+        findCategoryOrThrow(id).removeAttribute(attributeId);
+    }
+
     private List<ProductAttribute> findAttributesOrThrow(Collection<Long> attributeIds, Long companyId) {
         Set<Long> ids = new HashSet<>(attributeIds);
         if (ids.isEmpty()) {

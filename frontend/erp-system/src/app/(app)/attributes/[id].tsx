@@ -13,6 +13,7 @@ import {
 import { ProductAttributeFormModal } from '@/components/attributes/ProductAttributeFormModal';
 import { ProductAttributeValueFormModal } from '@/components/attributes/ProductAttributeValueFormModal';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { FilterChip } from '@/components/ui/FilterChip';
 import { HeaderButton } from '@/components/ui/HeaderButton';
 import { ListGroup } from '@/components/ui/ListGroup';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -30,9 +31,13 @@ import {
     useSetAttributeActive,
     useSetAttributeValueActive,
 } from '@/hooks/use-attribute-queries';
+import { useCategories, useSetCategoryAttribute } from '@/hooks/use-category-queries';
+import { useAuthStore } from '@/stores/auth-store';
 import { showErrorToast } from '@/stores/toast-store';
 import { SharedStyles } from '@/styles/shared';
+import { Category } from '@/types/category';
 import { ProductAttributeValue } from '@/types/product';
+import { hasPermission } from '@/utils/permissions';
 
 export default function AttributeDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -42,11 +47,23 @@ export default function AttributeDetailScreen() {
     const { attributes, attributeValues, isLoading, error, refresh } = useAttributes();
     const setAttributeActive = useSetAttributeActive();
     const setValueActive = useSetAttributeValueActive();
+    const { categories } = useCategories();
+    const setCategoryAttribute = useSetCategoryAttribute();
+    const canManageCategories = useAuthStore((state) => hasPermission(state.user, 'ADMINISTRAR_CATEGORIAS'));
+    // Un toque por categoría a la vez: así un POST y un DELETE seguidos no llegan desordenados.
+    const [pendingCategoryIds, setPendingCategoryIds] = useState<string[]>([]);
 
     const attribute = attributes.find((item) => item.id === id);
     const values = attribute
         ? attributeValues.filter((value) => value.attributeId === attribute.id)
         : [];
+    const assignedCategoryIds = attribute
+        ? categories.filter((category) => category.attributeIds.includes(attribute.id)).map((category) => category.id)
+        : [];
+    // Una categoría desactivada sigue a la vista si ya lo tenía, para poder quitarlo; sin permiso
+    // solo se ven las asignadas.
+    const visibleCategories = categories.filter((category) => assignedCategoryIds.includes(category.id)
+        || (canManageCategories && category.active));
 
     const [isAttributeModalVisible, setIsAttributeModalVisible] = useState(false);
     const [isValueModalVisible, setIsValueModalVisible] = useState(false);
@@ -95,6 +112,23 @@ export default function AttributeDetailScreen() {
             await setValueActive.mutateAsync({ id: value.id, active: !value.active });
         } catch (toggleError) {
             showErrorToast(toggleError, 'No se pudo cambiar el estado del valor.');
+        }
+    }
+
+    async function handleToggleCategory(category: Category) {
+        if (!canManageCategories || pendingCategoryIds.includes(category.id)) return;
+
+        setPendingCategoryIds((current) => [...current, category.id]);
+        try {
+            await setCategoryAttribute.mutateAsync({
+                categoryId: category.id,
+                attributeId: currentAttribute.id,
+                assigned: !category.attributeIds.includes(currentAttribute.id),
+            });
+        } catch (toggleError) {
+            showErrorToast(toggleError, 'No se pudo cambiar la categoría.');
+        } finally {
+            setPendingCategoryIds((current) => current.filter((id) => id !== category.id));
         }
     }
 
@@ -169,6 +203,28 @@ export default function AttributeDetailScreen() {
                                 onPress={() => setIsAttributeModalVisible(true)}
                             />
                         </ListGroup>
+                        <SectionHeader title={`Categorías (${assignedCategoryIds.length})`} />
+                        <Text style={styles.hint}>
+                            {canManageCategories
+                                ? 'Tocá las categorías cuyos productos pueden usar este atributo.'
+                                : 'Las categorías cuyos productos pueden usar este atributo.'}
+                        </Text>
+                        {visibleCategories.length === 0 ? (
+                            <Text style={styles.hint}>
+                                {canManageCategories ? 'Todavía no hay categorías.' : 'Ninguna categoría lo usa.'}
+                            </Text>
+                        ) : (
+                            <View style={styles.chips}>
+                                {visibleCategories.map((category) => (
+                                    <FilterChip
+                                        key={category.id}
+                                        label={category.active ? category.name : `${category.name} (inactiva)`}
+                                        selected={assignedCategoryIds.includes(category.id)}
+                                        onPress={() => void handleToggleCategory(category)}
+                                    />
+                                ))}
+                            </View>
+                        )}
                         <SectionHeader title={`Valores (${values.length})`} />
                     </View>
                 )}
@@ -213,6 +269,15 @@ const styles = StyleSheet.create({
     listHeader: {
         gap: Spacing.md,
         marginBottom: Spacing.xs,
+    },
+    hint: {
+        fontSize: 13,
+        color: Colors.textSecondary,
+    },
+    chips: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.xs,
     },
     iconButton: {
         padding: 8,

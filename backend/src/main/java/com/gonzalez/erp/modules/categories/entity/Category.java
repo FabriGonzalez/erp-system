@@ -70,6 +70,10 @@ public class Category extends BaseEntity {
         this.attributes.addAll(attributes);
     }
 
+    public void removeAttribute(Long attributeId) {
+        attributes.removeIf(attribute -> attribute.getId().equals(attributeId));
+    }
+
     public boolean allowsAttribute(Long attributeId) {
         return attributes.stream().anyMatch(attribute -> attribute.getId().equals(attributeId));
     }
