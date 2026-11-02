@@ -27,12 +27,14 @@ import com.gonzalez.erp.modules.products.dto.request.ProductVariantUpdateRequest
 import com.gonzalez.erp.modules.products.dto.response.ProductResponse;
 import com.gonzalez.erp.modules.products.dto.response.ProductVariantResponse;
 import com.gonzalez.erp.modules.products.entity.Product;
+import com.gonzalez.erp.modules.products.entity.ProductAttribute;
 import com.gonzalez.erp.modules.products.entity.ProductAttributeValue;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.entity.ProductVariantAttribute;
 import com.gonzalez.erp.modules.products.exception.InvalidProductVariantsException;
 import com.gonzalez.erp.modules.products.exception.PricePermissionRequiredException;
 import com.gonzalez.erp.modules.products.exception.ProductVariantBarcodeAlreadyExistsException;
+import com.gonzalez.erp.modules.products.exception.AttributeNotInCategoryException;
 import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveException;
 import com.gonzalez.erp.modules.products.exception.ProductVariantSkuAlreadyExistsException;
 import com.gonzalez.erp.modules.products.mapper.ProductMapper;
@@ -247,6 +249,11 @@ public class ProductServiceImpl implements ProductService {
                     vr.attributeValueIds(),
                     companyId
             );
+            validateAttributesInCategory(
+                    vr.attributeValueIds(),
+                    product.getCategory(),
+                    Set.of()
+            );
         }
 
         List<String> skus = resolveSkus(
@@ -409,6 +416,14 @@ public class ProductServiceImpl implements ProductService {
             validateOneValuePerAttribute(
                     vr.attributeValueIds(),
                     sku
+            );
+
+            validateAttributesInCategory(
+                    vr.attributeValueIds(),
+                    product.getCategory(),
+                    existingForSku
+                            .map(ProductServiceImpl::attributeIdsOf)
+                            .orElse(Set.of())
             );
 
             // El formulario reenvía todas las variantes: reenviar el mismo precio no cuenta.
@@ -770,7 +785,37 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-    private Product findProductOrThrow(Long id) {
+    /*
+     * Una variante solo puede usar los atributos de la categoría del producto. Los que ya
+     * tenía se conservan aunque no lo sean (se cambió la categoría o se le quitó el atributo),
+     * así el producto se puede seguir editando sin rehacer sus variantes.
+     */
+    private void validateAttributesInCategory(
+            List<Long> attributeValueIds,
+            Category category,
+            Set<Long> alreadyUsedAttributeIds
+    ) {
+        for (Long valueId : attributeValueIds) {
+            ProductAttribute attribute =
+                    attributeValueRepository.getReferenceById(valueId).getAttribute();
+
+            if (!alreadyUsedAttributeIds.contains(attribute.getId())
+                    && !category.allowsAttribute(attribute.getId())) {
+                throw new AttributeNotInCategoryException(
+                        attribute.getName(),
+                        category.getName()
+                );
+            }
+        }
+    }
+
+    private static Set<Long> attributeIdsOf(ProductVariant variant) {
+        return variant.getAttributes().stream()
+                .map(pva -> pva.getAttributeValue().getAttribute().getId())
+                .collect(Collectors.toSet());
+    }
+
+        private Product findProductOrThrow(Long id) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
         return productRepository.findByIdAndCompanyId(id, companyId)

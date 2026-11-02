@@ -158,6 +158,7 @@ export default function ProductsScreen() {
                         setAttributeFilterOpen(false);
                     }}
                     onClose={() => setAttributeFilterOpen(false)}
+                    categoryId={selectedCategoryId}
                 />
             ) : null}
 

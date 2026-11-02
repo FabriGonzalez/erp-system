@@ -168,6 +168,8 @@ class ProductImportServiceImplTest {
         assertThat(result.applied()).isTrue();
         verify(attributeService).addValue(SIZE_ID, new ProductAttributeValueRequest("L"));
         verify(attributeService).addValue(70L, new ProductAttributeValueRequest("Rojo"));
+        // La categoría suma los atributos que usan sus productos del archivo.
+        verify(categoryService).addAttributes(CATEGORY_ID, Set.of(SIZE_ID, 70L));
         ArgumentCaptor<ProductRequest> request = ArgumentCaptor.forClass(ProductRequest.class);
         verify(productService).create(request.capture());
         assertThat(request.getValue().name()).isEqualTo("Remera lisa");
@@ -182,14 +184,14 @@ class ProductImportServiceImplTest {
     @Test
     void aMissingCategoryIsCreatedWithItsPermission() {
         when(categoryService.create(any())).thenReturn(
-                new CategoryResponse(31L, "Buzos", null, COMPANY_ID, true, null, null));
+                new CategoryResponse(31L, "Buzos", null, COMPANY_ID, true, List.of(), null, null));
 
         importService.importProducts("p.csv", csv("""
                 Producto;Categoría;Precio
                 Buzo;Buzos;3000
                 """));
 
-        verify(categoryService).create(new CategoryRequest("Buzos", null));
+        verify(categoryService).create(new CategoryRequest("Buzos", null, null));
         ArgumentCaptor<ProductRequest> request = ArgumentCaptor.forClass(ProductRequest.class);
         verify(productService).create(request.capture());
         assertThat(request.getValue().categoryId()).isEqualTo(31L);

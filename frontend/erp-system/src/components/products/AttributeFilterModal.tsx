@@ -8,12 +8,15 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useAttributes } from '@/hooks/use-attribute-queries';
+import { useCategories } from '@/hooks/use-category-queries';
 import { AttributeFilter } from '@/utils/attribute-filter';
 
 type AttributeFilterModalProps = {
     value: AttributeFilter;
     onApply: (filter: AttributeFilter) => void;
     onClose: () => void;
+    // Con una categoría elegida en el listado, solo se ofrecen sus atributos.
+    categoryId?: string | null;
 };
 
 /**
@@ -21,13 +24,15 @@ type AttributeFilterModalProps = {
  * "Listo" (una sola búsqueda); cerrar descarta lo elegido. Montalo solo mientras está abierto:
  * cada apertura parte del filtro vigente.
  */
-export function AttributeFilterModal({ value, onApply, onClose }: AttributeFilterModalProps) {
+export function AttributeFilterModal({ value, onApply, onClose, categoryId }: AttributeFilterModalProps) {
     const { attributes, attributeValues, isLoading, error } = useAttributes();
+    const { categories } = useCategories();
+    const category = categoryId ? categories.find((item) => item.id === categoryId) : undefined;
     const [draft, setDraft] = useState<AttributeFilter>(value);
 
     // Solo atributos y valores activos, y atributos que tengan alguno.
     const groups = attributes
-        .filter((attribute) => attribute.active)
+        .filter((attribute) => attribute.active && (!category || category.attributeIds.includes(attribute.id)))
         .map((attribute) => ({
             attribute,
             values: attributeValues.filter((item) => item.active && item.attributeId === attribute.id),
@@ -70,7 +75,11 @@ export function AttributeFilterModal({ value, onApply, onClose }: AttributeFilte
             {isLoading ? (
                 <ActivityIndicator color={Colors.primary} />
             ) : groups.length === 0 && !error ? (
-                <Text style={styles.empty}>No hay atributos activos para filtrar.</Text>
+                <Text style={styles.empty}>
+                    {category
+                        ? `La categoría ${category.name} no tiene atributos para filtrar.`
+                        : 'No hay atributos activos para filtrar.'}
+                </Text>
             ) : (
                 groups.map(({ attribute, values }) => (
                     <View key={attribute.id} style={styles.group}>

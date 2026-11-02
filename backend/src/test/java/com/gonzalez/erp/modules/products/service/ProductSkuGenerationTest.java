@@ -96,6 +96,7 @@ class ProductSkuGenerationTest {
         size.setId(60L);
         ProductAttribute color = ProductAttribute.builder().name("Color").company(company).build();
         color.setId(61L);
+        category.replaceAttributes(List.of(size, color));
         attributeValue(SIZE_M_ID, size, "M");
         attributeValue(COLOR_BROWN_ID, color, "Marrón");
         attributeValue(COLOR_MANGO_ID, color, "Mango");

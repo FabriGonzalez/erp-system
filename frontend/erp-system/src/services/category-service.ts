@@ -8,6 +8,7 @@ type BackendCategoryResponse = {
     description?: string | null;
     companyId?: number | string | null;
     active: boolean;
+    attributeIds?: (number | string)[] | null;
     createdAt?: string | null;
     updatedAt?: string | null;
 };
@@ -19,6 +20,7 @@ function normalizeCategory(data: BackendCategoryResponse): Category {
         description: data.description ?? null,
         companyId: data.companyId != null ? String(data.companyId) : null,
         active: data.active,
+        attributeIds: (data.attributeIds ?? []).map(String),
         createdAt: data.createdAt ?? null,
         updatedAt: data.updatedAt ?? null,
     };
@@ -29,7 +31,7 @@ const CATEGORY_ERRORS = {
         CATEGORY_NAME_ALREADY_EXISTS: 'Ya existe una categoría con ese nombre.',
     },
     byStatus: {
-        404: 'Categoría no encontrada.',
+        404: 'Categoría o atributo no encontrados.',
         409: 'Ya existe una categoría con ese nombre.',
     },
 };
@@ -77,6 +79,7 @@ export async function createCategory(
         body: JSON.stringify({
             name: data.name.trim(),
             description: data.description?.trim() || null,
+            attributeIds: data.attributeIds.map(Number),
         }),
     });
 
@@ -103,6 +106,7 @@ export async function updateCategory(
         body: JSON.stringify({
             name: data.name.trim(),
             description: data.description?.trim() || null,
+            attributeIds: data.attributeIds.map(Number),
         }),
     });
 

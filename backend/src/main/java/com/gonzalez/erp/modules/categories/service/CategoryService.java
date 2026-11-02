@@ -3,6 +3,7 @@ package com.gonzalez.erp.modules.categories.service;
 import com.gonzalez.erp.modules.categories.dto.request.CategoryRequest;
 import com.gonzalez.erp.modules.categories.dto.response.CategoryResponse;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface CategoryService {
@@ -18,4 +19,7 @@ public interface CategoryService {
     CategoryResponse deactivate(Long id);
 
     CategoryResponse activate(Long id);
+
+    /** Suma atributos a los que ya tiene la categoría (la importación de Excel). */
+    void addAttributes(Long id, Collection<Long> attributeIds);
 }

@@ -19,6 +19,8 @@ const PRODUCT_ERRORS = {
         CATEGORY_INACTIVE: 'La categoría está inactiva. Elegí otra o activala antes de guardar.',
         INVALID_PRODUCT_VARIANTS:
             'Las variantes no son válidas: una variante sin atributos tiene que ser la única del producto, cada variante lleva un solo valor por atributo y una sucursal no se puede repetir en el stock.',
+        ATTRIBUTE_NOT_IN_CATEGORY:
+            'Una variante usa un atributo que no es de la categoría elegida. Asignáselo a la categoría o quitalo de la variante.',
         ATTRIBUTE_VALUE_ALREADY_EXISTS: 'Ese valor de atributo ya existe.',
         INVALID_PRODUCT_QUERY: 'No se pudo cargar el listado de productos.',
         PRICE_PERMISSION_REQUIRED:

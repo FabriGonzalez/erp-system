@@ -28,6 +28,7 @@ import com.gonzalez.erp.modules.orders.exception.InvalidOrderStatusTransitionExc
 import com.gonzalez.erp.modules.orders.exception.InvalidShippingAddressException;
 import com.gonzalez.erp.modules.orders.exception.QuickSaleValidationException;
 import com.gonzalez.erp.modules.payments.exception.InvalidPaymentException;
+import com.gonzalez.erp.modules.products.exception.AttributeNotInCategoryException;
 import com.gonzalez.erp.modules.products.exception.InvalidProductQueryException;
 import com.gonzalez.erp.modules.products.exception.InvalidProductVariantsException;
 import com.gonzalez.erp.modules.products.exception.PricePermissionRequiredException;
@@ -335,9 +336,15 @@ public class GlobalExceptionHandler {
                 ));
     }
 
-    @ExceptionHandler(InvalidProductVariantsException.class)
+    @ExceptionHandler({
+            InvalidProductVariantsException.class,
+            AttributeNotInCategoryException.class
+    })
     public ResponseEntity<ErrorResponse> handleInvalidProductVariants(
-            InvalidProductVariantsException ex, HttpServletRequest request) {
+            RuntimeException ex, HttpServletRequest request) {
+        String code = ex instanceof AttributeNotInCategoryException
+                ? "ATTRIBUTE_NOT_IN_CATEGORY"
+                : "INVALID_PRODUCT_VARIANTS";
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of(
@@ -345,7 +352,7 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_REQUEST.getReasonPhrase(),
                         ex.getMessage(),
                         request.getRequestURI(),
-                        "INVALID_PRODUCT_VARIANTS"
+                        code
                 ));
     }
 

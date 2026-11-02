@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
+import { FilterChip } from '@/components/ui/FilterChip';
 import { FormField } from '@/components/ui/FormField';
 import { ModalCard } from '@/components/ui/ModalCard';
+import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useAttributes } from '@/hooks/use-attribute-queries';
 import { useSaveCategory } from '@/hooks/use-category-queries';
 import { Category } from '@/types/category';
 
@@ -24,18 +27,31 @@ export function CategoryFormModal({
     onSaved,
 }: CategoryFormModalProps) {
     const saveCategory = useSaveCategory();
+    const { attributes } = useAttributes();
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
+    const [attributeIds, setAttributeIds] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const isEdit = Boolean(categoryToEdit);
+    // Un atributo desactivado sigue a la vista si ya estaba asignado, para poder quitarlo.
+    const selectableAttributes = attributes.filter(
+        (attribute) => attribute.active || attributeIds.includes(attribute.id),
+    );
+
+    function toggleAttribute(attributeId: string) {
+        setAttributeIds((current) => current.includes(attributeId)
+            ? current.filter((id) => id !== attributeId)
+            : [...current, attributeId]);
+    }
 
     useEffect(() => {
         if (visible) {
             const frame = requestAnimationFrame(() => {
                 setName(categoryToEdit?.name ?? '');
                 setDescription(categoryToEdit?.description ?? '');
+                setAttributeIds(categoryToEdit?.attributeIds ?? []);
                 setErrorMessage(null);
             });
 
@@ -69,6 +85,7 @@ export function CategoryFormModal({
             const data = {
                 name: trimmedName,
                 description: trimmedDescription || null,
+                attributeIds,
             };
 
             const saved = await saveCategory.mutateAsync({
@@ -126,6 +143,23 @@ export function CategoryFormModal({
                     editable={!isSubmitting}
                 />
             </FormField>
+
+            <FormField label="Atributos" hint="Los que pueden usar las variantes de sus productos (p. ej. talle y color)">
+                {selectableAttributes.length === 0 ? (
+                    <Text style={styles.empty}>Todavía no hay atributos. Crealos en Más → Atributos de productos.</Text>
+                ) : (
+                    <View style={styles.chips}>
+                        {selectableAttributes.map((attribute) => (
+                            <FilterChip
+                                key={attribute.id}
+                                label={attribute.active ? attribute.name : `${attribute.name} (inactivo)`}
+                                selected={attributeIds.includes(attribute.id)}
+                                onPress={() => !isSubmitting && toggleAttribute(attribute.id)}
+                            />
+                        ))}
+                    </View>
+                )}
+            </FormField>
         </ModalCard>
     );
 }
@@ -134,5 +168,14 @@ const styles = StyleSheet.create({
     descriptionInput: {
         height: 96,
         paddingTop: Spacing.md,
+    },
+    chips: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.xs,
+    },
+    empty: {
+        fontSize: 13,
+        color: Colors.textSecondary,
     },
 });

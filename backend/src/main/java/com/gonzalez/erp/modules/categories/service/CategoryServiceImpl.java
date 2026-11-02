@@ -10,11 +10,16 @@ import com.gonzalez.erp.modules.categories.mapper.CategoryMapper;
 import com.gonzalez.erp.modules.categories.repository.CategoryRepository;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
+import com.gonzalez.erp.modules.products.entity.ProductAttribute;
+import com.gonzalez.erp.modules.products.repository.ProductAttributeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +28,7 @@ public class CategoryServiceImpl implements CategoryService {
 
     private final CategoryRepository categoryRepository;
     private final CompanyRepository companyRepository;
+    private final ProductAttributeRepository attributeRepository;
 
     @Override
     public List<CategoryResponse> findAll(Boolean active) {
@@ -56,6 +62,9 @@ public class CategoryServiceImpl implements CategoryService {
                 .description(request.description())
                 .company(company)
                 .build();
+        if (request.attributeIds() != null) {
+            category.replaceAttributes(findAttributesOrThrow(request.attributeIds(), companyId));
+        }
 
         Category saved = categoryRepository.save(category);
         return CategoryMapper.toResponse(saved);
@@ -74,6 +83,9 @@ public class CategoryServiceImpl implements CategoryService {
                 });
 
         category.update(request.name(), request.description());
+        if (request.attributeIds() != null) {
+            category.replaceAttributes(findAttributesOrThrow(request.attributeIds(), companyId));
+        }
         return CategoryMapper.toResponse(category);
     }
 
@@ -91,6 +103,26 @@ public class CategoryServiceImpl implements CategoryService {
         Category category = findCategoryOrThrow(id);
         category.activate();
         return CategoryMapper.toResponse(category);
+    }
+
+    @Override
+    @Transactional
+    public void addAttributes(Long id, Collection<Long> attributeIds) {
+        Category category = findCategoryOrThrow(id);
+        category.addAttributes(findAttributesOrThrow(attributeIds, SecurityUtils.requireCurrentCompanyId()));
+    }
+
+    private List<ProductAttribute> findAttributesOrThrow(Collection<Long> attributeIds, Long companyId) {
+        Set<Long> ids = new HashSet<>(attributeIds);
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        List<ProductAttribute> attributes = attributeRepository.findByIdInAndCompanyId(ids, companyId);
+        if (attributes.size() != ids.size()) {
+            ids.removeAll(attributes.stream().map(ProductAttribute::getId).toList());
+            throw new ResourceNotFoundException("Attribute not found with id: " + ids.iterator().next());
+        }
+        return attributes;
     }
 
     private Category findCategoryOrThrow(Long id) {

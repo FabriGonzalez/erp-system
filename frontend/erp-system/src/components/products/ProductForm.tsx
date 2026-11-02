@@ -5,6 +5,7 @@ import { Colors } from '@/constants/colors';
 import { Radius, Spacing } from '@/constants/spacing';
 import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useAttributes } from '@/hooks/use-attribute-queries';
+import { useSaveCategory } from '@/hooks/use-category-queries';
 import { SharedStyles } from '@/styles/shared';
 import { useAuthStore } from '@/stores/auth-store';
 import { Branch } from '@/types/branch';
@@ -166,9 +167,20 @@ export function ProductForm({
     const initialVariantIds = new Set((initialValues?.variants ?? []).map((variant) => variant.id));
     const [isCreateAttrModalVisible, setIsCreateAttrModalVisible] = useState(false);
     const [createValueAttrId, setCreateValueAttrId] = useState<string | null>(null);
+    const saveCategory = useSaveCategory();
 
     const activeBranch = useActiveBranch();
     const selectedCategory = categories.find((category) => category.id === categoryId);
+    // Las variantes usan los atributos de la categoría. Una ya guardada conserva los suyos
+    // aunque no lo sean (se cambió la categoría o se le quitó el atributo): el backend lo acepta.
+    const categoryAttributeIds = new Set(selectedCategory?.attributeIds ?? []);
+    const savedAttributeIdsByVariant = new Map((initialValues?.variants ?? []).map((variant) => [
+        variant.id,
+        new Set(variant.attributes.map((attribute) => attribute.attributeId)),
+    ]));
+    const savedAttributeIds = new Set([...savedAttributeIdsByVariant.values()].flatMap((ids) => [...ids]));
+    const variantAttributes = attributes.filter((attribute) => attribute.active
+        && (categoryAttributeIds.has(attribute.id) || savedAttributeIds.has(attribute.id)));
     // Una inactiva no se puede asignar (CATEGORY_INACTIVE); al editar, la que ya tenía el
     // producto se sigue mostrando para no perderla de vista.
     const selectableCategories = categories.filter(
@@ -208,11 +220,14 @@ export function ProductForm({
     }
 
     function handleGenerate() {
-        if (!Object.values(selectedValues).some((values) => values.length > 0)) {
+        // Lo elegido en atributos que ya no se muestran (se cambió la categoría) no cuenta.
+        const visibleValues = Object.fromEntries(Object.entries(selectedValues)
+            .filter(([attributeId]) => variantAttributes.some((attribute) => attribute.id === attributeId)));
+        if (!Object.values(visibleValues).some((values) => values.length > 0)) {
             setErrors((current) => ({ ...current, variants: 'Seleccioná al menos un atributo y un valor para generar variantes' }));
             return;
         }
-        setVariants(generateCombinations(selectedValues, variants, basePrice));
+        setVariants(generateCombinations(visibleValues, variants, basePrice));
         setVariantMode(true);
         setErrors((current) => ({ ...current, variants: '' }));
     }
@@ -244,6 +259,12 @@ export function ProductForm({
                 if (!Number.isInteger(Number(attribute.attributeValueId))) {
                     nextErrors.variants = 'Los valores de atributos deben provenir del backend';
                 }
+                if (selectedCategory
+                    && !categoryAttributeIds.has(attribute.attributeId)
+                    && !savedAttributeIdsByVariant.get(variant.id)?.has(attribute.attributeId)) {
+                    const attributeName = attributes.find((item) => item.id === attribute.attributeId)?.name ?? 'un atributo';
+                    nextErrors.variants = `Hay variantes con ${attributeName}, que no es de la categoría ${selectedCategory.name}: quitalas o asignale el atributo a la categoría`;
+                }
             });
             if (sku) skuSet.add(sku);
             if (!canEditPrices && !initialSkus.has(sku)) {
@@ -257,6 +278,26 @@ export function ProductForm({
         if (variants.length > 1 && variants.some(isManualPlaceholder)) nextErrors.variants = 'Si el producto tiene varias variantes, cada una debe tener al menos un valor de atributo';
         setErrors(nextErrors);
         return Object.keys(nextErrors).length === 0;
+    }
+
+    // El atributo nuevo se suma a la categoría elegida: si no, sus variantes no se podrían guardar.
+    async function addAttributeToCategory(attributeId: string) {
+        if (!selectedCategory || selectedCategory.attributeIds.includes(attributeId)) return;
+        try {
+            await saveCategory.mutateAsync({
+                id: selectedCategory.id,
+                data: {
+                    name: selectedCategory.name,
+                    description: selectedCategory.description,
+                    attributeIds: [...selectedCategory.attributeIds, attributeId],
+                },
+            });
+        } catch (error: unknown) {
+            setErrors((current) => ({
+                ...current,
+                variants: error instanceof Error ? error.message : 'No se pudo agregar el atributo a la categoría.',
+            }));
+        }
     }
 
     function handleSubmit() {
@@ -359,11 +400,20 @@ export function ProductForm({
                 {variantMode && (
                     <FormSection
                         title="Atributos para variantes"
-                        actionLabel={isSubmitting ? undefined : 'Nuevo atributo'}
+                        // Crear uno lo suma a la categoría: hace falta poder editarla.
+                        actionLabel={isSubmitting || !selectedCategory || !canCreateCategory ? undefined : 'Nuevo atributo'}
                         onAction={() => setIsCreateAttrModalVisible(true)}
                     >
-                        {attributes
-                            .filter((attribute) => attribute.active)
+                        {!selectedCategory ? (
+                            <Text style={styles.attributesHint}>Elegí una categoría para ver sus atributos.</Text>
+                        ) : variantAttributes.length === 0 ? (
+                            <Text style={styles.attributesHint}>
+                                {`La categoría ${selectedCategory.name} no tiene atributos. ${canCreateCategory
+                                    ? 'Creá uno con "Nuevo atributo" o asignáselos desde Categorías.'
+                                    : 'Pedile a quien administra las categorías que se los asigne.'}`}
+                            </Text>
+                        ) : null}
+                        {variantAttributes
                             .map((attribute) => {
                                 const activeValues = attributeValues.filter(
                                     (value) => value.attributeId === attribute.id && value.active,
@@ -372,7 +422,11 @@ export function ProductForm({
                                 return (
                                     <View key={attribute.id} style={styles.attributeGroup}>
                                         <View style={styles.attributeHeaderRow}>
-                                            <Text style={SharedStyles.fieldLabel}>{attribute.name}</Text>
+                                            <Text style={SharedStyles.fieldLabel}>
+                                                {categoryAttributeIds.has(attribute.id)
+                                                    ? attribute.name
+                                                    : `${attribute.name} (no es de la categoría)`}
+                                            </Text>
                                             <Pressable
                                                 style={styles.addInlineValueButton}
                                                 onPress={() => setCreateValueAttrId(attribute.id)}
@@ -573,6 +627,7 @@ export function ProductForm({
                 <ProductAttributeFormModal
                     visible={isCreateAttrModalVisible}
                     onClose={() => setIsCreateAttrModalVisible(false)}
+                    onSuccess={(attribute) => void addAttributeToCategory(attribute.id)}
                 />
 
                 <ProductAttributeValueFormModal
@@ -610,6 +665,7 @@ const styles = StyleSheet.create({
     attributeHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     addInlineValueButton: { paddingVertical: 2, paddingHorizontal: 4 },
     addInlineValueText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
+    attributesHint: { fontSize: 13, color: Colors.textSecondary },
     stockRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.md },
     stockInput: { width: 100, textAlign: 'right' },
     row: { flexDirection: 'row', gap: Spacing.md },

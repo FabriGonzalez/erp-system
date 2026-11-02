@@ -21,6 +21,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
+import { useAttributes } from '@/hooks/use-attribute-queries';
 import { useCategories, useSetCategoryActive } from '@/hooks/use-category-queries';
 import { showErrorToast } from '@/stores/toast-store';
 import { SharedStyles } from '@/styles/shared';
@@ -29,6 +30,7 @@ import { Category } from '@/types/category';
 export default function CategoriesScreen() {
     const { categories, isLoading, isRefreshing, error, refresh } = useCategories();
     const setCategoryActive = useSetCategoryActive();
+    const { attributes } = useAttributes();
     const [isFormModalVisible, setIsFormModalVisible] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
     const [togglingCategoryId, setTogglingCategoryId] = useState<string | null>(null);
@@ -58,6 +60,9 @@ export default function CategoriesScreen() {
 
     function renderItem({ item }: { item: Category }) {
         const isToggling = togglingCategoryId === item.id;
+        const attributeNames = attributes
+            .filter((attribute) => item.attributeIds.includes(attribute.id))
+            .map((attribute) => attribute.name);
 
         return (
             <Pressable
@@ -84,6 +89,9 @@ export default function CategoriesScreen() {
                     ) : (
                         <Text style={[SharedStyles.listItemMeta, styles.noDescription]}>Sin descripción</Text>
                     )}
+                    <Text style={SharedStyles.listItemMeta} numberOfLines={1}>
+                        {attributeNames.length ? `Atributos: ${attributeNames.join(', ')}` : 'Sin atributos'}
+                    </Text>
                     {!item.active ? <StatusPill label="Inactiva" tone="neutral" /> : null}
                 </View>
                 {isToggling ? (

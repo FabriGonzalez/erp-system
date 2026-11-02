@@ -587,7 +587,7 @@ public class ProductImportServiceImpl implements ProductImportService {
         Map<String, Long> categoryIds = new HashMap<>();
         analysis.categories.forEach((key, category) -> categoryIds.put(key, category.getId()));
         analysis.categoriesToCreate.forEach((key, name) ->
-                categoryIds.put(key, categoryService.create(new CategoryRequest(name, null)).id()));
+                categoryIds.put(key, categoryService.create(new CategoryRequest(name, null, null)).id()));
 
         Map<String, Long> attributeIds = new HashMap<>();
         analysis.attributes.forEach((key, attribute) -> attributeIds.put(key, attribute.getId()));
@@ -602,6 +602,18 @@ public class ProductImportServiceImpl implements ProductImportService {
                     .computeIfAbsent(attributeKey, key -> new HashMap<>())
                     .put(valueKey, attributeService.addValue(attributeId, new ProductAttributeValueRequest(value)).id()));
         });
+
+        // El archivo declara qué atributos usa cada categoría: se suman a los que ya tenía.
+        Map<String, Set<Long>> attributeIdsByCategory = new HashMap<>();
+        for (NewProduct product : analysis.newProducts.values()) {
+            for (ImportRow row : product.rows) {
+                row.attributes.keySet().forEach(attributeKey -> attributeIdsByCategory
+                        .computeIfAbsent(product.categoryKey, key -> new HashSet<>())
+                        .add(attributeIds.get(attributeKey)));
+            }
+        }
+        attributeIdsByCategory.forEach((categoryKey, ids) ->
+                categoryService.addAttributes(categoryIds.get(categoryKey), ids));
 
         for (NewProduct product : analysis.newProducts.values()) {
             List<ProductVariantRequest> variants = product.rows.stream()

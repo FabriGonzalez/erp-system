@@ -2,6 +2,7 @@ package com.gonzalez.erp.modules.categories.mapper;
 
 import com.gonzalez.erp.modules.categories.dto.response.CategoryResponse;
 import com.gonzalez.erp.modules.categories.entity.Category;
+import com.gonzalez.erp.modules.products.entity.ProductAttribute;
 
 public final class CategoryMapper {
 
@@ -14,6 +15,10 @@ public final class CategoryMapper {
                 category.getDescription(),
                 category.getCompany().getId(),
                 category.isActive(),
+                category.getAttributes().stream()
+                        .map(ProductAttribute::getId)
+                        .sorted()
+                        .toList(),
                 category.getCreatedAt(),
                 category.getUpdatedAt()
         );

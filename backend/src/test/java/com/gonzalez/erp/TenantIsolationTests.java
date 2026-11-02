@@ -211,6 +211,8 @@ class TenantIsolationTests {
                         Map.of("name", "HACK")),
                 new Attack("desactivar categoría de B", "PATCH",
                         "/categories/" + b.get("category") + "/deactivate", null),
+                new Attack("asignar atributo de B a una categoría", "PATCH", "/categories/" + a.get("category"),
+                        Map.of("name", "HACK", "attributeIds", List.of(b.get("attribute")))),
                 // Clientes y direcciones
                 new Attack("editar cliente de B", "PATCH", "/customers/" + b.get("customer"),
                         Map.of("firstName", "HACK")),
@@ -420,8 +422,9 @@ class TenantIsolationTests {
     private void fill(String token, Map<String, Long> ids, String name) {
         ids.put("branch", id(call(token, "POST", "/branches", Map.of("name", name + "Sucursal 1"))));
         ids.put("branch2", id(call(token, "POST", "/branches", Map.of("name", name + "Sucursal 2"))));
-        ids.put("category", id(call(token, "POST", "/categories", Map.of("name", name + "Categoría"))));
         ids.put("attribute", id(call(token, "POST", "/product-attributes", Map.of("name", name + "Talle"))));
+        ids.put("category", id(call(token, "POST", "/categories", Map.of(
+                "name", name + "Categoría", "attributeIds", List.of(ids.get("attribute"))))));
         ids.put("value", id(call(token, "POST", "/product-attributes/" + ids.get("attribute") + "/values",
                 Map.of("value", name + "XL"))));
 
