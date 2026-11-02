@@ -125,6 +125,8 @@ function normalizeOrder(data: OrderResponse): Order {
         branchName: data.branchName,
         items: (data.items ?? []).map(normalizeOrderItem),
         promos: (data.promos ?? []).map(normalizeOrderPromo),
+        subtotal: Number(data.subtotal ?? data.total),
+        discount: Number(data.discount ?? 0),
         total: Number(data.total),
         amountPaid: Number(data.amountPaid ?? 0),
         paymentStatus: data.paymentStatus,

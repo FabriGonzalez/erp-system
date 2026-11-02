@@ -77,6 +77,7 @@ export default function NewOrderScreen() {
                 deliveryType: 'LOCAL_PICKUP',
                 items: isQuickSale ? undefined : toOrderItemRequests(items),
                 promos: isQuickSale ? undefined : toOrderPromoRequests(promos),
+                discount: isQuickSale ? undefined : draft.discount,
                 ...toOrderPaymentOptions(draft),
             });
 

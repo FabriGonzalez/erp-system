@@ -26,6 +26,9 @@ public record OrderResponse(
         // Snapshot de la dirección de entrega; null en retiros y en envíos creados sin ella.
         ShipmentResponse shipment,
         OrderStatus status,
+        // subtotal - discount = total, lo que se cobra.
+        BigDecimal subtotal,
+        BigDecimal discount,
         BigDecimal total,
         BigDecimal amountPaid,
         PaymentStatus paymentStatus,

@@ -34,6 +34,8 @@ type OrderDraftState = {
     address: CustomerAddress | undefined;
     items: OrderItem[];
     promos: OrderPromo[];
+    // En pesos, sobre el pedido entero; solo con productos.
+    discount: number;
     // Solo al editar, por variante: lo vendido suelto conserva su precio, como hace el backend.
     originalItems: Record<string, OriginalItem>;
     // Solo al editar, por variante: unidades (sueltas y en promos) ya descontadas del stock,
@@ -50,6 +52,7 @@ type OrderDraftState = {
     updateCustomer: (customer: Customer) => void;
     setSalesType: (salesType: SalesType) => void;
     setQuickSaleAmount: (amount: number) => void;
+    setDiscount: (discount: number) => void;
     setDeliveryType: (deliveryType: DeliveryType) => void;
     setAddress: (address: CustomerAddress) => void;
     setAmountPaid: (amount: number) => void;
@@ -115,6 +118,7 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
     address: undefined,
     items: [],
     promos: [],
+    discount: 0,
     originalItems: {},
     originalUnits: {},
     amountPaid: 0,
@@ -131,8 +135,9 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
             address: undefined,
             items: [],
             promos: [],
+            discount: 0,
             originalItems: {},
-                    originalUnits: {},
+            originalUnits: {},
             amountPaid: 0,
             paymentMethod: 'CASH',
             applyCredit: false,
@@ -162,6 +167,7 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
             address: undefined,
             items: order.items,
             promos: order.promos,
+            discount: order.discount,
             originalItems: Object.fromEntries(
                 order.items.map((item) => [item.variantId, { unitPrice: item.unitPrice }]),
             ),
@@ -188,6 +194,10 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
 
     setQuickSaleAmount: (amount) => {
         set({ quickSaleAmount: Number.isFinite(amount) ? Math.max(0, amount) : 0 });
+    },
+
+    setDiscount: (discount) => {
+        set({ discount: Number.isFinite(discount) ? Math.max(0, discount) : 0 });
     },
 
     setDeliveryType: (deliveryType) => {
@@ -376,8 +386,9 @@ export const useOrderDraftStore = create<OrderDraftState>((set, get) => ({
             address: undefined,
             items: [],
             promos: [],
+            discount: 0,
             originalItems: {},
-                    originalUnits: {},
+            originalUnits: {},
             amountPaid: 0,
             paymentMethod: 'CASH',
             applyCredit: false,

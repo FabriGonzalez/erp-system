@@ -67,12 +67,13 @@ export function EditShipmentScreen({ flow }: EditShipmentScreenProps) {
 
         try {
             // Sin dirección nueva elegida, el envío conserva la que tiene.
-            const { address } = useOrderDraftStore.getState();
+            const { address, discount } = useOrderDraftStore.getState();
             await updateOrder.mutateAsync({
                 id: shipment.id,
                 data: {
                     items: toOrderItemRequests(items),
                     promos: toOrderPromoRequests(promos),
+                    discount,
                     shippingAddressId: address ? Number(address.id) : undefined,
                 },
             });

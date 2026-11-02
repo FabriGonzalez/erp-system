@@ -270,7 +270,7 @@ class OrderPromoTest {
     void aQuickSaleCannotHavePromos() {
         when(branchAccessService.requireAccessible(BRANCH_ID)).thenReturn(branch);
         OrderRequest request = new OrderRequest(BRANCH_ID, 20L, SalesType.QUICK_SALE, new BigDecimal("500"),
-                DeliveryType.LOCAL_PICKUP, null, null, null, null,
+                DeliveryType.LOCAL_PICKUP, null, null, null, null, null,
                 List.of(newLine(PROMO_ID, 1, choice(REMERA_M, 2), choice(GORRA, 1))), null);
 
         assertThatThrownBy(() -> orderService.create(request)).isInstanceOf(QuickSaleValidationException.class);
@@ -280,7 +280,7 @@ class OrderPromoTest {
     void aQuickSaleCanBeForAWalkInCustomerAndKeepsItsPaymentMethod() {
         stubCreate();
         OrderRequest request = new OrderRequest(BRANCH_ID, null, SalesType.QUICK_SALE, new BigDecimal("500"),
-                DeliveryType.LOCAL_PICKUP, null, null, null, null, null, PaymentMethod.TRANSFER);
+                DeliveryType.LOCAL_PICKUP, null, null, null, null, null, null, PaymentMethod.TRANSFER);
 
         OrderResponse response = orderService.create(request);
 
@@ -295,7 +295,7 @@ class OrderPromoTest {
     void aWalkInOrderNeedsAPaymentMethod() {
         when(branchAccessService.requireAccessible(BRANCH_ID)).thenReturn(branch);
         OrderRequest request = new OrderRequest(BRANCH_ID, null, SalesType.QUICK_SALE, new BigDecimal("500"),
-                DeliveryType.LOCAL_PICKUP, null, null, null, null, null, null);
+                DeliveryType.LOCAL_PICKUP, null, null, null, null, null, null, null);
 
         assertThatThrownBy(() -> orderService.create(request)).isInstanceOf(InvalidOrderException.class);
     }
@@ -304,7 +304,7 @@ class OrderPromoTest {
     void anOrderWithACustomerTakesTheMethodFromItsPayment() {
         when(branchAccessService.requireAccessible(BRANCH_ID)).thenReturn(branch);
         OrderRequest request = new OrderRequest(BRANCH_ID, 20L, SalesType.QUICK_SALE, new BigDecimal("500"),
-                DeliveryType.LOCAL_PICKUP, null, null, null, null, null, PaymentMethod.CASH);
+                DeliveryType.LOCAL_PICKUP, null, null, null, null, null, null, PaymentMethod.CASH);
 
         assertThatThrownBy(() -> orderService.create(request)).isInstanceOf(InvalidOrderException.class);
     }
@@ -320,7 +320,7 @@ class OrderPromoTest {
         stubStock(REMERA_M, 10);
         stubStock(GORRA, 10);
 
-        orderService.update(ORDER_ID, new OrderUpdateRequest(null, List.of(), null,
+        orderService.update(ORDER_ID, new OrderUpdateRequest(null, List.of(), null, null,
                 List.of(existingLine(LINE_ID, 2))));
 
         assertThat(order.getPromos()).singleElement().satisfies(promo -> {
@@ -341,7 +341,7 @@ class OrderPromoTest {
         stubUpdate(order);
         stubPromotion(promotion(OTHER_PROMO_ID, "Vencida", "500", today().minusDays(3), today().minusDays(1)));
 
-        assertThatThrownBy(() -> orderService.update(ORDER_ID, new OrderUpdateRequest(null, List.of(), null,
+        assertThatThrownBy(() -> orderService.update(ORDER_ID, new OrderUpdateRequest(null, List.of(), null, null,
                 List.of(newLine(OTHER_PROMO_ID, 1, choice(REMERA_M, 2), choice(GORRA, 1))))))
                 .isInstanceOf(PromotionNotAvailableException.class);
     }
@@ -351,7 +351,7 @@ class OrderPromoTest {
         Order order = orderWithLine(promotion(PROMO_ID, "Promo", "2000", today(), today()), 1);
         stubUpdate(order);
 
-        assertThatThrownBy(() -> orderService.update(ORDER_ID, new OrderUpdateRequest(null, List.of(), null,
+        assertThatThrownBy(() -> orderService.update(ORDER_ID, new OrderUpdateRequest(null, List.of(), null, null,
                 List.of(existingLine(999L, 1)))))
                 .isInstanceOf(InvalidOrderException.class);
     }
@@ -364,7 +364,7 @@ class OrderPromoTest {
         stubStock(GORRA, 10);
 
         orderService.update(ORDER_ID, new OrderUpdateRequest(null,
-                List.of(new OrderItemRequest(REMERA_M, 2)), null, List.of()));
+                List.of(new OrderItemRequest(REMERA_M, 2)), null, null, List.of()));
 
         assertThat(order.getPromos()).isEmpty();
         assertThat(order.getTotal()).isEqualByComparingTo("2000");
@@ -445,7 +445,7 @@ class OrderPromoTest {
 
     private OrderRequest walkIn(List<OrderItemRequest> items, List<OrderPromoRequest> promos) {
         return new OrderRequest(BRANCH_ID, null, SalesType.WITH_PRODUCTS, null, DeliveryType.LOCAL_PICKUP,
-                null, items, null, null, promos, PaymentMethod.CASH);
+                null, items, null, null, null, promos, PaymentMethod.CASH);
     }
 
     private static PromoVariantRequest choice(Long variantId, int quantity) {

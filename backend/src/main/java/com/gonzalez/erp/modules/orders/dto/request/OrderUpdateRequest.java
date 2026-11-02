@@ -10,6 +10,9 @@ public record OrderUpdateRequest(
 
         List<@Valid OrderItemRequest> items,
 
+        // Reemplaza el descuento del pedido; null lo deja como está.
+        BigDecimal discount,
+
         // Solo pedidos SHIPPING: cambia la dirección de entrega. Null la deja como está.
         Long shippingAddressId,
 

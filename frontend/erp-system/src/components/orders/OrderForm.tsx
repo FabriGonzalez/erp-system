@@ -10,6 +10,8 @@ import { OrderSalesTypeSection } from './OrderSalesTypeSection';
 import { OrderTotalCard } from './OrderTotalCard';
 
 import { AppInput } from '@/components/ui/AppInput';
+import { ListGroup } from '@/components/ui/ListGroup';
+import { SwitchRow } from '@/components/ui/SwitchRow';
 import { Colors } from '@/constants/colors';
 import { Radius, Spacing } from '@/constants/spacing';
 import { useActiveBranch } from '@/hooks/use-branch-queries';
@@ -25,6 +27,7 @@ import { formatCurrency } from '@/utils/format';
 import { CUSTOMER_PICKER_ROUTES, ORDER_FORM_ROUTES, OrderFlow } from '@/utils/order-routes';
 
 const INACTIVE_CUSTOMER_MESSAGE = 'El cliente seleccionado está inactivo. Elegí otro cliente para continuar.';
+const DISCOUNT_TOO_HIGH_MESSAGE = 'El descuento tiene que ser menor que el subtotal.';
 
 type OrderFormProps = {
     mode?: OrderCreationMode;
@@ -56,6 +59,7 @@ export function OrderForm({
         address,
         items,
         promos,
+        discount,
         originalUnits,
         applyCredit,
         setApplyCredit,
@@ -67,6 +71,7 @@ export function OrderForm({
         reset: resetDraft,
         setSalesType,
         setQuickSaleAmount,
+        setDiscount,
         updateItemQuantity,
         updatePromoQuantity,
     } = useOrderDraftStore();
@@ -74,6 +79,8 @@ export function OrderForm({
     const creationMode = mode ?? (initialOrder?.deliveryType === 'SHIPPING' ? 'SHIPMENT' : 'SALE');
 
     const [formError, setFormError] = useState<string | null>(null);
+    // Prendido a mano; un descuento cargado (p. ej. al editar) también lo muestra.
+    const [isDiscountToggled, setIsDiscountToggled] = useState(false);
     const [quickSaleInput, setQuickSaleInput] = useState(
         quickSaleAmount > 0 ? String(quickSaleAmount) : '',
     );
@@ -127,6 +134,19 @@ export function OrderForm({
         return () => resetDraft();
     }, [editingOrderId, resetDraft]);
 
+    function handleToggleDiscount(enabled: boolean) {
+        setIsDiscountToggled(enabled);
+        // Apagado no queda un descuento escondido en el total.
+        if (!enabled) {
+            setDiscount(0);
+        }
+    }
+
+    function handleDiscountInputChange(text: string) {
+        const parsed = Number(text.replace(/[^0-9]/g, ''));
+        setDiscount(Number.isFinite(parsed) ? parsed : 0);
+    }
+
     function handleQuickSaleInputChange(text: string) {
         const cleaned = text.replace(/[^0-9]/g, '');
         setQuickSaleInput(cleaned);
@@ -171,7 +191,12 @@ export function OrderForm({
     ) + promos.reduce((sum, promo) => sum + promo.subtotal, 0);
     const hasProducts = items.length > 0 || promos.length > 0;
 
-    const totalAmount = effectiveSalesType === 'QUICK_SALE' ? quickSaleAmount : itemsTotal;
+    // La venta rápida ya se carga con lo cobrado: no lleva descuento.
+    const discountAmount = effectiveSalesType === 'QUICK_SALE' ? 0 : discount;
+    // Como en el backend, el pedido no puede quedar en $0.
+    const isDiscountEnabled = isDiscountToggled || discount > 0;
+    const isDiscountTooHigh = hasProducts && discountAmount > 0 && discountAmount >= itemsTotal;
+    const totalAmount = effectiveSalesType === 'QUICK_SALE' ? quickSaleAmount : itemsTotal - discountAmount;
 
     const accountSummary = useCustomerAccountSummary(customer);
     const customerCredit = accountSummary?.credit ?? 0;
@@ -250,6 +275,11 @@ export function OrderForm({
             return false;
         }
 
+        if (isDiscountTooHigh) {
+            setFormError(DISCOUNT_TOO_HIGH_MESSAGE);
+            return false;
+        }
+
         if (isShipment && customer.id === CUSTOMER_ANONYMOUS.id) {
             setFormError('Debes seleccionar un cliente registrado.');
             return false;
@@ -297,7 +327,7 @@ export function OrderForm({
     const isFormInvalid =
         isShippingBlocked ||
         isCustomerInactive ||
-        (effectiveSalesType === 'WITH_PRODUCTS' ? !hasProducts : quickSaleAmount <= 0) ||
+        (effectiveSalesType === 'WITH_PRODUCTS' ? !hasProducts || isDiscountTooHigh : quickSaleAmount <= 0) ||
         (isShipment && customer.id === CUSTOMER_ANONYMOUS.id);
 
     const isQuickSale = effectiveSalesType === 'QUICK_SALE';
@@ -369,17 +399,55 @@ export function OrderForm({
                 )}
 
                 {!isQuickSale ? (
-                    <OrderCartSection
-                        items={items}
-                        promos={promos}
-                        onAddProducts={handleAddProducts}
-                        onUpdateQuantity={handleUpdateQuantity}
-                        onUpdatePromoQuantity={handleUpdatePromoQuantity}
-                    />
+                    <>
+                        <OrderCartSection
+                            items={items}
+                            promos={promos}
+                            onAddProducts={handleAddProducts}
+                            onUpdateQuantity={handleUpdateQuantity}
+                            onUpdatePromoQuantity={handleUpdatePromoQuantity}
+                        />
+
+                        {hasProducts ? (
+                            <View style={styles.discountSection}>
+                                <ListGroup>
+                                    <SwitchRow
+                                        title="Aplicar descuento"
+                                        value={isDiscountEnabled}
+                                        onValueChange={handleToggleDiscount}
+                                        disabled={isSubmitting}
+                                    />
+                                </ListGroup>
+                                {isDiscountEnabled ? (
+                                    <View style={[SharedStyles.card, styles.amountCard]}>
+                                        <View style={styles.subtotalRow}>
+                                            <Text style={styles.subtotalLabel}>Subtotal</Text>
+                                            <Text style={styles.subtotalValue}>{formatCurrency(itemsTotal)}</Text>
+                                        </View>
+                                        <Text style={SharedStyles.fieldLabel}>Descuento en pesos</Text>
+                                        <View style={[styles.currencyInputRow, isDiscountTooHigh && styles.inputError]}>
+                                            <Text style={styles.currencyPrefix}>$</Text>
+                                            <AppInput
+                                                style={styles.amountInput}
+                                                value={discount > 0 ? String(discount) : ''}
+                                                onChangeText={handleDiscountInputChange}
+                                                keyboardType="numeric"
+                                                placeholder="0"
+                                                editable={!isSubmitting}
+                                            />
+                                        </View>
+                                        {isDiscountTooHigh ? (
+                                            <Text style={styles.fieldErrorText}>{DISCOUNT_TOO_HIGH_MESSAGE}</Text>
+                                        ) : null}
+                                    </View>
+                                ) : null}
+                            </View>
+                        ) : null}
+                    </>
                 ) : (
                     <View>
                         <Text style={SharedStyles.sectionTitle}>Venta rápida</Text>
-                        <View style={[SharedStyles.card, styles.quickSaleCard]}>
+                        <View style={[SharedStyles.card, styles.amountCard]}>
                             <Text style={SharedStyles.fieldLabel}>
                                 Importe total de la venta <Text style={styles.required}>*</Text>
                             </Text>
@@ -504,8 +572,32 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: Colors.white,
     },
-    quickSaleCard: {
+    discountSection: {
         gap: Spacing.sm,
+    },
+    amountCard: {
+        gap: Spacing.sm,
+    },
+    subtotalRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    subtotalLabel: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+    },
+    subtotalValue: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: Colors.text,
+    },
+    inputError: {
+        borderColor: Colors.errorBorder,
+    },
+    fieldErrorText: {
+        color: Colors.error,
+        fontSize: 13,
     },
     required: {
         color: Colors.error,

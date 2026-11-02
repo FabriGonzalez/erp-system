@@ -43,6 +43,8 @@ public final class OrderMapper {
                 order.getDeliveryType(),
                 shipment != null ? ShipmentMapper.toResponse(shipment) : null,
                 order.getStatus(),
+                order.getSubtotal(),
+                order.getDiscount(),
                 order.getTotal(),
                 amountPaid,
                 paymentStatus,

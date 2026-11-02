@@ -28,6 +28,10 @@ public record OrderRequest(
 
         List<@Valid OrderItemRequest> items,
 
+        // Descuento en pesos sobre el pedido entero, menor que el subtotal (el pedido no queda en $0).
+        // Prohibido en QUICK_SALE.
+        BigDecimal discount,
+
         // Aplica el saldo a favor disponible del cliente a esta orden.
         Boolean applyCredit,
 

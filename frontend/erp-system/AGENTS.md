@@ -171,6 +171,12 @@ Al modificar productos o stock, probá tanto el caso normal como la combinación
 - El stock se mide **por variante sobre el total**: sueltas + (unidades del componente × cantidad de promos). En el borrador, `originalUnits` es lo que el pedido en edición ya tenía descontado; el límite de un ítem suelto resta lo que usan las promos y el de una línea de promo sale de `promoLimit` (`utils/draft-stock.ts`). El stock del borrador incluye las variantes de las promos (`draftVariantIds`).
 - Reportes: "más vendidos" suma las unidades vendidas en promos, pero el importe es solo el de las ventas sueltas.
 
+### Descuento
+
+- Un pedido con productos puede llevar un `discount` en pesos sobre el pedido entero (sin %, sin motivo, alcanza con `CREAR_PEDIDOS`). Tiene que ser menor que el subtotal: el pedido no queda en $0. La venta rápida no lleva descuento (ya se carga con lo cobrado).
+- El total ya viene descontado (`subtotal - discount = total`) y es lo que se cobra: pago automático sin cliente, cuenta del cliente, reportes de ventas y cobros por medio. Los precios de los ítems no cambian, así "más vendidos" sigue mostrando el importe de lista.
+- Al editar un envío se reenvía el descuento del borrador; sin el campo, el backend conserva el actual.
+
 ## 8. Prevención de condiciones de carrera
 
 Este ERP tiene operaciones asíncronas en las que el usuario puede seguir interactuando mientras se ejecutan requests. Para evitar regresiones:

@@ -61,6 +61,7 @@ export default function NewShipmentScreen() {
                 shippingAddressId: Number(address.id),
                 items: toOrderItemRequests(items),
                 promos: toOrderPromoRequests(promos),
+                discount: draft.discount,
                 ...toOrderPaymentOptions(draft),
             });
 

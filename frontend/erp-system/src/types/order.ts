@@ -82,6 +82,9 @@ export type Order = {
     branchName: string;
     items: OrderItem[];
     promos: OrderPromo[];
+    // subtotal - discount = total, lo que se cobra. La venta rápida no lleva descuento.
+    subtotal: number;
+    discount: number;
     total: number;
     // Los tres los calcula el backend con los pagos asignados; sin cliente se cobra en el acto.
     amountPaid: number;
@@ -135,6 +138,8 @@ export type OrderRequest = {
     // Obligatoria con SHIPPING y prohibida con LOCAL_PICKUP: dirección del cliente del pedido.
     shippingAddressId?: number;
     items?: OrderItemRequest[];
+    // En pesos, sobre el pedido entero y menor que el subtotal. Solo con productos.
+    discount?: number;
     // Promos vigentes, sin repetir. Con productos lleva al menos un ítem o una promo.
     promos?: OrderPromoRequest[];
     // Solo con cliente: aplica su saldo a favor a esta orden.
@@ -148,6 +153,8 @@ export type OrderRequest = {
 export type OrderUpdateRequest = {
     quickSaleAmount?: number;
     items?: OrderItemRequest[];
+    // Reemplaza el descuento; sin el campo queda el actual.
+    discount?: number;
     // Reemplaza las promos: las que ya tenía conservan precio y componentes.
     promos?: OrderPromoRequest[];
     // Solo envíos: cambia la dirección de entrega. Sin el campo queda la actual.
@@ -210,6 +217,8 @@ export type OrderResponse = {
     deliveryType: DeliveryType;
     shipment?: ShipmentResponse | null;
     status: OrderStatus;
+    subtotal?: number | string | null;
+    discount?: number | string | null;
     total: number | string;
     amountPaid?: number | string | null;
     paymentStatus: PaymentStatus;

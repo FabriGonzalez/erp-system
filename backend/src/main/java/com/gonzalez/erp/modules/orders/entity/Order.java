@@ -75,6 +75,11 @@ public class Order extends BaseEntity {
     @Column(name = "payment_method", length = 30)
     private PaymentMethod paymentMethod;
 
+    // En pesos, sobre el pedido entero; el total ya viene descontado. Siempre 0 en ventas rápidas.
+    @Column(nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal discount = BigDecimal.ZERO;
+
     @Column(nullable = false, precision = 12, scale = 2)
     @Builder.Default
     private BigDecimal total = BigDecimal.ZERO;
@@ -233,8 +238,13 @@ public class Order extends BaseEntity {
             BigDecimal promosTotal = promos.stream()
                     .map(promo -> promo.getUnitPrice().multiply(BigDecimal.valueOf(promo.getQuantity())))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            this.total = itemsTotal.add(promosTotal);
+            this.total = itemsTotal.add(promosTotal).subtract(discount);
         }
+    }
+
+    /** Lo que suman los productos y las promos, antes del descuento. */
+    public BigDecimal getSubtotal() {
+        return total.add(discount);
     }
 
     public boolean isConfirmed() {

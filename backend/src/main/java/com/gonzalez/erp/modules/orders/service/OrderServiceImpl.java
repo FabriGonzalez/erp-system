@@ -157,6 +157,9 @@ public class OrderServiceImpl implements OrderService {
         branchAccessService.requireAccessible(request.branchId());
         validateSalesType(request.salesType(), request.deliveryType(), request.items(), request.promos(),
                 request.quickSaleAmount());
+        if (request.salesType() == SalesType.QUICK_SALE) {
+            rejectQuickSaleDiscount(request.discount());
+        }
         validatePaymentOptions(request);
 
         Customer customer = resolveCustomerOrNull(request.customerId(), companyId);
@@ -198,7 +201,7 @@ public class OrderServiceImpl implements OrderService {
             order.updatePromos(orEmpty(request.promos()).stream()
                     .map(promoRequest -> buildNewPromo(promoRequest, companyId, today))
                     .toList());
-            order.recalculateTotal();
+            applyDiscount(order, request.discount());
 
             Order saved = orderRepository.saveAndFlush(order);
 
@@ -332,6 +335,7 @@ public class OrderServiceImpl implements OrderService {
             if (request.promos() != null && !request.promos().isEmpty()) {
                 throw new QuickSaleValidationException("QUICK_SALE cannot have promos");
             }
+            rejectQuickSaleDiscount(request.discount());
 
             order.setQuickSaleAmount(quickSaleAmount);
             order.getItems().clear();
@@ -408,7 +412,7 @@ public class OrderServiceImpl implements OrderService {
                 }
             }
 
-            order.recalculateTotal();
+            applyDiscount(order, request.discount() != null ? request.discount() : order.getDiscount());
 
             saved = orderRepository.save(order);
         }
@@ -645,6 +649,26 @@ public class OrderServiceImpl implements OrderService {
 
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    /** Fija el descuento y recalcula el total: un pedido con productos no puede quedar en $0. */
+    private void applyDiscount(Order order, BigDecimal discount) {
+        BigDecimal amount = discount != null ? discount : BigDecimal.ZERO;
+        if (amount.signum() < 0) {
+            throw new InvalidOrderException("discount cannot be negative");
+        }
+        order.setDiscount(amount);
+        order.recalculateTotal();
+        if (amount.signum() > 0 && order.getTotal().signum() <= 0) {
+            throw new InvalidOrderException("discount must be lower than the order subtotal");
+        }
+    }
+
+    // La venta rápida ya se carga con el importe cobrado.
+    private void rejectQuickSaleDiscount(BigDecimal discount) {
+        if (discount != null && discount.signum() != 0) {
+            throw new QuickSaleValidationException("QUICK_SALE cannot have a discount");
+        }
     }
 
     private void validateSalesType(SalesType salesType, DeliveryType deliveryType, List<OrderItemRequest> items,

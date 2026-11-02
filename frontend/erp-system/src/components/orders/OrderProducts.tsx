@@ -74,6 +74,19 @@ export function OrderProducts({ order }: OrderProductsProps) {
                     ))]
                 )}
 
+                {order.discount > 0 ? (
+                    <>
+                        <View style={[styles.summaryRow, styles.summaryFirst]}>
+                            <Text style={styles.summaryLabel}>Subtotal</Text>
+                            <Text style={styles.summaryValue}>{formatCurrency(order.subtotal)}</Text>
+                        </View>
+                        <View style={styles.summaryRow}>
+                            <Text style={styles.summaryLabel}>Descuento</Text>
+                            <Text style={styles.summaryValue}>−{formatCurrency(order.discount)}</Text>
+                        </View>
+                    </>
+                ) : null}
+
                 <View style={styles.totalRow}>
                     <Text style={styles.totalLabel}>Total</Text>
                     <Text style={styles.totalValue}>
@@ -121,6 +134,28 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '700',
         color: Colors.text,
+    },
+
+    summaryRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingTop: Spacing.xs,
+    },
+
+    summaryFirst: {
+        paddingTop: Spacing.md,
+    },
+
+    summaryLabel: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+    },
+
+    summaryValue: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: Colors.textSecondary,
     },
 
     totalRow: {
