@@ -1463,6 +1463,65 @@ para que la consuma, más lo mínimo en el ERP para atender los pedidos web.
   El local ve los dos tipos de cliente en el ERP. Una misma persona puede quedar dos veces;
   si molesta, más adelante un "unir fichas" en el ERP (lo hace el empleado, nunca el comprador).
 
+**Después del lanzamiento (charlado el 2026-10-28).** La tienda se hace con la app ya en uso. Pago
+solo con **Mercado Pago** (decisión del usuario: sin otras pasarelas ni transferencia por ahora).
+Cómo cambia el trabajo:
+- **Orden:** 22A (subida apagada, `storeEnabled = false`) → 22B → refactor de servicios (22C.2,
+  solo) → resto de 22C → 22D → habilitar la tienda para un cliente.
+- **Staging:** Render + Neon quedan como entorno de pruebas (no se dan de baja en la etapa 26):
+  ahí se prueban el webhook de Mercado Pago y cada migración sobre una copia de producción.
+- **Migraciones sobre datos reales:** `Customer.origin` con `ERP` por defecto, `created_by`
+  nullable, `CHECK` de los enums nuevos. Backup a mano y deploy fuera del horario del comercio.
+- **Versiones de la app:** cambios del backend solo aditivos; la app con las etiquetas de los
+  estados nuevos tiene que llegar antes de habilitar la tienda (una vieja muestra la píldora vacía).
+- **Antes de habilitarla:** tests de aislamiento también sobre `/store/**`; almacenamiento de
+  imágenes elegido de nuevo (Oracle quedó descartado: R2 o B2); dominio y mails de la etapa 26.
+- **Estimación:** 22A 5-6 días, 22B 3-4, refactor 1,5-2, 22C 5-7, 22D 3-4: 17-23 días; con
+  los endpoints ★ de abajo (cotizar el carrito, OAuth de Mercado Pago, retomar el pago) **19-25
+  días** (4-5 semanas). Lo más incierto es Mercado Pago. No incluye el sitio de la tienda.
+
+**Mismo backend, módulo nuevo (decisión del usuario, 2026-10-28).** No se hace un backend de cero:
+la tienda vende los mismos productos del ERP (stock, precio, promos y reportes atados a
+`ProductVariant`), el stock se descuenta en una sola transacción contra las ventas del local y el
+pedido web es un pedido del ERP. Un backend aparte tendría que compartir la base (reglas
+duplicadas), llamar a la API del ERP como empleado (descartado) o sincronizar una copia (stock
+atrasado). Separación interna: `modules/store` con controllers, DTOs y servicios propios (nunca
+devuelve entidades ni DTOs del ERP), cadena de seguridad aparte para `/store/**` y reutiliza solo
+precio/stock y, tras el refactor, crear pedido y pago. Si algún día la tienda carga al ERP, el
+mismo código se levanta dos veces detrás de Caddy (`/store/**` y el resto), sin reescribir.
+
+**Carrito (propuesta aceptada, 2026-10-28).** No reutiliza `order-draft-store`: el carrito vive en
+el sitio de la tienda (otro proyecto) y el borrador del ERP trae edición de pedidos, venta rápida,
+cliente elegido por el empleado y pago parcial, y no se persiste. Se guarda en el navegador
+(`localStorage`; funciona sin cuenta, el login se pide al pagar) con el mismo formato que manda el
+ERP: sueltos (variante, cantidad) y líneas de promo (`promotionId`, `quantity`, variante por
+unidad). El carrito **no reserva stock**: se reserva en el checkout (`PENDING_PAYMENT`).
+`POST /store/cart/quote` devuelve precios web actuales, total, disponibilidad por línea y avisos
+de cambios; el checkout vuelve a validar todo con la misma función. Carrito en el backend (varios
+dispositivos, mails de carrito abandonado) solo si un cliente lo pide.
+
+**Endpoints estimados (2026-10-28).** ★ = no estaban en el plan. Las rutas exactas se fijan en el
+plan detallado de cada parte.
+- **22A.** Tienda: `GET /store/info` ★, `GET /store/categories`, `GET /store/products`,
+  `GET /store/products/{id}`, `GET /store/promotions` ★ (promos vigentes con precio web). ERP:
+  `GET/PATCH /companies/me/store`, `POST /products/{id}/images/upload-url`,
+  `POST /products/{id}/images`, `PATCH /products/{id}/images/order`,
+  `DELETE /products/{id}/images/{imageId}`. Cambia: alta/edición de producto con `publishedOnline`.
+- **22B.** Tienda: `POST /store/auth/register`, `login`, `refresh` ★, `verify-email`,
+  `resend-verification` ★, `forgot-password`, `reset-password`; `GET/PATCH /store/me`,
+  `PATCH /store/me/password` ★, `GET/POST /store/me/addresses`,
+  `PATCH/DELETE /store/me/addresses/{id}`, `GET /store/me/orders`, `GET /store/me/orders/{id}`.
+  Cambia: `GET /customers` con filtro y campo `origin`.
+- **22C.** Tienda: `POST /store/cart/quote` ★, `POST /store/checkout`,
+  `POST /store/me/orders/{id}/pay` ★ (retomar el pago antes de que venza la reserva),
+  `POST /store/payments/mercadopago` (webhook). ERP: `GET /companies/me/mercadopago`,
+  `GET /companies/me/mercadopago/connect` ★ y `GET /mercadopago/oauth/callback` ★ (conexión por
+  OAuth, tokens cifrados; la alternativa de pegar el access token es más frágil),
+  `DELETE /companies/me/mercadopago` ★, `PUT /branches/store-priority`.
+- **22D.** ERP: `POST /orders/{id}/assign-branch`. Cambian: `GET /orders` (filtro por canal,
+  estados nuevos) y el dashboard (sin `PENDING_PAYMENT`; la venta web suma al pagarse).
+- Total: ~26 de la tienda y ~10 del ERP nuevos (12 ★), 4 existentes que cambian.
+
 **Lo que hay hoy (relevamiento).**
 - `SecurityConfig`: solo `/auth/login` es público; todo lo demás exige el JWT de empleado. CORS
   acepta cualquier origen (`setAllowedOriginPatterns("*")` con credenciales).
@@ -1550,7 +1609,12 @@ para que la consuma, más lo mínimo en el ERP para atender los pedidos web.
    `TO_ASSIGN`; `PaymentMethod.MERCADO_PAGO`; prioridad de sucursal para la tienda (`Branch`).
 2. **Servicios sin token de empleado:** extraer de `OrderServiceImpl` / pagos / stock la lógica que
    hoy lee `SecurityUtils` para que reciba empresa y autor explícitos; el ERP sigue pasando los del
-   token y la tienda los del contexto de tienda.
+   token y la tienda los del contexto de tienda. Alcance (relevado el 2026-10-28): `OrderServiceImpl`
+   (7 llamadas), `PaymentServiceImpl` (6), lo que descuenta y devuelve stock en `StockServiceImpl`
+   y `StockMovementRecorder`: unas 20-25 llamadas en 4-5 archivos, no todo el backend. Va **como
+   cambio aparte, antes del checkout** (refactor sin funcionalidad nueva, con los tests y los de
+   aislamiento en verde, unos días en producción antes de seguir). Descartado (decisión del
+   usuario): un "usuario sistema" por empresa con un token de empleado simulado en el checkout.
 3. **Checkout:** `POST /store/checkout` (ítems, retiro o envío a una dirección propia). El backend
    valida precio y stock, elige la sucursal (la primera por prioridad con todos los ítems), crea
    el pedido `PENDING_PAYMENT` descontando stock (reserva) y la preferencia de Mercado Pago;
@@ -1581,9 +1645,10 @@ para que la consuma, más lo mínimo en el ERP para atender los pedidos web.
 **Fuera de alcance.** El sitio de la tienda, cupones, costo de envío calculado, facturación
 electrónica, compra como invitado.
 
-## Etapa 23 — Facturación electrónica con ARCA (posible plan; sin fecha)
+## Etapa 23 — Facturación electrónica con ARCA (antes del lanzamiento)
 
-Charlado el 2026-10-26; queda como posible plan, sin orden asignado. Antes de arrancar hay que
+Charlado el 2026-10-26. **Decisión del usuario (2026-10-28): va antes del lanzamiento** (la app no
+sale a producción sin facturación); la tienda web (22) queda para después. Antes de arrancar hay que
 releer el manual vigente de WSFEv1 (`wsfev1-COMPG.pdf`, v4.7 o posterior) y confirmar los puntos
 marcados "a confirmar".
 
@@ -1969,7 +2034,8 @@ como menú lateral en escritorio). Archivos `.web.tsx` solo si una pantalla camb
 Pedido del usuario (2026-10-28): juntar acá lo que no se puede hacer hasta tener un cliente que
 pague o un VPS propio. Hasta entonces las demos siguen en Render + Neon (`docs/deploy.md` §11). No
 es funcionalidad nueva: es lo que hace falta para que un comercio use el ERP todos los días sin
-riesgo de perder datos.
+riesgo de perder datos. La facturación con ARCA (etapa 23) tiene que estar hecha antes; la tienda
+web (22) viene después.
 
 **Antes de arrancar (no espera al lanzamiento).** Conviene hacerlo ya, mientras se hacen demos:
 - ~~Actualizaciones sin APK nuevo (EAS Update / `expo-updates`)~~ (2026-10-28): `runtimeVersion`
@@ -2009,5 +2075,5 @@ riesgo de perder datos.
 9. **Negocio (no es código).** Precio y forma de cobro (abono mensual), qué pasa si no paga (la
    suspensión de empresa ya existe), términos de uso y política de privacidad (se guardan datos de
    los clientes de cada comercio), y cómo se pide soporte.
-10. **Render y Neon.** Al migrar, dejarlos solo para demos o darlos de baja; que ningún APK de
-    cliente quede apuntando ahí.
+10. **Render y Neon.** Al migrar, dejarlos como staging (demos y pruebas de la tienda web, ver
+    etapa 22); que ningún APK de cliente quede apuntando ahí.
