@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { AttributeFilterModal } from '@/components/products/AttributeFilterModal';
+import { CategoryPills } from '@/components/products/CategoryPills';
 import { ProductSelectionCard } from '@/components/products/ProductSelectionCard';
 import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -10,6 +11,7 @@ import { FilterChip } from '@/components/ui/FilterChip';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useCategories } from '@/hooks/use-category-queries';
 import { useProducts } from '@/hooks/use-product-queries';
 import { Product, ProductVariant } from '@/types/product';
 import {
@@ -57,9 +59,13 @@ export function VariantCatalog({
     const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
     // Propia de cada catálogo: no pisa la búsqueda del listado de Productos.
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
     const [attributeFilter, setAttributeFilter] = useState<AttributeFilter>({});
     const [isAttributeFilterOpen, setAttributeFilterOpen] = useState(false);
     const attributeValueIds = attributeFilterValueIds(attributeFilter);
+    // Solo se vende de categorías activas; la elegida sigue a la vista aunque la desactiven.
+    const { categories } = useCategories();
+    const selectableCategories = categories.filter((category) => category.active || category.id === selectedCategoryId);
 
     // Activos con stock en la sucursal, filtrados en el backend (con atributos, el stock es el
     // de las variantes que coinciden). Se vuelven a pedir cada vez que se abre el catálogo: las
@@ -75,6 +81,7 @@ export function VariantCatalog({
     } = useProducts(
         {
             q: searchQuery,
+            categoryId: selectedCategoryId ?? undefined,
             active: true,
             stock: 'IN_STOCK',
             branchId,
@@ -100,6 +107,12 @@ export function VariantCatalog({
             ) &&
             variant.attributes.every((attribute) => selectedAttributes[attribute.attributeId] === attribute.attributeValueId),
         );
+    }
+
+    function resetSelection() {
+        // La variante a medio elegir puede no coincidir con el filtro nuevo.
+        setSelectedProductId(null);
+        setSelectedAttributes({});
     }
 
     function attributeOptions(product: Product, attributeId: string) {
@@ -141,13 +154,21 @@ export function VariantCatalog({
                     onApply={(filter) => {
                         setAttributeFilter(filter);
                         setAttributeFilterOpen(false);
-                        // La variante a medio elegir puede no coincidir con el filtro nuevo.
-                        setSelectedProductId(null);
-                        setSelectedAttributes({});
+                        resetSelection();
                     }}
                     onClose={() => setAttributeFilterOpen(false)}
+                    categoryId={selectedCategoryId}
                 />
             ) : null}
+
+            <CategoryPills
+                categories={selectableCategories}
+                selectedCategoryId={selectedCategoryId}
+                onSelect={(categoryId) => {
+                    setSelectedCategoryId(categoryId);
+                    resetSelection();
+                }}
+            />
 
             {isInitialLoading ? (
                 <LoadingState label="Cargando productos..." />
