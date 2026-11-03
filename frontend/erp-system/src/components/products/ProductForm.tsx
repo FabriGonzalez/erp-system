@@ -268,7 +268,7 @@ export function ProductForm({
             });
             if (sku) skuSet.add(sku);
             if (!canEditPrices && !initialSkus.has(sku)) {
-                nextErrors.variants = 'Sin el permiso "Administrar precios" no se pueden agregar variantes ni cambiar el SKU de una existente';
+                nextErrors.variants = 'Sin el permiso "Administrar precios" no se pueden agregar variantes';
             }
         });
 
@@ -493,9 +493,11 @@ export function ProductForm({
 
                             <View style={styles.row}>
                                 <FormField
-                                    label={initialVariantIds.has(variant.id) ? 'SKU *' : 'SKU (opcional)'}
+                                    label={initialVariantIds.has(variant.id) ? 'SKU' : 'SKU (opcional)'}
                                     style={styles.flex1}
                                 >
+                                    {/* El SKU es la identidad de la variante: cambiarlo sería otra variante
+                                        (el backend desactiva la vieja). Para eso se quita y se agrega una nueva. */}
                                     <AppInput
                                         value={variant.sku}
                                         onChangeText={(value) =>
@@ -506,8 +508,8 @@ export function ProductForm({
                                             )
                                         }
                                         autoCapitalize="characters"
-                                        placeholder={initialVariantIds.has(variant.id) ? 'Ej. SKU-PA-RO-44' : 'Se genera al guardar'}
-                                        editable={!isSubmitting}
+                                        placeholder="Se genera al guardar"
+                                        editable={!isSubmitting && !initialVariantIds.has(variant.id)}
                                     />
                                 </FormField>
 
