@@ -43,6 +43,11 @@ public class    Product extends BaseEntity {
     @Builder.Default
     private boolean active = true;
 
+    // Es el mismo producto del ERP, no una copia: la tienda solo decide si lo muestra.
+    @Column(name = "published_online", nullable = false)
+    @Builder.Default
+    private boolean publishedOnline = false;
+
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<ProductVariant> variants = new ArrayList<>();
@@ -64,5 +69,9 @@ public class    Product extends BaseEntity {
 
     public void activate() {
         this.active = true;
+    }
+
+    public void unpublish() {
+        this.publishedOnline = false;
     }
 }

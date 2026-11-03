@@ -44,6 +44,15 @@ app:
   jwt:
     secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION_MS:604800000}
+  # Fotos de producto (S3-compatible). Los defaults apuntan al contenedor de docker-compose.
+  storage:
+    endpoint: ${STORAGE_ENDPOINT:http://localhost:9000}
+    region: ${STORAGE_REGION:us-east-1}
+    bucket: ${STORAGE_BUCKET:erp-images}
+    access-key: ${STORAGE_ACCESS_KEY:rustfsadmin}
+    secret-key: ${STORAGE_SECRET_KEY:rustfsadmin}
+    # Base de las URL que ven la tienda y el panel (bucket de lectura pública o CDN delante).
+    public-url: ${STORAGE_PUBLIC_URL:http://localhost:9000/erp-images}
   platform-admin:
     username: ${ERP_PLATFORM_ADMIN_USERNAME:platform_admin}
     email: ${ERP_PLATFORM_ADMIN_EMAIL:platform@erp.local}

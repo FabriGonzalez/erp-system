@@ -29,6 +29,7 @@ import com.gonzalez.erp.modules.orders.exception.InvalidShippingAddressException
 import com.gonzalez.erp.modules.orders.exception.QuickSaleValidationException;
 import com.gonzalez.erp.modules.payments.exception.InvalidPaymentException;
 import com.gonzalez.erp.modules.products.exception.AttributeNotInCategoryException;
+import com.gonzalez.erp.modules.products.exception.InvalidProductImageException;
 import com.gonzalez.erp.modules.products.exception.InvalidProductQueryException;
 import com.gonzalez.erp.modules.products.exception.InvalidProductVariantsException;
 import com.gonzalez.erp.modules.products.exception.PricePermissionRequiredException;
@@ -104,6 +105,20 @@ public class GlobalExceptionHandler {
                         ex.getMessage(),
                         request.getRequestURI(),
                         "PRICE_PERMISSION_REQUIRED"
+                ));
+    }
+
+    @ExceptionHandler(InvalidProductImageException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidProductImage(
+            InvalidProductImageException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.UNPROCESSABLE_CONTENT)
+                .body(ErrorResponse.of(
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        ex.getCode()
                 ));
     }
 
