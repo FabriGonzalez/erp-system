@@ -1,8 +1,20 @@
 # Plan de las etapas que quedan
 
-Estado al 2026-10-23, rama `feature/promotions` (etapa 20 implementada, sin commitear). Para
-retomar: pasarle este archivo a Claude y elegir la etapa (la 21 está sin planear; la 22 tiene plan
-general).
+Para retomar: pasarle este archivo a Claude.
+
+## Qué sigue (orden al 2026-11-03)
+
+1. **Etapa 22 — Backend de la tienda web** (en curso, rama `feature/store-22a`). 22A: pasos 1, 2
+   y 3a hechos; faltan 3b (catálogo) y 3c (promos y regla de variantes activas). Plan detallado en
+   `backend/docs/etapa-22a-tienda.md`. Después: 22B, refactor de servicios (22C.2), 22C y 22D.
+2. **Etapa 28 — Endurecimiento de seguridad.**
+3. **Etapa 29 — Facturación electrónica con ARCA.**
+4. **Etapa 30 — Lanzamiento** (con el primer pago / VPS propio).
+5. Sin fecha: Etapa 21 (asistente de voz, idea) y "Pendientes chicos".
+
+Hechas: 1 a 20, 24 (Excel), 25 (rediseño) y 27 (reportes como dashboard). Los números no se
+reutilizan: aparecen en los commits ("Etapa 24: …"). Por eso ARCA y lanzamiento, que eran la 23 y
+la 26, pasaron a 29 y 30 el 2026-11-03 (decisión del usuario).
 
 ## Cómo se trabaja (vale para todas las etapas)
 
@@ -1468,14 +1480,14 @@ solo con **Mercado Pago** (decisión del usuario: sin otras pasarelas ni transfe
 Cómo cambia el trabajo:
 - **Orden:** 22A (subida apagada, `storeEnabled = false`) → 22B → refactor de servicios (22C.2,
   solo) → resto de 22C → 22D → habilitar la tienda para un cliente.
-- **Staging:** Render + Neon quedan como entorno de pruebas (no se dan de baja en la etapa 26):
+- **Staging:** Render + Neon quedan como entorno de pruebas (no se dan de baja en la etapa 30):
   ahí se prueban el webhook de Mercado Pago y cada migración sobre una copia de producción.
 - **Migraciones sobre datos reales:** `Customer.origin` con `ERP` por defecto, `created_by`
   nullable, `CHECK` de los enums nuevos. Backup a mano y deploy fuera del horario del comercio.
 - **Versiones de la app:** cambios del backend solo aditivos; la app con las etiquetas de los
   estados nuevos tiene que llegar antes de habilitar la tienda (una vieja muestra la píldora vacía).
 - **Antes de habilitarla:** tests de aislamiento también sobre `/store/**`; almacenamiento de
-  imágenes elegido de nuevo (Oracle quedó descartado: R2 o B2); dominio y mails de la etapa 26.
+  imágenes elegido de nuevo (Oracle quedó descartado: R2 o B2); dominio y mails de la etapa 30.
 - **Estimación:** 22A 5-6 días, 22B 3-4, refactor 1,5-2, 22C 5-7, 22D 3-4: 17-23 días; con
   los endpoints ★ de abajo (cotizar el carrito, OAuth de Mercado Pago, retomar el pago) **19-25
   días** (4-5 semanas). Lo más incierto es Mercado Pago. No incluye el sitio de la tienda.
@@ -1645,10 +1657,40 @@ plan detallado de cada parte.
 **Fuera de alcance.** El sitio de la tienda, cupones, costo de envío calculado, facturación
 electrónica, compra como invitado.
 
-## Etapa 23 — Facturación electrónica con ARCA (antes del lanzamiento)
+## Etapa 28 — Endurecimiento de seguridad (después del backend de la tienda)
+
+Pedido del usuario (2026-11-03): se hace **apenas termine el backend de la tienda (etapa 22)**, y en
+todo caso antes de ARCA (29) y del lanzamiento (30). Sale de una revisión de los puntos principales (no una
+auditoría completa): puntaje 7/10. Contra bots automáticos está bien cubierta (consultas con
+parámetros, bloqueo de intentos de login, Swagger solo en desarrollo, errores sin detalle, secretos
+por variables, BCrypt, contenedor sin root, HTTPS, aislamiento entre empresas probado); los caminos
+realistas para un ataque dirigido son los de abajo. Orden por riesgo:
+
+1. **2FA para el admin de plataforma** (TOTP con app autenticadora). Hoy una sola contraseña
+   controla todas las empresas (crear, suspender, configurar tiendas).
+2. **Sesión del ERP en la web:** el token va en `AsyncStorage` (en web es `localStorage`, legible
+   por un XSS) y dura 7 días (`JWT_EXPIRATION_MS`). Acortar la vida del token y renovarlo con
+   `/auth/refresh` (ya existe); `SecureStore` en el celular; evaluar cookie `HttpOnly` para la web.
+3. **Revisión automática de dependencias** (Dependabot de GitHub u OWASP Dependency-Check): hoy
+   nadie avisa si una librería (Spring, POI, SDK de AWS) tiene una vulnerabilidad conocida.
+4. **Headers de seguridad en Caddy** para la web: `Content-Security-Policy` (la defensa principal
+   contra XSS) y `Strict-Transport-Security`.
+5. **Monitoreo y alertas** (Sentry, ya anotado en la etapa 30): detectar rápido acorta el daño.
+
+Menores:
+- La contraseña que pone el admin al resetear a otro usuario acepta 6 caracteres
+  (`PasswordResetRequest`); la que elige el usuario pide 8 con letras y números
+  (`ChangePasswordRequest`). Igualarlas.
+- El bloqueo de intentos de login vive en memoria (`LoginAttemptService`): se reinicia con el
+  servidor y no se comparte entre instancias.
+- Límite de pedidos por IP en `/store/**` (hoy solo lectura pública: el riesgo es carga o copia
+  del catálogo, no filtración); el login, registro y checkout de la tienda ya lo tienen planeado en 22.
+
+## Etapa 29 — Facturación electrónica con ARCA (antes del lanzamiento; era la 23)
 
 Charlado el 2026-10-26. **Decisión del usuario (2026-10-28): va antes del lanzamiento** (la app no
-sale a producción sin facturación); la tienda web (22) queda para después. Antes de arrancar hay que
+sale a producción sin facturación). Orden actualizado el 2026-11-03: después de la tienda (22) y de
+seguridad (28). Antes de arrancar hay que
 releer el manual vigente de WSFEv1 (`wsfev1-COMPG.pdf`, v4.7 o posterior) y confirmar los puntos
 marcados "a confirmar".
 
@@ -1877,7 +1919,7 @@ grandes, deshacer una importación.
   comprobó que detecta una fuga sacando a propósito el filtro de empresa de categorías. Un endpoint
   nuevo que reciba ids se suma a `readPathsOfB()` o a `attacks()`.
 
-## Etapa 25 — Rediseño visual (estilo "A") y estilos compartidos — EN CURSO
+## Etapa 25 — Rediseño visual (estilo "A") y estilos compartidos — HECHA
 
 Decidido el 2026-10-27 sobre el lienzo https://claude.ai/artifact/TcTV14bqmKLUyTgKhBFPiB (el usuario
 eligió la opción A y aprobó Envíos, Productos y Más con ese estilo). Pedido del usuario: aplicarlo a
@@ -2029,13 +2071,13 @@ header de la pila y la barra de pestañas siguen a todo el ancho. Propuesta orig
 principales, layouts propios para ancho grande (p. ej. Ventas en dos columnas, la barra de pestañas
 como menú lateral en escritorio). Archivos `.web.tsx` solo si una pantalla cambia por completo.
 
-## Etapa 26 — Lanzamiento (con el primer pago / VPS propio)
+## Etapa 30 — Lanzamiento (con el primer pago / VPS propio; era la 26)
 
 Pedido del usuario (2026-10-28): juntar acá lo que no se puede hacer hasta tener un cliente que
 pague o un VPS propio. Hasta entonces las demos siguen en Render + Neon (`docs/deploy.md` §11). No
 es funcionalidad nueva: es lo que hace falta para que un comercio use el ERP todos los días sin
-riesgo de perder datos. La facturación con ARCA (etapa 23) tiene que estar hecha antes; la tienda
-web (22) viene después.
+riesgo de perder datos. La tienda web (22), seguridad (28) y la facturación con ARCA (29) tienen
+que estar hechas antes (orden del 2026-11-03).
 
 **Antes de arrancar (no espera al lanzamiento).** Conviene hacerlo ya, mientras se hacen demos:
 - ~~Actualizaciones sin APK nuevo (EAS Update / `expo-updates`)~~ (2026-10-28): `runtimeVersion`
@@ -2078,7 +2120,7 @@ web (22) viene después.
 10. **Render y Neon.** Al migrar, dejarlos como staging (demos y pruebas de la tienda web, ver
     etapa 22); que ningún APK de cliente quede apuntando ahí.
 
-## Etapa 27 — Reportes como dashboard (propuesta C) — HECHA, SIN PROBAR EN LA APP
+## Etapa 27 — Reportes como dashboard (propuesta C) — HECHA
 
 Pedido del usuario (2026-11-02): la pantalla de Reportes está muy cargada (seis secciones
 apiladas); que sea un dashboard más prolijo, manejado con filtros. Se hicieron tres propuestas en

@@ -29,7 +29,7 @@ Estado al 2026-11-03: pasos 1, 2 y 3a hechos; faltan 3b (catálogo) y 3c (promos
    - **3c. Promos y regla de variantes activas:** `GET /store/promotions` (vigentes hoy, precio web). **Una promo con algún producto no visible no se muestra** (decisión del usuario). Publicar y despublicar cuentan solo fotos del producto y de **variantes activas**; si la edición de producto del ERP desactiva una variante y el producto se queda sin fotos visibles, se despublica (decisión del usuario, 2026-11-03). Motivo: las variantes no se borran, se desactivan, y hoy un producto cuyas únicas fotos son de variantes inactivas queda publicado sin nada que mostrar.
    - **SKU de variante no editable (decisión del usuario, 2026-11-03, opción A):** el SKU es la identidad de la variante (la edición y la importación la reconocen por SKU). En el formulario del ERP el SKU de una variante guardada es de solo lectura; para "cambiarlo" se quita la variante y se agrega otra. El backend no cambia. Commit aparte, fuera de la tienda.
    - **Dominio por coincidencia exacta** (decisión del usuario): el backend acepta solo el dominio registrado; `www` se resuelve con una redirección en el hosting (ver "Antes de habilitar una tienda").
-   - **CORS del ERP sin cambios en 22A** (decisión del usuario): en Render ya se usa `CORS_ALLOWED_ORIGINS`; quitar el `*` por defecto queda para la etapa 26. El dominio del panel de la tienda se suma a esa variable cuando exista.
+   - **CORS del ERP sin cambios en 22A** (decisión del usuario): en Render ya se usa `CORS_ALLOWED_ORIGINS`; quitar el `*` por defecto queda para la etapa 30 (lanzamiento). El dominio del panel de la tienda se suma a esa variable cuando exista.
 
 ## Para 22B: sesión del comprador (anotado el 2026-11-03)
 
@@ -125,4 +125,4 @@ Las columnas nuevas son aditivas y con default, así la app vieja no se rompe. S
 ## Preguntas abiertas para más adelante (no bloquean 22A)
 
 - Oracle Object Storage o R2/B2 para producción (decidir antes de habilitar la tienda).
-- Mails y dominio propio de la empresa para la tienda (etapa 26).
+- Mails y dominio propio de la empresa para la tienda (etapa 30, lanzamiento).
