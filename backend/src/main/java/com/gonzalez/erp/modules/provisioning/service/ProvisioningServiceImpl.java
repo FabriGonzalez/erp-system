@@ -6,14 +6,17 @@ import com.gonzalez.erp.config.security.TemporaryPasswords;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.exception.CompanyNameAlreadyExistsException;
 import com.gonzalez.erp.modules.companies.exception.CompanyTaxIdAlreadyExistsException;
+import com.gonzalez.erp.modules.companies.exception.StoreDomainAlreadyExistsException;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.provisioning.dto.request.ChangeCompanyStatusRequest;
 import com.gonzalez.erp.modules.provisioning.dto.request.ProvisionCompanyRequest;
+import com.gonzalez.erp.modules.provisioning.dto.request.StoreSetupRequest;
 import com.gonzalez.erp.modules.provisioning.dto.response.CompanyResponse;
 import com.gonzalez.erp.modules.provisioning.dto.response.ProvisionCompanyResponse;
 import com.gonzalez.erp.modules.roles.entity.Permission;
 import com.gonzalez.erp.modules.roles.entity.Role;
 import com.gonzalez.erp.modules.roles.repository.RoleRepository;
+import com.gonzalez.erp.modules.store.web.StoreDomains;
 import com.gonzalez.erp.modules.users.entity.User;
 import com.gonzalez.erp.modules.users.exception.UserEmailAlreadyExistsException;
 import com.gonzalez.erp.modules.users.exception.UserUsernameAlreadyExistsException;
@@ -99,6 +102,26 @@ public class ProvisioningServiceImpl implements ProvisioningService {
             case SUSPENDED -> company.suspend(request.reason().trim());
             case CANCELLED -> company.cancel(request.reason().trim());
         }
+        return CompanyResponse.from(company);
+    }
+
+    @Override
+    public CompanyResponse configureStore(Long companyId, StoreSetupRequest request) {
+        checkPlatformAdminRole();
+
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Company not found with id: " + companyId));
+
+        String domain = StoreDomains.normalize(request.storeDomain()).orElse(null);
+        if (domain != null) {
+            companyRepository.findByStoreDomain(domain)
+                    .filter(other -> !other.getId().equals(company.getId()))
+                    .ifPresent(other -> {
+                        throw new StoreDomainAlreadyExistsException(domain);
+                    });
+        }
+
+        company.configureStore(domain, request.storeEnabled());
         return CompanyResponse.from(company);
     }
 

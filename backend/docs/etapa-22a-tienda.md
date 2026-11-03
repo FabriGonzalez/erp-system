@@ -2,7 +2,7 @@
 
 Plan detallado de la primera parte de la etapa 22 (plan general en `docs/plan-proximas-etapas.md`, sección "Etapa 22"). Rama: `feature/store-22a`, desde `feature/production-ready`. Alcance: **solo backend**; el frontend del ERP para la tienda se planea aparte.
 
-Estado al 2026-11-03: pasos 1 y 2 hechos; falta el 3 (catálogo público).
+Estado al 2026-11-03: pasos 1, 2 y 3a hechos; faltan 3b (catálogo) y 3c (promos y regla de variantes activas).
 
 ## Decisiones
 
@@ -24,12 +24,19 @@ Estado al 2026-11-03: pasos 1 y 2 hechos; falta el 3 (catálogo público).
    - **2a. Fotos:** RustFS, SDK de S3, `ProductImage`, `GET/POST /products/{id}/images`, `upload-url`, `order`, `DELETE` (despublica si era la última), límites y validación del archivo guardado. **Hecho el 2026-11-03** (probado contra RustFS y sobre una copia de la base de desarrollo).
    - **2b. Publicar:** `PATCH /products/{id}/publication`, 409 `PRODUCT_IMAGE_REQUIRED`, `publishedOnline` en la respuesta de producto. Un producto inactivo puede quedar publicado (la tienda lo muestra recién al reactivarlo). **Hecho el 2026-11-03.**
 3. Catálogo público, en tres partes (plan del 2026-11-03):
-   - **3a. Tienda por dominio:** filtro de `/store/**` (empresa por `X-Store-Domain` u `Origin`, normalizado; inexistente, deshabilitada o empresa no activa → 404) y contexto de tienda propio; cadena de seguridad aparte y pública, con el `JwtAuthFilter` excluido de `/store/**` (hoy, como `@Component`, corre en todas las rutas); CORS de `/store/**` solo para dominios de tiendas habilitadas; `PATCH /provisioning/companies/{id}/store` (`storeDomain`, `storeEnabled`; formato válido, 409 `STORE_DOMAIN_ALREADY_EXISTS`, no se habilita sin dominio); `GET /store/info`; tests de normalización e integración (404, CORS, sin token de empleado).
+   - **3a. Tienda por dominio:** filtro de `/store/**` (empresa por `X-Store-Domain` u `Origin`, normalizado; inexistente, deshabilitada o empresa no activa → 404) y contexto de tienda propio; cadena de seguridad aparte y pública, con el `JwtAuthFilter` excluido de `/store/**` (hoy, como `@Component`, corre en todas las rutas); CORS de `/store/**` solo para dominios de tiendas habilitadas; `PATCH /provisioning/companies/{id}/store` (`storeDomain`, `storeEnabled`; formato válido, 409 `STORE_DOMAIN_ALREADY_EXISTS`, no se habilita sin dominio); `GET /store/info`; tests de normalización e integración (404, CORS, sin token de empleado). **Hecho el 2026-11-03.** El `JwtAuthFilter` quedó con su registro de servlet desactivado (`FilterRegistrationBean`) en lugar de excluir rutas: corre solo dentro de la cadena del ERP.
    - **3b. Catálogo:** `GET /store/categories`, `GET /store/products` (paginado, búsqueda, categoría, orden por precio o nombre), `GET /store/products/{id}`. Visible = activo, publicado, categoría activa y al menos una variante activa; solo variantes activas; stock sumado de sucursales activas. Reglas de fotos resueltas en el backend (variante sin fotos → las del producto; portada). Ordenar por precio web = ordenar por precio ERP mínimo (mismo porcentaje y redondeo hacia arriba para todos: el orden no cambia), así la base pagina sin calcular precios. DTOs y repositorio propios de la tienda.
    - **3c. Promos y regla de variantes activas:** `GET /store/promotions` (vigentes hoy, precio web). **Una promo con algún producto no visible no se muestra** (decisión del usuario). Publicar y despublicar cuentan solo fotos del producto y de **variantes activas**; si la edición de producto del ERP desactiva una variante y el producto se queda sin fotos visibles, se despublica (decisión del usuario, 2026-11-03). Motivo: las variantes no se borran, se desactivan, y hoy un producto cuyas únicas fotos son de variantes inactivas queda publicado sin nada que mostrar.
    - **SKU de variante no editable (decisión del usuario, 2026-11-03, opción A):** el SKU es la identidad de la variante (la edición y la importación la reconocen por SKU). En el formulario del ERP el SKU de una variante guardada es de solo lectura; para "cambiarlo" se quita la variante y se agrega otra. El backend no cambia. Commit aparte, fuera de la tienda.
    - **Dominio por coincidencia exacta** (decisión del usuario): el backend acepta solo el dominio registrado; `www` se resuelve con una redirección en el hosting (ver "Antes de habilitar una tienda").
    - **CORS del ERP sin cambios en 22A** (decisión del usuario): en Render ya se usa `CORS_ALLOWED_ORIGINS`; quitar el `*` por defecto queda para la etapa 26. El dominio del panel de la tienda se suma a esa variable cuando exista.
+
+## Para 22B: sesión del comprador (anotado el 2026-11-03)
+
+- **Dirección elegida (a confirmar al planear 22B):** el sitio de la tienda con servidor propio (Next.js, Nuxt o Astro: patrón "BFF"). El navegador guarda solo una cookie `HttpOnly` del dominio de la tienda; el token del comprador lo guarda el servidor de la tienda y lo manda a la API en `Authorization`, con `X-Store-Domain`. Un XSS en la tienda no puede robar la sesión.
+- **Por qué no cookies directo desde la API:** la API está en otro dominio, así que sería una cookie de terceros (Safari las bloquea por defecto, Firefox y Brave las restringen); para que fuera propia, la API tendría que atender en un subdominio de cada tienda (DNS y certificado por empresa).
+- **La API no cambia:** sigue con token en el header, sin cookies (`setAllowCredentials(false)` en el CORS de la tienda). No es un segundo backend: el servidor de la tienda no tiene base ni reglas de negocio, solo arma páginas y guarda la sesión.
+- **Alternativa si la tienda fuera solo estática (SPA):** token de acceso corto en memoria (no en `localStorage`) y token de renovación (`/store/auth/refresh`).
 
 ## Antes de habilitar una tienda (checklist)
 

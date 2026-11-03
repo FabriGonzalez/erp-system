@@ -3,10 +3,15 @@ package com.gonzalez.erp.config;
 import tools.jackson.databind.json.JsonMapper;
 import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.config.security.JwtAuthFilter;
+import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
+import com.gonzalez.erp.modules.store.web.StoreCorsConfigurationSource;
+import com.gonzalez.erp.modules.store.web.StoreResolutionFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpStatus;
@@ -28,6 +33,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.CorsFilter;
 
 import java.util.List;
 
@@ -105,7 +111,35 @@ public class SecurityConfig {
         };
     }
 
+    // Como @Component, Spring registraría JwtAuthFilter para todas las rutas, /store/** incluida.
+    // Así corre solo dentro de la cadena del ERP: un token de empleado nunca entra a la tienda.
     @Bean
+    public FilterRegistrationBean<JwtAuthFilter> jwtAuthFilterRegistration(JwtAuthFilter filter) {
+        FilterRegistrationBean<JwtAuthFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    /** Tienda web: pública, la empresa sale del dominio y el CORS solo admite tiendas registradas. */
+    @Bean
+    @Order(1)
+    public SecurityFilterChain storeSecurityFilterChain(
+            HttpSecurity http,
+            CompanyRepository companyRepository
+    ) throws Exception {
+        return http
+                .securityMatcher("/api/v1/store/**")
+                .cors(cors -> cors.configurationSource(new StoreCorsConfigurationSource(companyRepository)))
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .addFilterAfter(new StoreResolutionFilter(companyRepository, objectMapper), CorsFilter.class)
+                .build();
+    }
+
+    @Bean
+    @Order(2)
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             Environment environment

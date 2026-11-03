@@ -79,6 +79,17 @@ public class Company extends BaseEntity {
         this.storeRoundingStep = roundingStep;
     }
 
+    /** Solo lo llama el operador (provisioning): la empresa no elige su dominio. */
+    public void configureStore(String storeDomain, boolean storeEnabled) {
+        this.storeDomain = storeDomain;
+        this.storeEnabled = storeEnabled;
+    }
+
+    /** La tienda atiende si está habilitada, tiene dominio y la empresa está activa. */
+    public boolean isStoreOpen() {
+        return storeEnabled && storeDomain != null && isActive();
+    }
+
     public boolean isActive() {
         return status == CompanyStatus.ACTIVE;
     }

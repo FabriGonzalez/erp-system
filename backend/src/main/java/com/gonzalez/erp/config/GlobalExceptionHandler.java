@@ -8,6 +8,7 @@ import com.gonzalez.erp.modules.companies.exception.CompanyNameAlreadyExistsExce
 import com.gonzalez.erp.modules.companies.exception.CompanyNotActiveException;
 import com.gonzalez.erp.modules.companies.exception.CompanyTaxIdAlreadyExistsException;
 import com.gonzalez.erp.modules.companies.exception.InvalidCompanyStatusTransitionException;
+import com.gonzalez.erp.modules.companies.exception.StoreDomainAlreadyExistsException;
 import com.gonzalez.erp.modules.branches.exception.BranchAccessDeniedException;
 import com.gonzalez.erp.modules.branches.exception.BranchInactiveException;
 import com.gonzalez.erp.modules.branches.exception.BranchNameAlreadyExistsException;
@@ -256,6 +257,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             CompanyNameAlreadyExistsException.class,
             CompanyTaxIdAlreadyExistsException.class,
+            StoreDomainAlreadyExistsException.class,
             BranchNameAlreadyExistsException.class,
             CategoryNameAlreadyExistsException.class,
             ProductSkuAlreadyExistsException.class,
@@ -271,6 +273,7 @@ public class GlobalExceptionHandler {
         String code = switch (ex) {
             case CompanyNameAlreadyExistsException e -> "COMPANY_NAME_ALREADY_EXISTS";
             case CompanyTaxIdAlreadyExistsException e -> "COMPANY_TAX_ID_ALREADY_EXISTS";
+            case StoreDomainAlreadyExistsException e -> "STORE_DOMAIN_ALREADY_EXISTS";
             case BranchNameAlreadyExistsException e -> "BRANCH_NAME_ALREADY_EXISTS";
             case CategoryNameAlreadyExistsException e -> "CATEGORY_NAME_ALREADY_EXISTS";
             case ProductSkuAlreadyExistsException e -> "PRODUCT_SKU_ALREADY_EXISTS";

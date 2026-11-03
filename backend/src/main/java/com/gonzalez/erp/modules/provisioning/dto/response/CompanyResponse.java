@@ -14,6 +14,8 @@ public record CompanyResponse(
         CompanyStatus status,
         String statusReason,
         Instant statusChangedAt,
+        String storeDomain,
+        boolean storeEnabled,
         Instant createdAt
 ) {
     public static CompanyResponse from(Company company) {
@@ -25,6 +27,8 @@ public record CompanyResponse(
                 company.getStatus(),
                 company.getStatusReason(),
                 company.getStatusChangedAt(),
+                company.getStoreDomain(),
+                company.isStoreEnabled(),
                 company.getCreatedAt()
         );
     }
