@@ -37,9 +37,11 @@ import com.gonzalez.erp.modules.products.exception.ProductVariantBarcodeAlreadyE
 import com.gonzalez.erp.modules.products.exception.AttributeNotInCategoryException;
 import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveException;
 import com.gonzalez.erp.modules.products.exception.ProductVariantSkuAlreadyExistsException;
+import com.gonzalez.erp.modules.products.exception.ProductImageRequiredException;
 import com.gonzalez.erp.modules.products.mapper.ProductMapper;
 import com.gonzalez.erp.modules.products.mapper.ProductVariantMapper;
 import com.gonzalez.erp.modules.products.repository.ProductAttributeValueRepository;
+import com.gonzalez.erp.modules.products.repository.ProductImageRepository;
 import com.gonzalez.erp.modules.products.repository.ProductRepository;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
 import com.gonzalez.erp.modules.roles.entity.Permission;
@@ -67,6 +69,7 @@ public class ProductServiceImpl implements ProductService {
     private final StockRepository stockRepository;
     private final StockService stockService;
     private final StockMovementRecorder stockMovementRecorder;
+    private final ProductImageRepository imageRepository;
 
     @Override
     public PageResponse<ProductResponse> findAll(ProductSearchCriteria criteria, Pageable pageable) {
@@ -229,6 +232,26 @@ public class ProductServiceImpl implements ProductService {
         return ProductMapper.toResponse(
                 product,
                 variantResponses
+        );
+    }
+
+    @Override
+    @Transactional
+    public ProductResponse updatePublication(Long id, boolean publishedOnline) {
+        Product product = findProductOrThrow(id);
+
+        if (publishedOnline) {
+            if (imageRepository.findAllOfProduct(product.getId()).isEmpty()) {
+                throw new ProductImageRequiredException(product.getId());
+            }
+            product.publish();
+        } else {
+            product.unpublish();
+        }
+
+        return ProductMapper.toResponse(
+                product,
+                loadVariantsForProduct(product.getId())
         );
     }
 

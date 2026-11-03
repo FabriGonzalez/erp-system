@@ -20,4 +20,6 @@ public interface ProductService {
     ProductResponse deactivate(Long id);
 
     ProductResponse activate(Long id);
+
+    ProductResponse updatePublication(Long id, boolean publishedOnline);
 }

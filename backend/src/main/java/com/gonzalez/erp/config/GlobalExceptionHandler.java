@@ -34,6 +34,7 @@ import com.gonzalez.erp.modules.products.exception.InvalidProductQueryException;
 import com.gonzalez.erp.modules.products.exception.InvalidProductVariantsException;
 import com.gonzalez.erp.modules.products.exception.PricePermissionRequiredException;
 import com.gonzalez.erp.modules.products.exception.ProductAttributeNameAlreadyExistsException;
+import com.gonzalez.erp.modules.products.exception.ProductImageRequiredException;
 import com.gonzalez.erp.modules.products.exception.ProductAttributeValueAlreadyExistsException;
 import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveException;
 import com.gonzalez.erp.modules.products.exception.ProductSkuAlreadyExistsException;
@@ -119,6 +120,20 @@ public class GlobalExceptionHandler {
                         ex.getMessage(),
                         request.getRequestURI(),
                         ex.getCode()
+                ));
+    }
+
+    @ExceptionHandler(ProductImageRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleProductImageRequired(
+            ProductImageRequiredException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(
+                        HttpStatus.CONFLICT.value(),
+                        HttpStatus.CONFLICT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "PRODUCT_IMAGE_REQUIRED"
                 ));
     }
 

@@ -2,7 +2,7 @@
 
 Plan detallado de la primera parte de la etapa 22 (plan general en `docs/plan-proximas-etapas.md`, sección "Etapa 22"). Rama: `feature/store-22a`, desde `feature/production-ready`. Alcance: **solo backend**; el frontend del ERP para la tienda se planea aparte.
 
-Estado al 2026-11-03: pasos 1 y 2a hechos; falta 2b (publicar) y 3 (catálogo público).
+Estado al 2026-11-03: pasos 1 y 2 hechos; falta el 3 (catálogo público).
 
 ## Decisiones
 
@@ -22,8 +22,9 @@ Estado al 2026-11-03: pasos 1 y 2a hechos; falta 2b (publicar) y 3 (catálogo p�
 1. Configuración de la tienda y precio web: `V6`, campos en `Company` y `Product`, permiso, `GET/PATCH /companies/me/store`, función única de precio web. **Hecho el 2026-11-03.**
 2. Imágenes y publicar, en dos partes:
    - **2a. Fotos:** RustFS, SDK de S3, `ProductImage`, `GET/POST /products/{id}/images`, `upload-url`, `order`, `DELETE` (despublica si era la última), límites y validación del archivo guardado. **Hecho el 2026-11-03** (probado contra RustFS y sobre una copia de la base de desarrollo).
-   - **2b. Publicar:** `PATCH /products/{id}/publication`, 409 `PRODUCT_IMAGE_REQUIRED`, `publishedOnline` en la respuesta de producto.
+   - **2b. Publicar:** `PATCH /products/{id}/publication`, 409 `PRODUCT_IMAGE_REQUIRED`, `publishedOnline` en la respuesta de producto. Un producto inactivo puede quedar publicado (la tienda lo muestra recién al reactivarlo). **Hecho el 2026-11-03.**
 3. Catálogo público: filtro por dominio, CORS por dominio, cadena de seguridad aparte, endpoints `/store/**`, alta del dominio por provisioning, tests de aislamiento.
+   - **A decidir en el plan del paso 3 (anotado el 2026-11-03):** las variantes no se borran, se desactivan (la edición de producto desactiva las que no vienen, y reconoce las existentes por SKU: cambiar el SKU de una variante en el ERP crea una variante nueva y desactiva la vieja, que se queda con sus fotos). Hoy la regla de publicar cuenta también las fotos de variantes inactivas, así que un producto cuyas únicas fotos son de variantes inactivas queda publicado sin nada que mostrar. Propuesta: publicar y despublicar cuentan solo fotos del producto y de variantes activas, y desactivar una variante que se lleva las últimas fotos visibles despublica el producto.
 
 ## Migración
 

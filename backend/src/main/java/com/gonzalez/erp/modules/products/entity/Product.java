@@ -71,6 +71,10 @@ public class    Product extends BaseEntity {
         this.active = true;
     }
 
+    public void publish() {
+        this.publishedOnline = true;
+    }
+
     public void unpublish() {
         this.publishedOnline = false;
     }

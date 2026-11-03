@@ -2,6 +2,7 @@ package com.gonzalez.erp.modules.products.controller;
 
 import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.common.dto.PageResponse;
+import com.gonzalez.erp.modules.products.dto.request.ProductPublicationRequest;
 import com.gonzalez.erp.modules.products.dto.request.ProductRequest;
 import com.gonzalez.erp.modules.products.dto.request.ProductSearchCriteria;
 import com.gonzalez.erp.modules.products.dto.request.ProductStockFilter;
@@ -147,5 +148,24 @@ public class ProductController {
             @Parameter(description = "ID del producto a activar")
             @PathVariable Long id) {
         return ResponseEntity.ok(productService.activate(id));
+    }
+
+    // Endpoint propio y no un campo de la edición: la edición reemplaza el producto entero y el
+    // panel de la tienda podría pisar precios o variantes cambiados en el ERP mientras tanto.
+    @PreAuthorize("hasAuthority('ADMINISTRAR_TIENDA')")
+    @PatchMapping("/{id}/publication")
+    @Operation(summary = "Publicar o despublicar en la tienda",
+            description = "Publicar exige al menos una foto, propia o de alguna variante. Despublicar siempre se puede. "
+                    + "Un producto inactivo puede quedar publicado: la tienda lo muestra recién cuando se reactiva.")
+    @ApiResponse(responseCode = "200", description = "Publicación actualizada")
+    @ApiResponse(responseCode = "404", description = "Producto no encontrado",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "409", description = "El producto no tiene fotos (PRODUCT_IMAGE_REQUIRED)",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<ProductResponse> updatePublication(
+            @Parameter(description = "ID del producto")
+            @PathVariable Long id,
+            @Valid @RequestBody ProductPublicationRequest request) {
+        return ResponseEntity.ok(productService.updatePublication(id, request.publishedOnline()));
     }
 }
