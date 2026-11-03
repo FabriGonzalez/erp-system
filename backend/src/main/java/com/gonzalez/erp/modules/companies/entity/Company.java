@@ -15,6 +15,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.ColumnDefault;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
@@ -51,10 +52,31 @@ public class Company extends BaseEntity {
     @Column(name = "status_changed_at")
     private Instant statusChangedAt;
 
+    // Dominio y habilitación los carga el operador: la empresa no puede reclamar un dominio ajeno.
+    @Column(name = "store_domain", unique = true)
+    private String storeDomain;
+
+    @Column(name = "store_enabled", nullable = false)
+    @Builder.Default
+    private boolean storeEnabled = false;
+
+    @Column(name = "store_price_adjustment_percent", nullable = false, precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal storePriceAdjustmentPercent = BigDecimal.ZERO;
+
+    @Column(name = "store_rounding_step", nullable = false)
+    @Builder.Default
+    private int storeRoundingStep = 10;
+
     public void update(String name, String legalName, String taxId) {
         this.name = name;
         this.legalName = legalName;
         this.taxId = taxId;
+    }
+
+    public void updateStorePricing(BigDecimal priceAdjustmentPercent, int roundingStep) {
+        this.storePriceAdjustmentPercent = priceAdjustmentPercent;
+        this.storeRoundingStep = roundingStep;
     }
 
     public boolean isActive() {
