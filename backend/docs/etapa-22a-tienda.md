@@ -23,8 +23,21 @@ Estado al 2026-11-03: pasos 1 y 2 hechos; falta el 3 (catálogo público).
 2. Imágenes y publicar, en dos partes:
    - **2a. Fotos:** RustFS, SDK de S3, `ProductImage`, `GET/POST /products/{id}/images`, `upload-url`, `order`, `DELETE` (despublica si era la última), límites y validación del archivo guardado. **Hecho el 2026-11-03** (probado contra RustFS y sobre una copia de la base de desarrollo).
    - **2b. Publicar:** `PATCH /products/{id}/publication`, 409 `PRODUCT_IMAGE_REQUIRED`, `publishedOnline` en la respuesta de producto. Un producto inactivo puede quedar publicado (la tienda lo muestra recién al reactivarlo). **Hecho el 2026-11-03.**
-3. Catálogo público: filtro por dominio, CORS por dominio, cadena de seguridad aparte, endpoints `/store/**`, alta del dominio por provisioning, tests de aislamiento.
-   - **A decidir en el plan del paso 3 (anotado el 2026-11-03):** las variantes no se borran, se desactivan (la edición de producto desactiva las que no vienen, y reconoce las existentes por SKU: cambiar el SKU de una variante en el ERP crea una variante nueva y desactiva la vieja, que se queda con sus fotos). Hoy la regla de publicar cuenta también las fotos de variantes inactivas, así que un producto cuyas únicas fotos son de variantes inactivas queda publicado sin nada que mostrar. Propuesta: publicar y despublicar cuentan solo fotos del producto y de variantes activas, y desactivar una variante que se lleva las últimas fotos visibles despublica el producto.
+3. Catálogo público, en tres partes (plan del 2026-11-03):
+   - **3a. Tienda por dominio:** filtro de `/store/**` (empresa por `X-Store-Domain` u `Origin`, normalizado; inexistente, deshabilitada o empresa no activa → 404) y contexto de tienda propio; cadena de seguridad aparte y pública, con el `JwtAuthFilter` excluido de `/store/**` (hoy, como `@Component`, corre en todas las rutas); CORS de `/store/**` solo para dominios de tiendas habilitadas; `PATCH /provisioning/companies/{id}/store` (`storeDomain`, `storeEnabled`; formato válido, 409 `STORE_DOMAIN_ALREADY_EXISTS`, no se habilita sin dominio); `GET /store/info`; tests de normalización e integración (404, CORS, sin token de empleado).
+   - **3b. Catálogo:** `GET /store/categories`, `GET /store/products` (paginado, búsqueda, categoría, orden por precio o nombre), `GET /store/products/{id}`. Visible = activo, publicado, categoría activa y al menos una variante activa; solo variantes activas; stock sumado de sucursales activas. Reglas de fotos resueltas en el backend (variante sin fotos → las del producto; portada). Ordenar por precio web = ordenar por precio ERP mínimo (mismo porcentaje y redondeo hacia arriba para todos: el orden no cambia), así la base pagina sin calcular precios. DTOs y repositorio propios de la tienda.
+   - **3c. Promos y regla de variantes activas:** `GET /store/promotions` (vigentes hoy, precio web). **Una promo con algún producto no visible no se muestra** (decisión del usuario). Publicar y despublicar cuentan solo fotos del producto y de **variantes activas**; si la edición de producto del ERP desactiva una variante y el producto se queda sin fotos visibles, se despublica (decisión del usuario, 2026-11-03). Motivo: las variantes no se borran, se desactivan, y hoy un producto cuyas únicas fotos son de variantes inactivas queda publicado sin nada que mostrar.
+   - **SKU de variante no editable (decisión del usuario, 2026-11-03, opción A):** el SKU es la identidad de la variante (la edición y la importación la reconocen por SKU). En el formulario del ERP el SKU de una variante guardada es de solo lectura; para "cambiarlo" se quita la variante y se agrega otra. El backend no cambia. Commit aparte, fuera de la tienda.
+   - **Dominio por coincidencia exacta** (decisión del usuario): el backend acepta solo el dominio registrado; `www` se resuelve con una redirección en el hosting (ver "Antes de habilitar una tienda").
+   - **CORS del ERP sin cambios en 22A** (decisión del usuario): en Render ya se usa `CORS_ALLOWED_ORIGINS`; quitar el `*` por defecto queda para la etapa 26. El dominio del panel de la tienda se suma a esa variable cuando exista.
+
+## Antes de habilitar una tienda (checklist)
+
+- [ ] Verificar que el dominio sea de la empresa (que lo controla en su DNS) antes de cargarlo por provisioning: el backend confía en el registro del operador.
+- [ ] Configurar en el hosting de la tienda la redirección de `www.dominio` al dominio registrado (o al revés, y registrar ese): el backend compara el dominio exacto.
+- [ ] Sumar el dominio del panel de la tienda a `CORS_ALLOWED_ORIGINS`.
+- [ ] Almacenamiento de fotos de producción (R2 o B2) con sus variables `STORAGE_*`, bucket de lectura pública y regla que borre archivos subidos y nunca confirmados.
+- [ ] La app con las etiquetas de los estados nuevos de pedido publicada (22C/22D) antes de que entren pedidos web.
 
 ## Migración
 
@@ -39,7 +52,7 @@ Las columnas nuevas son aditivas y con default, así la app vieja no se rompe. S
 
 - Filtro para `/api/v1/store/**`: resuelve la empresa por el header `Origin`, o por `X-Store-Domain` para la tienda renderizada en servidor. Lo deja en un contexto propio (no en `SecurityUtils`).
 - Empresa inexistente, con `storeEnabled = false` o suspendida → **404** (no 403, para no revelar que existe).
-- CORS: `/store/**` solo admite los dominios registrados. El resto de la API deja de aceptar `*` y pasa a usar `CORS_ALLOWED_ORIGINS`, que ya existe en Render. **Riesgo:** si el origen de la web del ERP no está en esa variable, el panel deja de funcionar; revisarlo antes de desplegar.
+- CORS: `/store/**` solo admite los dominios registrados. El CORS del resto de la API no cambia en 22A (ver paso 3).
 
 ## 2. Imágenes
 
@@ -105,5 +118,4 @@ Las columnas nuevas son aditivas y con default, así la app vieja no se rompe. S
 ## Preguntas abiertas para más adelante (no bloquean 22A)
 
 - Oracle Object Storage o R2/B2 para producción (decidir antes de habilitar la tienda).
-- Quién y cómo da de alta un dominio de tienda (endpoint de plataforma o procedimiento).
 - Mails y dominio propio de la empresa para la tienda (etapa 26).
