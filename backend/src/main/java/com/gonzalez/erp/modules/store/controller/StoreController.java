@@ -7,6 +7,7 @@ import com.gonzalez.erp.modules.store.dto.StoreCategoryResponse;
 import com.gonzalez.erp.modules.store.dto.StoreInfoResponse;
 import com.gonzalez.erp.modules.store.dto.StoreProductResponse;
 import com.gonzalez.erp.modules.store.dto.StoreProductSummaryResponse;
+import com.gonzalez.erp.modules.store.dto.StorePromotionResponse;
 import com.gonzalez.erp.modules.store.service.StoreCatalogService;
 import com.gonzalez.erp.modules.store.web.CurrentStore;
 import io.swagger.v3.oas.annotations.Operation;
@@ -82,6 +83,16 @@ public class StoreController {
                     + "tiene) y disponibilidad (AVAILABLE, LOW_STOCK u OUT_OF_STOCK).")
     public ResponseEntity<StoreProductResponse> product(@PathVariable Long id) {
         return ResponseEntity.ok(catalogService.findProduct(id));
+    }
+
+    @GetMapping("/promotions")
+    @Operation(summary = "Promos",
+            description = "Promos vigentes hoy cuyos productos son todos visibles, las que vencen antes primero. "
+                    + "Sin paginar. Precio web; regularWebPrice y savings comparan con comprar por separado la "
+                    + "variante más barata de cada producto (null si la promo no conviene). availability: "
+                    + "AVAILABLE u OUT_OF_STOCK.")
+    public ResponseEntity<List<StorePromotionResponse>> promotions() {
+        return ResponseEntity.ok(catalogService.findPromotions());
     }
 
     // Los campos son alias de la consulta del listado; el id desempata para que la paginación sea estable.

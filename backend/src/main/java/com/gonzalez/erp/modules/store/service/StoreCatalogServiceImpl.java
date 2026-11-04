@@ -2,6 +2,7 @@ package com.gonzalez.erp.modules.store.service;
 
 import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.common.util.BusinessDate;
 import com.gonzalez.erp.common.util.SearchText;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
@@ -11,11 +12,15 @@ import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.entity.ProductVariantAttribute;
 import com.gonzalez.erp.modules.products.repository.ProductImageRepository;
 import com.gonzalez.erp.modules.products.service.ImageStorage;
+import com.gonzalez.erp.modules.promotions.entity.Promotion;
+import com.gonzalez.erp.modules.promotions.entity.PromotionItem;
 import com.gonzalez.erp.modules.store.dto.StoreAvailability;
 import com.gonzalez.erp.modules.store.dto.StoreCategoryResponse;
 import com.gonzalez.erp.modules.store.dto.StoreProductResponse;
 import com.gonzalez.erp.modules.store.dto.StoreProductSummaryResponse;
+import com.gonzalez.erp.modules.store.dto.StorePromotionResponse;
 import com.gonzalez.erp.modules.store.repository.StoreCatalogRepository;
+import com.gonzalez.erp.modules.store.repository.StoreCatalogRepository.ProductMinPrice;
 import com.gonzalez.erp.modules.store.repository.StoreCatalogRepository.ProductRow;
 import com.gonzalez.erp.modules.store.repository.StoreCatalogRepository.VariantStock;
 import com.gonzalez.erp.modules.store.web.CurrentStore;
@@ -27,9 +32,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -130,6 +137,80 @@ public class StoreCatalogServiceImpl implements StoreCatalogService {
                 StorePrices.webPrice(minPrice, company),
                 StorePrices.webPrice(maxPrice, company),
                 variantResponses
+        );
+    }
+
+    @Override
+    public List<StorePromotionResponse> findPromotions() {
+        Company company = currentCompany();
+        List<Promotion> promotions = catalogRepository.findVisiblePromotions(company.getId(), BusinessDate.today());
+        if (promotions.isEmpty()) {
+            return List.of();
+        }
+
+        // Precios, stock y fotos de todos los productos de todas las promos en tres consultas.
+        Set<Long> productIds = promotions.stream()
+                .flatMap(promotion -> promotion.getItems().stream())
+                .map(item -> item.getProduct().getId())
+                .collect(Collectors.toSet());
+        Map<Long, BigDecimal> minPriceByProduct = catalogRepository.findActiveMinPrices(productIds).stream()
+                .collect(Collectors.toMap(ProductMinPrice::getProductId, ProductMinPrice::getMinPrice));
+        Map<Long, Long> stockByProduct = catalogRepository.findActiveVariantStock(productIds).stream()
+                .collect(Collectors.groupingBy(VariantStock::getProductId,
+                        Collectors.summingLong(VariantStock::getQuantity)));
+        Map<Long, String> coverByProduct = new HashMap<>();
+        imageRepository.findVisibleOfProducts(productIds).stream()
+                .collect(Collectors.groupingBy(StoreCatalogServiceImpl::ownerProductId))
+                .forEach((productId, images) -> coverByProduct.put(productId, coverOf(images)));
+
+        return promotions.stream()
+                .map(promotion -> toPromotionResponse(promotion, company, minPriceByProduct, stockByProduct, coverByProduct))
+                .toList();
+    }
+
+    /*
+     * Por separado = el precio web de la variante activa más barata de cada producto por la
+     * cantidad. El precio web nunca baja si sube el ERP, así que el precio web del mínimo ERP es
+     * el mínimo web. Con cualquier otra variante el comprador ahorra más: "al menos $X" no miente.
+     * El stock se suma entre variantes porque las unidades de una promo pueden ser de variantes
+     * distintas.
+     */
+    static StorePromotionResponse toPromotionResponse(
+            Promotion promotion,
+            Company company,
+            Map<Long, BigDecimal> minPriceByProduct,
+            Map<Long, Long> stockByProduct,
+            Map<Long, String> coverByProduct
+    ) {
+        BigDecimal webPrice = StorePrices.webPrice(promotion.getPrice(), company);
+        BigDecimal regularWebPrice = BigDecimal.ZERO;
+        boolean available = true;
+        for (PromotionItem item : promotion.getItems()) {
+            Long productId = item.getProduct().getId();
+            regularWebPrice = regularWebPrice.add(StorePrices.webPrice(minPriceByProduct.get(productId), company)
+                    .multiply(BigDecimal.valueOf(item.getQuantity())));
+            available &= stockByProduct.getOrDefault(productId, 0L) >= item.getQuantity();
+        }
+        BigDecimal savings = regularWebPrice.subtract(webPrice);
+        boolean showSavings = savings.signum() > 0;
+
+        List<StorePromotionResponse.Item> items = promotion.getItems().stream()
+                .map(item -> new StorePromotionResponse.Item(
+                        item.getProduct().getId(),
+                        item.getProduct().getName(),
+                        item.getQuantity(),
+                        coverByProduct.get(item.getProduct().getId())))
+                .toList();
+        return new StorePromotionResponse(
+                promotion.getId(),
+                promotion.getName(),
+                promotion.getDescription(),
+                webPrice,
+                showSavings ? regularWebPrice : null,
+                showSavings ? savings : null,
+                available ? StoreAvailability.AVAILABLE : StoreAvailability.OUT_OF_STOCK,
+                promotion.getEndDate(),
+                items
         );
     }
 

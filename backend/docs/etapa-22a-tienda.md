@@ -2,7 +2,7 @@
 
 Plan detallado de la primera parte de la etapa 22 (plan general en `docs/plan-proximas-etapas.md`, sección "Etapa 22"). Rama: `feature/store-22a`, desde `feature/production-ready`. Alcance: **solo backend**; el frontend del ERP para la tienda se planea aparte.
 
-Estado al 2026-11-04: pasos 1, 2, 3a, 3b y 3c-1 hechos; falta 3c-2 (promos), planeado abajo en "Plan del paso 3c".
+Estado al 2026-11-04: **etapa 22A terminada** (pasos 1, 2 y 3 completos, incluidas las promos de 3c-2).
 
 ## Decisiones
 
@@ -48,7 +48,7 @@ Hoy `findAllOfProduct` cuenta las fotos de todas las variantes, activas o no. Se
 - **Aviso de fotos en variantes inactivas (decisión del usuario, 2026-11-04):** se pueden seguir subiendo, y cada foto de `GET/POST /products/{id}/images` trae `visibleInStore` (`false` si es de una variante inactiva). Con eso el panel muestra "esta variante está inactiva: la foto no se ve en la tienda". No se rechaza nada.
 - Tests: `ProductPublicationTest` (publicar con fotos solo en variantes inactivas → 409), `ProductImageServiceImplTest` (borrar la última foto visible despublica aunque queden fotos de variantes inactivas; `visibleInStore` en `false` para una variante inactiva) y un test de la edición que desactiva la única variante con fotos.
 
-### 3c-2. `GET /store/promotions`
+### 3c-2. `GET /store/promotions` (hecho el 2026-11-04)
 
 - **Cuáles:** de la empresa de la tienda, activas y vigentes hoy (`BusinessDate.today()`, hora de Argentina, igual que el ERP), y **todos** sus productos visibles con la regla del catálogo (activo, publicado, categoría activa, alguna variante activa). Una sola consulta con `NOT EXISTS` sobre los ítems con producto no visible.
 - **Respuesta** (`StorePromotionResponse`, propia de la tienda): `id`, `name`, `description`, `webPrice` (con `StorePrices.webPrice`, la función única), `regularWebPrice`, `savings`, `availability`, `endDate` (para mostrar "hasta el…") e `items`: `productId`, `productName`, `quantity` y la portada del producto (misma regla de fotos que el catálogo). Sin precio ERP, sin costos, sin `startDate` ni estado.

@@ -3,6 +3,7 @@ package com.gonzalez.erp.modules.store.repository;
 import com.gonzalez.erp.modules.categories.entity.Category;
 import com.gonzalez.erp.modules.products.entity.Product;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
+import com.gonzalez.erp.modules.promotions.entity.Promotion;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
@@ -10,6 +11,7 @@ import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +31,12 @@ public interface StoreCatalogRepository extends Repository<Product, Long> {
         String getCategoryName();
         BigDecimal getMinPrice();
         BigDecimal getMaxPrice();
+    }
+
+    /** El precio ERP más barato entre las variantes activas de un producto. */
+    interface ProductMinPrice {
+        Long getProductId();
+        BigDecimal getMinPrice();
     }
 
     /** Stock de una variante activa sumado en las sucursales activas. */
@@ -113,4 +121,31 @@ public interface StoreCatalogRepository extends Repository<Product, Long> {
             GROUP BY v.product.id, v.id
             """)
     List<VariantStock> findActiveVariantStock(@Param("productIds") Collection<Long> productIds);
+
+    @Query("""
+            SELECT v.product.id AS productId, MIN(v.price) AS minPrice
+            FROM ProductVariant v
+            WHERE v.product.id IN :productIds AND v.active = true
+            GROUP BY v.product.id
+            """)
+    List<ProductMinPrice> findActiveMinPrices(@Param("productIds") Collection<Long> productIds);
+
+    /*
+     * Promos vigentes hoy (mismo criterio que el estado ACTIVE del ERP) en las que todos los
+     * productos son visibles con la regla del catálogo: si uno no se ve, la promo no se muestra.
+     * Trae los ítems con su producto en la misma consulta.
+     */
+    @Query("""
+            SELECT DISTINCT pr FROM Promotion pr
+            JOIN FETCH pr.items i JOIN FETCH i.product
+            WHERE pr.company.id = :companyId AND pr.active = true
+            AND pr.startDate <= :today AND pr.endDate >= :today
+            AND NOT EXISTS (
+                SELECT 1 FROM PromotionItem hidden JOIN hidden.product p JOIN p.category c
+                WHERE hidden.promotion = pr
+                AND (p.active = false OR p.publishedOnline = false OR c.active = false
+                     OR NOT EXISTS (SELECT 1 FROM ProductVariant v WHERE v.product = p AND v.active = true)))
+            ORDER BY pr.endDate ASC, pr.name ASC, pr.id ASC
+            """)
+    List<Promotion> findVisiblePromotions(@Param("companyId") Long companyId, @Param("today") LocalDate today);
 }

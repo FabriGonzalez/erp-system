@@ -1,5 +1,6 @@
 package com.gonzalez.erp;
 
+import com.gonzalez.erp.common.util.BusinessDate;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,7 +35,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /*
  * Catálogo público contra Postgres real: qué productos se ven (y cuáles no), precio web, orden,
  * búsqueda, paginado, disponibilidad sin cantidad, reglas de fotos y aislamiento entre tiendas.
- * También que solo cuentan las fotos visibles (propias o de variantes activas) para seguir publicado.
+ * También que solo cuentan las fotos visibles (propias o de variantes activas) para seguir publicado,
+ * y qué promos se ven, con su precio web, ahorro y disponibilidad.
  * Las fotos se insertan directo en la base: el test no levanta el almacenamiento.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
@@ -68,6 +71,7 @@ class StoreCatalogTests {
 
     private final Map<String, Long> ids = new LinkedHashMap<>();
     private String adminA;
+    private String adminB;
 
     @AfterAll
     static void restoreTimeZone() {
@@ -80,6 +84,7 @@ class StoreCatalogTests {
         String a = provision(platform, "Catalogo A", "admin_catalogo_a", STORE_A);
         adminA = a;
         String b = provision(platform, "Catalogo B", "admin_catalogo_b", STORE_B);
+        adminB = b;
 
         Long central = id(call(a, "POST", "/branches", Map.of("name", "Central"), STORE_A));
         Long warehouse = id(call(a, "POST", "/branches", Map.of("name", "Deposito"), STORE_A));
@@ -104,6 +109,7 @@ class StoreCatalogTests {
         ids.put("sweater", sweater);
         ids.put("hidden", hidden);
         ids.put("inactive", inactive);
+        ids.put("oldCap", oldCap);
 
         Long companyA = jdbc.queryForObject("SELECT company_id FROM products WHERE id = ?", Long.class, blue);
         productImage(companyA, blue, "a.png", 0);
@@ -245,6 +251,50 @@ class StoreCatalogTests {
     }
 
     @Test
+    void onlyCurrentPromotionsWithAllTheirProductsVisibleAreListed() {
+        LocalDate today = BusinessDate.today();
+        Long blue = ids.get("blue");
+        // Remera Azul desde $1000 ERP ($1100 web) con 12 unidades; Buzo Gris $5000 ($5500 web) sin stock vendible.
+        promotion(adminA, "Combo Buzo", 6000, today.minusDays(3), today.plusDays(10),
+                Map.of(blue, 2, ids.get("sweater"), 1));
+        promotion(adminA, "Remeras x3", 2000, today, today.plusDays(2), Map.of(blue, 3));
+        promotion(adminA, "Con Oculta", 1000, today, today.plusDays(5), Map.of(blue, 1, ids.get("hidden"), 1));
+        promotion(adminA, "Con Categoria Vieja", 1000, today, today.plusDays(5), Map.of(blue, 1, ids.get("oldCap"), 1));
+        promotion(adminA, "Vencida", 1000, today.minusDays(10), today.minusDays(1), Map.of(blue, 1));
+        promotion(adminA, "Programada", 1000, today.plusDays(1), today.plusDays(5), Map.of(blue, 1));
+        Long disabled = promotion(adminA, "Desactivada", 1000, today, today.plusDays(5), Map.of(blue, 1));
+        ok(call(adminA, "PATCH", "/promotions/" + disabled + "/deactivate", null, null));
+        promotion(adminB, "Promo B", 500, today, today.plusDays(5), Map.of(ids.get("secret"), 1));
+
+        JsonNode promotions = ok(store(STORE_A, "/store/promotions"));
+        // Las que vencen antes primero.
+        assertThat(texts(promotions, "name")).containsExactly("Remeras x3", "Combo Buzo");
+        assertThat(texts(ok(store(STORE_B, "/store/promotions")), "name")).containsExactly("Promo B");
+
+        Map<String, JsonNode> byName = byName(promotions);
+        JsonNode shirts = byName.get("Remeras x3");
+        assertThat(decimal(shirts, "webPrice")).isEqualByComparingTo("2200");
+        assertThat(decimal(shirts, "regularWebPrice")).isEqualByComparingTo("3300");
+        assertThat(decimal(shirts, "savings")).isEqualByComparingTo("1100");
+        assertThat(shirts.get("availability").asString()).isEqualTo("AVAILABLE");
+        assertThat(shirts.get("endDate").asString()).isEqualTo(today.plusDays(2).toString());
+        JsonNode item = shirts.get("items").get(0);
+        assertThat(item.get("productName").asString()).isEqualTo("Remera Azul");
+        assertThat(item.get("quantity").asInt()).isEqualTo(3);
+        assertThat(item.get("coverImageUrl").asString()).endsWith("/a.png");
+
+        // 2 × 1100 + 5500 = 7700 por separado contra $6600; el Buzo no tiene stock vendible.
+        JsonNode combo = byName.get("Combo Buzo");
+        assertThat(decimal(combo, "webPrice")).isEqualByComparingTo("6600");
+        assertThat(decimal(combo, "savings")).isEqualByComparingTo("1100");
+        assertThat(combo.get("availability").asString()).isEqualTo("OUT_OF_STOCK");
+
+        // Nada del ERP: ni el precio ERP, ni fechas de inicio, ni estado.
+        assertThat(combo.properties().stream().map(Map.Entry::getKey).toList()).containsExactlyInAnyOrder(
+                "id", "name", "description", "webPrice", "regularWebPrice", "savings", "availability", "endDate", "items");
+    }
+
+    @Test
     void invalidPagingOrSortingIsRejected() {
         assertThat(store(STORE_A, "/store/products?sort=sku,asc").hasCode("INVALID_PRODUCT_QUERY")).isTrue();
         assertThat(store(STORE_A, "/store/products?size=100").hasCode("INVALID_PRODUCT_QUERY")).isTrue();
@@ -255,6 +305,14 @@ class StoreCatalogTests {
         JsonNode created = ok(call(token, "POST", "/products",
                 Map.of("name", name, "categoryId", categoryId, "variants", List.of(variants)), null));
         return created.get("id").asLong();
+    }
+
+    private Long promotion(String token, String name, int price, LocalDate start, LocalDate end, Map<Long, Integer> items) {
+        List<Map<String, Object>> itemRequests = items.entrySet().stream()
+                .map(entry -> Map.<String, Object>of("productId", entry.getKey(), "quantity", entry.getValue()))
+                .toList();
+        return id(call(token, "POST", "/promotions", Map.of("name", name, "price", price,
+                "startDate", start.toString(), "endDate", end.toString(), "items", itemRequests), null));
     }
 
     private static Map<String, Object> variant(int price, List<Long> valueIds, Long branchId, int quantity) {

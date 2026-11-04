@@ -4,6 +4,7 @@ import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.modules.store.dto.StoreCategoryResponse;
 import com.gonzalez.erp.modules.store.dto.StoreProductResponse;
 import com.gonzalez.erp.modules.store.dto.StoreProductSummaryResponse;
+import com.gonzalez.erp.modules.store.dto.StorePromotionResponse;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
@@ -16,4 +17,6 @@ public interface StoreCatalogService {
     PageResponse<StoreProductSummaryResponse> findProducts(Long categoryId, String search, Pageable pageable);
 
     StoreProductResponse findProduct(Long id);
+
+    List<StorePromotionResponse> findPromotions();
 }
