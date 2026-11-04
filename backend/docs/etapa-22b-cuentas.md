@@ -2,7 +2,7 @@
 
 Plan detallado de la segunda parte de la etapa 22 (plan general en `docs/plan-proximas-etapas.md`, sección "22B"). Rama: `feature/store-22b`, desde `feature/store-22a`. Alcance: backend, más la marca "Web" en el frontend del ERP (la única excepción de la decisión 8 de 22A).
 
-Estado al 2026-11-04: **plan, sin código**. Decisiones tomadas salvo cuándo va el inicio con Google.
+Estado al 2026-11-04: plan cerrado; paso 1 hecho, sin commitear hasta la revisión del usuario.
 
 ## Lo que hay hoy (relevado el 2026-11-04)
 
@@ -75,6 +75,7 @@ Cada paso es un commit, con su revisión antes:
 | 3 | Mails, Mailpit, verificación y recuperación | 14 |
 | 4 | Perfil y direcciones | 10 |
 | 5 | Marca "Web" en el ERP (frontend) | 5 |
+| 6 | Inicio con Google | 6 |
 
 ## Decisiones del usuario (2026-11-04)
 
@@ -85,9 +86,7 @@ Cada paso es un commit, con su revisión antes:
 4. **Proveedor de mail de producción:** más adelante (va al checklist "Antes de habilitar una tienda"). En 22B, SMTP genérico + Mailpit.
 5. **"Mis pedidos" pasa a 22C.**
 
-## A decidir
-
-- **Inicio de sesión con Google** (pedido del usuario: "seguro pongo inicio con Google si se puede"). Se puede. Ver "Inicio con Google" abajo; falta decidir si entra en 22B o después.
+6. **Inicio con Google en 22B, como paso 6** (pedido del usuario; aceptado con el "dale" del 2026-11-04), después del login con contraseña.
 
 ## Inicio con Google (propuesta)
 

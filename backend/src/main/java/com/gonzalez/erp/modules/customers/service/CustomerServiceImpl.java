@@ -10,6 +10,7 @@ import com.gonzalez.erp.modules.customers.dto.request.CustomerRequest;
 import com.gonzalez.erp.modules.customers.dto.response.CustomerResponse;
 import com.gonzalez.erp.modules.customers.entity.Address;
 import com.gonzalez.erp.modules.customers.entity.Customer;
+import com.gonzalez.erp.modules.customers.entity.CustomerOrigin;
 import com.gonzalez.erp.modules.customers.exception.CustomerDocumentAlreadyExistsException;
 import com.gonzalez.erp.modules.customers.exception.InvalidCustomerAddressException;
 import com.gonzalez.erp.modules.customers.exception.InvalidCustomerDocumentException;
@@ -40,13 +41,13 @@ public class CustomerServiceImpl implements CustomerService {
     private final CustomerAccountService customerAccountService;
 
     @Override
-    public PageResponse<CustomerResponse> findAll(Boolean active, String search, Pageable pageable) {
+    public PageResponse<CustomerResponse> findAll(Boolean active, CustomerOrigin origin, String search, Pageable pageable) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
         String normalizedSearch = normalizeSearch(search);
 
         Page<Customer> customers = normalizedSearch == null
-                ? customerRepository.searchWithoutText(companyId, active, pageable)
-                : customerRepository.searchWithText(companyId, active, normalizedSearch, pageable);
+                ? customerRepository.searchWithoutText(companyId, active, origin, pageable)
+                : customerRepository.searchWithText(companyId, active, origin, normalizedSearch, pageable);
 
         // Las direcciones de toda la página en una sola consulta, no una por cliente.
         List<Long> ids = customers.getContent().stream().map(Customer::getId).toList();

@@ -53,6 +53,12 @@ public class Customer extends BaseEntity {
     @Builder.Default
     private boolean active = true;
 
+    // Lo fija el alta (ERP o registro en la tienda) y no cambia: no tiene setter ni entra en update().
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    @Builder.Default
+    private CustomerOrigin origin = CustomerOrigin.ERP;
+
     @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = false)
     @Builder.Default
     private List<Address> addresses = new ArrayList<>();
