@@ -2,7 +2,7 @@
 
 Plan detallado de la primera parte de la etapa 22 (plan general en `docs/plan-proximas-etapas.md`, sección "Etapa 22"). Rama: `feature/store-22a`, desde `feature/production-ready`. Alcance: **solo backend**; el frontend del ERP para la tienda se planea aparte.
 
-Estado al 2026-11-03: pasos 1, 2, 3a y 3b hechos; falta 3c (promos y regla de variantes activas).
+Estado al 2026-11-04: pasos 1, 2, 3a y 3b hechos; falta 3c (promos y regla de variantes activas), planeado abajo en "Plan del paso 3c".
 
 ## Decisiones
 
@@ -30,6 +30,43 @@ Estado al 2026-11-03: pasos 1, 2, 3a y 3b hechos; falta 3c (promos y regla de va
    - **SKU de variante no editable (decisión del usuario, 2026-11-03, opción A):** el SKU es la identidad de la variante (la edición y la importación la reconocen por SKU). En el formulario del ERP el SKU de una variante guardada es de solo lectura; para "cambiarlo" se quita la variante y se agrega otra. El backend no cambia. Commit aparte, fuera de la tienda.
    - **Dominio por coincidencia exacta** (decisión del usuario): el backend acepta solo el dominio registrado; `www` se resuelve con una redirección en el hosting (ver "Antes de habilitar una tienda").
    - **CORS del ERP sin cambios en 22A** (decisión del usuario): en Render ya se usa `CORS_ALLOWED_ORIGINS`; quitar el `*` por defecto queda para la etapa 30 (lanzamiento). El dominio del panel de la tienda se suma a esa variable cuando exista.
+
+## Plan del paso 3c (2026-11-04)
+
+Dos commits, en este orden: primero la regla de variantes activas (cambia lo que ya existe) y después las promos (solo agrega).
+
+### 3c-1. Fotos visibles = producto + variantes activas
+
+Hoy `findAllOfProduct` cuenta las fotos de todas las variantes, activas o no. Se cambia a contar solo las visibles, la misma regla que ya usa el catálogo (`findVisibleOfProducts`).
+
+- `ProductImageRepository`: `existsVisibleOfProduct(productId)` (fotos propias o de variantes activas). `findAllOfProduct` queda para el listado del panel, que sigue mostrando todas.
+- **Publicar** (`ProductServiceImpl.updatePublication`): exige una foto visible; si no hay, 409 `PRODUCT_IMAGE_REQUIRED` como hoy.
+- **Borrar foto** (`ProductImageServiceImpl.delete`): despublica si no queda ninguna visible (antes: ninguna en total).
+- **Editar producto** (`ProductServiceImpl.update`, que también usa la importación de Excel): después de `updateVariants`, si estaba publicado y no le queda foto visible, se despublica en la misma transacción. La respuesta ya trae `publishedOnline`, así el ERP y el panel lo ven sin campo nuevo.
+- Reactivar una variante **no** vuelve a publicar: publicar es siempre una acción del panel.
+- Desactivar el producto entero no cambia nada (decisión de 2b: queda publicado y la tienda lo oculta).
+- Tests: `ProductPublicationTest` (publicar con fotos solo en variantes inactivas → 409), `ProductImageServiceImplTest` (borrar la última foto visible despublica aunque queden fotos de variantes inactivas) y un test de la edición que desactiva la única variante con fotos.
+
+### 3c-2. `GET /store/promotions`
+
+- **Cuáles:** de la empresa de la tienda, activas y vigentes hoy (`BusinessDate.today()`, hora de Argentina, igual que el ERP), y **todos** sus productos visibles con la regla del catálogo (activo, publicado, categoría activa, alguna variante activa). Una sola consulta con `NOT EXISTS` sobre los ítems con producto no visible.
+- **Respuesta** (`StorePromotionResponse`, propia de la tienda): `id`, `name`, `description`, `webPrice` (con `StorePrices.webPrice`, la función única), `endDate` (para mostrar "hasta el…") e `items`: `productId`, `productName`, `quantity` y la portada del producto (misma regla de fotos que el catálogo). Sin precio ERP, sin costos, sin `startDate` ni estado.
+- **Orden:** las que vencen antes primero, después por nombre.
+- **Repositorio y servicio:** consulta en `StoreCatalogRepository` (sigue siendo solo lectura) y método en `StoreCatalogService`; se reusa la carga de portadas del catálogo.
+- **Tests:** unitario del servicio (precio web, armado de ítems) e integración en `StoreCatalogTests`: promo vigente con todo visible aparece; vencida, programada, desactivada o con un producto despublicado / de categoría inactiva no aparece; una empresa no ve las promos de otra.
+
+### Archivos estimados (unos 12)
+
+- 3c-1: `ProductImageRepository`, `ProductServiceImpl`, `ProductImageServiceImpl` y sus tests (`ProductPublicationTest`, `ProductImageServiceImplTest`, test de edición de producto).
+- 3c-2: `StoreCatalogRepository`, `StoreCatalogService`, `StoreCatalogServiceImpl`, `StorePromotionResponse` (nuevo), `StoreController`, `StoreCatalogServiceImplTest`, `StoreCatalogTests`.
+- Este documento (estado y criterios).
+
+### A decidir antes de codear
+
+1. **¿Paginar las promos?** Propuesta: no, lista completa (una empresa tiene pocas vigentes a la vez).
+2. **¿Mostrar el ahorro?** El "precio por separado" depende de la variante que elija el comprador. Propuesta: no mostrarlo en 22A; si se quiere, se agrega con el precio web mínimo de cada producto × cantidad, aclarado como "desde".
+3. **¿Disponibilidad de la promo?** Propuesta: sí, `AVAILABLE` / `OUT_OF_STOCK` con la misma idea que el listado (disponible si cada producto tiene, sumando sus variantes activas, al menos la cantidad que pide la promo). Sin cantidades exactas.
+4. **¿Fotos en variantes inactivas?** Hoy se pueden subir. Propuesta: dejarlo así (no cuentan para la tienda y sirven si la variante se reactiva).
 
 ## Para 22B: sesión del comprador (anotado el 2026-11-03)
 
