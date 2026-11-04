@@ -13,7 +13,6 @@ import com.gonzalez.erp.modules.inventory.service.StockMovementRecorder;
 import com.gonzalez.erp.modules.inventory.service.StockService;
 import com.gonzalez.erp.modules.products.dto.response.ProductResponse;
 import com.gonzalez.erp.modules.products.entity.Product;
-import com.gonzalez.erp.modules.products.entity.ProductImage;
 import com.gonzalez.erp.modules.products.exception.ProductImageRequiredException;
 import com.gonzalez.erp.modules.products.repository.ProductAttributeValueRepository;
 import com.gonzalez.erp.modules.products.repository.ProductImageRepository;
@@ -42,7 +41,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
-/** Publicar en la tienda exige al menos una foto; despublicar siempre se puede. */
+/**
+ * Publicar en la tienda exige al menos una foto visible (propia o de una variante activa);
+ * despublicar siempre se puede. Qué foto es visible lo prueba StoreCatalogTests contra Postgres.
+ */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ProductPublicationTest {
@@ -86,8 +88,8 @@ class ProductPublicationTest {
     }
 
     @Test
-    void publishingWithoutImagesIsRejected() {
-        when(imageRepository.findAllOfProduct(PRODUCT_ID)).thenReturn(List.of());
+    void publishingWithoutVisibleImagesIsRejected() {
+        when(imageRepository.existsVisibleOfProduct(PRODUCT_ID)).thenReturn(false);
 
         assertThatThrownBy(() -> productService.updatePublication(PRODUCT_ID, true))
                 .isInstanceOf(ProductImageRequiredException.class);
@@ -95,8 +97,8 @@ class ProductPublicationTest {
     }
 
     @Test
-    void publishingWithAnImageOfAVariantWorks() {
-        when(imageRepository.findAllOfProduct(PRODUCT_ID)).thenReturn(List.of(new ProductImage()));
+    void publishingWithAVisibleImageWorks() {
+        when(imageRepository.existsVisibleOfProduct(PRODUCT_ID)).thenReturn(true);
 
         ProductResponse response = productService.updatePublication(PRODUCT_ID, true);
 
@@ -107,7 +109,7 @@ class ProductPublicationTest {
     @Test
     void anInactiveProductCanBePublished() {
         product.deactivate();
-        when(imageRepository.findAllOfProduct(PRODUCT_ID)).thenReturn(List.of(new ProductImage()));
+        when(imageRepository.existsVisibleOfProduct(PRODUCT_ID)).thenReturn(true);
 
         assertThat(productService.updatePublication(PRODUCT_ID, true).publishedOnline()).isTrue();
     }
@@ -115,7 +117,7 @@ class ProductPublicationTest {
     @Test
     void unpublishingDoesNotNeedImages() {
         product.publish();
-        when(imageRepository.findAllOfProduct(PRODUCT_ID)).thenReturn(List.of());
+        when(imageRepository.existsVisibleOfProduct(PRODUCT_ID)).thenReturn(false);
 
         ProductResponse response = productService.updatePublication(PRODUCT_ID, false);
 

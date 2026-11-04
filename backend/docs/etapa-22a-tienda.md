@@ -2,7 +2,7 @@
 
 Plan detallado de la primera parte de la etapa 22 (plan general en `docs/plan-proximas-etapas.md`, sección "Etapa 22"). Rama: `feature/store-22a`, desde `feature/production-ready`. Alcance: **solo backend**; el frontend del ERP para la tienda se planea aparte.
 
-Estado al 2026-11-04: pasos 1, 2, 3a y 3b hechos; falta 3c (promos y regla de variantes activas), planeado abajo en "Plan del paso 3c".
+Estado al 2026-11-04: pasos 1, 2, 3a, 3b y 3c-1 hechos; falta 3c-2 (promos), planeado abajo en "Plan del paso 3c".
 
 ## Decisiones
 
@@ -35,7 +35,7 @@ Estado al 2026-11-04: pasos 1, 2, 3a y 3b hechos; falta 3c (promos y regla de va
 
 Dos commits, en este orden: primero la regla de variantes activas (cambia lo que ya existe) y después las promos (solo agrega).
 
-### 3c-1. Fotos visibles = producto + variantes activas
+### 3c-1. Fotos visibles = producto + variantes activas (hecho el 2026-11-04)
 
 Hoy `findAllOfProduct` cuenta las fotos de todas las variantes, activas o no. Se cambia a contar solo las visibles, la misma regla que ya usa el catálogo (`findVisibleOfProducts`).
 

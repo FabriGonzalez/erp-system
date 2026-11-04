@@ -14,7 +14,7 @@ public interface ProductImageRepository extends JpaRepository<ProductImage, Long
 
     List<ProductImage> findByVariantIdOrderBySortOrderAscIdAsc(Long variantId);
 
-    /** Las del producto y las de todas sus variantes. */
+    /** Las del producto y las de todas sus variantes, activas o no (el listado del panel). */
     @Query("""
             select i from ProductImage i
             left join i.variant v
@@ -22,6 +22,17 @@ public interface ProductImageRepository extends JpaRepository<ProductImage, Long
             order by i.sortOrder asc, i.id asc
             """)
     List<ProductImage> findAllOfProduct(@Param("productId") Long productId);
+
+    /**
+     * Si el producto tiene alguna foto que la tienda muestra: propia o de una variante activa.
+     * Las de variantes inactivas no cuentan para publicar ni para seguir publicado.
+     */
+    @Query("""
+            select count(i) > 0 from ProductImage i
+            left join i.variant v
+            where i.product.id = :productId or (v.product.id = :productId and v.active = true)
+            """)
+    boolean existsVisibleOfProduct(@Param("productId") Long productId);
 
     /** Las que se ven en la tienda de varios productos: las propias y las de variantes activas. */
     @Query("""

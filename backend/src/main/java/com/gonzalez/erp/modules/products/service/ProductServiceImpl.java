@@ -197,6 +197,15 @@ public class ProductServiceImpl implements ProductService {
                         companyId
                 );
 
+        /*
+         * Si la edición desactivó la última variante con fotos, la tienda no tendría qué mostrar.
+         * La consulta ve las variantes recién desactivadas: JPA las guarda antes de consultar.
+         * Vale también para la importación de Excel, que edita por acá.
+         */
+        if (product.isPublishedOnline() && !imageRepository.existsVisibleOfProduct(product.getId())) {
+            product.unpublish();
+        }
+
         return ProductMapper.toResponse(
                 product,
                 variantResponses
@@ -241,7 +250,7 @@ public class ProductServiceImpl implements ProductService {
         Product product = findProductOrThrow(id);
 
         if (publishedOnline) {
-            if (imageRepository.findAllOfProduct(product.getId()).isEmpty()) {
+            if (!imageRepository.existsVisibleOfProduct(product.getId())) {
                 throw new ProductImageRequiredException(product.getId());
             }
             product.publish();

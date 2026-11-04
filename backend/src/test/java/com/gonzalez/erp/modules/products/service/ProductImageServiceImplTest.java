@@ -196,6 +196,19 @@ class ProductImageServiceImplTest {
     }
 
     @Test
+    void anImageOfAnInactiveVariantIsMarkedAsNotVisibleInTheStore() {
+        variant.deactivate();
+        uploaded(PREFIX + "a.png", 1000, PNG);
+        uploaded(PREFIX + "b.png", 1000, PNG);
+
+        // Se acepta igual: sirve si la variante se reactiva. La del producto siempre se ve.
+        assertThat(imageService.confirm(PRODUCT_ID, new ProductImageRequest(PREFIX + "a.png", VARIANT_ID)).visibleInStore())
+                .isFalse();
+        assertThat(imageService.confirm(PRODUCT_ID, new ProductImageRequest(PREFIX + "b.png", null)).visibleInStore())
+                .isTrue();
+    }
+
+    @Test
     void reorderFollowsTheGivenIds() {
         ProductImage first = productImage(1L, 0);
         ProductImage second = productImage(2L, 1);
@@ -222,11 +235,11 @@ class ProductImageServiceImplTest {
     }
 
     @Test
-    void deletingTheLastImageUnpublishesTheProduct() {
+    void deletingTheLastVisibleImageUnpublishesTheProduct() {
         publish();
         ProductImage image = productImage(1L, 0);
         when(imageRepository.findById(1L)).thenReturn(Optional.of(image));
-        when(imageRepository.findAllOfProduct(PRODUCT_ID)).thenReturn(List.of());
+        when(imageRepository.existsVisibleOfProduct(PRODUCT_ID)).thenReturn(false);
 
         ProductImageDeleteResponse response = imageService.delete(PRODUCT_ID, 1L);
 
@@ -237,10 +250,10 @@ class ProductImageServiceImplTest {
     }
 
     @Test
-    void deletingWhileAVariantStillHasImagesKeepsItPublished() {
+    void deletingWhileVisibleImagesRemainKeepsItPublished() {
         publish();
         when(imageRepository.findById(1L)).thenReturn(Optional.of(productImage(1L, 0)));
-        when(imageRepository.findAllOfProduct(PRODUCT_ID)).thenReturn(List.of(variantImage(2L, 0)));
+        when(imageRepository.existsVisibleOfProduct(PRODUCT_ID)).thenReturn(true);
 
         ProductImageDeleteResponse response = imageService.delete(PRODUCT_ID, 1L);
 

@@ -33,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /*
  * Catálogo público contra Postgres real: qué productos se ven (y cuáles no), precio web, orden,
  * búsqueda, paginado, disponibilidad sin cantidad, reglas de fotos y aislamiento entre tiendas.
+ * También que solo cuentan las fotos visibles (propias o de variantes activas) para seguir publicado.
  * Las fotos se insertan directo en la base: el test no levanta el almacenamiento.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
@@ -66,6 +67,7 @@ class StoreCatalogTests {
     private JdbcTemplate jdbc;
 
     private final Map<String, Long> ids = new LinkedHashMap<>();
+    private String adminA;
 
     @AfterAll
     static void restoreTimeZone() {
@@ -76,6 +78,7 @@ class StoreCatalogTests {
     void createCatalogs() {
         String platform = login("platform_admin", "test-platform-admin");
         String a = provision(platform, "Catalogo A", "admin_catalogo_a", STORE_A);
+        adminA = a;
         String b = provision(platform, "Catalogo B", "admin_catalogo_b", STORE_B);
 
         Long central = id(call(a, "POST", "/branches", Map.of("name", "Central"), STORE_A));
@@ -86,6 +89,9 @@ class StoreCatalogTests {
         Long shirts = id(call(a, "POST", "/categories", Map.of("name", "Remeras", "attributeIds", List.of(size)), STORE_A));
         Long old = id(call(a, "POST", "/categories", Map.of("name", "Viejas"), STORE_A));
         ids.put("shirts", shirts);
+        ids.put("central", central);
+        ids.put("sizeM", m);
+        ids.put("sizeL", l);
 
         Long blue = product(a, "Remera Azul", shirts,
                 variant(1000, List.of(m), central, 10),
@@ -208,6 +214,34 @@ class StoreCatalogTests {
         assertThat(store(STORE_A, "/store/products/" + ids.get("inactive")).status()).isEqualTo(404);
         assertThat(store(STORE_A, "/store/products/" + ids.get("secret")).status()).isEqualTo(404);
         assertThat(store(STORE_B, "/store/products/" + ids.get("secret")).status()).isEqualTo(200);
+    }
+
+    @Test
+    void editingAwayTheOnlyVariantWithImagesUnpublishesTheProduct() {
+        Long shirts = ids.get("shirts");
+        Long product = product(adminA, "Remera Temporal", shirts,
+                variant(1500, List.of(ids.get("sizeM")), ids.get("central"), 3),
+                variant(1500, List.of(ids.get("sizeL")), ids.get("central"), 3));
+        Long companyA = jdbc.queryForObject("SELECT company_id FROM products WHERE id = ?", Long.class, product);
+        Long withImage = jdbc.queryForObject("SELECT MAX(id) FROM product_variants WHERE product_id = ?", Long.class, product);
+        String keptSku = jdbc.queryForObject("SELECT sku FROM product_variants WHERE id = ?", String.class, firstVariant(product));
+        variantImage(companyA, withImage, "temporal.png");
+        ok(call(adminA, "PATCH", "/products/" + product + "/publication", Map.of("publishedOnline", true), null));
+
+        // La edición deja solo la variante sin fotos: la otra se desactiva y su foto deja de verse.
+        JsonNode edited = ok(call(adminA, "PATCH", "/products/" + product, Map.of(
+                "name", "Remera Temporal", "categoryId", shirts,
+                "variants", List.of(Map.of("sku", keptSku, "price", 1500, "attributeValueIds", List.of(ids.get("sizeM"))))),
+                null));
+        assertThat(edited.get("publishedOnline").asBoolean()).isFalse();
+
+        // La foto sigue en el panel, marcada como no visible, y no alcanza para volver a publicar.
+        JsonNode images = ok(call(adminA, "GET", "/products/" + product + "/images", null, null));
+        assertThat(images.get(0).get("visibleInStore").asBoolean()).isFalse();
+        Response republish = call(adminA, "PATCH", "/products/" + product + "/publication",
+                Map.of("publishedOnline", true), null);
+        assertThat(republish.status()).isEqualTo(409);
+        assertThat(republish.body()).contains("PRODUCT_IMAGE_REQUIRED");
     }
 
     @Test

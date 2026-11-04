@@ -156,7 +156,7 @@ public class ProductImageServiceImpl implements ProductImageService {
         imageRepository.delete(image);
         // La consulta vacía el delete pendiente a la base antes de contar (flush automático de JPA).
         boolean unpublished = product.isPublishedOnline()
-                && imageRepository.findAllOfProduct(product.getId()).isEmpty();
+                && !imageRepository.existsVisibleOfProduct(product.getId());
         if (unpublished) {
             product.unpublish();
         }
@@ -256,7 +256,8 @@ public class ProductImageServiceImpl implements ProductImageService {
                 image.getId(),
                 image.getVariant() != null ? image.getVariant().getId() : null,
                 storage.publicUrl(image.getStorageKey()),
-                image.getSortOrder()
+                image.getSortOrder(),
+                image.getVariant() == null || image.getVariant().isActive()
         );
     }
 }

@@ -5,5 +5,7 @@ public record ProductImageResponse(
         // Null si la foto es del producto.
         Long variantId,
         String url,
-        int sortOrder
+        int sortOrder,
+        // False si es de una variante inactiva: el panel avisa que la tienda no la muestra.
+        boolean visibleInStore
 ) {}
