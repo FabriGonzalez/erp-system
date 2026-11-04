@@ -45,28 +45,25 @@ Hoy `findAllOfProduct` cuenta las fotos de todas las variantes, activas o no. Se
 - **Editar producto** (`ProductServiceImpl.update`, que también usa la importación de Excel): después de `updateVariants`, si estaba publicado y no le queda foto visible, se despublica en la misma transacción. La respuesta ya trae `publishedOnline`, así el ERP y el panel lo ven sin campo nuevo.
 - Reactivar una variante **no** vuelve a publicar: publicar es siempre una acción del panel.
 - Desactivar el producto entero no cambia nada (decisión de 2b: queda publicado y la tienda lo oculta).
-- Tests: `ProductPublicationTest` (publicar con fotos solo en variantes inactivas → 409), `ProductImageServiceImplTest` (borrar la última foto visible despublica aunque queden fotos de variantes inactivas) y un test de la edición que desactiva la única variante con fotos.
+- **Aviso de fotos en variantes inactivas (decisión del usuario, 2026-11-04):** se pueden seguir subiendo, y cada foto de `GET/POST /products/{id}/images` trae `visibleInStore` (`false` si es de una variante inactiva). Con eso el panel muestra "esta variante está inactiva: la foto no se ve en la tienda". No se rechaza nada.
+- Tests: `ProductPublicationTest` (publicar con fotos solo en variantes inactivas → 409), `ProductImageServiceImplTest` (borrar la última foto visible despublica aunque queden fotos de variantes inactivas; `visibleInStore` en `false` para una variante inactiva) y un test de la edición que desactiva la única variante con fotos.
 
 ### 3c-2. `GET /store/promotions`
 
 - **Cuáles:** de la empresa de la tienda, activas y vigentes hoy (`BusinessDate.today()`, hora de Argentina, igual que el ERP), y **todos** sus productos visibles con la regla del catálogo (activo, publicado, categoría activa, alguna variante activa). Una sola consulta con `NOT EXISTS` sobre los ítems con producto no visible.
-- **Respuesta** (`StorePromotionResponse`, propia de la tienda): `id`, `name`, `description`, `webPrice` (con `StorePrices.webPrice`, la función única), `endDate` (para mostrar "hasta el…") e `items`: `productId`, `productName`, `quantity` y la portada del producto (misma regla de fotos que el catálogo). Sin precio ERP, sin costos, sin `startDate` ni estado.
+- **Respuesta** (`StorePromotionResponse`, propia de la tienda): `id`, `name`, `description`, `webPrice` (con `StorePrices.webPrice`, la función única), `regularWebPrice`, `savings`, `availability`, `endDate` (para mostrar "hasta el…") e `items`: `productId`, `productName`, `quantity` y la portada del producto (misma regla de fotos que el catálogo). Sin precio ERP, sin costos, sin `startDate` ni estado.
+- **Sin paginar (decisión del usuario, 2026-11-04):** lista completa; una empresa tiene pocas promos vigentes a la vez.
+- **Ahorro (decisión del usuario, 2026-11-04):** `regularWebPrice` = suma, por ítem, del precio web de la variante activa **más barata** del producto × cantidad; `savings` = `regularWebPrice − webPrice`. Al tomar la más barata, el ahorro es el **mínimo** real: con cualquier otra variante el comprador ahorra más, así que "ahorrás al menos $X" nunca miente. Si la promo no es más barata que comprar por separado (`savings ≤ 0`), los dos campos van en `null` y la tienda no muestra ahorro.
+- **Disponibilidad (decisión del usuario, 2026-11-04):** `AVAILABLE` si cada producto tiene, sumando sus variantes activas en sucursales activas, al menos la cantidad que pide la promo; si no, `OUT_OF_STOCK`. Se suma entre variantes porque las unidades de una promo pueden ser de variantes distintas. Sin cantidades exactas; el checkout valida (22C).
 - **Orden:** las que vencen antes primero, después por nombre.
-- **Repositorio y servicio:** consulta en `StoreCatalogRepository` (sigue siendo solo lectura) y método en `StoreCatalogService`; se reusa la carga de portadas del catálogo.
-- **Tests:** unitario del servicio (precio web, armado de ítems) e integración en `StoreCatalogTests`: promo vigente con todo visible aparece; vencida, programada, desactivada o con un producto despublicado / de categoría inactiva no aparece; una empresa no ve las promos de otra.
+- **Repositorio y servicio:** consultas en `StoreCatalogRepository` (sigue siendo solo lectura): las promos visibles con sus ítems, y el precio mínimo de las variantes activas por producto. Método en `StoreCatalogService`; se reusan la carga de portadas y la de stock (`findActiveVariantStock`) del catálogo.
+- **Tests:** unitario del servicio (precio web, ahorro, ahorro en `null` si no conviene, disponibilidad) e integración en `StoreCatalogTests`: promo vigente con todo visible aparece; vencida, programada, desactivada o con un producto despublicado / de categoría inactiva no aparece; una empresa no ve las promos de otra.
 
-### Archivos estimados (unos 12)
+### Archivos estimados (unos 13)
 
-- 3c-1: `ProductImageRepository`, `ProductServiceImpl`, `ProductImageServiceImpl` y sus tests (`ProductPublicationTest`, `ProductImageServiceImplTest`, test de edición de producto).
+- 3c-1: `ProductImageRepository`, `ProductServiceImpl`, `ProductImageServiceImpl`, `ProductImageResponse` y sus tests (`ProductPublicationTest`, `ProductImageServiceImplTest`, test de edición de producto).
 - 3c-2: `StoreCatalogRepository`, `StoreCatalogService`, `StoreCatalogServiceImpl`, `StorePromotionResponse` (nuevo), `StoreController`, `StoreCatalogServiceImplTest`, `StoreCatalogTests`.
 - Este documento (estado y criterios).
-
-### A decidir antes de codear
-
-1. **¿Paginar las promos?** Propuesta: no, lista completa (una empresa tiene pocas vigentes a la vez).
-2. **¿Mostrar el ahorro?** El "precio por separado" depende de la variante que elija el comprador. Propuesta: no mostrarlo en 22A; si se quiere, se agrega con el precio web mínimo de cada producto × cantidad, aclarado como "desde".
-3. **¿Disponibilidad de la promo?** Propuesta: sí, `AVAILABLE` / `OUT_OF_STOCK` con la misma idea que el listado (disponible si cada producto tiene, sumando sus variantes activas, al menos la cantidad que pide la promo). Sin cantidades exactas.
-4. **¿Fotos en variantes inactivas?** Hoy se pueden subir. Propuesta: dejarlo así (no cuentan para la tienda y sirven si la variante se reactiva).
 
 ## Para 22B: sesión del comprador (anotado el 2026-11-03)
 
