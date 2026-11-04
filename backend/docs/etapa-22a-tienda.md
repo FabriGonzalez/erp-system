@@ -78,6 +78,7 @@ Hoy `findAllOfProduct` cuenta las fotos de todas las variantes, activas o no. Se
 - [ ] Configurar en el hosting de la tienda la redirección de `www.dominio` al dominio registrado (o al revés, y registrar ese): el backend compara el dominio exacto.
 - [ ] Sumar el dominio del panel de la tienda a `CORS_ALLOWED_ORIGINS`.
 - [ ] Almacenamiento de fotos de producción (R2 o B2) con sus variables `STORAGE_*`, bucket de lectura pública y regla que borre archivos subidos y nunca confirmados.
+- [ ] Proveedor de mail de producción (SMTP: Resend, Brevo, Amazon SES…) con sus variables `MAIL_*` y el dominio de envío (22B, decisión del 2026-11-04: se elige más adelante).
 - [ ] La app con las etiquetas de los estados nuevos de pedido publicada (22C/22D) antes de que entren pedidos web.
 
 ## Migración

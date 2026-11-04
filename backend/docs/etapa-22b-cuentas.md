@@ -2,7 +2,7 @@
 
 Plan detallado de la segunda parte de la etapa 22 (plan general en `docs/plan-proximas-etapas.md`, sección "22B"). Rama: `feature/store-22b`, desde `feature/store-22a`. Alcance: backend, más la marca "Web" en el frontend del ERP (la única excepción de la decisión 8 de 22A).
 
-Estado al 2026-11-04: **plan, sin código**. Faltan las decisiones de "A decidir antes de codear".
+Estado al 2026-11-04: **plan, sin código**. Decisiones tomadas salvo cuándo va el inicio con Google.
 
 ## Lo que hay hoy (relevado el 2026-11-04)
 
@@ -24,7 +24,7 @@ Estado al 2026-11-04: **plan, sin código**. Faltan las decisiones de "A decidir
 ### Modelo y migración `V7__cuentas_tienda.sql`
 
 - `customers.origin` (`ERP`/`WEB`, `NOT NULL DEFAULT 'ERP'`, con CHECK): los existentes y los que carga el ERP quedan `ERP`. Aditiva: la app vieja no se rompe.
-- `store_accounts` (la cuenta web): `customer_id` (único), `company_id`, `email` (único por empresa, en minúsculas), `password_hash` (BCrypt, como el ERP), `email_verified_at`, `password_changed_at`, `last_login_at`.
+- `store_accounts` (la cuenta web): `customer_id` (único), `company_id`, `email` (único por empresa, en minúsculas), `password_hash` (BCrypt, como el ERP; opcional para las cuentas de Google), `google_subject` (opcional, único por empresa), `email_verified_at`, `password_changed_at`, `last_login_at`.
 - `store_account_tokens`: verificación de email y recuperación de contraseña. Se guarda solo el **hash** del token (como una contraseña: si se filtra la base, los links no sirven), con tipo, vencimiento y `used_at` (un solo uso).
 - El email de la cuenta es el de login; `Customer.email` arranca con el mismo. Si el ERP edita el email de la ficha, el login no cambia.
 
@@ -62,7 +62,7 @@ Estado al 2026-11-04: **plan, sin código**. Faltan las decisiones de "A decidir
 ### Fuera de 22B
 
 - **"Mis pedidos" pasa a 22C** (cambio respecto del plan general): necesita `Order.channel` para no mostrar ventas del local cargadas a la ficha, y antes de 22C no hay pedidos web.
-- Cambiar el email de la cuenta, login con Google, borrar la cuenta.
+- Cambiar el email de la cuenta, borrar la cuenta.
 
 ## Commits previstos
 
@@ -76,13 +76,26 @@ Cada paso es un commit, con su revisión antes:
 | 4 | Perfil y direcciones | 10 |
 | 5 | Marca "Web" en el ERP (frontend) | 5 |
 
-## A decidir antes de codear
+## Decisiones del usuario (2026-11-04)
 
-1. **Sesión: ¿tienda con servidor propio (BFF) o solo estática?** Anotado en 22A como dirección elegida "a confirmar". Con BFF el token vive en el servidor de la tienda y alcanza un token único de vida media (p. ej. 7 días, como el ERP). Si es estática hacen falta token corto en memoria + `/store/auth/refresh` con token de renovación guardado en la base (más trabajo: unos 5 archivos más). Propuesta: BFF, sin refresh en 22B.
-2. **Registro con un email que ya tiene cuenta:** propuesta: responder igual que un registro nuevo ("te mandamos un mail") y mandarle al dueño un mail "ya tenés cuenta, ¿olvidaste la contraseña?". Así nadie averigua quién es cliente probando emails. La alternativa (409 "ese email ya está registrado") es más clara para el comprador, pero revela cuentas.
-3. **¿Se puede iniciar sesión sin verificar el email?** Propuesta: sí, y la verificación se exige recién al pagar (22C). Si no, quien no encuentra el mail no puede ni mirar su perfil.
-4. **Proveedor de mail de producción** (Resend, Brevo, Amazon SES…): no bloquea 22B porque es SMTP genérico; se elige antes de habilitar la tienda (va al checklist de 22A), junto con el dominio de envío de la etapa 30.
-5. **"Mis pedidos" a 22C:** confirmar el cambio.
+1. **Sitio de la tienda en React con Next.js** ("casi seguro"): servidor propio (BFF). El token del comprador lo guarda el servidor de la tienda; alcanza un token único de vida media (7 días, como el ERP), **sin `/store/auth/refresh` en 22B**. Un solo sitio Next.js atiende todas las tiendas: lee el dominio del request y lo manda en `X-Store-Domain`.
+2. **Registro con un email que ya tiene cuenta:** se responde igual que un registro nuevo y al dueño le llega un mail "ya tenés cuenta, ¿olvidaste la contraseña?". Nadie averigua quién es cliente probando emails.
+   - **Cuentas por tienda:** el email es único **dentro de cada empresa**, no en toda la plataforma. La misma persona se registra en la tienda A y en la B por separado: dos cuentas, dos contraseñas, dos fichas de cliente, cada una en su empresa. Una tienda nunca ve que la persona tiene cuenta en otra. Es lo que hacen Shopify y Tiendanube.
+3. **Se inicia sesión sin verificar el email**, para no perder ventas; la verificación no bloquea nada en 22B (si se exige al pagar se decide en 22C).
+4. **Proveedor de mail de producción:** más adelante (va al checklist "Antes de habilitar una tienda"). En 22B, SMTP genérico + Mailpit.
+5. **"Mis pedidos" pasa a 22C.**
+
+## A decidir
+
+- **Inicio de sesión con Google** (pedido del usuario: "seguro pongo inicio con Google si se puede"). Se puede. Ver "Inicio con Google" abajo; falta decidir si entra en 22B o después.
+
+## Inicio con Google (propuesta)
+
+- **Cómo funciona:** el sitio Next.js muestra "Continuar con Google"; Google devuelve un *ID token* (un JWT firmado por Google con el email y si está verificado). El sitio se lo pasa al backend en `POST /store/auth/google`; el backend verifica la firma con las claves públicas de Google, que sea para nuestra app (`audience`) y que no esté vencido. Si todo está bien, busca o crea la cuenta **de esa tienda** y devuelve nuestro token de comprador, igual que el login con contraseña.
+- **Modelo:** `store_accounts.password_hash` pasa a opcional y se suma `google_subject` (el id fijo de la persona en Google). Se deja preparado así en la migración V7 aunque Google se haga después, para no migrar dos veces.
+- **Email ya registrado con contraseña:** si Google confirma el email (`email_verified`), se vincula a la cuenta existente de esa tienda y queda verificada. Es lo habitual y es seguro porque Google ya probó que la persona controla el email.
+- **Lo de afuera del código:** una app en Google Cloud con su pantalla de consentimiento (nombre, logo y política de privacidad), y cada dominio de tienda cargado como origen autorizado. Pidiendo solo email y perfil, Google no exige la revisión larga.
+- **Costo:** unos 6 archivos en el backend (sin dependencia nueva: la firma se verifica con la librería JWT que ya usamos o con la de Google). El botón y el flujo del lado del sitio quedan para el proyecto Next.js.
 
 ## Criterios de aceptación
 
