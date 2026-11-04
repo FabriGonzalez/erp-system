@@ -2,11 +2,12 @@
 
 Para retomar: pasarle este archivo a Claude.
 
-## Qué sigue (orden al 2026-11-03)
+## Qué sigue (orden al 2026-11-04)
 
-1. **Etapa 22 — Backend de la tienda web** (en curso, rama `feature/store-22a`). 22A: pasos 1, 2
-   y 3a hechos; faltan 3b (catálogo) y 3c (promos y regla de variantes activas). Plan detallado en
-   `backend/docs/etapa-22a-tienda.md`. Después: 22B, refactor de servicios (22C.2), 22C y 22D.
+1. **Etapa 22 — Backend de la tienda web** (en curso). 22A terminada el 2026-11-04 (rama
+   `feature/store-22a`, plan en `backend/docs/etapa-22a-tienda.md`). 22B planeada, sin código
+   (rama `feature/store-22b`, plan en `backend/docs/etapa-22b-cuentas.md`; "mis pedidos" se
+   propone pasar a 22C). Después: refactor de servicios (22C.2), 22C y 22D.
 2. **Etapa 28 — Endurecimiento de seguridad.**
 3. **Etapa 29 — Facturación electrónica con ARCA.**
 4. **Etapa 30 — Lanzamiento** (con el primer pago / VPS propio).
