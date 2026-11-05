@@ -2,7 +2,7 @@
 
 Plan detallado de la segunda parte de la etapa 22 (plan general en `docs/plan-proximas-etapas.md`, sección "22B"). Rama: `feature/store-22b`, desde `feature/store-22a`. Alcance: backend, más la marca "Web" en el frontend del ERP (la única excepción de la decisión 8 de 22A).
 
-Estado al 2026-11-04: paso 1 commiteado (aa310a4); paso 2 hecho, sin commitear hasta la revisión del usuario.
+Estado al 2026-11-05: pasos 1 (aa310a4) y 2 (4352ce5) commiteados; paso 3a hecho, sin commitear hasta la revisión del usuario.
 
 ## Lo que hay hoy (relevado el 2026-11-04)
 
@@ -43,13 +43,27 @@ Estado al 2026-11-04: paso 1 commiteado (aa310a4); paso 2 hecho, sin commitear h
 - **Hecho en el paso 2 (2026-11-04):** la clave del token se **deriva** de `JWT_SECRET` (HMAC con un contexto propio) en vez de una variable nueva: es otra clave y no hay que configurar nada. El registro no devuelve token (responde 202 siempre); el sitio inicia sesión después. El login limita por cuenta (clave con la empresa) y por IP con `LoginAttemptService`. El límite del registro pasa al paso 3, junto con el de recuperación.
 - **A decidir antes de habilitar la tienda — la IP real detrás del sitio Next.js:** con BFF todos los pedidos llegan desde la IP del servidor de la tienda, así que el límite por IP (30 fallos) frenaría a **todos** los compradores a la vez. Propuesta: el sitio manda la IP del comprador en un header y una clave compartida (`STORE_BFF_SECRET`); el backend usa ese header solo si la clave coincide (si no, cualquiera inventaría IPs).
 
-### 3. Mails
+### 3a. Mails y verificación del email (hecho el 2026-11-05)
 
-- `spring-boot-starter-mail` por **SMTP genérico**: sirve cualquier proveedor cambiando variables (`MAIL_*`). En desarrollo, **Mailpit** en docker-compose (el sucesor de MailHog, que ya no se mantiene): captura los mails y los muestra en una página local.
-- Plantillas simples (HTML y texto) con el nombre de la tienda. Los links apuntan al dominio de la tienda (`https://{storeDomain}/...`).
-- El mail se manda **después del commit**: si la transacción falla no sale un mail de algo que no pasó, y si el mail falla el registro no se pierde (queda el reenvío).
-- `POST /store/auth/verify-email`, `resend-verification`, `forgot-password` y `reset-password`. Tokens de verificación: 48 h; de recuperación: 1 h; un solo uso.
-- `forgot-password` responde siempre lo mismo, exista o no el email (no revela quién tiene cuenta).
+- `spring-boot-starter-mail` por **SMTP genérico**: sirve cualquier proveedor cambiando variables (`MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_SMTP_AUTH`, `MAIL_STARTTLS`, `MAIL_FROM`). En desarrollo, **Mailpit** en docker-compose (el sucesor de MailHog, que ya no se mantiene): captura los mails y los muestra en `http://localhost:8025`.
+- Remitente: `MAIL_FROM` con el nombre de la tienda como nombre visible ("Tienda X <no-reply@…>"). El remitente por tienda es el paso 3c.
+- Links: `{STORE_LINK_SCHEME}://{dominio}[:{STORE_LINK_PORT}]/cuenta/verificar?token=…` (por defecto `https` sin puerto; en desarrollo `http` y `3000`). La página del sitio consume el token y lo saca de la URL.
+- **Registro pendiente (V8, `store_pending_registrations`):** registrarse no crea ni la cuenta ni la ficha; guarda los datos (con el hash de la contraseña) y el hash del token del link, que vence en 48 h. `POST /store/auth/verify-email` crea la cuenta (ya verificada) y la ficha WEB **con los datos de ese registro** y borra los demás pendientes del email. Así un registro ajeno con el mismo email nunca termina siendo la cuenta (si se reutilizara un registro pendiente, el dueño verificaría la cuenta con la contraseña del intruso) y el ERP solo ve clientes verificados.
+- Login con un registro pendiente y la contraseña correcta → 403 `EMAIL_NOT_VERIFIED`; con otra contraseña, el 401 de siempre.
+- `POST /store/auth/resend-verification {email}`: público (sin verificar no se puede entrar), responde 202 siempre y renueva el link del último pendiente (el anterior deja de servir).
+- Registro con un email que ya tiene cuenta: 202 igual y al dueño le llega "ya tenés cuenta, ¿olvidaste la contraseña?".
+- Registro y reenvío: cada pedido cuenta para el límite (5 por email y tienda, 30 por IP, cada 15 minutos; contadores de IP separados de los del login).
+- El mail se manda **después del commit y en otro hilo** (`@TransactionalEventListener` + `@Async`): si la transacción falla no sale un mail de algo que no pasó; si el mail falla queda en el log y el reenvío; y la respuesta tarda lo mismo mande o no mail.
+- `store_account_tokens` queda para la recuperación (3b); el tipo `EMAIL_VERIFICATION` no se usa.
+
+### 3b. Recuperación de contraseña
+
+- `POST /store/auth/forgot-password` y `reset-password`. Token de 1 h, un solo uso, en `store_account_tokens`.
+- `forgot-password` responde siempre lo mismo, exista o no el email (no revela quién tiene cuenta). Cambiar la contraseña invalida las sesiones anteriores.
+
+### 3c. Remitente por tienda
+
+- Campo opcional en la empresa, cargado por el administrador de la plataforma en el aprovisionamiento. Sin él, `MAIL_FROM`. Cada dominio necesita sus registros DNS (SPF/DKIM) en el proveedor de mail.
 
 ### 4. Perfil y direcciones
 
@@ -74,7 +88,9 @@ Cada paso es un commit, con su revisión antes:
 |---|---|---|
 | 1 | Migración V7, entidades, origen en `GET /customers` | 10 |
 | 2 | Registro, login, token y filtro de comprador | 14 |
-| 3 | Mails, Mailpit, verificación y recuperación | 14 |
+| 3a | Mails, Mailpit, registro pendiente y verificación | 20 |
+| 3b | Recuperación de contraseña | 9 |
+| 3c | Remitente por tienda | 5 |
 | 4 | Perfil y direcciones | 10 |
 | 5 | Marca "Web" en el ERP (frontend) | 5 |
 | 6 | Inicio con Google | 6 |
@@ -84,11 +100,13 @@ Cada paso es un commit, con su revisión antes:
 1. **Sitio de la tienda en React con Next.js** ("casi seguro"): servidor propio (BFF). El token del comprador lo guarda el servidor de la tienda; alcanza un token único de vida media (7 días, como el ERP), **sin `/store/auth/refresh` en 22B**. Un solo sitio Next.js atiende todas las tiendas: lee el dominio del request y lo manda en `X-Store-Domain`.
 2. **Registro con un email que ya tiene cuenta:** se responde igual que un registro nuevo y al dueño le llega un mail "ya tenés cuenta, ¿olvidaste la contraseña?". Nadie averigua quién es cliente probando emails.
    - **Cuentas por tienda:** el email es único **dentro de cada empresa**, no en toda la plataforma. La misma persona se registra en la tienda A y en la B por separado: dos cuentas, dos contraseñas, dos fichas de cliente, cada una en su empresa. Una tienda nunca ve que la persona tiene cuenta en otra. Es lo que hacen Shopify y Tiendanube.
-3. **Se inicia sesión sin verificar el email**, para no perder ventas; la verificación no bloquea nada en 22B (si se exige al pagar se decide en 22C).
+3. ~~Se inicia sesión sin verificar el email~~ **Cambiado el 2026-11-05: el email se verifica al crear la cuenta.** Sin verificar no hay cuenta ni ficha (ver 3a); así nadie usa una cuenta con un email ajeno y el ERP no se llena de fichas basura.
 4. **Proveedor de mail de producción:** más adelante (va al checklist "Antes de habilitar una tienda"). En 22B, SMTP genérico + Mailpit.
 5. **"Mis pedidos" pasa a 22C.**
 
 6. **Inicio con Google en 22B, como paso 6** (pedido del usuario; aceptado con el "dale" del 2026-11-04), después del login con contraseña.
+
+7. **Decisiones del 2026-11-05:** reenvío de la verificación público con email; links en `/cuenta/verificar` y `/cuenta/restablecer`; remitente por tienda como paso 3c, cargado por el administrador de la plataforma; **captcha** en los formularios del sitio (p. ej. Cloudflare Turnstile) al checklist "Antes de habilitar una tienda"; borrar registros pendientes vencidos de forma automática, más adelante si hace falta.
 
 ## Inicio con Google (propuesta)
 
@@ -104,6 +122,7 @@ Cada paso es un commit, con su revisión antes:
 - El token del comprador no entra a ningún endpoint del ERP y el del ERP no entra a `/store/me/**`.
 - Un comprador de la tienda A no puede usar su token en la tienda B.
 - Tokens de verificación y recuperación: vencidos o usados → rechazados.
+- Sin verificar el email no hay cuenta ni ficha; el link de un registro ajeno con el mismo email nunca se convierte en la cuenta.
 - Cliente desactivado en el ERP → no inicia sesión.
 - Ninguna respuesta de `/store/**` trae saldo, deuda, observaciones ni datos de otros clientes.
 - Tests de aislamiento entre empresas y entre tipos de token contra Postgres.

@@ -4,6 +4,7 @@ import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.modules.auth.exception.InvalidPasswordChangeException;
 import com.gonzalez.erp.modules.auth.exception.TooManyLoginAttemptsException;
+import com.gonzalez.erp.modules.store.exception.StoreAuthException;
 import com.gonzalez.erp.modules.companies.exception.CompanyNameAlreadyExistsException;
 import com.gonzalez.erp.modules.companies.exception.CompanyNotActiveException;
 import com.gonzalez.erp.modules.companies.exception.CompanyTaxIdAlreadyExistsException;
@@ -194,6 +195,19 @@ public class GlobalExceptionHandler {
                         ex.getMessage(),
                         request.getRequestURI(),
                         "TOO_MANY_LOGIN_ATTEMPTS"
+                ));
+    }
+
+    @ExceptionHandler(StoreAuthException.class)
+    public ResponseEntity<ErrorResponse> handleStoreAuth(StoreAuthException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(ex.getStatus())
+                .body(ErrorResponse.of(
+                        ex.getStatus().value(),
+                        ex.getStatus().getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        ex.getCode()
                 ));
     }
 

@@ -12,18 +12,27 @@ import com.gonzalez.erp.modules.store.dto.StoreMeResponse;
 import com.gonzalez.erp.modules.store.dto.StoreRegisterRequest;
 import com.gonzalez.erp.modules.store.dto.StoreTokenResponse;
 import com.gonzalez.erp.modules.store.entity.StoreAccount;
+import com.gonzalez.erp.modules.store.entity.StorePendingRegistration;
+import com.gonzalez.erp.modules.store.exception.StoreAuthException;
+import com.gonzalez.erp.modules.store.mail.StoreMailEvent;
 import com.gonzalez.erp.modules.store.repository.StoreAccountRepository;
+import com.gonzalez.erp.modules.store.repository.StorePendingRegistrationRepository;
 import com.gonzalez.erp.modules.store.security.StoreCustomer;
+import com.gonzalez.erp.modules.store.security.StoreLinkTokens;
 import com.gonzalez.erp.modules.store.security.StoreTokenService;
 import com.gonzalez.erp.modules.store.web.CurrentStore;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -31,45 +40,105 @@ import java.util.Optional;
 @Transactional
 public class StoreAuthServiceImpl implements StoreAuthService {
 
+    static final Duration VERIFICATION_TTL = Duration.ofHours(48);
+
     private final StoreAccountRepository accountRepository;
+    private final StorePendingRegistrationRepository pendingRepository;
     private final CustomerRepository customerRepository;
     private final CompanyRepository companyRepository;
     private final PasswordEncoder passwordEncoder;
     private final StoreTokenService tokenService;
     private final LoginAttemptService loginAttemptService;
+    private final ApplicationEventPublisher events;
 
     // Hash de una contraseña que nadie conoce: con un email sin cuenta se compara contra él, así
     // el login tarda lo mismo exista o no la cuenta (no se puede averiguar midiendo el tiempo).
     private volatile String unknownAccountHash;
 
     @Override
-    public void register(StoreRegisterRequest request) {
-        Long companyId = CurrentStore.require().companyId();
+    public void register(StoreRegisterRequest request, String clientIp) {
+        CurrentStore store = CurrentStore.require();
         String email = normalizeEmail(request.email());
+        throttle("store-register", store.companyId(), email, clientIp);
         // Se calcula siempre, antes de mirar si existe: el hash es lo lento y los dos caminos tardan igual.
         String passwordHash = passwordEncoder.encode(request.password());
 
-        if (accountRepository.existsByCompanyIdAndEmail(companyId, email)) {
-            // El paso 3 (mails) le avisa al dueño "ya tenés cuenta". Acá no se dice nada.
+        Optional<StoreAccount> existing = accountRepository.findWithCustomerByEmail(store.companyId(), email);
+        if (existing.isPresent()) {
+            // La respuesta es la misma; solo el dueño del email se entera, por mail.
+            events.publishEvent(new StoreMailEvent.AlreadyRegistered(
+                    email, firstNameOf(existing.get().getCustomer()), store.name(), store.domain()));
             return;
+        }
+
+        Instant now = Instant.now();
+        pendingRepository.deleteExpiredByEmail(store.companyId(), email, now);
+        StoreLinkTokens.IssuedToken link = StoreLinkTokens.issue();
+        // No se toca ningún otro registro pendiente del email: cada link crea la cuenta con sus propios datos.
+        pendingRepository.save(StorePendingRegistration.builder()
+                .company(companyRepository.getReferenceById(store.companyId()))
+                .email(email)
+                .firstName(request.firstName().trim())
+                .lastName(request.lastName().trim())
+                .phone(blankToNull(request.phone()))
+                .passwordHash(passwordHash)
+                .tokenHash(link.hash())
+                .expiresAt(now.plus(VERIFICATION_TTL))
+                .build());
+        events.publishEvent(new StoreMailEvent.Verification(
+                email, request.firstName().trim(), store.name(), store.domain(), link.token()));
+    }
+
+    @Override
+    public void verifyEmail(String token) {
+        Long companyId = CurrentStore.require().companyId();
+        Instant now = Instant.now();
+        StorePendingRegistration pending = pendingRepository
+                .findByCompanyIdAndTokenHash(companyId, StoreLinkTokens.hash(token))
+                .filter(registration -> !registration.isExpired(now))
+                .orElseThrow(StoreAuthException::invalidLink);
+        // Otro registro del mismo email ya se verificó: este link ya no crea nada.
+        if (accountRepository.existsByCompanyIdAndEmail(companyId, pending.getEmail())) {
+            throw StoreAuthException.invalidLink();
         }
 
         Company company = companyRepository.getReferenceById(companyId);
         // Siempre una ficha nueva: nunca se vincula con una del ERP, aunque coincida el email.
         Customer customer = customerRepository.save(Customer.builder()
-                .firstName(request.firstName().trim())
-                .lastName(request.lastName().trim())
-                .email(email)
-                .phone(blankToNull(request.phone()))
+                .firstName(pending.getFirstName())
+                .lastName(pending.getLastName())
+                .email(pending.getEmail())
+                .phone(pending.getPhone())
                 .company(company)
                 .origin(CustomerOrigin.WEB)
                 .build());
         accountRepository.save(StoreAccount.builder()
                 .company(company)
                 .customer(customer)
-                .email(email)
-                .passwordHash(passwordHash)
+                .email(pending.getEmail())
+                .passwordHash(pending.getPasswordHash())
+                .emailVerifiedAt(now)
                 .build());
+        // Los demás registros del email (propios repetidos o de otra persona) quedan anulados.
+        pendingRepository.deleteAllByEmail(companyId, pending.getEmail());
+    }
+
+    @Override
+    public void resendVerification(String rawEmail, String clientIp) {
+        CurrentStore store = CurrentStore.require();
+        String email = normalizeEmail(rawEmail);
+        throttle("store-resend", store.companyId(), email, clientIp);
+        if (accountRepository.existsByCompanyIdAndEmail(store.companyId(), email)) {
+            return;
+        }
+        pendingRepository.findTop5ByCompanyIdAndEmailOrderByCreatedAtDesc(store.companyId(), email).stream()
+                .findFirst()
+                .ifPresent(pending -> {
+                    StoreLinkTokens.IssuedToken link = StoreLinkTokens.issue();
+                    pending.renewToken(link.hash(), Instant.now().plus(VERIFICATION_TTL));
+                    events.publishEvent(new StoreMailEvent.Verification(
+                            email, pending.getFirstName(), store.name(), store.domain(), link.token()));
+                });
     }
 
     @Override
@@ -81,21 +150,26 @@ public class StoreAuthServiceImpl implements StoreAuthService {
         loginAttemptService.checkAllowed(attemptKey, clientIp);
 
         Optional<StoreAccount> found = accountRepository.findWithCustomerByEmail(companyId, email);
-        boolean passwordMatches = found
-                .filter(account -> account.getPasswordHash() != null)
-                .map(account -> passwordEncoder.matches(request.password(), account.getPasswordHash()))
-                .orElseGet(() -> {
-                    passwordEncoder.matches(request.password(), unknownAccountHash());
-                    return false;
-                });
+        if (found.isEmpty()) {
+            // Recién acá se avisa que falta verificar, y solo con la contraseña correcta:
+            // sin ella no se puede saber si hay un registro pendiente.
+            if (matchesPendingRegistration(companyId, email, request.password())) {
+                throw StoreAuthException.emailNotVerified();
+            }
+            loginAttemptService.recordFailure(attemptKey, clientIp);
+            throw new BadCredentialsException("Invalid email or password");
+        }
+
+        StoreAccount account = found.get();
+        boolean passwordMatches = account.getPasswordHash() != null
+                && passwordEncoder.matches(request.password(), account.getPasswordHash());
         // Ficha desactivada en el ERP: el mismo error, sin revelar que la cuenta existe.
-        if (!passwordMatches || !found.get().getCustomer().isActive()) {
+        if (!passwordMatches || !account.getCustomer().isActive()) {
             loginAttemptService.recordFailure(attemptKey, clientIp);
             throw new BadCredentialsException("Invalid email or password");
         }
         loginAttemptService.recordSuccess(attemptKey);
 
-        StoreAccount account = found.get();
         account.recordLogin(Instant.now());
         return StoreTokenResponse.bearer(tokenService.generate(account));
     }
@@ -116,11 +190,38 @@ public class StoreAuthServiceImpl implements StoreAuthService {
         );
     }
 
+    private boolean matchesPendingRegistration(Long companyId, String email, String password) {
+        List<StorePendingRegistration> pending =
+                pendingRepository.findTop5ByCompanyIdAndEmailOrderByCreatedAtDesc(companyId, email);
+        if (pending.isEmpty()) {
+            passwordEncoder.matches(password, unknownAccountHash());
+            return false;
+        }
+        // Un vencido también cuenta: el sitio ofrece reenviar y el reenvío renueva el link.
+        return pending.stream().anyMatch(registration -> passwordEncoder.matches(password, registration.getPasswordHash()));
+    }
+
+    /**
+     * Registro y reenvío mandan mails: cada pedido cuenta como un intento (5 por email y 30 por IP
+     * cada 15 minutos), para que nadie llene la casilla de otro. La IP lleva la acción en la clave
+     * para no mezclar estos pedidos con los fallos de login.
+     */
+    private void throttle(String action, Long companyId, String email, String clientIp) {
+        String key = action + ":" + companyId + ":" + email;
+        String ipKey = action + ":" + clientIp;
+        loginAttemptService.checkAllowed(key, ipKey);
+        loginAttemptService.recordFailure(key, ipKey);
+    }
+
     private String unknownAccountHash() {
         if (unknownAccountHash == null) {
             unknownAccountHash = passwordEncoder.encode("unknown-account-" + Instant.now());
         }
         return unknownAccountHash;
+    }
+
+    private static String firstNameOf(Customer customer) {
+        return Objects.requireNonNullElse(customer.getFirstName(), "");
     }
 
     static String normalizeEmail(String email) {

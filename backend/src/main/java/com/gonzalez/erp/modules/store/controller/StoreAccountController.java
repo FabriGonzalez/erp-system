@@ -1,6 +1,8 @@
 package com.gonzalez.erp.modules.store.controller;
 
 import com.gonzalez.erp.common.dto.ErrorResponse;
+import com.gonzalez.erp.modules.store.dto.StoreEmailRequest;
+import com.gonzalez.erp.modules.store.dto.StoreLinkTokenRequest;
 import com.gonzalez.erp.modules.store.dto.StoreLoginRequest;
 import com.gonzalez.erp.modules.store.dto.StoreMeResponse;
 import com.gonzalez.erp.modules.store.dto.StoreRegisterRequest;
@@ -25,28 +27,58 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/store")
 @RequiredArgsConstructor
-@Tag(name = "Store accounts", description = "Registro, login y datos del comprador de la tienda web.")
+@Tag(name = "Store accounts", description = "Registro con verificación de email, login y datos del comprador de la tienda web.")
 public class StoreAccountController {
 
     private final StoreAuthService authService;
 
     @PostMapping("/auth/register")
     @Operation(summary = "Registrarse",
-            description = "Crea una cuenta y una ficha de cliente nuevas (origen WEB) en la tienda del dominio. "
-                    + "Responde 202 también si el email ya tenía cuenta, para no revelarlo; no devuelve token: "
-                    + "el sitio inicia sesión después con la misma contraseña.")
+            description = "Deja el registro pendiente y manda un mail con el link de verificación (48 h). La cuenta "
+                    + "y la ficha de cliente (origen WEB) se crean recién al verificar. Responde 202 también si el "
+                    + "email ya tenía cuenta, para no revelarlo; en ese caso al dueño le llega un aviso.")
     @ApiResponse(responseCode = "202", description = "Registro recibido")
     @ApiResponse(responseCode = "400", description = "Datos inválidos",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    public ResponseEntity<Void> register(@Valid @RequestBody StoreRegisterRequest request) {
-        authService.register(request);
+    @ApiResponse(responseCode = "429", description = "Demasiados pedidos para ese email o desde esa IP",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<Void> register(
+            @Valid @RequestBody StoreRegisterRequest request, HttpServletRequest httpRequest) {
+        authService.register(request, httpRequest.getRemoteAddr());
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/auth/verify-email")
+    @Operation(summary = "Verificar el email",
+            description = "Recibe el token del link /cuenta/verificar?token=… y crea la cuenta y la ficha. "
+                    + "No inicia sesión: el sitio lleva al login.")
+    @ApiResponse(responseCode = "204", description = "Email verificado y cuenta creada")
+    @ApiResponse(responseCode = "400", description = "Link vencido, usado o inválido (INVALID_LINK)",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<Void> verifyEmail(@Valid @RequestBody StoreLinkTokenRequest request) {
+        authService.verifyEmail(request.token());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/auth/resend-verification")
+    @Operation(summary = "Reenviar la verificación",
+            description = "Manda un link nuevo para el último registro pendiente del email; el anterior deja de "
+                    + "servir. Responde 202 siempre, exista o no el registro.")
+    @ApiResponse(responseCode = "202", description = "Pedido recibido")
+    @ApiResponse(responseCode = "429", description = "Demasiados pedidos para ese email o desde esa IP",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<Void> resendVerification(
+            @Valid @RequestBody StoreEmailRequest request, HttpServletRequest httpRequest) {
+        authService.resendVerification(request.email(), httpRequest.getRemoteAddr());
         return ResponseEntity.accepted().build();
     }
 
     @PostMapping("/auth/login")
-    @Operation(summary = "Iniciar sesión", description = "Devuelve el token de comprador (7 días). No exige el email verificado.")
+    @Operation(summary = "Iniciar sesión", description = "Devuelve el token de comprador (7 días). Exige el email verificado.")
     @ApiResponse(responseCode = "200", description = "Sesión iniciada")
     @ApiResponse(responseCode = "401", description = "Email o contraseña incorrectos (INVALID_CREDENTIALS)",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "403", description = "Contraseña correcta pero el email no está verificado (EMAIL_NOT_VERIFIED)",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @ApiResponse(responseCode = "429", description = "Demasiados intentos fallidos",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))

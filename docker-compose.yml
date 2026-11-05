@@ -47,6 +47,14 @@ services:
       '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":\"*\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::erp-images/*\"}]}';
       "
 
+  # Mails de la tienda en desarrollo: los recibe sin mandarlos y los muestra en http://localhost:8025.
+  mail:
+    image: axllent/mailpit:v1.27.11
+    container_name: erp-mail
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
 volumes:
   postgres_data:
   storage_data:

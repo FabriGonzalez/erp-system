@@ -1,12 +1,24 @@
 package com.gonzalez.erp;
 
+import jakarta.mail.Address;
+import jakarta.mail.Multipart;
+import jakarta.mail.Part;
+import jakarta.mail.Session;
+import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import org.mockito.Mockito;
+import org.mockito.invocation.Invocation;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessagePreparator;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -21,18 +33,24 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.TimeZone;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /*
- * Cuentas de comprador contra Postgres real: registro sin revelar cuentas existentes, fichas WEB
- * separadas de las del ERP, una cuenta por tienda, y que el token de comprador, el de empleado y
- * el de otra tienda no se mezclen.
+ * Cuentas de comprador contra Postgres real: registro pendiente hasta verificar el email, sin
+ * revelar cuentas existentes, fichas WEB separadas de las del ERP, una cuenta por tienda, y que el
+ * token de comprador, el de empleado y el de otra tienda no se mezclen. El envío de mails está
+ * simulado: los tests leen los links de los mails que se habrían mandado.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "app.jwt.secret=test-secret-de-al-menos-32-bytes-para-hs256-0123456789",
-        "app.platform-admin.password=test-platform-admin"
+        "app.platform-admin.password=test-platform-admin",
+        // Todos los pedidos salen de la misma IP: el límite por IP se prueba en LoginAttemptServiceTest.
+        "app.security.login.max-failures-per-ip=1000"
 })
 @Testcontainers(disabledWithoutDocker = true)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -46,6 +64,7 @@ class StoreAccountTests {
     private static final String STORE_A = "cuentas-a.test";
     private static final String STORE_B = "cuentas-b.test";
     private static final String PASSWORD = "clave1234";
+    private static final Pattern LINK_TOKEN = Pattern.compile("/cuenta/verificar\\?token=([A-Za-z0-9_-]+)");
 
     // Mismo motivo que en TenantIsolationTests: con la zona de Windows Postgres rechaza la conexión.
     static {
@@ -57,6 +76,12 @@ class StoreAccountTests {
 
     @Value("${local.server.port}")
     private int port;
+
+    @MockitoBean
+    private JavaMailSender mailSender;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private String adminA;
     private String adminB;
@@ -75,14 +100,25 @@ class StoreAccountTests {
     }
 
     @Test
-    void registeringCreatesANewWebCustomerAndTheBuyerCanLogIn() {
+    void theAccountAndTheWebCustomerAreCreatedOnlyWhenTheEmailIsVerified() {
         assertThat(register(STORE_A, "Ana", "ana@mail.test", PASSWORD).status()).isEqualTo(202);
+
+        // Pendiente: el ERP no la ve y el login avisa que falta verificar (solo con la contraseña correcta).
+        assertThat(customerNames(adminA, "WEB")).doesNotContain("Ana");
+        assertThat(login(STORE_A, "ana@mail.test", PASSWORD).hasCode("EMAIL_NOT_VERIFIED")).isTrue();
+        assertThat(login(STORE_A, "ana@mail.test", "otra5678").hasCode("INVALID_CREDENTIALS")).isTrue();
+
+        Mail mail = lastMailTo("ana@mail.test", 1);
+        assertThat(mail.subject()).isEqualTo("Confirmá tu email en Cuentas A");
+        assertThat(mail.from()).contains("Cuentas A");
+        assertThat(mail.body()).contains("https://" + STORE_A + "/cuenta/verificar?token=");
+        assertThat(verify(STORE_A, mail.token()).status()).isEqualTo(204);
 
         String token = buyerLogin(STORE_A, "ANA@mail.test", PASSWORD);
         JsonNode me = ok(call(token, "GET", "/store/me", null, STORE_A));
         assertThat(me.get("firstName").asString()).isEqualTo("Ana");
         assertThat(me.get("email").asString()).isEqualTo("ana@mail.test");
-        assertThat(me.get("emailVerified").asBoolean()).isFalse();
+        assertThat(me.get("emailVerified").asBoolean()).isTrue();
         // Nada de la ficha del ERP.
         assertThat(me.has("observations")).isFalse();
         assertThat(me.has("id")).isFalse();
@@ -91,11 +127,63 @@ class StoreAccountTests {
     }
 
     @Test
+    void aForeignPendingRegistrationNeverBecomesTheAccount() {
+        // Un intruso se registra primero con el email de Hilda; después se registra ella.
+        register(STORE_A, "Intruso", "hilda@mail.test", "intruso123");
+        String intruderLink = lastMailTo("hilda@mail.test", 1).token();
+        register(STORE_A, "Hilda", "hilda@mail.test", PASSWORD);
+        String ownerLink = lastMailTo("hilda@mail.test", 2).token();
+
+        // Hilda toca su link: la cuenta tiene sus datos y su contraseña, y el link del intruso muere.
+        assertThat(verify(STORE_A, ownerLink).status()).isEqualTo(204);
+        assertThat(login(STORE_A, "hilda@mail.test", "intruso123").hasCode("INVALID_CREDENTIALS")).isTrue();
+        assertThat(ok(call(buyerLogin(STORE_A, "hilda@mail.test", PASSWORD), "GET", "/store/me", null, STORE_A))
+                .get("firstName").asString()).isEqualTo("Hilda");
+        assertThat(verify(STORE_A, intruderLink).hasCode("INVALID_LINK")).isTrue();
+        assertThat(customerNames(adminA, "WEB")).doesNotContain("Intruso");
+    }
+
+    @Test
+    void verificationLinksAreSingleUseAndBelongToTheirStore() {
+        register(STORE_A, "Ines", "ines@mail.test", PASSWORD);
+        String link = lastMailTo("ines@mail.test", 1).token();
+
+        assertThat(verify(STORE_B, link).hasCode("INVALID_LINK")).isTrue();
+        assertThat(verify(STORE_A, "inventado").hasCode("INVALID_LINK")).isTrue();
+        assertThat(verify(STORE_A, link).status()).isEqualTo(204);
+        assertThat(verify(STORE_A, link).hasCode("INVALID_LINK")).isTrue();
+    }
+
+    @Test
+    void anExpiredLinkIsRejectedAndResendingGivesANewOne() {
+        register(STORE_A, "Julia", "julia@mail.test", PASSWORD);
+        String expired = lastMailTo("julia@mail.test", 1).token();
+        jdbc.update("UPDATE store_pending_registrations SET expires_at = now() - interval '1 minute' WHERE email = ?",
+                "julia@mail.test");
+
+        assertThat(verify(STORE_A, expired).hasCode("INVALID_LINK")).isTrue();
+        assertThat(login(STORE_A, "julia@mail.test", PASSWORD).hasCode("EMAIL_NOT_VERIFIED")).isTrue();
+
+        assertThat(resend(STORE_A, "julia@mail.test").status()).isEqualTo(202);
+        String renewed = lastMailTo("julia@mail.test", 2).token();
+        assertThat(renewed).isNotEqualTo(expired);
+        assertThat(verify(STORE_A, renewed).status()).isEqualTo(204);
+        buyerLogin(STORE_A, "julia@mail.test", PASSWORD);
+
+        // Sin registro pendiente (verificado o inexistente) responde igual y no manda nada.
+        assertThat(resend(STORE_A, "julia@mail.test").status()).isEqualTo(202);
+        assertThat(resend(STORE_A, "nadie-registrado@mail.test").status()).isEqualTo(202);
+        pause();
+        assertThat(mailsTo("julia@mail.test")).hasSize(2);
+        assertThat(mailsTo("nadie-registrado@mail.test")).isEmpty();
+    }
+
+    @Test
     void anErpCustomerWithTheSameEmailIsNeverLinked() {
         ok(call(adminA, "POST", "/customers",
                 Map.of("firstName", "Bruno del Local", "email", "bruno@mail.test"), null));
 
-        assertThat(register(STORE_A, "Bruno", "bruno@mail.test", PASSWORD).status()).isEqualTo(202);
+        registerAndVerify(STORE_A, "Bruno", "bruno@mail.test", PASSWORD);
 
         assertThat(customerNames(adminA, "ERP")).contains("Bruno del Local");
         assertThat(customerNames(adminA, "WEB")).contains("Bruno").doesNotContain("Bruno del Local");
@@ -104,12 +192,16 @@ class StoreAccountTests {
     }
 
     @Test
-    void registeringAnExistingEmailLooksTheSameAndDoesNotChangeTheAccount() {
-        assertThat(register(STORE_A, "Carla", "carla@mail.test", PASSWORD).status()).isEqualTo(202);
+    void registeringAnExistingEmailLooksTheSameAndOnlyWarnsTheOwner() {
+        registerAndVerify(STORE_A, "Carla", "carla@mail.test", PASSWORD);
 
         Response again = register(STORE_A, "Intrusa", "carla@mail.test", "otra5678");
         assertThat(again.status()).isEqualTo(202);
         assertThat(again.body()).isEmpty();
+
+        Mail warning = lastMailTo("carla@mail.test", 2);
+        assertThat(warning.subject()).isEqualTo("Ya tenés una cuenta en Cuentas A");
+        assertThat(warning.body()).contains("Hola Carla").doesNotContain("token=");
 
         // La contraseña original sigue valiendo y la del segundo registro no.
         assertThat(login(STORE_A, "carla@mail.test", "otra5678").hasCode("INVALID_CREDENTIALS")).isTrue();
@@ -120,12 +212,12 @@ class StoreAccountTests {
 
     @Test
     void eachStoreHasItsOwnAccounts() {
-        register(STORE_A, "Dario", "dario@mail.test", PASSWORD);
+        registerAndVerify(STORE_A, "Dario", "dario@mail.test", PASSWORD);
         String tokenA = buyerLogin(STORE_A, "dario@mail.test", PASSWORD);
 
         // En la tienda B no tiene cuenta hasta registrarse ahí, con su propia contraseña.
         assertThat(login(STORE_B, "dario@mail.test", PASSWORD).hasCode("INVALID_CREDENTIALS")).isTrue();
-        register(STORE_B, "Dario", "dario@mail.test", "propia9876");
+        registerAndVerify(STORE_B, "Dario", "dario@mail.test", "propia9876");
         assertThat(login(STORE_B, "dario@mail.test", PASSWORD).hasCode("INVALID_CREDENTIALS")).isTrue();
         String tokenB = buyerLogin(STORE_B, "dario@mail.test", "propia9876");
 
@@ -137,7 +229,7 @@ class StoreAccountTests {
 
     @Test
     void buyerAndEmployeeTokensDoNotMix() {
-        register(STORE_A, "Eva", "eva@mail.test", PASSWORD);
+        registerAndVerify(STORE_A, "Eva", "eva@mail.test", PASSWORD);
         String buyer = buyerLogin(STORE_A, "eva@mail.test", PASSWORD);
 
         assertThat(call(null, "GET", "/store/me", null, STORE_A).status()).isEqualTo(401);
@@ -149,7 +241,7 @@ class StoreAccountTests {
 
     @Test
     void aCustomerDeactivatedInTheErpCanNoLongerUseTheStore() {
-        register(STORE_A, "Facundo", "facundo@mail.test", PASSWORD);
+        registerAndVerify(STORE_A, "Facundo", "facundo@mail.test", PASSWORD);
         String token = buyerLogin(STORE_A, "facundo@mail.test", PASSWORD);
         Long customerId = customerId(adminA, "Facundo");
 
@@ -166,9 +258,33 @@ class StoreAccountTests {
         assertThat(login(STORE_A, "nadie@mail.test", PASSWORD).hasCode("INVALID_CREDENTIALS")).isTrue();
     }
 
+    @Test
+    void registrationsForTheSameEmailAreLimited() {
+        for (int i = 0; i < 5; i++) {
+            assertThat(register(STORE_A, "Karina", "karina@mail.test", PASSWORD).status()).isEqualTo(202);
+        }
+        assertThat(register(STORE_A, "Karina", "karina@mail.test", PASSWORD).status()).isEqualTo(429);
+        // El límite es por tienda: en la otra el mismo email sigue pudiendo registrarse.
+        assertThat(register(STORE_B, "Karina", "karina@mail.test", PASSWORD).status()).isEqualTo(202);
+    }
+
     private Response register(String store, String firstName, String email, String password) {
         return call(null, "POST", "/store/auth/register", Map.of(
                 "firstName", firstName, "lastName", "Prueba", "email", email, "password", password), store);
+    }
+
+    private void registerAndVerify(String store, String firstName, String email, String password) {
+        int before = mailsTo(email).size();
+        assertThat(register(store, firstName, email, password).status()).isEqualTo(202);
+        assertThat(verify(store, lastMailTo(email, before + 1).token()).status()).isEqualTo(204);
+    }
+
+    private Response verify(String store, String token) {
+        return call(null, "POST", "/store/auth/verify-email", Map.of("token", token), store);
+    }
+
+    private Response resend(String store, String email) {
+        return call(null, "POST", "/store/auth/resend-verification", Map.of("email", email), store);
     }
 
     private Response login(String store, String email, String password) {
@@ -177,6 +293,71 @@ class StoreAccountTests {
 
     private String buyerLogin(String store, String email, String password) {
         return ok(login(store, email, password)).get("token").asString();
+    }
+
+    private record Mail(String from, String subject, String body) {
+        String token() {
+            Matcher matcher = LINK_TOKEN.matcher(body);
+            assertThat(matcher.find()).as("verification link in mail").isTrue();
+            return matcher.group(1);
+        }
+    }
+
+    /** Espera a que el mail número {@code count} para ese email se haya mandado (sale en otro hilo). */
+    private Mail lastMailTo(String email, int count) {
+        long deadline = System.currentTimeMillis() + 10_000;
+        while (System.currentTimeMillis() < deadline) {
+            List<Mail> mails = mailsTo(email);
+            if (mails.size() >= count) {
+                return mails.get(count - 1);
+            }
+            pause();
+        }
+        throw new AssertionError("Expected " + count + " mails to " + email + " but got " + mailsTo(email).size());
+    }
+
+    private List<Mail> mailsTo(String email) {
+        List<Mail> mails = new ArrayList<>();
+        for (Invocation invocation : List.copyOf(Mockito.mockingDetails(mailSender).getInvocations())) {
+            if (invocation.getArguments().length == 1
+                    && invocation.getArgument(0) instanceof MimeMessagePreparator preparator) {
+                try {
+                    MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
+                    preparator.prepare(message);
+                    Address[] to = message.getAllRecipients();
+                    if (to != null && to.length == 1 && to[0].toString().equals(email)) {
+                        mails.add(new Mail(message.getFrom()[0].toString(), message.getSubject(), text(message)));
+                    }
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+        }
+        return mails;
+    }
+
+    // Junta el texto plano y el HTML: los dos llevan el link.
+    private static String text(Part part) throws Exception {
+        Object content = part.getContent();
+        if (content instanceof String text) {
+            return text;
+        }
+        StringBuilder all = new StringBuilder();
+        if (content instanceof Multipart multipart) {
+            for (int i = 0; i < multipart.getCount(); i++) {
+                all.append(text(multipart.getBodyPart(i))).append('\n');
+            }
+        }
+        return all.toString();
+    }
+
+    // Lo que se espera que no llegue tiene que tener tiempo de llegar si fuera a llegar.
+    private static void pause() {
+        try {
+            Thread.sleep(200);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private List<String> customerNames(String token, String origin) {

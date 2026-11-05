@@ -18,6 +18,19 @@ spring:
   flyway:
     baseline-on-migrate: true
     baseline-version: 1
+  # SMTP genérico: cambiando las variables sirve cualquier proveedor. Los defaults apuntan a
+  # Mailpit de docker-compose. Con timeouts cortos un servidor caído no deja hilos colgados.
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${MAIL_STARTTLS:false}
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
   jpa:
     hibernate:
       ddl-auto: validate
@@ -53,6 +66,13 @@ app:
     secret-key: ${STORAGE_SECRET_KEY:rustfsadmin}
     # Base de las URL que ven la tienda y el panel (bucket de lectura pública o CDN delante).
     public-url: ${STORAGE_PUBLIC_URL:http://localhost:9000/erp-images}
+  # Mails de la tienda: salen de MAIL_FROM con el nombre de la tienda como nombre visible. Los
+  # links van al dominio de la tienda; en desarrollo, STORE_LINK_SCHEME=http y STORE_LINK_PORT=3000.
+  mail:
+    from: ${MAIL_FROM:no-reply@erp.local}
+  store:
+    link-scheme: ${STORE_LINK_SCHEME:https}
+    link-port: ${STORE_LINK_PORT:}
   platform-admin:
     username: ${ERP_PLATFORM_ADMIN_USERNAME:platform_admin}
     email: ${ERP_PLATFORM_ADMIN_EMAIL:platform@erp.local}
