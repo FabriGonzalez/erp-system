@@ -2,7 +2,7 @@
 
 Plan detallado de la segunda parte de la etapa 22 (plan general en `docs/plan-proximas-etapas.md`, sección "22B"). Rama: `feature/store-22b`, desde `feature/store-22a`. Alcance: backend, más la marca "Web" en el frontend del ERP (la única excepción de la decisión 8 de 22A).
 
-Estado al 2026-11-04: plan cerrado; paso 1 hecho, sin commitear hasta la revisión del usuario.
+Estado al 2026-11-04: paso 1 commiteado (aa310a4); paso 2 hecho, sin commitear hasta la revisión del usuario.
 
 ## Lo que hay hoy (relevado el 2026-11-04)
 
@@ -40,6 +40,8 @@ Estado al 2026-11-04: plan cerrado; paso 1 hecho, sin commitear hasta la revisi�
 - Un cliente desactivado en el ERP no puede iniciar sesión (y su token deja de valer).
 - Cambiar la contraseña invalida los tokens anteriores (`password_changed_at`, como el ERP).
 - Límite de intentos por email y por IP en login, registro y recuperación (mismo mecanismo que el ERP, en memoria).
+- **Hecho en el paso 2 (2026-11-04):** la clave del token se **deriva** de `JWT_SECRET` (HMAC con un contexto propio) en vez de una variable nueva: es otra clave y no hay que configurar nada. El registro no devuelve token (responde 202 siempre); el sitio inicia sesión después. El login limita por cuenta (clave con la empresa) y por IP con `LoginAttemptService`. El límite del registro pasa al paso 3, junto con el de recuperación.
+- **A decidir antes de habilitar la tienda — la IP real detrás del sitio Next.js:** con BFF todos los pedidos llegan desde la IP del servidor de la tienda, así que el límite por IP (30 fallos) frenaría a **todos** los compradores a la vez. Propuesta: el sitio manda la IP del comprador en un header y una clave compartida (`STORE_BFF_SECRET`); el backend usa ese header solo si la clave coincide (si no, cualquiera inventaría IPs).
 
 ### 3. Mails
 

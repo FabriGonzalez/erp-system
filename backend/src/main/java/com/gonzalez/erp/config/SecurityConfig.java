@@ -5,6 +5,9 @@ import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.config.security.JwtAuthFilter;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.store.web.StoreCorsConfigurationSource;
+import com.gonzalez.erp.modules.store.repository.StoreAccountRepository;
+import com.gonzalez.erp.modules.store.security.StoreCustomerAuthFilter;
+import com.gonzalez.erp.modules.store.security.StoreTokenService;
 import com.gonzalez.erp.modules.store.web.StoreResolutionFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -120,12 +123,18 @@ public class SecurityConfig {
         return registration;
     }
 
-    /** Tienda web: pública, la empresa sale del dominio y el CORS solo admite tiendas registradas. */
+    /**
+     * Tienda web: la empresa sale del dominio y el CORS solo admite tiendas registradas. El
+     * catálogo y /store/auth/** son públicos; /store/me/** exige el token de comprador de esa
+     * tienda (StoreCustomerAuthFilter). El token de empleado acá no vale.
+     */
     @Bean
     @Order(1)
     public SecurityFilterChain storeSecurityFilterChain(
             HttpSecurity http,
-            CompanyRepository companyRepository
+            CompanyRepository companyRepository,
+            StoreTokenService storeTokenService,
+            StoreAccountRepository storeAccountRepository
     ) throws Exception {
         return http
                 .securityMatcher("/api/v1/store/**")
@@ -133,8 +142,13 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(authenticationEntryPoint()))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/v1/store/me", "/api/v1/store/me/**").hasRole("STORE_CUSTOMER")
+                        .anyRequest().permitAll())
                 .addFilterAfter(new StoreResolutionFilter(companyRepository, objectMapper), CorsFilter.class)
+                .addFilterAfter(new StoreCustomerAuthFilter(storeTokenService, storeAccountRepository),
+                        StoreResolutionFilter.class)
                 .build();
     }
 
