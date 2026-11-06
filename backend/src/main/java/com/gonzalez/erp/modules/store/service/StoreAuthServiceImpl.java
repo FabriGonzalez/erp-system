@@ -73,7 +73,7 @@ public class StoreAuthServiceImpl implements StoreAuthService {
         if (existing.isPresent()) {
             // La respuesta es la misma; solo el dueño del email se entera, por mail.
             events.publishEvent(new StoreMailEvent.AlreadyRegistered(
-                    email, firstNameOf(existing.get().getCustomer()), store.name(), store.domain()));
+                    email, firstNameOf(existing.get().getCustomer()), store.name(), store.domain(), store.mailFrom()));
             return;
         }
 
@@ -92,7 +92,7 @@ public class StoreAuthServiceImpl implements StoreAuthService {
                 .expiresAt(now.plus(VERIFICATION_TTL))
                 .build());
         events.publishEvent(new StoreMailEvent.Verification(
-                email, request.firstName().trim(), store.name(), store.domain(), link.token()));
+                email, request.firstName().trim(), store.name(), store.domain(), store.mailFrom(), link.token()));
     }
 
     @Override
@@ -143,7 +143,7 @@ public class StoreAuthServiceImpl implements StoreAuthService {
                     StoreLinkTokens.IssuedToken link = StoreLinkTokens.issue();
                     pending.renewToken(link.hash(), Instant.now().plus(VERIFICATION_TTL));
                     events.publishEvent(new StoreMailEvent.Verification(
-                            email, pending.getFirstName(), store.name(), store.domain(), link.token()));
+                            email, pending.getFirstName(), store.name(), store.domain(), store.mailFrom(), link.token()));
                 });
     }
 
@@ -202,7 +202,7 @@ public class StoreAuthServiceImpl implements StoreAuthService {
                 .expiresAt(now.plus(PASSWORD_RESET_TTL))
                 .build());
         events.publishEvent(new StoreMailEvent.PasswordReset(
-                email, firstNameOf(account.getCustomer()), store.name(), store.domain(), link.token()));
+                email, firstNameOf(account.getCustomer()), store.name(), store.domain(), store.mailFrom(), link.token()));
     }
 
     @Override
@@ -223,7 +223,7 @@ public class StoreAuthServiceImpl implements StoreAuthService {
         // Quien recuperó la contraseña no tiene que esperar el bloqueo por los intentos fallidos.
         loginAttemptService.recordSuccess(loginAttemptKey(store.companyId(), account.getEmail()));
         events.publishEvent(new StoreMailEvent.PasswordChanged(
-                account.getEmail(), firstNameOf(account.getCustomer()), store.name(), store.domain()));
+                account.getEmail(), firstNameOf(account.getCustomer()), store.name(), store.domain(), store.mailFrom()));
     }
 
     @Override

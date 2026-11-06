@@ -66,7 +66,8 @@ app:
     secret-key: ${STORAGE_SECRET_KEY:rustfsadmin}
     # Base de las URL que ven la tienda y el panel (bucket de lectura pública o CDN delante).
     public-url: ${STORAGE_PUBLIC_URL:http://localhost:9000/erp-images}
-  # Mails de la tienda: salen de MAIL_FROM con el nombre de la tienda como nombre visible. Los
+  # Mails de la tienda: salen del remitente de la tienda (si el operador lo cargó) o de MAIL_FROM,
+  # con el nombre de la tienda como nombre visible. Los
   # links van al dominio de la tienda; en desarrollo, STORE_LINK_SCHEME=http y STORE_LINK_PORT=3000.
   mail:
     from: ${MAIL_FROM:no-reply@erp.local}

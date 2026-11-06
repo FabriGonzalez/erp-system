@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -121,7 +122,10 @@ public class ProvisioningServiceImpl implements ProvisioningService {
                     });
         }
 
-        company.configureStore(domain, request.storeEnabled());
+        String mailFrom = request.storeMailFrom() == null || request.storeMailFrom().isBlank()
+                ? null
+                : request.storeMailFrom().trim().toLowerCase(Locale.ROOT);
+        company.configureStore(domain, request.storeEnabled(), mailFrom);
         return CompanyResponse.from(company);
     }
 

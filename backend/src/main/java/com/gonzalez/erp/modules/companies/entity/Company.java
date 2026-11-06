@@ -60,6 +60,10 @@ public class Company extends BaseEntity {
     @Builder.Default
     private boolean storeEnabled = false;
 
+    // Remitente de los mails de la tienda; null = MAIL_FROM. También lo carga solo el operador.
+    @Column(name = "store_mail_from", length = 254)
+    private String storeMailFrom;
+
     @Column(name = "store_price_adjustment_percent", nullable = false, precision = 5, scale = 2)
     @Builder.Default
     private BigDecimal storePriceAdjustmentPercent = BigDecimal.ZERO;
@@ -80,9 +84,10 @@ public class Company extends BaseEntity {
     }
 
     /** Solo lo llama el operador (provisioning): la empresa no elige su dominio. */
-    public void configureStore(String storeDomain, boolean storeEnabled) {
+    public void configureStore(String storeDomain, boolean storeEnabled, String storeMailFrom) {
         this.storeDomain = storeDomain;
         this.storeEnabled = storeEnabled;
+        this.storeMailFrom = storeMailFrom;
     }
 
     /** La tienda atiende si está habilitada, tiene dominio y la empresa está activa. */

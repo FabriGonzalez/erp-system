@@ -2,7 +2,7 @@
 
 Plan detallado de la segunda parte de la etapa 22 (plan general en `docs/plan-proximas-etapas.md`, sección "22B"). Rama: `feature/store-22b`, desde `feature/store-22a`. Alcance: backend, más la marca "Web" en el frontend del ERP (la única excepción de la decisión 8 de 22A).
 
-Estado al 2026-11-06: pasos 1 (aa310a4), 2 (4352ce5) y 3a (9038974) commiteados; paso 3b hecho, sin commitear hasta la revisión del usuario.
+Estado al 2026-11-06: pasos 1 (aa310a4), 2 (4352ce5), 3a (9038974) y 3b (6aac455) commiteados; paso 3c hecho, sin commitear hasta la revisión del usuario.
 
 ## Lo que hay hoy (relevado el 2026-11-04)
 
@@ -62,9 +62,11 @@ Estado al 2026-11-06: pasos 1 (aa310a4), 2 (4352ce5) y 3a (9038974) commiteados;
 - `POST /store/auth/reset-password {token, password}`: misma regla de contraseña que el registro. Link vencido, usado, de otra tienda o de una ficha desactivada → 400 `INVALID_LINK`. Al cambiarla se cierran las sesiones abiertas (`password_changed_at`), se limpia el contador de fallos del login y llega el mail "cambió tu contraseña". Responde 204 y el sitio lleva al login.
 - **Decisiones del 2026-11-06:** se manda el aviso de cambio; a un registro sin verificar no se le manda nada; las cuentas creadas con Google no reciben contraseña por esta vía (se entra siempre con Google).
 
-### 3c. Remitente por tienda
+### 3c. Remitente por tienda (hecho el 2026-11-06)
 
 - Campo opcional en la empresa, cargado por el administrador de la plataforma en el aprovisionamiento. Sin él, `MAIL_FROM`. Cada dominio necesita sus registros DNS (SPF/DKIM) en el proveedor de mail.
+- **Hecho:** columna `companies.store_mail_from` (V9). Se carga con `storeMailFrom` en `PATCH /provisioning/companies/{id}/store` (validado como email, guardado en minúsculas). `CurrentStore` lo lleva al evento del mail y `StoreMailSender` lo usa como dirección, con el nombre de la tienda como nombre visible; si está vacío, `MAIL_FROM`.
+- **Decisiones del 2026-11-06:** no se exige que el remitente sea del dominio de la tienda (el control real es el DNS); el pedido es la configuración completa, así que mandarlo sin `storeMailFrom` lo borra (igual que el dominio); sin Reply-To, los mails son solo de aviso.
 
 ### 4. Perfil y direcciones
 

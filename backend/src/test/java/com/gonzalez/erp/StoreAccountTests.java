@@ -83,6 +83,7 @@ class StoreAccountTests {
     @Autowired
     private JdbcTemplate jdbc;
 
+    private String platform;
     private String adminA;
     private String adminB;
 
@@ -93,7 +94,7 @@ class StoreAccountTests {
 
     @BeforeAll
     void createStores() {
-        String platform = ok(call(null, "POST", "/auth/login",
+        platform = ok(call(null, "POST", "/auth/login",
                 Map.of("username", "platform_admin", "password", "test-platform-admin"), null)).get("token").asString();
         adminA = provision(platform, "Cuentas A", "admin_cuentas_a", STORE_A);
         adminB = provision(platform, "Cuentas B", "admin_cuentas_b", STORE_B);
@@ -124,6 +125,35 @@ class StoreAccountTests {
         assertThat(me.has("id")).isFalse();
 
         assertThat(customerNames(adminA, "WEB")).contains("Ana");
+    }
+
+    @Test
+    void mailsGoOutFromTheStoreSenderOrFromTheDefault() {
+        // Tienda propia: cambiarle el remitente no afecta a los demás tests.
+        String domain = "remitente.test";
+        provision(platform, "Remitente", "admin_remitente", domain);
+        String storePath = "/provisioning/companies/" + companyIdByDomain(domain) + "/store";
+
+        JsonNode configured = ok(call(platform, "PATCH", storePath, Map.of(
+                "storeDomain", domain, "storeEnabled", true, "storeMailFrom", " Avisos@Remitente.test "), null));
+        assertThat(configured.get("storeMailFrom").asString()).isEqualTo("avisos@remitente.test");
+        assertThat(call(platform, "PATCH", storePath, Map.of(
+                "storeDomain", domain, "storeEnabled", true, "storeMailFrom", "no-es-un-email"), null).status())
+                .isEqualTo(400);
+
+        register(domain, "Rita", "rita@mail.test", PASSWORD);
+        assertThat(lastMailTo("rita@mail.test", 1).from()).isEqualTo("Remitente <avisos@remitente.test>");
+
+        // Sin remitente en la configuración se borra y vuelve a MAIL_FROM.
+        JsonNode cleared = ok(call(platform, "PATCH", storePath,
+                Map.of("storeDomain", domain, "storeEnabled", true), null));
+        assertThat(cleared.get("storeMailFrom").isNull()).isTrue();
+        register(domain, "Raúl", "raul@mail.test", PASSWORD);
+        assertThat(lastMailTo("raul@mail.test", 1).from()).isEqualTo("Remitente <no-reply@erp.local>");
+    }
+
+    private Long companyIdByDomain(String domain) {
+        return jdbc.queryForObject("SELECT id FROM companies WHERE store_domain = ?", Long.class, domain);
     }
 
     @Test

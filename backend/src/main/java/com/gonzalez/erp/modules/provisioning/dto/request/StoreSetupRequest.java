@@ -2,17 +2,27 @@ package com.gonzalez.erp.modules.provisioning.dto.request;
 
 import com.gonzalez.erp.modules.store.web.StoreDomains;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-/** Dominio y habilitación de la tienda de una empresa: los carga solo el operador. */
+/**
+ * Dominio, habilitación y remitente de la tienda de una empresa: los carga solo el operador. Es la
+ * configuración completa: lo que no viene queda vacío.
+ */
 public record StoreSetupRequest(
         // Vacío = la empresa queda sin tienda. Se guarda normalizado ("https://Tienda.com/" → tienda.com).
         @Size(max = 255, message = "Store domain must not exceed 255 characters")
         String storeDomain,
 
         @NotNull(message = "storeEnabled is required")
-        Boolean storeEnabled
+        Boolean storeEnabled,
+
+        // Vacío = los mails salen de MAIL_FROM. No se exige que sea del dominio de la tienda: lo
+        // que importa es que ese dominio tenga SPF/DKIM del proveedor de mail.
+        @Email(message = "Store mail sender must be a valid email")
+        @Size(max = 254, message = "Store mail sender must not exceed 254 characters")
+        String storeMailFrom
 ) {
     @AssertTrue(message = "Store domain is not a valid domain")
     public boolean isStoreDomainValid() {

@@ -13,19 +13,22 @@ public sealed interface StoreMailEvent {
 
     String storeDomain();
 
+    /** Remitente propio de la tienda; null = MAIL_FROM. */
+    String storeMailFrom();
+
     /** Link para confirmar el email y terminar el registro. */
-    record Verification(String to, String firstName, String storeName, String storeDomain, String token)
+    record Verification(String to, String firstName, String storeName, String storeDomain, String storeMailFrom, String token)
             implements StoreMailEvent {}
 
     /** Alguien se registró con un email que ya tiene cuenta: se le avisa al dueño. */
-    record AlreadyRegistered(String to, String firstName, String storeName, String storeDomain)
+    record AlreadyRegistered(String to, String firstName, String storeName, String storeDomain, String storeMailFrom)
             implements StoreMailEvent {}
 
     /** Link para elegir una contraseña nueva. */
-    record PasswordReset(String to, String firstName, String storeName, String storeDomain, String token)
+    record PasswordReset(String to, String firstName, String storeName, String storeDomain, String storeMailFrom, String token)
             implements StoreMailEvent {}
 
     /** Aviso de que la contraseña cambió: si no fue el dueño, se entera. */
-    record PasswordChanged(String to, String firstName, String storeName, String storeDomain)
+    record PasswordChanged(String to, String firstName, String storeName, String storeDomain, String storeMailFrom)
             implements StoreMailEvent {}
 }

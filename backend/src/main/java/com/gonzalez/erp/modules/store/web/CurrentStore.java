@@ -7,7 +7,7 @@ import org.springframework.web.context.request.RequestContextHolder;
  * La tienda del request, resuelta por StoreResolutionFilter. Es el equivalente de SecurityUtils
  * para /store/**: la empresa sale del dominio, nunca de un token de empleado.
  */
-public record CurrentStore(Long companyId, String name, String domain) {
+public record CurrentStore(Long companyId, String name, String domain, String mailFrom) {
 
     static final String ATTRIBUTE = CurrentStore.class.getName();
 

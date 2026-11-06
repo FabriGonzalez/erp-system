@@ -54,7 +54,8 @@ public class StoreMailSender {
         try {
             mailSender.send(message -> {
                 MimeMessageHelper helper = new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name());
-                helper.setFrom(new InternetAddress(from, event.storeName(), StandardCharsets.UTF_8.name()));
+                String sender = event.storeMailFrom() != null ? event.storeMailFrom() : from;
+                helper.setFrom(new InternetAddress(sender, event.storeName(), StandardCharsets.UTF_8.name()));
                 helper.setTo(event.to());
                 helper.setSubject(mail.subject());
                 helper.setText(mail.text(), mail.html());

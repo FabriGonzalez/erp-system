@@ -52,7 +52,7 @@ public class StoreResolutionFilter extends OncePerRequestFilter {
 
         Company store = company.get();
         request.setAttribute(CurrentStore.ATTRIBUTE,
-                new CurrentStore(store.getId(), store.getName(), store.getStoreDomain()));
+                new CurrentStore(store.getId(), store.getName(), store.getStoreDomain(), store.getStoreMailFrom()));
         filterChain.doFilter(request, response);
     }
 
