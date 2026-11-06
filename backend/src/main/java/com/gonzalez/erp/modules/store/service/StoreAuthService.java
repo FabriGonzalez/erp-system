@@ -3,6 +3,7 @@ package com.gonzalez.erp.modules.store.service;
 import com.gonzalez.erp.modules.store.dto.StoreLoginRequest;
 import com.gonzalez.erp.modules.store.dto.StoreMeResponse;
 import com.gonzalez.erp.modules.store.dto.StoreRegisterRequest;
+import com.gonzalez.erp.modules.store.dto.StoreResetPasswordRequest;
 import com.gonzalez.erp.modules.store.dto.StoreTokenResponse;
 
 /** Cuentas de comprador de la tienda del request (CurrentStore). */
@@ -21,6 +22,15 @@ public interface StoreAuthService {
     void resendVerification(String email, String clientIp);
 
     StoreTokenResponse login(StoreLoginRequest request, String clientIp);
+
+    /**
+     * Manda el link para elegir otra contraseña (1 h, un solo uso) y anula los anteriores.
+     * No dice si el email tiene cuenta.
+     */
+    void forgotPassword(String email, String clientIp);
+
+    /** Cambia la contraseña con el link del mail y cierra las sesiones abiertas. */
+    void resetPassword(StoreResetPasswordRequest request);
 
     StoreMeResponse me();
 }

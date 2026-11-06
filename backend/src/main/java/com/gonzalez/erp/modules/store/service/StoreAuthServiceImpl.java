@@ -10,12 +10,16 @@ import com.gonzalez.erp.modules.customers.repository.CustomerRepository;
 import com.gonzalez.erp.modules.store.dto.StoreLoginRequest;
 import com.gonzalez.erp.modules.store.dto.StoreMeResponse;
 import com.gonzalez.erp.modules.store.dto.StoreRegisterRequest;
+import com.gonzalez.erp.modules.store.dto.StoreResetPasswordRequest;
 import com.gonzalez.erp.modules.store.dto.StoreTokenResponse;
 import com.gonzalez.erp.modules.store.entity.StoreAccount;
+import com.gonzalez.erp.modules.store.entity.StoreAccountToken;
+import com.gonzalez.erp.modules.store.entity.StoreAccountTokenType;
 import com.gonzalez.erp.modules.store.entity.StorePendingRegistration;
 import com.gonzalez.erp.modules.store.exception.StoreAuthException;
 import com.gonzalez.erp.modules.store.mail.StoreMailEvent;
 import com.gonzalez.erp.modules.store.repository.StoreAccountRepository;
+import com.gonzalez.erp.modules.store.repository.StoreAccountTokenRepository;
 import com.gonzalez.erp.modules.store.repository.StorePendingRegistrationRepository;
 import com.gonzalez.erp.modules.store.security.StoreCustomer;
 import com.gonzalez.erp.modules.store.security.StoreLinkTokens;
@@ -41,9 +45,11 @@ import java.util.Optional;
 public class StoreAuthServiceImpl implements StoreAuthService {
 
     static final Duration VERIFICATION_TTL = Duration.ofHours(48);
+    static final Duration PASSWORD_RESET_TTL = Duration.ofHours(1);
 
     private final StoreAccountRepository accountRepository;
     private final StorePendingRegistrationRepository pendingRepository;
+    private final StoreAccountTokenRepository accountTokenRepository;
     private final CustomerRepository customerRepository;
     private final CompanyRepository companyRepository;
     private final PasswordEncoder passwordEncoder;
@@ -145,8 +151,7 @@ public class StoreAuthServiceImpl implements StoreAuthService {
     public StoreTokenResponse login(StoreLoginRequest request, String clientIp) {
         Long companyId = CurrentStore.require().companyId();
         String email = normalizeEmail(request.email());
-        // La empresa en la clave: el mismo email en otra tienda es otra cuenta, con su propio contador.
-        String attemptKey = "store:" + companyId + ":" + email;
+        String attemptKey = loginAttemptKey(companyId, email);
         loginAttemptService.checkAllowed(attemptKey, clientIp);
 
         Optional<StoreAccount> found = accountRepository.findWithCustomerByEmail(companyId, email);
@@ -172,6 +177,53 @@ public class StoreAuthServiceImpl implements StoreAuthService {
 
         account.recordLogin(Instant.now());
         return StoreTokenResponse.bearer(tokenService.generate(account));
+    }
+
+    @Override
+    public void forgotPassword(String rawEmail, String clientIp) {
+        CurrentStore store = CurrentStore.require();
+        String email = normalizeEmail(rawEmail);
+        throttle("store-forgot", store.companyId(), email, clientIp);
+
+        Optional<StoreAccount> found = accountRepository.findWithCustomerByEmail(store.companyId(), email);
+        // Sin cuenta (o solo con un registro sin verificar), con la ficha desactivada o creada con
+        // Google (sin contraseña que restablecer): no se manda nada y la respuesta es la misma.
+        if (found.isEmpty() || !found.get().getCustomer().isActive() || found.get().getPasswordHash() == null) {
+            return;
+        }
+        StoreAccount account = found.get();
+        Instant now = Instant.now();
+        accountTokenRepository.invalidatePending(account.getId(), StoreAccountTokenType.PASSWORD_RESET, now);
+        StoreLinkTokens.IssuedToken link = StoreLinkTokens.issue();
+        accountTokenRepository.save(StoreAccountToken.builder()
+                .account(account)
+                .type(StoreAccountTokenType.PASSWORD_RESET)
+                .tokenHash(link.hash())
+                .expiresAt(now.plus(PASSWORD_RESET_TTL))
+                .build());
+        events.publishEvent(new StoreMailEvent.PasswordReset(
+                email, firstNameOf(account.getCustomer()), store.name(), store.domain(), link.token()));
+    }
+
+    @Override
+    public void resetPassword(StoreResetPasswordRequest request) {
+        CurrentStore store = CurrentStore.require();
+        Instant now = Instant.now();
+        StoreAccountToken link = accountTokenRepository
+                .findWithAccount(store.companyId(), StoreLinkTokens.hash(request.token()),
+                        StoreAccountTokenType.PASSWORD_RESET)
+                .filter(token -> token.isUsable(now))
+                .filter(token -> token.getAccount().getCustomer().isActive())
+                .orElseThrow(StoreAuthException::invalidLink);
+
+        StoreAccount account = link.getAccount();
+        link.markUsed(now);
+        // Cambiar la contraseña cierra las sesiones abiertas: el filtro rechaza los tokens anteriores.
+        account.changePassword(passwordEncoder.encode(request.password()), now);
+        // Quien recuperó la contraseña no tiene que esperar el bloqueo por los intentos fallidos.
+        loginAttemptService.recordSuccess(loginAttemptKey(store.companyId(), account.getEmail()));
+        events.publishEvent(new StoreMailEvent.PasswordChanged(
+                account.getEmail(), firstNameOf(account.getCustomer()), store.name(), store.domain()));
     }
 
     @Override
@@ -201,8 +253,13 @@ public class StoreAuthServiceImpl implements StoreAuthService {
         return pending.stream().anyMatch(registration -> passwordEncoder.matches(password, registration.getPasswordHash()));
     }
 
+    // La empresa en la clave: el mismo email en otra tienda es otra cuenta, con su propio contador.
+    private static String loginAttemptKey(Long companyId, String email) {
+        return "store:" + companyId + ":" + email;
+    }
+
     /**
-     * Registro y reenvío mandan mails: cada pedido cuenta como un intento (5 por email y 30 por IP
+     * Registro, reenvío y recuperación mandan mails: cada pedido cuenta como un intento (5 por email y 30 por IP
      * cada 15 minutos), para que nadie llene la casilla de otro. La IP lleva la acción en la clave
      * para no mezclar estos pedidos con los fallos de login.
      */

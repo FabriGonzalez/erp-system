@@ -4,7 +4,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-/** Pedidos que solo llevan el email (reenviar la verificación; en el paso 3b, olvidé la contraseña). */
+/** Pedidos que solo llevan el email: reenviar la verificación y olvidé la contraseña. */
 public record StoreEmailRequest(
         @NotBlank(message = "email is required")
         @Email(message = "email must be valid")

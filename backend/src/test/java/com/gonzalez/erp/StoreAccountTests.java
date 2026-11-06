@@ -42,8 +42,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /*
  * Cuentas de comprador contra Postgres real: registro pendiente hasta verificar el email, sin
- * revelar cuentas existentes, fichas WEB separadas de las del ERP, una cuenta por tienda, y que el
- * token de comprador, el de empleado y el de otra tienda no se mezclen. El envío de mails está
+ * revelar cuentas existentes, fichas WEB separadas de las del ERP, una cuenta por tienda, que el
+ * token de comprador, el de empleado y el de otra tienda no se mezclen, y la recuperación de contraseña. El envío de mails está
  * simulado: los tests leen los links de los mails que se habrían mandado.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
@@ -64,7 +64,7 @@ class StoreAccountTests {
     private static final String STORE_A = "cuentas-a.test";
     private static final String STORE_B = "cuentas-b.test";
     private static final String PASSWORD = "clave1234";
-    private static final Pattern LINK_TOKEN = Pattern.compile("/cuenta/verificar\\?token=([A-Za-z0-9_-]+)");
+    private static final Pattern LINK_TOKEN = Pattern.compile("/cuenta/(?:verificar|restablecer)\\?token=([A-Za-z0-9_-]+)");
 
     // Mismo motivo que en TenantIsolationTests: con la zona de Windows Postgres rechaza la conexión.
     static {
@@ -268,6 +268,94 @@ class StoreAccountTests {
         assertThat(register(STORE_B, "Karina", "karina@mail.test", PASSWORD).status()).isEqualTo(202);
     }
 
+    @Test
+    void recoveringThePasswordUnblocksTheAccountAndClosesOtherSessions() {
+        registerAndVerify(STORE_A, "Lara", "lara@mail.test", PASSWORD);
+        String oldSession = buyerLogin(STORE_A, "lara@mail.test", PASSWORD);
+        for (int i = 0; i < 5; i++) {
+            login(STORE_A, "lara@mail.test", "equivocada1");
+        }
+        assertThat(login(STORE_A, "lara@mail.test", PASSWORD).status()).isEqualTo(429);
+        // El token guarda segundos: el cambio tiene que caer en un segundo posterior al login.
+        waitNextSecond();
+
+        assertThat(forgot(STORE_A, "lara@mail.test").status()).isEqualTo(202);
+        Mail mail = lastMailTo("lara@mail.test", 2);
+        assertThat(mail.subject()).isEqualTo("Restablecé tu contraseña de Cuentas A");
+        assertThat(mail.body()).contains("https://" + STORE_A + "/cuenta/restablecer?token=");
+        assertThat(reset(STORE_A, mail.token(), "nueva5678").status()).isEqualTo(204);
+
+        assertThat(call(oldSession, "GET", "/store/me", null, STORE_A).status()).isEqualTo(401);
+        assertThat(login(STORE_A, "lara@mail.test", PASSWORD).hasCode("INVALID_CREDENTIALS")).isTrue();
+        buyerLogin(STORE_A, "lara@mail.test", "nueva5678");
+        // El link sirve una sola vez.
+        assertThat(reset(STORE_A, mail.token(), "otra98765").hasCode("INVALID_LINK")).isTrue();
+
+        Mail notice = lastMailTo("lara@mail.test", 3);
+        assertThat(notice.subject()).isEqualTo("Cambió tu contraseña de Cuentas A");
+        assertThat(notice.body()).contains("Hola Lara").doesNotContain("token=");
+    }
+
+    @Test
+    void onlyTheLastResetLinkOfItsStoreWorksAndItExpires() {
+        registerAndVerify(STORE_A, "Mario", "mario@mail.test", PASSWORD);
+        forgot(STORE_A, "mario@mail.test");
+        String first = lastMailTo("mario@mail.test", 2).token();
+        forgot(STORE_A, "mario@mail.test");
+        String second = lastMailTo("mario@mail.test", 3).token();
+
+        assertThat(reset(STORE_A, first, "nueva5678").hasCode("INVALID_LINK")).isTrue();
+        assertThat(reset(STORE_B, second, "nueva5678").hasCode("INVALID_LINK")).isTrue();
+        assertThat(reset(STORE_A, "inventado", "nueva5678").hasCode("INVALID_LINK")).isTrue();
+        // Una contraseña que no cumple la regla no gasta el link.
+        assertThat(reset(STORE_A, second, "sinnumeros").status()).isEqualTo(400);
+
+        jdbc.update("""
+                UPDATE store_account_tokens SET expires_at = now() - interval '1 minute'
+                WHERE store_account_id IN (SELECT id FROM store_accounts WHERE email = ?)
+                """, "mario@mail.test");
+        assertThat(reset(STORE_A, second, "nueva5678").hasCode("INVALID_LINK")).isTrue();
+        buyerLogin(STORE_A, "mario@mail.test", PASSWORD);
+    }
+
+    @Test
+    void recoveryLooksTheSameWithoutAnAccountAndSendsNothing() {
+        // Sin cuenta, con el registro sin verificar o en otra tienda: misma respuesta y ningún mail.
+        assertThat(forgot(STORE_A, "nadie-recupera@mail.test").status()).isEqualTo(202);
+        register(STORE_A, "Nora", "nora@mail.test", PASSWORD);
+        lastMailTo("nora@mail.test", 1);
+        assertThat(forgot(STORE_A, "nora@mail.test").status()).isEqualTo(202);
+        registerAndVerify(STORE_A, "Olga", "olga@mail.test", PASSWORD);
+        assertThat(forgot(STORE_B, "olga@mail.test").status()).isEqualTo(202);
+
+        pause();
+        assertThat(mailsTo("nadie-recupera@mail.test")).isEmpty();
+        assertThat(mailsTo("nora@mail.test")).hasSize(1);
+        assertThat(mailsTo("olga@mail.test")).hasSize(1);
+    }
+
+    @Test
+    void aDeactivatedCustomerCannotRecoverThePassword() {
+        registerAndVerify(STORE_A, "Pedro", "pedro@mail.test", PASSWORD);
+        forgot(STORE_A, "pedro@mail.test");
+        String link = lastMailTo("pedro@mail.test", 2).token();
+
+        ok(call(adminA, "PATCH", "/customers/" + customerId(adminA, "Pedro") + "/deactivate", null, null));
+
+        assertThat(reset(STORE_A, link, "nueva5678").hasCode("INVALID_LINK")).isTrue();
+        assertThat(forgot(STORE_A, "pedro@mail.test").status()).isEqualTo(202);
+        pause();
+        assertThat(mailsTo("pedro@mail.test")).hasSize(2);
+    }
+
+    @Test
+    void recoveryRequestsForTheSameEmailAreLimited() {
+        for (int i = 0; i < 5; i++) {
+            assertThat(forgot(STORE_A, "quique@mail.test").status()).isEqualTo(202);
+        }
+        assertThat(forgot(STORE_A, "quique@mail.test").status()).isEqualTo(429);
+    }
+
     private Response register(String store, String firstName, String email, String password) {
         return call(null, "POST", "/store/auth/register", Map.of(
                 "firstName", firstName, "lastName", "Prueba", "email", email, "password", password), store);
@@ -287,6 +375,14 @@ class StoreAccountTests {
         return call(null, "POST", "/store/auth/resend-verification", Map.of("email", email), store);
     }
 
+    private Response forgot(String store, String email) {
+        return call(null, "POST", "/store/auth/forgot-password", Map.of("email", email), store);
+    }
+
+    private Response reset(String store, String token, String password) {
+        return call(null, "POST", "/store/auth/reset-password", Map.of("token", token, "password", password), store);
+    }
+
     private Response login(String store, String email, String password) {
         return call(null, "POST", "/store/auth/login", Map.of("email", email, "password", password), store);
     }
@@ -298,7 +394,7 @@ class StoreAccountTests {
     private record Mail(String from, String subject, String body) {
         String token() {
             Matcher matcher = LINK_TOKEN.matcher(body);
-            assertThat(matcher.find()).as("verification link in mail").isTrue();
+            assertThat(matcher.find()).as("link in mail").isTrue();
             return matcher.group(1);
         }
     }
@@ -355,6 +451,14 @@ class StoreAccountTests {
     private static void pause() {
         try {
             Thread.sleep(200);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static void waitNextSecond() {
+        try {
+            Thread.sleep(1100);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

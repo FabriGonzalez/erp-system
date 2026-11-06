@@ -20,4 +20,12 @@ public sealed interface StoreMailEvent {
     /** Alguien se registró con un email que ya tiene cuenta: se le avisa al dueño. */
     record AlreadyRegistered(String to, String firstName, String storeName, String storeDomain)
             implements StoreMailEvent {}
+
+    /** Link para elegir una contraseña nueva. */
+    record PasswordReset(String to, String firstName, String storeName, String storeDomain, String token)
+            implements StoreMailEvent {}
+
+    /** Aviso de que la contraseña cambió: si no fue el dueño, se entera. */
+    record PasswordChanged(String to, String firstName, String storeName, String storeDomain)
+            implements StoreMailEvent {}
 }

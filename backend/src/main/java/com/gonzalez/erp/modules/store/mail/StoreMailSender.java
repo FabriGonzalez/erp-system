@@ -47,6 +47,9 @@ public class StoreMailSender {
             case StoreMailEvent.Verification v ->
                     StoreMailTemplates.verification(v, storeUrl(v) + "/cuenta/verificar?token=" + v.token());
             case StoreMailEvent.AlreadyRegistered a -> StoreMailTemplates.alreadyRegistered(a, storeUrl(a));
+            case StoreMailEvent.PasswordReset r ->
+                    StoreMailTemplates.passwordReset(r, storeUrl(r) + "/cuenta/restablecer?token=" + r.token());
+            case StoreMailEvent.PasswordChanged c -> StoreMailTemplates.passwordChanged(c, storeUrl(c));
         };
         try {
             mailSender.send(message -> {

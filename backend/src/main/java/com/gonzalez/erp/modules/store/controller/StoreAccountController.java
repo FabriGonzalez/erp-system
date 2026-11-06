@@ -6,6 +6,7 @@ import com.gonzalez.erp.modules.store.dto.StoreLinkTokenRequest;
 import com.gonzalez.erp.modules.store.dto.StoreLoginRequest;
 import com.gonzalez.erp.modules.store.dto.StoreMeResponse;
 import com.gonzalez.erp.modules.store.dto.StoreRegisterRequest;
+import com.gonzalez.erp.modules.store.dto.StoreResetPasswordRequest;
 import com.gonzalez.erp.modules.store.dto.StoreTokenResponse;
 import com.gonzalez.erp.modules.store.service.StoreAuthService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/store")
 @RequiredArgsConstructor
-@Tag(name = "Store accounts", description = "Registro con verificación de email, login y datos del comprador de la tienda web.")
+@Tag(name = "Store accounts", description = "Registro con verificación de email, login, recuperación de contraseña y datos del comprador de la tienda web.")
 public class StoreAccountController {
 
     private final StoreAuthService authService;
@@ -86,6 +87,31 @@ public class StoreAccountController {
             @Valid @RequestBody StoreLoginRequest request, HttpServletRequest httpRequest) {
         // Mismo criterio que el login del ERP: getRemoteAddr, nunca X-Forwarded-For directo.
         return ResponseEntity.ok(authService.login(request, httpRequest.getRemoteAddr()));
+    }
+
+    @PostMapping("/auth/forgot-password")
+    @Operation(summary = "Olvidé mi contraseña",
+            description = "Manda un link a /cuenta/restablecer?token=… que vence en 1 hora y sirve una vez; los "
+                    + "links anteriores dejan de servir. Responde 202 siempre, tenga o no cuenta el email.")
+    @ApiResponse(responseCode = "202", description = "Pedido recibido")
+    @ApiResponse(responseCode = "429", description = "Demasiados pedidos para ese email o desde esa IP",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<Void> forgotPassword(
+            @Valid @RequestBody StoreEmailRequest request, HttpServletRequest httpRequest) {
+        authService.forgotPassword(request.email(), httpRequest.getRemoteAddr());
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/auth/reset-password")
+    @Operation(summary = "Restablecer la contraseña",
+            description = "Recibe el token del link y la contraseña nueva. Cierra las sesiones abiertas y avisa "
+                    + "por mail. No inicia sesión: el sitio lleva al login.")
+    @ApiResponse(responseCode = "204", description = "Contraseña cambiada")
+    @ApiResponse(responseCode = "400", description = "Contraseña inválida, o link vencido, usado o inválido (INVALID_LINK)",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<Void> resetPassword(@Valid @RequestBody StoreResetPasswordRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/me")

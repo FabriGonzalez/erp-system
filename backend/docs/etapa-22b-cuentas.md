@@ -2,7 +2,7 @@
 
 Plan detallado de la segunda parte de la etapa 22 (plan general en `docs/plan-proximas-etapas.md`, sección "22B"). Rama: `feature/store-22b`, desde `feature/store-22a`. Alcance: backend, más la marca "Web" en el frontend del ERP (la única excepción de la decisión 8 de 22A).
 
-Estado al 2026-11-05: pasos 1 (aa310a4) y 2 (4352ce5) commiteados; paso 3a hecho, sin commitear hasta la revisión del usuario.
+Estado al 2026-11-06: pasos 1 (aa310a4), 2 (4352ce5) y 3a (9038974) commiteados; paso 3b hecho, sin commitear hasta la revisión del usuario.
 
 ## Lo que hay hoy (relevado el 2026-11-04)
 
@@ -56,10 +56,11 @@ Estado al 2026-11-05: pasos 1 (aa310a4) y 2 (4352ce5) commiteados; paso 3a hecho
 - El mail se manda **después del commit y en otro hilo** (`@TransactionalEventListener` + `@Async`): si la transacción falla no sale un mail de algo que no pasó; si el mail falla queda en el log y el reenvío; y la respuesta tarda lo mismo mande o no mail.
 - `store_account_tokens` queda para la recuperación (3b); el tipo `EMAIL_VERIFICATION` no se usa.
 
-### 3b. Recuperación de contraseña
+### 3b. Recuperación de contraseña (hecho el 2026-11-06)
 
-- `POST /store/auth/forgot-password` y `reset-password`. Token de 1 h, un solo uso, en `store_account_tokens`.
-- `forgot-password` responde siempre lo mismo, exista o no el email (no revela quién tiene cuenta). Cambiar la contraseña invalida las sesiones anteriores.
+- `POST /store/auth/forgot-password {email}`: responde 202 siempre y cuenta para el límite como el registro (clave `store-forgot`). Con una cuenta de esta tienda, ficha activa y contraseña, anula los links de recuperación sin usar y manda uno nuevo a `/cuenta/restablecer?token=…` (1 h, un solo uso, hash en `store_account_tokens`). Sin cuenta, con el registro sin verificar, con la ficha desactivada o con una cuenta solo de Google, no manda nada.
+- `POST /store/auth/reset-password {token, password}`: misma regla de contraseña que el registro. Link vencido, usado, de otra tienda o de una ficha desactivada → 400 `INVALID_LINK`. Al cambiarla se cierran las sesiones abiertas (`password_changed_at`), se limpia el contador de fallos del login y llega el mail "cambió tu contraseña". Responde 204 y el sitio lleva al login.
+- **Decisiones del 2026-11-06:** se manda el aviso de cambio; a un registro sin verificar no se le manda nada; las cuentas creadas con Google no reciben contraseña por esta vía (se entra siempre con Google).
 
 ### 3c. Remitente por tienda
 
@@ -114,6 +115,7 @@ Cada paso es un commit, con su revisión antes:
 - **Modelo:** `store_accounts.password_hash` pasa a opcional y se suma `google_subject` (el id fijo de la persona en Google). Se deja preparado así en la migración V7 aunque Google se haga después, para no migrar dos veces.
 - **Email ya registrado con contraseña:** si Google confirma el email (`email_verified`), se vincula a la cuenta existente de esa tienda y queda verificada. Es lo habitual y es seguro porque Google ya probó que la persona controla el email.
 - **Lo de afuera del código:** una app en Google Cloud con su pantalla de consentimiento (nombre, logo y política de privacidad), y cada dominio de tienda cargado como origen autorizado. Pidiendo solo email y perfil, Google no exige la revisión larga.
+- **"Último usado" en el login** (pedido del 2026-11-06, como Render o Neon): el sitio guarda en `localStorage` el método con el que se entró (Google o contraseña) y marca ese botón. No toca el backend; va con el login del sitio Next.js.
 - **Costo:** unos 6 archivos en el backend (sin dependencia nueva: la firma se verifica con la librería JWT que ya usamos o con la de Google). El botón y el flujo del lado del sitio quedan para el proyecto Next.js.
 
 ## Criterios de aceptación

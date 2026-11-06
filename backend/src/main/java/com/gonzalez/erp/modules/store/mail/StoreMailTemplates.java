@@ -57,6 +57,47 @@ final class StoreMailTemplates {
         return new Mail(subject, text, html);
     }
 
+    static Mail passwordReset(StoreMailEvent.PasswordReset mail, String link) {
+        String subject = "Restablecé tu contraseña de " + mail.storeName();
+        String text = """
+                Hola %s,
+
+                Pediste restablecer la contraseña de tu cuenta en %s. Elegí una nueva con este link:
+
+                %s
+
+                El link vence en 1 hora y sirve una sola vez. Si no lo pediste vos, ignorá este mail: \
+                tu contraseña no cambia.
+                """.formatted(mail.firstName(), mail.storeName(), link);
+        String html = layout(mail.storeName(), """
+                <p>Hola %s,</p>
+                <p>Pediste restablecer la contraseña de tu cuenta en %s:</p>
+                <p><a href="%s" style="display:inline-block;padding:12px 20px;background:#111;color:#fff;\
+                text-decoration:none;border-radius:6px">Elegir contraseña nueva</a></p>
+                <p style="color:#666;font-size:13px">El link vence en 1 hora y sirve una sola vez. Si no lo \
+                pediste vos, ignorá este mail: tu contraseña no cambia.</p>
+                """.formatted(escape(mail.firstName()), escape(mail.storeName()), link));
+        return new Mail(subject, text, html);
+    }
+
+    static Mail passwordChanged(StoreMailEvent.PasswordChanged mail, String storeUrl) {
+        String subject = "Cambió tu contraseña de " + mail.storeName();
+        String text = """
+                Hola %s,
+
+                La contraseña de tu cuenta en %s se cambió recién y se cerraron las sesiones abiertas.
+
+                Si no fuiste vos, entrá a %s y restablecela ya desde "Olvidé mi contraseña".
+                """.formatted(mail.firstName(), mail.storeName(), storeUrl);
+        String html = layout(mail.storeName(), """
+                <p>Hola %s,</p>
+                <p>La contraseña de tu cuenta en %s se cambió recién y se cerraron las sesiones abiertas.</p>
+                <p>Si no fuiste vos, entrá a <a href="%s">la tienda</a> y restablecela ya desde
+                "Olvidé mi contraseña".</p>
+                """.formatted(escape(mail.firstName()), escape(mail.storeName()), storeUrl));
+        return new Mail(subject, text, html);
+    }
+
     private static String layout(String storeName, String body) {
         return """
                 <!doctype html>
