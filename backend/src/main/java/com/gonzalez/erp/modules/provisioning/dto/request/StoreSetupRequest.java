@@ -24,6 +24,13 @@ public record StoreSetupRequest(
         @Size(max = 254, message = "Store mail sender must not exceed 254 characters")
         String storeMailFrom
 ) {
+    // Corre al leer el JSON, antes de validar: @Email ve el remitente sin espacios y vacío = null.
+    public StoreSetupRequest {
+        if (storeMailFrom != null) {
+            storeMailFrom = storeMailFrom.isBlank() ? null : storeMailFrom.trim();
+        }
+    }
+
     @AssertTrue(message = "Store domain is not a valid domain")
     public boolean isStoreDomainValid() {
         return storeDomain == null || storeDomain.isBlank() || StoreDomains.normalize(storeDomain).isPresent();

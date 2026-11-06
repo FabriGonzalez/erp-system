@@ -122,9 +122,8 @@ public class ProvisioningServiceImpl implements ProvisioningService {
                     });
         }
 
-        String mailFrom = request.storeMailFrom() == null || request.storeMailFrom().isBlank()
-                ? null
-                : request.storeMailFrom().trim().toLowerCase(Locale.ROOT);
+        // Ya viene sin espacios y vacío = null (StoreSetupRequest).
+        String mailFrom = request.storeMailFrom() == null ? null : request.storeMailFrom().toLowerCase(Locale.ROOT);
         company.configureStore(domain, request.storeEnabled(), mailFrom);
         return CompanyResponse.from(company);
     }
