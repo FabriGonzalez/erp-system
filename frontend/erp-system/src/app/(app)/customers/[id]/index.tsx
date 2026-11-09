@@ -211,7 +211,7 @@ export default function CustomerDetailScreen() {
 
                 {isWebCustomer || !customer.active ? (
                     <View style={styles.pills}>
-                        {isWebCustomer ? <StatusPill label="Web" tone="teal" /> : null}
+                        {isWebCustomer ? <StatusPill label="Tienda online" tone="teal" /> : null}
                         {!customer.active ? <StatusPill label="Inactivo" tone="neutral" /> : null}
                     </View>
                 ) : null}

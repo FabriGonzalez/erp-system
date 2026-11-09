@@ -34,7 +34,7 @@ const STATUS_FILTERS: { value: CustomerStatusFilter; label: string }[] = [
 const ORIGIN_FILTERS: { value: CustomerOrigin | 'all'; label: string }[] = [
     { value: 'all', label: 'Todos' },
     { value: 'ERP', label: 'Local' },
-    { value: 'WEB', label: 'Web' },
+    { value: 'WEB', label: 'Tienda online' },
 ];
 
 export default function CustomersScreen() {
