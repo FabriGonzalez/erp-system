@@ -2,7 +2,7 @@
 
 Plan detallado de la segunda parte de la etapa 22 (plan general en `docs/plan-proximas-etapas.md`, sección "22B"). Rama: `feature/store-22b`, desde `feature/store-22a`. Alcance: backend, más la marca "Web" en el frontend del ERP (la única excepción de la decisión 8 de 22A).
 
-Estado al 2026-11-06: pasos 1 (aa310a4), 2 (4352ce5), 3a (9038974) y 3b (6aac455) commiteados; paso 3c hecho, sin commitear hasta la revisión del usuario.
+Estado al 2026-11-09: pasos 1 (aa310a4), 2 (4352ce5), 3a (9038974), 3b (6aac455), 3c (46ff9ba, bf9e783) y 4a commiteados. Siguen 4b, 5 y 6.
 
 ## Lo que hay hoy (relevado el 2026-11-04)
 
@@ -26,7 +26,7 @@ Estado al 2026-11-06: pasos 1 (aa310a4), 2 (4352ce5), 3a (9038974) y 3b (6aac455
 - `customers.origin` (`ERP`/`WEB`, `NOT NULL DEFAULT 'ERP'`, con CHECK): los existentes y los que carga el ERP quedan `ERP`. Aditiva: la app vieja no se rompe.
 - `store_accounts` (la cuenta web): `customer_id` (único), `company_id`, `email` (único por empresa, en minúsculas), `password_hash` (BCrypt, como el ERP; opcional para las cuentas de Google), `google_subject` (opcional, único por empresa), `email_verified_at`, `password_changed_at`, `last_login_at`.
 - `store_account_tokens`: verificación de email y recuperación de contraseña. Se guarda solo el **hash** del token (como una contraseña: si se filtra la base, los links no sirven), con tipo, vencimiento y `used_at` (un solo uso).
-- El email de la cuenta es el de login; `Customer.email` arranca con el mismo. Si el ERP edita el email de la ficha, el login no cambia.
+- El email de la cuenta es el de login; `Customer.email` arranca con el mismo. Desde el paso 4b el ERP no puede editar el email de una ficha web.
 
 ### 1. Origen del cliente en el ERP (backend)
 
@@ -68,15 +68,23 @@ Estado al 2026-11-06: pasos 1 (aa310a4), 2 (4352ce5), 3a (9038974) y 3b (6aac455
 - **Hecho:** columna `companies.store_mail_from` (V9). Se carga con `storeMailFrom` en `PATCH /provisioning/companies/{id}/store` (validado como email, guardado en minúsculas). `CurrentStore` lo lleva al evento del mail y `StoreMailSender` lo usa como dirección, con el nombre de la tienda como nombre visible; si está vacío, `MAIL_FROM`.
 - **Decisiones del 2026-11-06:** no se exige que el remitente sea del dominio de la tienda (el control real es el DNS); el pedido es la configuración completa, así que mandarlo sin `storeMailFrom` lo borra (igual que el dominio); sin Reply-To, los mails son solo de aviso.
 
-### 4. Perfil y direcciones
+### 4a. Perfil y direcciones del comprador
 
 - `GET/PATCH /store/me` (nombre, apellido, teléfono; el email no se cambia en esta etapa) y `PATCH /store/me/password`.
 - `GET/POST /store/me/addresses`, `PATCH/DELETE /store/me/addresses/{id}`: reutilizan `Address` y su regla de principal. Borrar = desactivar, como en el ERP.
 - Respuestas propias de la tienda (`Store*Response`): nunca `CustomerResponse` del ERP.
 
+- **Decisiones del 2026-11-09 (4a):** cambiar la contraseña pide la actual (un fallo cuenta para el límite de intentos), cierra las demás sesiones, avisa por mail y devuelve un token nuevo; una cuenta solo de Google recibe 400 `PASSWORD_NOT_SET` y `GET /store/me` trae `hasPassword`. `PATCH /store/me` es el formulario completo: un teléfono vacío o ausente se borra. Hasta 5 direcciones activas por comprador (409 `ADDRESS_LIMIT_REACHED`); las borradas no cuentan. `AddressService` no se reutiliza porque saca la empresa del empleado; sí la entidad, el mapper y la regla de principal.
+
+### 4b. Ficha web protegida en el ERP
+
+- En un cliente `WEB` el ERP no puede cambiar nombre, apellido, teléfono ni email, ni crear, editar, activar o desactivar direcciones: 409 `CUSTOMER_MANAGED_BY_STORE`, chequeado en el backend.
+- Sí puede activar o desactivar la ficha, editar observaciones y documento, venderle y registrar sus pagos.
+
 ### 5. Marca "Web" en el ERP (frontend)
 
 - Píldora "Web" en el listado y la ficha del cliente, y filtro por origen en el listado.
+- En las fichas web, los datos del comprador de solo lectura y sin botones de direcciones.
 
 ### Fuera de 22B
 
@@ -94,8 +102,9 @@ Cada paso es un commit, con su revisión antes:
 | 3a | Mails, Mailpit, registro pendiente y verificación | 20 |
 | 3b | Recuperación de contraseña | 9 |
 | 3c | Remitente por tienda | 5 |
-| 4 | Perfil y direcciones | 10 |
-| 5 | Marca "Web" en el ERP (frontend) | 5 |
+| 4a | Perfil y direcciones del comprador | 15 |
+| 4b | Ficha web protegida en el ERP | 5 |
+| 5 | Marca "Web" y solo lectura en el ERP (frontend) | 5 |
 | 6 | Inicio con Google | 6 |
 
 ## Decisiones del usuario (2026-11-04)

@@ -74,6 +74,13 @@ public class Customer extends BaseEntity {
         this.observations = observations;
     }
 
+    /** Lo que el comprador edita desde la tienda: documento y observaciones no se tocan. */
+    public void updateContact(String firstName, String lastName, String phone) {
+        this.firstName = firstName;
+        this.lastName = lastName;
+        this.phone = phone;
+    }
+
     public void deactivate() {
         this.active = false;
     }

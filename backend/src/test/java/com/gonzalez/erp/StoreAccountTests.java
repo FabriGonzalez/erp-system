@@ -386,6 +386,174 @@ class StoreAccountTests {
         assertThat(forgot(STORE_A, "quique@mail.test").status()).isEqualTo(429);
     }
 
+    @Test
+    void theProfileIsTheFullFormAndKeepsTheErpData() {
+        registerAndVerify(STORE_A, "Rosa", "rosa@mail.test", PASSWORD);
+        String token = buyerLogin(STORE_A, "rosa@mail.test", PASSWORD);
+        Long customerId = customerId(adminA, "Rosa");
+        ok(call(adminA, "PATCH", "/customers/" + customerId, Map.of("firstName", "Rosa", "lastName", "Prueba",
+                "documentType", "DNI", "documentNumber", "30111222", "observations", "nota interna"), null));
+
+        JsonNode updated = ok(call(token, "PATCH", "/store/me",
+                Map.of("firstName", " Rosana ", "lastName", "Gomez", "phone", "1155556666"), STORE_A));
+        assertThat(updated.get("firstName").asString()).isEqualTo("Rosana");
+        assertThat(updated.get("phone").asString()).isEqualTo("1155556666");
+        assertThat(updated.get("email").asString()).isEqualTo("rosa@mail.test");
+        assertThat(updated.get("hasPassword").asBoolean()).isTrue();
+        assertThat(updated.has("observations")).isFalse();
+
+        // Sin teléfono en el formulario se borra; sin nombre se rechaza.
+        JsonNode cleared = ok(call(token, "PATCH", "/store/me", Map.of("firstName", "Rosana", "lastName", "Gomez"), STORE_A));
+        assertThat(cleared.get("phone").isNull()).isTrue();
+        assertThat(call(token, "PATCH", "/store/me", Map.of("lastName", "Gomez"), STORE_A).status()).isEqualTo(400);
+
+        JsonNode inErp = ok(call(adminA, "GET", "/customers/" + customerId, null, null));
+        assertThat(inErp.get("firstName").asString()).isEqualTo("Rosana");
+        assertThat(inErp.get("documentNumber").asString()).isEqualTo("30111222");
+        assertThat(inErp.get("observations").asString()).isEqualTo("nota interna");
+    }
+
+    @Test
+    void changingThePasswordKeepsThisSessionAndClosesTheOthers() {
+        registerAndVerify(STORE_A, "Sara", "sara@mail.test", PASSWORD);
+        String session = buyerLogin(STORE_A, "sara@mail.test", PASSWORD);
+        String otherSession = buyerLogin(STORE_A, "sara@mail.test", PASSWORD);
+        // El token guarda segundos: el cambio tiene que caer en un segundo posterior al login.
+        waitNextSecond();
+
+        assertThat(changePassword(session, "equivocada1", "nueva5678").hasCode("INVALID_CURRENT_PASSWORD")).isTrue();
+        assertThat(changePassword(session, PASSWORD, PASSWORD).hasCode("PASSWORD_UNCHANGED")).isTrue();
+        assertThat(changePassword(session, PASSWORD, "sinnumeros").status()).isEqualTo(400);
+        assertThat(mailsTo("sara@mail.test")).hasSize(1);
+
+        String renewed = ok(changePassword(session, PASSWORD, "nueva5678")).get("token").asString();
+
+        assertThat(call(renewed, "GET", "/store/me", null, STORE_A).status()).isEqualTo(200);
+        assertThat(call(session, "GET", "/store/me", null, STORE_A).status()).isEqualTo(401);
+        assertThat(call(otherSession, "GET", "/store/me", null, STORE_A).status()).isEqualTo(401);
+        assertThat(login(STORE_A, "sara@mail.test", PASSWORD).hasCode("INVALID_CREDENTIALS")).isTrue();
+        buyerLogin(STORE_A, "sara@mail.test", "nueva5678");
+
+        assertThat(lastMailTo("sara@mail.test", 2).subject()).isEqualTo("Cambió tu contraseña de Cuentas A");
+    }
+
+    @Test
+    void guessingTheCurrentPasswordIsLimited() {
+        registerAndVerify(STORE_A, "Tania", "tania@mail.test", PASSWORD);
+        String token = buyerLogin(STORE_A, "tania@mail.test", PASSWORD);
+
+        for (int i = 0; i < 5; i++) {
+            assertThat(changePassword(token, "equivocada1", "nueva5678").status()).isEqualTo(400);
+        }
+        assertThat(changePassword(token, PASSWORD, "nueva5678").status()).isEqualTo(429);
+    }
+
+    @Test
+    void aGoogleOnlyAccountHasNoPasswordToChange() {
+        registerAndVerify(STORE_A, "Ulises", "ulises@mail.test", PASSWORD);
+        String token = buyerLogin(STORE_A, "ulises@mail.test", PASSWORD);
+        jdbc.update("UPDATE store_accounts SET password_hash = NULL, google_subject = 'sub-ulises' WHERE email = ?",
+                "ulises@mail.test");
+
+        assertThat(ok(call(token, "GET", "/store/me", null, STORE_A)).get("hasPassword").asBoolean()).isFalse();
+        assertThat(changePassword(token, PASSWORD, "nueva5678").hasCode("PASSWORD_NOT_SET")).isTrue();
+    }
+
+    @Test
+    void addressesKeepExactlyOneMainAndShowOnlyActiveOnes() {
+        registerAndVerify(STORE_A, "Vera", "vera@mail.test", PASSWORD);
+        String token = buyerLogin(STORE_A, "vera@mail.test", PASSWORD);
+
+        JsonNode first = ok(createAddress(token, STORE_A, "Calle 1", false));
+        assertThat(first.get("mainAddress").asBoolean()).isTrue();
+        assertThat(first.has("active")).isFalse();
+        assertThat(first.has("createdAt")).isFalse();
+        JsonNode second = ok(createAddress(token, STORE_A, "Calle 2", false));
+        assertThat(second.get("mainAddress").asBoolean()).isFalse();
+        JsonNode third = ok(createAddress(token, STORE_A, "Calle 3", true));
+        assertThat(addressStreets(token, STORE_A)).containsExactly("Calle 3", "Calle 1", "Calle 2");
+
+        JsonNode edited = ok(call(token, "PATCH", "/store/me/addresses/" + second.get("id").asLong(),
+                Map.of("street", "Calle 2 bis", "city", "CABA", "mainAddress", true), STORE_A));
+        assertThat(edited.get("mainAddress").asBoolean()).isTrue();
+        assertThat(addressStreets(token, STORE_A)).containsExactly("Calle 2 bis", "Calle 1", "Calle 3");
+
+        // Borrar la principal pasa el rol a la activa más antigua y la borrada ya no existe para el comprador.
+        String secondPath = "/store/me/addresses/" + second.get("id").asLong();
+        assertThat(call(token, "DELETE", secondPath, null, STORE_A).status()).isEqualTo(204);
+        assertThat(addressStreets(token, STORE_A)).containsExactly("Calle 1", "Calle 3");
+        assertThat(call(token, "DELETE", secondPath, null, STORE_A).status()).isEqualTo(404);
+        assertThat(call(token, "PATCH", secondPath, Map.of("street", "X", "city", "Y"), STORE_A).status()).isEqualTo(404);
+        assertThat(third.get("id").asLong()).isPositive();
+
+        assertThat(call(token, "POST", "/store/me/addresses", Map.of("street", "Sin ciudad"), STORE_A).status()).isEqualTo(400);
+
+        // El ERP ve las direcciones que cargó el comprador, para despachar los pedidos web.
+        JsonNode inErp = ok(call(adminA, "GET", "/customers/" + customerId(adminA, "Vera") + "/addresses", null, null));
+        assertThat(inErp.size()).isEqualTo(3);
+    }
+
+    @Test
+    void aBuyerCanHaveUpToFiveActiveAddresses() {
+        registerAndVerify(STORE_A, "Walter", "walter@mail.test", PASSWORD);
+        String token = buyerLogin(STORE_A, "walter@mail.test", PASSWORD);
+        long lastId = 0;
+        for (int i = 1; i <= 5; i++) {
+            lastId = ok(createAddress(token, STORE_A, "Calle " + i, false)).get("id").asLong();
+        }
+
+        assertThat(createAddress(token, STORE_A, "Calle 6", false).hasCode("ADDRESS_LIMIT_REACHED")).isTrue();
+
+        // Las borradas no cuentan.
+        assertThat(call(token, "DELETE", "/store/me/addresses/" + lastId, null, STORE_A).status()).isEqualTo(204);
+        assertThat(createAddress(token, STORE_A, "Calle 6", false).status()).isEqualTo(201);
+    }
+
+    @Test
+    void addressesBelongOnlyToTheirBuyer() {
+        registerAndVerify(STORE_A, "Ximena", "ximena@mail.test", PASSWORD);
+        String owner = buyerLogin(STORE_A, "ximena@mail.test", PASSWORD);
+        registerAndVerify(STORE_A, "Yago", "yago@mail.test", PASSWORD);
+        String other = buyerLogin(STORE_A, "yago@mail.test", PASSWORD);
+        // Tienda propia: eachStoreHasItsOwnAccounts exige que en la B solo esté su comprador.
+        String thirdStore = "direcciones-c.test";
+        provision(platform, "Direcciones C", "admin_direcciones_c", thirdStore);
+        registerAndVerify(thirdStore, "Zoe", "zoe@mail.test", PASSWORD);
+        String otherStore = buyerLogin(thirdStore, "zoe@mail.test", PASSWORD);
+        String path = "/store/me/addresses/" + ok(createAddress(owner, STORE_A, "Privada 1", false)).get("id").asLong();
+
+        // Otro comprador, de esta tienda o de otra, no la encuentra aunque sepa el id.
+        assertThat(addressStreets(other, STORE_A)).isEmpty();
+        assertThat(call(other, "PATCH", path, Map.of("street", "X", "city", "Y"), STORE_A).status()).isEqualTo(404);
+        assertThat(call(other, "DELETE", path, null, STORE_A).status()).isEqualTo(404);
+        assertThat(call(otherStore, "DELETE", path, null, thirdStore).status()).isEqualTo(404);
+
+        // Sin token de comprador válido para esta tienda no se llega al servicio.
+        assertThat(call(null, "GET", "/store/me/addresses", null, STORE_A).status()).isEqualTo(401);
+        assertThat(call(adminA, "GET", "/store/me/addresses", null, STORE_A).status()).isEqualTo(401);
+        assertThat(call(owner, "GET", "/store/me/addresses", null, thirdStore).status()).isEqualTo(401);
+        assertThat(addressStreets(owner, STORE_A)).containsExactly("Privada 1");
+    }
+
+    private Response changePassword(String token, String currentPassword, String newPassword) {
+        return call(token, "PATCH", "/store/me/password",
+                Map.of("currentPassword", currentPassword, "newPassword", newPassword), STORE_A);
+    }
+
+    private Response createAddress(String token, String store, String street, boolean main) {
+        return call(token, "POST", "/store/me/addresses",
+                Map.of("street", street, "city", "CABA", "mainAddress", main), store);
+    }
+
+    private List<String> addressStreets(String token, String store) {
+        JsonNode addresses = ok(call(token, "GET", "/store/me/addresses", null, store));
+        List<String> streets = new ArrayList<>();
+        for (int i = 0; i < addresses.size(); i++) {
+            streets.add(addresses.get(i).get("street").asString());
+        }
+        return streets;
+    }
+
     private Response register(String store, String firstName, String email, String password) {
         return call(null, "POST", "/store/auth/register", Map.of(
                 "firstName", firstName, "lastName", "Prueba", "email", email, "password", password), store);

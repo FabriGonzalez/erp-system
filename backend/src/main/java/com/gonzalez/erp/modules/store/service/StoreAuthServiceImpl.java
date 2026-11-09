@@ -2,16 +2,19 @@ package com.gonzalez.erp.modules.store.service;
 
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.LoginAttemptService;
+import com.gonzalez.erp.modules.auth.exception.InvalidPasswordChangeException;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.customers.entity.Customer;
 import com.gonzalez.erp.modules.customers.entity.CustomerOrigin;
 import com.gonzalez.erp.modules.customers.repository.CustomerRepository;
+import com.gonzalez.erp.modules.store.dto.StoreChangePasswordRequest;
 import com.gonzalez.erp.modules.store.dto.StoreLoginRequest;
 import com.gonzalez.erp.modules.store.dto.StoreMeResponse;
 import com.gonzalez.erp.modules.store.dto.StoreRegisterRequest;
 import com.gonzalez.erp.modules.store.dto.StoreResetPasswordRequest;
 import com.gonzalez.erp.modules.store.dto.StoreTokenResponse;
+import com.gonzalez.erp.modules.store.dto.StoreUpdateProfileRequest;
 import com.gonzalez.erp.modules.store.entity.StoreAccount;
 import com.gonzalez.erp.modules.store.entity.StoreAccountToken;
 import com.gonzalez.erp.modules.store.entity.StoreAccountTokenType;
@@ -229,16 +232,59 @@ public class StoreAuthServiceImpl implements StoreAuthService {
     @Override
     @Transactional(readOnly = true)
     public StoreMeResponse me() {
+        return toMeResponse(currentAccount());
+    }
+
+    @Override
+    public StoreMeResponse updateProfile(StoreUpdateProfileRequest request) {
+        StoreAccount account = currentAccount();
+        account.getCustomer().updateContact(
+                request.firstName().trim(), request.lastName().trim(), blankToNull(request.phone()));
+        return toMeResponse(account);
+    }
+
+    @Override
+    public StoreTokenResponse changePassword(StoreChangePasswordRequest request, String clientIp) {
+        CurrentStore store = CurrentStore.require();
+        StoreAccount account = currentAccount();
+        String attemptKey = loginAttemptKey(store.companyId(), account.getEmail());
+        // Adivinar la contraseña actual con una sesión robada cuenta como intento fallido.
+        loginAttemptService.checkAllowed(attemptKey, clientIp);
+
+        if (account.getPasswordHash() == null) {
+            throw InvalidPasswordChangeException.passwordNotSet();
+        }
+        if (!passwordEncoder.matches(request.currentPassword(), account.getPasswordHash())) {
+            loginAttemptService.recordFailure(attemptKey, clientIp);
+            throw InvalidPasswordChangeException.wrongCurrentPassword();
+        }
+        if (passwordEncoder.matches(request.newPassword(), account.getPasswordHash())) {
+            throw InvalidPasswordChangeException.sameAsCurrent();
+        }
+
+        account.changePassword(passwordEncoder.encode(request.newPassword()), Instant.now());
+        loginAttemptService.recordSuccess(attemptKey);
+        events.publishEvent(new StoreMailEvent.PasswordChanged(
+                account.getEmail(), firstNameOf(account.getCustomer()), store.name(), store.domain(), store.mailFrom()));
+        // Se firma después del cambio: el filtro rechaza los anteriores y este sigue valiendo.
+        return StoreTokenResponse.bearer(tokenService.generate(account));
+    }
+
+    private StoreAccount currentAccount() {
         StoreCustomer current = StoreCustomer.require();
-        StoreAccount account = accountRepository.findWithCustomer(current.accountId(), current.companyId())
+        return accountRepository.findWithCustomer(current.accountId(), current.companyId())
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+    }
+
+    private static StoreMeResponse toMeResponse(StoreAccount account) {
         Customer customer = account.getCustomer();
         return new StoreMeResponse(
                 customer.getFirstName(),
                 customer.getLastName(),
                 account.getEmail(),
                 customer.getPhone(),
-                account.isEmailVerified()
+                account.isEmailVerified(),
+                account.getPasswordHash() != null
         );
     }
 

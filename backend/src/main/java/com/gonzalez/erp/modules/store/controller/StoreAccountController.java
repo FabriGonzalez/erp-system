@@ -1,6 +1,7 @@
 package com.gonzalez.erp.modules.store.controller;
 
 import com.gonzalez.erp.common.dto.ErrorResponse;
+import com.gonzalez.erp.modules.store.dto.StoreChangePasswordRequest;
 import com.gonzalez.erp.modules.store.dto.StoreEmailRequest;
 import com.gonzalez.erp.modules.store.dto.StoreLinkTokenRequest;
 import com.gonzalez.erp.modules.store.dto.StoreLoginRequest;
@@ -8,6 +9,7 @@ import com.gonzalez.erp.modules.store.dto.StoreMeResponse;
 import com.gonzalez.erp.modules.store.dto.StoreRegisterRequest;
 import com.gonzalez.erp.modules.store.dto.StoreResetPasswordRequest;
 import com.gonzalez.erp.modules.store.dto.StoreTokenResponse;
+import com.gonzalez.erp.modules.store.dto.StoreUpdateProfileRequest;
 import com.gonzalez.erp.modules.store.service.StoreAuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -19,6 +21,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -121,5 +124,29 @@ public class StoreAccountController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<StoreMeResponse> me() {
         return ResponseEntity.ok(authService.me());
+    }
+
+    @PatchMapping("/me")
+    @Operation(summary = "Editar mis datos",
+            description = "Recibe el formulario completo: un teléfono vacío o ausente se borra. El email no se cambia.")
+    @ApiResponse(responseCode = "200", description = "Datos actualizados")
+    @ApiResponse(responseCode = "400", description = "Datos inválidos",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<StoreMeResponse> updateProfile(@Valid @RequestBody StoreUpdateProfileRequest request) {
+        return ResponseEntity.ok(authService.updateProfile(request));
+    }
+
+    @PatchMapping("/me/password")
+    @Operation(summary = "Cambiar mi contraseña",
+            description = "Cierra las demás sesiones, avisa por mail y devuelve un token nuevo para esta sesión.")
+    @ApiResponse(responseCode = "200", description = "Contraseña cambiada; el token anterior ya no vale")
+    @ApiResponse(responseCode = "400",
+            description = "Contraseña inválida, INVALID_CURRENT_PASSWORD, PASSWORD_UNCHANGED o PASSWORD_NOT_SET (cuenta de Google)",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "429", description = "Demasiados intentos fallidos",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<StoreTokenResponse> changePassword(
+            @Valid @RequestBody StoreChangePasswordRequest request, HttpServletRequest httpRequest) {
+        return ResponseEntity.ok(authService.changePassword(request, httpRequest.getRemoteAddr()));
     }
 }

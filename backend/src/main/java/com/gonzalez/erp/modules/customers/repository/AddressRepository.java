@@ -13,6 +13,8 @@ public interface AddressRepository extends JpaRepository<Address, Long> {
 
     Optional<Address> findByIdAndCustomerId(Long addressId, Long customerId);
 
+    long countByCustomerIdAndActiveTrue(Long customerId);
+
     /** Para el resumen de direcciones de una página de clientes en una sola consulta. */
     List<Address> findByCustomerIdInAndActiveTrue(Collection<Long> customerIds);
 }

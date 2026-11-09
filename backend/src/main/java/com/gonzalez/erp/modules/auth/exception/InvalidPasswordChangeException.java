@@ -25,6 +25,11 @@ public class InvalidPasswordChangeException extends RuntimeException {
                 "This account's password is managed by an administrator", "PASSWORD_MANAGED_BY_ADMIN");
     }
 
+    /** Cuenta de la tienda creada con Google: no tiene contraseña que cambiar. */
+    public static InvalidPasswordChangeException passwordNotSet() {
+        return new InvalidPasswordChangeException("This account does not use a password", "PASSWORD_NOT_SET");
+    }
+
     public static InvalidPasswordChangeException sameAsCurrent() {
         return new InvalidPasswordChangeException(
                 "New password must be different from the current one", "PASSWORD_UNCHANGED");

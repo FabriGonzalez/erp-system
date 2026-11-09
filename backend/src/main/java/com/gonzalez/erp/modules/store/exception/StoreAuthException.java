@@ -22,6 +22,11 @@ public class StoreAuthException extends RuntimeException {
                 "Email not verified. Check your inbox or request a new link");
     }
 
+    public static StoreAuthException addressLimitReached() {
+        return new StoreAuthException(HttpStatus.CONFLICT, "ADDRESS_LIMIT_REACHED",
+                "The maximum number of addresses has been reached");
+    }
+
     /** Link vencido, ya usado, de otra tienda o inventado: no se distingue cuál. */
     public static StoreAuthException invalidLink() {
         return new StoreAuthException(HttpStatus.BAD_REQUEST, "INVALID_LINK", "The link is invalid or has expired");
