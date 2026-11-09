@@ -9,7 +9,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useCustomerAddresses } from '@/hooks/use-customer-queries';
+import { useCustomer, useCustomerAddresses } from '@/hooks/use-customer-queries';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
 import { CustomerAddress } from '@/types/customer';
@@ -26,8 +26,10 @@ export function SelectAddressScreen({ flow }: SelectAddressScreenProps) {
     // Solo las activas: una inactiva no se puede elegir para un envío.
     const { addresses, error, isLoading, reload } = useCustomerAddresses(customer.id, { activeOnly: true });
     const addAddressRoute = ORDER_FORM_ROUTES[flow].addAddress;
-    // Las direcciones de un cliente web las administra él desde la tienda.
-    const canAddAddress = customer.origin !== 'WEB';
+    // Las direcciones de un cliente web las administra él desde la tienda. El origen se pide al
+    // backend porque al editar una orden el borrador no lo conoce.
+    const { customer: freshCustomer } = useCustomer(customer.id);
+    const canAddAddress = (freshCustomer ?? customer).origin !== 'WEB';
 
     function handleSelectAddress(address: CustomerAddress) {
         setDraftAddress(address);
