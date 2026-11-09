@@ -74,6 +74,8 @@ app:
   store:
     link-scheme: ${STORE_LINK_SCHEME:https}
     link-port: ${STORE_LINK_PORT:}
+    # Client ID de la app de Google Cloud. Vacío = "Continuar con Google" deshabilitado (503).
+    google-client-id: ${GOOGLE_CLIENT_ID:}
   platform-admin:
     username: ${ERP_PLATFORM_ADMIN_USERNAME:platform_admin}
     email: ${ERP_PLATFORM_ADMIN_EMAIL:platform@erp.local}

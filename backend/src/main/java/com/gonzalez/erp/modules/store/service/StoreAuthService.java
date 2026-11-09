@@ -25,6 +25,9 @@ public interface StoreAuthService {
 
     StoreTokenResponse login(StoreLoginRequest request, String clientIp);
 
+    /** Entra con la cuenta vinculada a ese id de Google; si no hay, vincula por email o crea una nueva. */
+    StoreTokenResponse loginWithGoogle(String idToken);
+
     /**
      * Manda el link para elegir otra contraseña (1 h, un solo uso) y anula los anteriores.
      * No dice si el email tiene cuenta.

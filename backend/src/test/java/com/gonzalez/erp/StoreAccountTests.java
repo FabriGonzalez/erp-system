@@ -1,5 +1,7 @@
 package com.gonzalez.erp;
 
+import com.gonzalez.erp.modules.store.security.GoogleTokenVerifier;
+import com.gonzalez.erp.modules.store.security.GoogleTokenVerifier.GoogleIdentity;
 import jakarta.mail.Address;
 import jakarta.mail.Multipart;
 import jakarta.mail.Part;
@@ -79,6 +81,10 @@ class StoreAccountTests {
 
     @MockitoBean
     private JavaMailSender mailSender;
+
+    // Simulado: la firma real de Google se prueba en GoogleTokenVerifierTest.
+    @MockitoBean
+    private GoogleTokenVerifier googleTokenVerifier;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -600,6 +606,131 @@ class StoreAccountTests {
         ok(call(adminA, "PATCH", addressesPath + "/" + addressId, Map.of("street", "Local 2", "city", "CABA"), null));
         ok(call(adminA, "PATCH", addressesPath + "/" + addressId + "/deactivate", null, null));
         ok(call(adminA, "PATCH", addressesPath + "/" + addressId + "/activate", null, null));
+    }
+
+    @Test
+    void continuingWithGoogleCreatesAVerifiedWebAccountWithoutPassword() {
+        ok(call(adminA, "POST", "/customers", Map.of("firstName", "Gala del Local", "email", "gala@mail.test"), null));
+        register(STORE_A, "Intrusa", "gala@mail.test", PASSWORD);
+        String pendingLink = lastMailTo("gala@mail.test", 1).token();
+
+        assertThat(call(null, "POST", "/store/auth/google", Map.of("idToken", " "), STORE_A).status()).isEqualTo(400);
+
+        String token = googleToken(STORE_A, new GoogleIdentity("sub-gala", "GALA@mail.test", true, "Gala", "Web"));
+        JsonNode me = ok(call(token, "GET", "/store/me", null, STORE_A));
+        assertThat(me.get("firstName").asString()).isEqualTo("Gala");
+        assertThat(me.get("email").asString()).isEqualTo("gala@mail.test");
+        assertThat(me.get("emailVerified").asBoolean()).isTrue();
+        assertThat(me.get("hasPassword").asBoolean()).isFalse();
+
+        // Ficha nueva: la del ERP con el mismo email sigue aparte y el registro pendiente quedó anulado.
+        assertThat(customerNames(adminA, "ERP")).contains("Gala del Local");
+        assertThat(customerNames(adminA, "WEB")).contains("Gala").doesNotContain("Intrusa");
+        assertThat(verify(STORE_A, pendingLink).hasCode("INVALID_LINK")).isTrue();
+
+        // El id de Google manda: con otro email en Google sigue siendo la misma cuenta.
+        String again = googleToken(STORE_A, new GoogleIdentity("sub-gala", "gala.nueva@mail.test", true, "Gala", "Web"));
+        assertThat(ok(call(again, "GET", "/store/me", null, STORE_A)).get("email").asString()).isEqualTo("gala@mail.test");
+        assertThat(customerNames(adminA, "WEB")).containsOnlyOnce("Gala");
+
+        assertThat(login(STORE_A, "gala@mail.test", PASSWORD).hasCode("INVALID_CREDENTIALS")).isTrue();
+        assertThat(call(token, "GET", "/customers", null, null).status()).isIn(401, 403);
+    }
+
+    @Test
+    void googleLinksToTheExistingAccountOfThatEmail() {
+        registerAndVerify(STORE_A, "Hortensia", "hortensia@mail.test", PASSWORD);
+
+        String token = googleToken(STORE_A, new GoogleIdentity("sub-hortensia", "hortensia@mail.test", true, "Otro", "Nombre"));
+
+        JsonNode me = ok(call(token, "GET", "/store/me", null, STORE_A));
+        assertThat(me.get("firstName").asString()).isEqualTo("Hortensia");
+        assertThat(me.get("hasPassword").asBoolean()).isTrue();
+        assertThat(customerNames(adminA, "WEB")).containsOnlyOnce("Hortensia").doesNotContain("Otro");
+        assertThat(googleSubjectOf("hortensia@mail.test")).isEqualTo("sub-hortensia");
+        buyerLogin(STORE_A, "hortensia@mail.test", PASSWORD);
+
+        // Solo el mail de verificación: vincular no avisa.
+        pause();
+        assertThat(mailsTo("hortensia@mail.test")).hasSize(1);
+    }
+
+    @Test
+    void googleNeedsAConfirmedEmailToCreateOrLinkAnAccount() {
+        registerAndVerify(STORE_A, "Irene", "irene@mail.test", PASSWORD);
+
+        assertThat(googleLogin(STORE_A, new GoogleIdentity("sub-irene", "irene@mail.test", false, "Irene", null))
+                .hasCode("GOOGLE_LOGIN_FAILED")).isTrue();
+        assertThat(googleSubjectOf("irene@mail.test")).isNull();
+        assertThat(googleLogin(STORE_A, new GoogleIdentity("sub-sin-cuenta", "sincuenta@mail.test", false, "Sin", "Cuenta"))
+                .hasCode("GOOGLE_LOGIN_FAILED")).isTrue();
+        assertThat(customerNames(adminA, "WEB")).doesNotContain("Sin");
+
+        // Ya vinculada, la identifica el id.
+        googleToken(STORE_A, new GoogleIdentity("sub-irene", "irene@mail.test", true, "Irene", null));
+        googleToken(STORE_A, new GoogleIdentity("sub-irene", "irene@mail.test", false, "Irene", null));
+    }
+
+    @Test
+    void anEmailLinkedToAnotherGoogleIdIsRejected() {
+        googleToken(STORE_A, new GoogleIdentity("sub-ana-acme", "ventas@acme.test", true, "Anita", "Acme"));
+
+        assertThat(googleLogin(STORE_A, new GoogleIdentity("sub-otro-acme", "ventas@acme.test", true, "Reasignado", "Acme"))
+                .hasCode("GOOGLE_LOGIN_FAILED")).isTrue();
+
+        assertThat(googleSubjectOf("ventas@acme.test")).isEqualTo("sub-ana-acme");
+        assertThat(customerNames(adminA, "WEB")).doesNotContain("Reasignado");
+    }
+
+    @Test
+    void aDeactivatedCustomerCannotEnterWithGoogleNorGetLinked() {
+        registerAndVerify(STORE_A, "Juana", "juana@mail.test", PASSWORD);
+        String customerPath = "/customers/" + customerId(adminA, "Juana");
+        GoogleIdentity identity = new GoogleIdentity("sub-juana", "juana@mail.test", true, "Juana", "Prueba");
+
+        ok(call(adminA, "PATCH", customerPath + "/deactivate", null, null));
+        assertThat(googleLogin(STORE_A, identity).hasCode("GOOGLE_LOGIN_FAILED")).isTrue();
+        assertThat(googleSubjectOf("juana@mail.test")).isNull();
+
+        ok(call(adminA, "PATCH", customerPath + "/activate", null, null));
+        googleToken(STORE_A, identity);
+
+        ok(call(adminA, "PATCH", customerPath + "/deactivate", null, null));
+        assertThat(googleLogin(STORE_A, identity).hasCode("GOOGLE_LOGIN_FAILED")).isTrue();
+    }
+
+    @Test
+    void eachStoreHasItsOwnGoogleAccountAndANamelessOneStaysEmpty() {
+        // Tienda propia: una ficha sin nombre no puede mezclarse con los listados de los demás tests.
+        String otherStore = "google-c.test";
+        provision(platform, "Google C", "admin_google_c", otherStore);
+
+        String inA = googleToken(STORE_A, new GoogleIdentity("sub-kira", "kira@mail.test", true, "Kira", "Prueba"));
+        String inOther = googleToken(otherStore, new GoogleIdentity("sub-kira", "kira@mail.test", true, null, " "));
+
+        assertThat(call(inA, "GET", "/store/me", null, otherStore).status()).isEqualTo(401);
+        assertThat(call(inOther, "GET", "/store/me", null, STORE_A).status()).isEqualTo(401);
+        JsonNode me = ok(call(inOther, "GET", "/store/me", null, otherStore));
+        assertThat(me.path("firstName").isMissingNode() || me.path("firstName").isNull()).isTrue();
+        assertThat(me.path("lastName").isMissingNode() || me.path("lastName").isNull()).isTrue();
+
+        // Registrarse con ese email avisa que entre con Google: no tiene contraseña que recuperar.
+        assertThat(register(otherStore, "Kira", "kira@mail.test", PASSWORD).status()).isEqualTo(202);
+        Mail mail = lastMailTo("kira@mail.test", 1);
+        assertThat(mail.body()).contains("Hola,").contains("Continuar con Google").doesNotContain("Olvidé");
+    }
+
+    private Response googleLogin(String store, GoogleIdentity identity) {
+        Mockito.when(googleTokenVerifier.verify("id-token-de-google")).thenReturn(identity);
+        return call(null, "POST", "/store/auth/google", Map.of("idToken", "id-token-de-google"), store);
+    }
+
+    private String googleToken(String store, GoogleIdentity identity) {
+        return ok(googleLogin(store, identity)).get("token").asString();
+    }
+
+    private String googleSubjectOf(String email) {
+        return jdbc.queryForObject("SELECT google_subject FROM store_accounts WHERE email = ?", String.class, email);
     }
 
     private Response changePassword(String token, String currentPassword, String newPassword) {

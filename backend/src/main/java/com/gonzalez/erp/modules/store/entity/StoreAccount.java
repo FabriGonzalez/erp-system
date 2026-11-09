@@ -58,6 +58,12 @@ public class StoreAccount extends BaseEntity {
         }
     }
 
+    /** Google ya probó que la persona controla el email: la cuenta queda verificada. */
+    public void linkGoogle(String googleSubject, Instant now) {
+        this.googleSubject = googleSubject;
+        markEmailVerified(now);
+    }
+
     /** Los tokens emitidos antes de este momento dejan de valer. */
     public void changePassword(String passwordHash, Instant now) {
         this.passwordHash = passwordHash;

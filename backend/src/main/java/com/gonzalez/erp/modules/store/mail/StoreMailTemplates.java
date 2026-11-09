@@ -38,23 +38,36 @@ final class StoreMailTemplates {
 
     static Mail alreadyRegistered(StoreMailEvent.AlreadyRegistered mail, String storeUrl) {
         String subject = "Ya tenés una cuenta en " + mail.storeName();
+        // Una cuenta de Google no tiene contraseña que recuperar: mandarla a "Olvidé" sería un callejón sin salida.
+        String textAccess = mail.hasPassword()
+                ? "Podés iniciar sesión en %s y, si no recordás la contraseña, recuperarla desde \"Olvidé mi contraseña\"."
+                        .formatted(storeUrl)
+                : "Tu cuenta se creó con Google: entrá a %s con el botón \"Continuar con Google\".".formatted(storeUrl);
+        String htmlAccess = mail.hasPassword()
+                ? "Podés <a href=\"%s\">iniciar sesión</a> y, si no recordás la contraseña, recuperarla desde \"Olvidé mi contraseña\"."
+                        .formatted(storeUrl)
+                : "Tu cuenta se creó con Google: <a href=\"%s\">entrá a la tienda</a> con el botón \"Continuar con Google\"."
+                        .formatted(storeUrl);
         String text = """
-                Hola %s,
+                %s
 
                 Alguien (seguramente vos) intentó crear una cuenta en %s con este email, pero ya \
-                tenés una. Podés iniciar sesión en %s y, si no recordás la contraseña, recuperarla \
-                desde "Olvidé mi contraseña".
+                tenés una. %s
 
                 Si no fuiste vos, ignorá este mail: tu cuenta no cambió.
-                """.formatted(mail.firstName(), mail.storeName(), storeUrl);
+                """.formatted(greeting(mail.firstName()), mail.storeName(), textAccess);
         String html = layout(mail.storeName(), """
-                <p>Hola %s,</p>
+                <p>%s</p>
                 <p>Alguien (seguramente vos) intentó crear una cuenta en %s con este email, pero ya tenés una.
-                Podés <a href="%s">iniciar sesión</a> y, si no recordás la contraseña, recuperarla desde
-                "Olvidé mi contraseña".</p>
+                %s</p>
                 <p style="color:#666;font-size:13px">Si no fuiste vos, ignorá este mail: tu cuenta no cambió.</p>
-                """.formatted(escape(mail.firstName()), escape(mail.storeName()), storeUrl));
+                """.formatted(escape(greeting(mail.firstName())), escape(mail.storeName()), htmlAccess));
         return new Mail(subject, text, html);
+    }
+
+    // Una cuenta creada con Google puede no tener nombre.
+    private static String greeting(String firstName) {
+        return firstName == null || firstName.isBlank() ? "Hola," : "Hola " + firstName + ",";
     }
 
     static Mail passwordReset(StoreMailEvent.PasswordReset mail, String link) {

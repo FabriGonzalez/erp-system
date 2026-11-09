@@ -24,6 +24,8 @@ import com.gonzalez.erp.modules.store.mail.StoreMailEvent;
 import com.gonzalez.erp.modules.store.repository.StoreAccountRepository;
 import com.gonzalez.erp.modules.store.repository.StoreAccountTokenRepository;
 import com.gonzalez.erp.modules.store.repository.StorePendingRegistrationRepository;
+import com.gonzalez.erp.modules.store.security.GoogleTokenVerifier;
+import com.gonzalez.erp.modules.store.security.GoogleTokenVerifier.GoogleIdentity;
 import com.gonzalez.erp.modules.store.security.StoreCustomer;
 import com.gonzalez.erp.modules.store.security.StoreLinkTokens;
 import com.gonzalez.erp.modules.store.security.StoreTokenService;
@@ -57,6 +59,7 @@ public class StoreAuthServiceImpl implements StoreAuthService {
     private final CompanyRepository companyRepository;
     private final PasswordEncoder passwordEncoder;
     private final StoreTokenService tokenService;
+    private final GoogleTokenVerifier googleTokenVerifier;
     private final LoginAttemptService loginAttemptService;
     private final ApplicationEventPublisher events;
 
@@ -76,7 +79,8 @@ public class StoreAuthServiceImpl implements StoreAuthService {
         if (existing.isPresent()) {
             // La respuesta es la misma; solo el dueño del email se entera, por mail.
             events.publishEvent(new StoreMailEvent.AlreadyRegistered(
-                    email, firstNameOf(existing.get().getCustomer()), store.name(), store.domain(), store.mailFrom()));
+                    email, firstNameOf(existing.get().getCustomer()), store.name(), store.domain(), store.mailFrom(),
+                    existing.get().getPasswordHash() != null));
             return;
         }
 
@@ -169,8 +173,10 @@ public class StoreAuthServiceImpl implements StoreAuthService {
         }
 
         StoreAccount account = found.get();
-        boolean passwordMatches = account.getPasswordHash() != null
-                && passwordEncoder.matches(request.password(), account.getPasswordHash());
+        String passwordHash = account.getPasswordHash();
+        // Sin contraseña (cuenta de Google) se compara igual, para que tarde lo mismo que las demás.
+        boolean passwordMatches = passwordEncoder.matches(
+                request.password(), passwordHash != null ? passwordHash : unknownAccountHash()) && passwordHash != null;
         // Ficha desactivada en el ERP: el mismo error, sin revelar que la cuenta existe.
         if (!passwordMatches || !account.getCustomer().isActive()) {
             loginAttemptService.recordFailure(attemptKey, clientIp);
@@ -180,6 +186,67 @@ public class StoreAuthServiceImpl implements StoreAuthService {
 
         account.recordLogin(Instant.now());
         return StoreTokenResponse.bearer(tokenService.generate(account));
+    }
+
+    @Override
+    public StoreTokenResponse loginWithGoogle(String idToken) {
+        Long companyId = CurrentStore.require().companyId();
+        GoogleIdentity google = googleTokenVerifier.verify(idToken);
+
+        // El id de Google es lo que identifica a la persona: si ya está vinculada, el email no importa.
+        StoreAccount account = accountRepository.findWithCustomerByGoogleSubject(companyId, google.subject())
+                .orElseGet(() -> linkOrCreateGoogleAccount(companyId, google));
+        // Al fallar se revierte la transacción: una ficha desactivada tampoco queda vinculada.
+        if (!account.getCustomer().isActive()) {
+            throw StoreAuthException.googleLoginFailed();
+        }
+        account.recordLogin(Instant.now());
+        return StoreTokenResponse.bearer(tokenService.generate(account));
+    }
+
+    private StoreAccount linkOrCreateGoogleAccount(Long companyId, GoogleIdentity google) {
+        if (!google.emailVerified()) {
+            throw StoreAuthException.googleLoginFailed();
+        }
+        String email = normalizeEmail(google.email());
+        Instant now = Instant.now();
+
+        Optional<StoreAccount> byEmail = accountRepository.findWithCustomerByEmail(companyId, email);
+        if (byEmail.isPresent()) {
+            StoreAccount account = byEmail.get();
+            // El email pasó a otra persona (p. ej. una casilla corporativa reasignada): no hereda la cuenta.
+            if (account.getGoogleSubject() != null) {
+                throw StoreAuthException.googleLoginFailed();
+            }
+            account.linkGoogle(google.subject(), now);
+            return account;
+        }
+
+        Company company = companyRepository.getReferenceById(companyId);
+        // Siempre una ficha nueva, como el registro. Sin nombre en Google, lo completa el comprador en su perfil.
+        Customer customer = customerRepository.save(Customer.builder()
+                .firstName(googleName(google.givenName()))
+                .lastName(googleName(google.familyName()))
+                .email(email)
+                .company(company)
+                .origin(CustomerOrigin.WEB)
+                .build());
+        StoreAccount account = accountRepository.save(StoreAccount.builder()
+                .company(company)
+                .customer(customer)
+                .email(email)
+                .googleSubject(google.subject())
+                .emailVerifiedAt(now)
+                .build());
+        // Los links de registro pendientes de este email ya no tienen nada que crear.
+        pendingRepository.deleteAllByEmail(companyId, email);
+        return account;
+    }
+
+    // Un nombre demasiado largo no puede impedir la entrada: la columna admite 100 caracteres.
+    private static String googleName(String name) {
+        String value = blankToNull(name);
+        return value == null || value.length() <= 100 ? value : value.substring(0, 100);
     }
 
     @Override

@@ -20,8 +20,9 @@ public sealed interface StoreMailEvent {
     record Verification(String to, String firstName, String storeName, String storeDomain, String storeMailFrom, String token)
             implements StoreMailEvent {}
 
-    /** Alguien se registró con un email que ya tiene cuenta: se le avisa al dueño. */
-    record AlreadyRegistered(String to, String firstName, String storeName, String storeDomain, String storeMailFrom)
+    /** Alguien se registró con un email que ya tiene cuenta: se le avisa al dueño. Sin contraseña, entra con Google. */
+    record AlreadyRegistered(String to, String firstName, String storeName, String storeDomain, String storeMailFrom,
+                             boolean hasPassword)
             implements StoreMailEvent {}
 
     /** Link para elegir una contraseña nueva. */

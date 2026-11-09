@@ -18,6 +18,13 @@ public interface StoreAccountRepository extends JpaRepository<StoreAccount, Long
             """)
     Optional<StoreAccount> findWithCustomerByEmail(@Param("companyId") Long companyId, @Param("email") String email);
 
+    @Query("""
+            SELECT a FROM StoreAccount a JOIN FETCH a.customer
+            WHERE a.company.id = :companyId AND a.googleSubject = :googleSubject
+            """)
+    Optional<StoreAccount> findWithCustomerByGoogleSubject(@Param("companyId") Long companyId,
+                                                           @Param("googleSubject") String googleSubject);
+
     // Con el cliente cargado: el filtro corre fuera de una transacción y mira si está activo.
     @Query("""
             SELECT a FROM StoreAccount a JOIN FETCH a.customer

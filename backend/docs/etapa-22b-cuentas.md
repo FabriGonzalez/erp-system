@@ -2,7 +2,7 @@
 
 Plan detallado de la segunda parte de la etapa 22 (plan general en `docs/plan-proximas-etapas.md`, sección "22B"). Rama: `feature/store-22b`, desde `feature/store-22a`. Alcance: backend, más la marca "Web" en el frontend del ERP (la única excepción de la decisión 8 de 22A).
 
-Estado al 2026-11-09: pasos 1 (aa310a4), 2 (4352ce5), 3a (9038974), 3b (6aac455), 3c (46ff9ba, bf9e783) 4a (7fa325f), 4b (86228f6) y 5 hechos. Sigue 6.
+Estado al 2026-11-09: pasos 1 (aa310a4), 2 (4352ce5), 3a (9038974), 3b (6aac455), 3c (46ff9ba, bf9e783) 4a (7fa325f), 4b (86228f6), 5 y 6 hechos.
 
 ## Lo que hay hoy (relevado el 2026-11-04)
 
@@ -107,7 +107,7 @@ Cada paso es un commit, con su revisión antes:
 | 4a | Perfil y direcciones del comprador | 15 |
 | 4b | Ficha web protegida en el ERP | 5 |
 | 5 | Marca "Web" y solo lectura en el ERP (frontend) | 11 |
-| 6 | Inicio con Google | 6 |
+| 6 | Inicio con Google | 14 |
 
 ## Decisiones del usuario (2026-11-04)
 
@@ -129,7 +129,17 @@ Cada paso es un commit, con su revisión antes:
 - **Email ya registrado con contraseña:** si Google confirma el email (`email_verified`), se vincula a la cuenta existente de esa tienda y queda verificada. Es lo habitual y es seguro porque Google ya probó que la persona controla el email.
 - **Lo de afuera del código:** una app en Google Cloud con su pantalla de consentimiento (nombre, logo y política de privacidad), y cada dominio de tienda cargado como origen autorizado. Pidiendo solo email y perfil, Google no exige la revisión larga.
 - **"Último usado" en el login** (pedido del 2026-11-06, como Render o Neon): el sitio guarda en `localStorage` el método con el que se entró (Google o contraseña) y marca ese botón. No toca el backend; va con el login del sitio Next.js.
-- **Costo:** unos 6 archivos en el backend (sin dependencia nueva: la firma se verifica con la librería JWT que ya usamos o con la de Google). El botón y el flujo del lado del sitio quedan para el proyecto Next.js.
+- **Del lado del sitio:** el botón y el flujo quedan para el proyecto Next.js.
+
+### 6. Hecho el 2026-11-09
+
+- `POST /store/auth/google {idToken}`, público. `GoogleTokenVerifier` valida firma, emisor, `audience` y vencimiento con `spring-security-oauth2-jose` (cambio respecto de "sin dependencia nueva": la librería baja, guarda y renueva las claves de Google). Client ID único de la plataforma en `GOOGLE_CLIENT_ID`; vacío = 503 `GOOGLE_LOGIN_DISABLED`, y si no se llega a Google, 503 `GOOGLE_LOGIN_UNAVAILABLE`.
+- Busca primero por `google_subject` (el email de Google puede haber cambiado). Si no está vinculada: exige `email_verified`, vincula por email o crea cuenta sin contraseña y ficha `WEB`, y borra los registros pendientes del email. Cualquier rechazo es 401 `GOOGLE_LOGIN_FAILED`.
+- Sin migración: V7 ya dejó el modelo preparado. Sin límite de intentos: un token de Google no se adivina, y limitar por IP frenaría a todos los compradores detrás del BFF.
+- El login con contraseña compara también en las cuentas sin contraseña (mismo tiempo de respuesta), y el mail "ya tenés cuenta" lleva a esas cuentas a "Continuar con Google".
+- **Decisiones del 2026-11-09 (6):** sin nombre en Google la ficha queda vacía y lo completa el comprador en "Mi perfil" (22C debe pedirlo antes de confirmar la compra); un email vinculado a otro id de Google se rechaza; vincular no manda mail.
+- **Límite conocido:** hay una sola app de Google para todas las tiendas, así que un ID token filtrado sirve en otra tienda hasta que vence (1 hora). El `nonce` del flujo lo maneja el sitio Next.js.
+- **Antes de habilitar una tienda:** crear la app en Google Cloud, cargar `GOOGLE_CLIENT_ID` y agregar cada dominio como origen autorizado.
 
 ## Criterios de aceptación
 

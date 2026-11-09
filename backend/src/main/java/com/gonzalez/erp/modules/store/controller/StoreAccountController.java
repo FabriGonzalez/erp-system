@@ -3,6 +3,7 @@ package com.gonzalez.erp.modules.store.controller;
 import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.modules.store.dto.StoreChangePasswordRequest;
 import com.gonzalez.erp.modules.store.dto.StoreEmailRequest;
+import com.gonzalez.erp.modules.store.dto.StoreGoogleLoginRequest;
 import com.gonzalez.erp.modules.store.dto.StoreLinkTokenRequest;
 import com.gonzalez.erp.modules.store.dto.StoreLoginRequest;
 import com.gonzalez.erp.modules.store.dto.StoreMeResponse;
@@ -90,6 +91,22 @@ public class StoreAccountController {
             @Valid @RequestBody StoreLoginRequest request, HttpServletRequest httpRequest) {
         // Mismo criterio que el login del ERP: getRemoteAddr, nunca X-Forwarded-For directo.
         return ResponseEntity.ok(authService.login(request, httpRequest.getRemoteAddr()));
+    }
+
+    @PostMapping("/auth/google")
+    @Operation(summary = "Continuar con Google",
+            description = "Recibe el ID token que Google le dio al sitio y devuelve el token de comprador (7 días). "
+                    + "Si el email confirmado por Google ya tenía cuenta en esta tienda la vincula; si no, crea la "
+                    + "cuenta y una ficha de cliente nueva (origen WEB).")
+    @ApiResponse(responseCode = "200", description = "Sesión iniciada")
+    @ApiResponse(responseCode = "400", description = "Falta el token",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "401", description = "No se pudo iniciar sesión con esa cuenta de Google (GOOGLE_LOGIN_FAILED)",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "503", description = "Google no configurado (GOOGLE_LOGIN_DISABLED) o no disponible (GOOGLE_LOGIN_UNAVAILABLE)",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<StoreTokenResponse> loginWithGoogle(@Valid @RequestBody StoreGoogleLoginRequest request) {
+        return ResponseEntity.ok(authService.loginWithGoogle(request.idToken()));
     }
 
     @PostMapping("/auth/forgot-password")
