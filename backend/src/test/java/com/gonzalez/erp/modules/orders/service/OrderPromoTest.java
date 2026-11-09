@@ -179,7 +179,7 @@ class OrderPromoTest {
         assertThat(stocks.get(REMERA_L).getQuantity()).isEqualTo(4);
         assertThat(stocks.get(GORRA).getQuantity()).isEqualTo(4);
         verify(stockMovementRecorder).record(eq(stocks.get(REMERA_M)), eq(StockMovementType.SALE), eq(-2), eq(5),
-                isNull(), eq("ORDER"), eq(ORDER_ID));
+                isNull(), eq("ORDER"), eq(ORDER_ID), eq(7L));
     }
 
     @Test
@@ -213,7 +213,7 @@ class OrderPromoTest {
                 List.of(new OrderItemRequest(REMERA_M, 1)),
                 List.of(newLine(PROMO_ID, 1, choice(REMERA_M, 2), choice(GORRA, 1))))))
                 .isInstanceOf(InsufficientStockForEditException.class);
-        verify(stockMovementRecorder, never()).record(any(), any(), anyInt(), anyInt(), any(), any(), any());
+        verify(stockMovementRecorder, never()).record(any(), any(), anyInt(), anyInt(), any(), any(), any(), any());
     }
 
     @Test
@@ -372,7 +372,7 @@ class OrderPromoTest {
         assertThat(stocks.get(REMERA_M).getQuantity()).isEqualTo(10);
         assertThat(stocks.get(GORRA).getQuantity()).isEqualTo(11);
         verify(stockMovementRecorder).record(eq(stocks.get(GORRA)), eq(StockMovementType.RETURN), eq(1), eq(10),
-                isNull(), eq("ORDER"), eq(ORDER_ID));
+                isNull(), eq("ORDER"), eq(ORDER_ID), eq(7L));
     }
 
     // --- Cancelación ---

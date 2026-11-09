@@ -25,11 +25,20 @@ public class StockMovementRecorder {
     private final StockMovementRepository stockMovementRepository;
     private final UserRepository userRepository;
 
+    /** Con el empleado de la sesión como autor. */
+    public StockMovement record(Stock stock, StockMovementType type, int quantity, int previousQuantity,
+                                String reason, String referenceType, Long referenceId) {
+        return record(stock, type, quantity, previousQuantity, reason, referenceType, referenceId,
+                SecurityUtils.getCurrentUserId());
+    }
+
     /**
+     * Para quien ya sabe quién es el autor y puede no tener una sesión de empleado.
+     *
      * @param quantity delta con signo: negativo si el stock bajó.
      */
     public StockMovement record(Stock stock, StockMovementType type, int quantity, int previousQuantity,
-                                String reason, String referenceType, Long referenceId) {
+                                String reason, String referenceType, Long referenceId, Long userId) {
         return stockMovementRepository.save(StockMovement.builder()
                 .stock(stock)
                 .type(type)
@@ -39,7 +48,7 @@ public class StockMovementRecorder {
                 .reason(reason)
                 .referenceId(referenceId)
                 .referenceType(referenceType)
-                .createdBy(userRepository.getReferenceById(SecurityUtils.getCurrentUserId()))
+                .createdBy(userRepository.getReferenceById(userId))
                 .build());
     }
 }

@@ -1622,12 +1622,16 @@ plan detallado de cada parte.
    `TO_ASSIGN`; `PaymentMethod.MERCADO_PAGO`; prioridad de sucursal para la tienda (`Branch`).
 2. **Servicios sin token de empleado:** extraer de `OrderServiceImpl` / pagos / stock la lógica que
    hoy lee `SecurityUtils` para que reciba empresa y autor explícitos; el ERP sigue pasando los del
-   token y la tienda los del contexto de tienda. Alcance (relevado el 2026-10-28): `OrderServiceImpl`
-   (7 llamadas), `PaymentServiceImpl` (6), lo que descuenta y devuelve stock en `StockServiceImpl`
-   y `StockMovementRecorder`: unas 20-25 llamadas en 4-5 archivos, no todo el backend. Va **como
-   cambio aparte, antes del checkout** (refactor sin funcionalidad nueva, con los tests y los de
-   aislamiento en verde, unos días en producción antes de seguir). Descartado (decisión del
-   usuario): un "usuario sistema" por empresa con un token de empleado simulado en el checkout.
+   token y la tienda los del contexto de tienda. **Alcance real (relevado el 2026-11-09):** solo
+   `StockMovementRecorder` y `OrderServiceImpl` (`reserveStock`, `releaseStock`, `cancelLocked`).
+   `OrderPaymentServiceImpl.registerOrderPayment` ya recibe empresa y autor; `PaymentServiceImpl`
+   no se usa (reparte el pago entre las deudas más viejas y el de Mercado Pago va a su pedido);
+   `StockServiceImpl` son ajustes del ERP (los pedidos descuentan por su cuenta), y
+   `BranchAccessService` es el permiso del empleado (la web elige sucursal por prioridad). Va
+   **como commit aparte, antes del checkout** (refactor sin funcionalidad nueva, con los tests y
+   los de aislamiento en verde). Decisión del usuario del 2026-11-09: no se esperan días en
+   producción antes de seguir. Descartado (decisión del usuario): un "usuario sistema" por empresa
+   con un token de empleado simulado en el checkout.
 3. **Checkout:** `POST /store/checkout` (ítems, retiro o envío a una dirección propia). El backend
    valida precio y stock, elige la sucursal (la primera por prioridad con todos los ítems), crea
    el pedido `PENDING_PAYMENT` descontando stock (reserva) y la preferencia de Mercado Pago;
