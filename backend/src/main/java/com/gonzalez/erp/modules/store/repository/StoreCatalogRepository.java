@@ -110,10 +110,10 @@ public interface StoreCatalogRepository extends Repository<Product, Long> {
             """)
     List<ProductVariant> findActiveVariantsWithAttributes(@Param("productId") Long productId);
 
-    // El stock de sucursales inactivas no se puede vender: suma cero.
+    // Solo suman las sucursales activas que el dueño eligió para vender por la web.
     @Query("""
             SELECT v.product.id AS productId, v.id AS variantId,
-                   COALESCE(SUM(CASE WHEN b.active = true THEN s.quantity ELSE 0 END), 0) AS quantity
+                   COALESCE(SUM(CASE WHEN b.active = true AND b.storePriority IS NOT NULL THEN s.quantity ELSE 0 END), 0) AS quantity
             FROM ProductVariant v
             LEFT JOIN Stock s ON s.productVariant = v
             LEFT JOIN s.branch b

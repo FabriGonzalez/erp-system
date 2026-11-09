@@ -220,12 +220,15 @@ public class ReportServiceImpl implements ReportService {
 
     /**
      * Todos los medios en el orden del enum (en cero si no hubo): pagos más ventas sin cliente.
-     * Las ventas sin cliente sin medio (anteriores a guardarlo) van aparte.
+     * Las ventas sin cliente sin medio (anteriores a guardarlo) van aparte. Mercado Pago aparece
+     * solo si hubo cobros: las versiones de la app sin su etiqueta mostrarían una fila sin nombre.
      */
     private static CollectionsSummary collections(List<Object[]> paymentRows, List<Object[]> walkInRows) {
         Map<PaymentMethod, BigDecimal> totals = new EnumMap<>(PaymentMethod.class);
         for (PaymentMethod method : PaymentMethod.values()) {
-            totals.put(method, BigDecimal.ZERO);
+            if (method != PaymentMethod.MERCADO_PAGO) {
+                totals.put(method, BigDecimal.ZERO);
+            }
         }
         BigDecimal withoutMethod = BigDecimal.ZERO;
         for (Object[] row : paymentRows) {

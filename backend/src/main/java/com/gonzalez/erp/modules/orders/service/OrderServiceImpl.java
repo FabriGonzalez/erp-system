@@ -46,6 +46,7 @@ import com.gonzalez.erp.modules.orders.exception.QuickSaleValidationException;
 import com.gonzalez.erp.modules.orders.mapper.OrderMapper;
 import com.gonzalez.erp.modules.orders.repository.OrderNumberCounterRepository;
 import com.gonzalez.erp.modules.orders.repository.OrderRepository;
+import com.gonzalez.erp.modules.payments.entity.PaymentMethod;
 import com.gonzalez.erp.modules.payments.service.OrderPaymentService;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
@@ -283,6 +284,10 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private void validatePaymentOptions(OrderRequest request) {
+        if (request.paymentMethod() == PaymentMethod.MERCADO_PAGO
+                || (request.initialPayment() != null && request.initialPayment().method() == PaymentMethod.MERCADO_PAGO)) {
+            throw new InvalidOrderException("MERCADO_PAGO payments are registered only by the store");
+        }
         if (request.customerId() == null) {
             if (Boolean.TRUE.equals(request.applyCredit()) || request.initialPayment() != null) {
                 throw new InvalidOrderException(

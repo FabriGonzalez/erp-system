@@ -47,8 +47,9 @@ public class Order extends BaseEntity {
     @JoinColumn(name = "customer_id")
     private Customer customer;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "created_by", nullable = false)
+    // Null en los pedidos de la tienda: no los carga un empleado.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by")
     private User createdBy;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -56,8 +57,18 @@ public class Order extends BaseEntity {
     private Company company;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    @Builder.Default
+    private OrderChannel channel = OrderChannel.ERP;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private OrderStatus status;
+
+    // Falso si se cobró sin descontar stock (ninguna sucursal podía armarlo sola): al cancelarlo no se devuelve nada.
+    @Column(name = "stock_reserved", nullable = false)
+    @Builder.Default
+    private boolean stockReserved = true;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "sales_type", nullable = false, length = 20)

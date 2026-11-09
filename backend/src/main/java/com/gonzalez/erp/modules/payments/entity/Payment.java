@@ -47,8 +47,9 @@ public class Payment extends BaseEntity {
     @Builder.Default
     private PaymentStatus status = PaymentStatus.ACTIVE;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "created_by", nullable = false)
+    // Null en los pagos de la tienda: los registra Mercado Pago, no un empleado.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by")
     private User createdBy;
 
     @Column(name = "cancelled_at")

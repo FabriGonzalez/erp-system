@@ -16,6 +16,7 @@ import com.gonzalez.erp.modules.payments.entity.Payment;
 import com.gonzalez.erp.modules.payments.entity.PaymentAllocation;
 import com.gonzalez.erp.modules.payments.entity.PaymentMethod;
 import com.gonzalez.erp.modules.payments.entity.PaymentStatus;
+import com.gonzalez.erp.modules.payments.exception.InvalidPaymentException;
 import com.gonzalez.erp.modules.payments.repository.PaymentAllocationRepository;
 import com.gonzalez.erp.modules.payments.repository.PaymentRepository;
 import com.gonzalez.erp.modules.users.entity.User;
@@ -37,6 +38,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -92,6 +94,14 @@ class PaymentServiceImplTest {
     @AfterEach
     void clearContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void anEmployeeCannotRegisterAMercadoPagoPayment() {
+        PaymentRequest request = new PaymentRequest(CUSTOMER_ID, BRANCH_ID, new BigDecimal("100"), PaymentMethod.MERCADO_PAGO);
+
+        assertThatThrownBy(() -> paymentService.createPayment(request))
+                .isInstanceOf(InvalidPaymentException.class);
     }
 
     @Test

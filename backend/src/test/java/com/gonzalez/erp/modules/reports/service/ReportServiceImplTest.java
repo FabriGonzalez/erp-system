@@ -146,10 +146,32 @@ class ReportServiceImplTest {
 
         assertThat(response.sales().orderCount()).isZero();
         assertThat(response.sales().averageTicket()).isEqualByComparingTo("0");
-        assertThat(response.collections().byMethod()).hasSize(PaymentMethod.values().length);
+        assertThat(response.collections().byMethod()).hasSize(4);
         assertThat(response.debt().totalDebt()).isEqualByComparingTo("1500");
         assertThat(response.lowStock().threshold()).isEqualTo(5);
         verifyNoInteractions(orderRepository, paymentRepository, stockRepository);
+    }
+
+    @Test
+    void mercadoPagoAppearsOnlyWhenThereWereCollections() {
+        List<Long> branchIds = List.of(CENTRO_ID);
+        when(branchAccessService.accessibleBranchIds()).thenReturn(branchIds);
+        when(customerBalanceService.getDebtSummary(COMPANY_ID))
+                .thenReturn(new CustomerDebtSummaryResponse(BigDecimal.ZERO, 0));
+        when(paymentRepository.sumActiveByMethod(COMPANY_ID, branchIds, FROM, TO)).thenReturn(
+                List.<Object[]>of(new Object[]{PaymentMethod.MERCADO_PAGO, new BigDecimal("900")}));
+        when(orderRepository.summarizeOrdersToPrepare(COMPANY_ID, branchIds))
+                .thenReturn(List.<Object[]>of(new Object[]{0L, null}));
+        when(stockRepository.findLowStock(eq(COMPANY_ID), eq(branchIds), anyInt(), any()))
+                .thenReturn(Page.empty());
+
+        DashboardResponse response = reportService.getDashboard(FROM, TO, null, null, 5, null);
+
+        assertThat(response.collections().byMethod()).last()
+                .satisfies(last -> {
+                    assertThat(last.method()).isEqualTo(PaymentMethod.MERCADO_PAGO);
+                    assertThat(last.total()).isEqualByComparingTo("900");
+                });
     }
 
     @Test
@@ -188,7 +210,8 @@ class ReportServiceImplTest {
         assertThat(response.salesByBranch()).hasSize(2);
         assertThat(response.collections().byMethod())
                 .extracting(MethodTotal::method)
-                .containsExactly(PaymentMethod.values());
+                .containsExactly(PaymentMethod.CASH, PaymentMethod.TRANSFER,
+                        PaymentMethod.DEBIT_CARD, PaymentMethod.CREDIT_CARD);
         assertThat(response.collections().byMethod().get(0).total()).isEqualByComparingTo("1000");
         assertThat(response.collections().withoutMethodTotal()).isEqualByComparingTo("1000");
         assertThat(response.topProducts()).singleElement()

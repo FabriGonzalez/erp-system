@@ -15,6 +15,7 @@ import com.gonzalez.erp.modules.inventory.entity.Stock;
 import com.gonzalez.erp.modules.inventory.repository.StockMovementRepository;
 import com.gonzalez.erp.modules.inventory.repository.StockRepository;
 import com.gonzalez.erp.modules.inventory.service.StockMovementRecorder;
+import com.gonzalez.erp.modules.orders.dto.request.InitialPaymentRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderItemRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderUpdateRequest;
@@ -181,6 +182,27 @@ class OrderDiscountTest {
                 DeliveryType.LOCAL_PICKUP, null, null, new BigDecimal("100"), null, null, null, PaymentMethod.CASH);
 
         assertThatThrownBy(() -> orderService.create(request)).isInstanceOf(QuickSaleValidationException.class);
+    }
+
+    // --- Mercado Pago solo lo registra la tienda ---
+
+    @Test
+    void aWalkInSaleCannotBePaidWithMercadoPago() {
+        when(branchAccessService.requireAccessible(BRANCH_ID)).thenReturn(branch);
+        OrderRequest request = new OrderRequest(BRANCH_ID, null, SalesType.QUICK_SALE, new BigDecimal("500"),
+                DeliveryType.LOCAL_PICKUP, null, null, null, null, null, null, PaymentMethod.MERCADO_PAGO);
+
+        assertThatThrownBy(() -> orderService.create(request)).isInstanceOf(InvalidOrderException.class);
+    }
+
+    @Test
+    void anInitialPaymentCannotBeMercadoPago() {
+        when(branchAccessService.requireAccessible(BRANCH_ID)).thenReturn(branch);
+        OrderRequest request = new OrderRequest(BRANCH_ID, CUSTOMER_ID, SalesType.QUICK_SALE, new BigDecimal("500"),
+                DeliveryType.LOCAL_PICKUP, null, null, null, null,
+                new InitialPaymentRequest(new BigDecimal("500"), PaymentMethod.MERCADO_PAGO), null, null);
+
+        assertThatThrownBy(() -> orderService.create(request)).isInstanceOf(InvalidOrderException.class);
     }
 
     // --- Edición ---

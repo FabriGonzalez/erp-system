@@ -44,7 +44,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     );
 
     /**
-     * Órdenes no canceladas con saldo pendiente. Cada fila es
+     * Órdenes con saldo pendiente: ni canceladas ni web sin pagar, que todavía no son deuda. Cada fila es
      * [customerId (Long), orderId (Long), total (BigDecimal), allocated (BigDecimal), createdAt (Instant)].
      * Si customerId es null, devuelve las de todos los clientes de la empresa.
      */
@@ -56,7 +56,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             WHERE o.company.id = :companyId
             AND o.customer IS NOT NULL
             AND (:customerId IS NULL OR o.customer.id = :customerId)
-            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.status NOT IN (com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED, com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
             AND o.total > (SELECT COALESCE(SUM(pa2.amount), 0) FROM PaymentAllocation pa2 WHERE pa2.order = o)
             ORDER BY o.createdAt ASC, o.id ASC
             """)
@@ -76,7 +76,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             JOIN FETCH o.branch
             WHERE o.company.id = :companyId
             AND o.customer.id = :customerId
-            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.status NOT IN (com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED, com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
             AND o.total > (SELECT COALESCE(SUM(pa2.amount), 0) FROM PaymentAllocation pa2 WHERE pa2.order = o)
             ORDER BY o.createdAt ASC, o.id ASC
             """,
@@ -84,7 +84,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             SELECT COUNT(o) FROM Order o
             WHERE o.company.id = :companyId
             AND o.customer.id = :customerId
-            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.status NOT IN (com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED, com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
             AND o.total > (SELECT COALESCE(SUM(pa2.amount), 0) FROM PaymentAllocation pa2 WHERE pa2.order = o)
             """)
     Page<Object[]> findPendingOrders(
@@ -98,7 +98,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT COALESCE(MAX(CAST(SUBSTRING(o.orderNumber, 5) AS INTEGER)), 0) FROM Order o WHERE o.company.id = :companyId")
     Long getMaxOrderNumberForCompany(@Param("companyId") Long companyId);
 
-    // --- Reportes: pedidos no cancelados con createdAt en [from, to) ---
+    // --- Reportes: pedidos ni cancelados ni web sin pagar, con createdAt en [from, to) ---
 
     /** Ventas por sucursal. Cada fila es [branchId (Long), branchName (String), count (Long), total (BigDecimal)]. */
     @Query("""
@@ -107,7 +107,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             JOIN o.branch b
             WHERE o.company.id = :companyId
             AND b.id IN :branchIds
-            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.status NOT IN (com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED, com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
             AND o.createdAt >= :from AND o.createdAt < :to
             GROUP BY b.id, b.name
             ORDER BY COALESCE(SUM(o.total), 0) DESC, b.id ASC
@@ -128,7 +128,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             FROM Order o
             WHERE o.company.id = :companyId
             AND o.branch.id IN :branchIds
-            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.status NOT IN (com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED, com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
             AND o.createdAt >= :from AND o.createdAt < :to
             """)
     List<Object[]> findSalesInRange(
@@ -148,7 +148,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             WHERE o.company.id = :companyId
             AND o.branch.id IN :branchIds
             AND o.customer IS NULL
-            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.status NOT IN (com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED, com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
             AND o.createdAt >= :from AND o.createdAt < :to
             GROUP BY o.paymentMethod
             """)
@@ -172,7 +172,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             JOIN v.product p
             WHERE o.company.id = :companyId
             AND o.branch.id IN :branchIds
-            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.status NOT IN (com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED, com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
             AND o.createdAt >= :from AND o.createdAt < :to
             GROUP BY v.id, p.name, v.sku
             ORDER BY SUM(i.quantity) DESC, v.id ASC
@@ -199,7 +199,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             JOIN v.product p
             WHERE o.company.id = :companyId
             AND o.branch.id IN :branchIds
-            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.status NOT IN (com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED, com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
             AND o.createdAt >= :from AND o.createdAt < :to
             GROUP BY v.id, p.name, v.sku
             """)

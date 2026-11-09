@@ -88,6 +88,7 @@ class StoreCatalogTests {
 
         Long central = id(call(a, "POST", "/branches", Map.of("name", "Central"), STORE_A));
         Long warehouse = id(call(a, "POST", "/branches", Map.of("name", "Deposito"), STORE_A));
+        jdbc.update("UPDATE branches SET store_priority = id WHERE id IN (?, ?)", central, warehouse);
         Long size = id(call(a, "POST", "/product-attributes", Map.of("name", "Talle"), STORE_A));
         Long m = id(call(a, "POST", "/product-attributes/" + size + "/values", Map.of("value", "M"), STORE_A));
         Long l = id(call(a, "POST", "/product-attributes/" + size + "/values", Map.of("value", "L"), STORE_A));
@@ -127,6 +128,7 @@ class StoreCatalogTests {
         ok(call(a, "PATCH", "/companies/me/store", Map.of("priceAdjustmentPercent", 10, "roundingStep", 10), STORE_A));
 
         Long branchB = id(call(b, "POST", "/branches", Map.of("name", "Central B"), STORE_B));
+        jdbc.update("UPDATE branches SET store_priority = 1 WHERE id = ?", branchB);
         Long categoryB = id(call(b, "POST", "/categories", Map.of("name", "Secreta"), STORE_B));
         Long secret = product(b, "B Secreto", categoryB, variant(999, List.of(), branchB, 5));
         Long companyB = jdbc.queryForObject("SELECT company_id FROM products WHERE id = ?", Long.class, secret);
@@ -168,6 +170,18 @@ class StoreCatalogTests {
         assertThat(sweater.get("availability").asString()).isEqualTo("OUT_OF_STOCK");
         // Sin fotos propias: la portada es la de su variante.
         assertThat(sweater.get("coverImageUrl").asString()).endsWith("/v.png");
+    }
+
+    @Test
+    void stockOfABranchOutOfTheStoreIsNotShown() {
+        Long central = ids.get("central");
+        jdbc.update("UPDATE branches SET store_priority = NULL WHERE id = ?", central);
+        try {
+            JsonNode blue = byName(ok(store(STORE_A, "/store/products")).get("content")).get("Remera Azul");
+            assertThat(blue.get("availability").asString()).isEqualTo("OUT_OF_STOCK");
+        } finally {
+            jdbc.update("UPDATE branches SET store_priority = id WHERE id = ?", central);
+        }
     }
 
     @Test

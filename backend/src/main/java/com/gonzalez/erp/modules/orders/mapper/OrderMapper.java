@@ -13,6 +13,7 @@ import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.promotions.mapper.PromotionMapper;
 import com.gonzalez.erp.modules.shipments.entity.Shipment;
 import com.gonzalez.erp.modules.shipments.mapper.ShipmentMapper;
+import com.gonzalez.erp.modules.users.entity.User;
 
 import java.math.BigDecimal;
 
@@ -28,6 +29,7 @@ public final class OrderMapper {
             BigDecimal balance
     ) {
         Customer customer = order.getCustomer();
+        User createdBy = order.getCreatedBy();
 
         return new OrderResponse(
                 order.getId(),
@@ -36,8 +38,8 @@ public final class OrderMapper {
                 order.getBranch().getName(),
                 customer != null ? customer.getId() : null,
                 customer != null ? customerName(customer) : null,
-                order.getCreatedBy().getId(),
-                order.getCreatedBy().getUsername(),
+                createdBy != null ? createdBy.getId() : null,
+                createdBy != null ? createdBy.getUsername() : null,
                 order.getSalesType(),
                 order.getQuickSaleAmount(),
                 order.getDeliveryType(),

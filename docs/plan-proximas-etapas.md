@@ -1618,8 +1618,18 @@ plan detallado de cada parte.
 ### 22C — Checkout, asignación de sucursal y Mercado Pago
 
 1. **Modelo:** `Order.channel` (`ERP`, `WEB`); `createdBy` pasa a opcional (los web no tienen
-   empleado; igual en `Payment` y `StockMovement`); estados nuevos `PENDING_PAYMENT` y
+   empleado; igual en `Payment`; `StockMovement` ya lo era); estados nuevos `PENDING_PAYMENT` y
    `TO_ASSIGN`; `PaymentMethod.MERCADO_PAGO`; prioridad de sucursal para la tienda (`Branch`).
+   **Decisiones del usuario (2026-11-09):**
+   - **Cambia lo decidido el 2026-10-20:** cada dueño elige de qué sucursales se muestra y se vende
+     stock (`Branch.storePriority`; vacío = no participa), en lugar de sumar siempre todas. Con
+     sucursales lejanas marca una sola y nunca hay pedidos a asignar.
+   - `TO_ASSIGN` es **después de pagar**: el pedido nace `PENDING_PAYMENT` y al acreditarse pasa a
+     `TO_ASSIGN` (pagado, falta sucursal). `Order.stockReserved = false` evita devolver al vencer
+     un stock que nunca se descontó. Lleva como sucursal provisoria la primera por prioridad.
+   - `MERCADO_PAGO` no se puede elegir en el ERP (el backend lo rechaza y el selector de la app
+     usa una lista fija de 4 medios), pero se ve como texto: **"Pago en tienda web"** (22D).
+   - Un solo medio `MERCADO_PAGO`, sin separar tarjeta o dinero en cuenta.
 2. **Servicios sin token de empleado:** extraer de `OrderServiceImpl` / pagos / stock la lógica que
    hoy lee `SecurityUtils` para que reciba empresa y autor explícitos; el ERP sigue pasando los del
    token y la tienda los del contexto de tienda. **Alcance real (relevado el 2026-11-09):** solo
@@ -1635,8 +1645,13 @@ plan detallado de cada parte.
 3. **Checkout:** `POST /store/checkout` (ítems, retiro o envío a una dirección propia). El backend
    valida precio y stock, elige la sucursal (la primera por prioridad con todos los ítems), crea
    el pedido `PENDING_PAYMENT` descontando stock (reserva) y la preferencia de Mercado Pago;
-   devuelve la URL de pago. Si ninguna sucursal alcanza pero la suma sí: pedido `TO_ASSIGN` sin
-   descontar hasta asignarlo (se informa al comprador que puede demorar).
+   devuelve la URL de pago. Si ninguna sucursal alcanza pero la suma sí: pedido sin descontar
+   stock que al pagarse pasa a `TO_ASSIGN`. La cotización del carrito avisa ese caso y el sitio
+   muestra que los productos pueden demorar unos días más porque salen de distintas sucursales.
+   Descartado (decisión del usuario, 2026-11-09): filtrar el catálogo según lo que hay en el
+   carrito, al estilo Full de Mercado Libre. Propuesta para el paso 4: excluir el pago en
+   efectivo (Rapipago/Pago Fácil) de la preferencia, porque no se acredita antes de que venza la
+   reserva; falta confirmarla.
 4. **Mercado Pago:** credenciales por empresa (guardadas cifradas); webhook público
    `POST /store/payments/mercadopago` con verificación de firma, idempotente; pago aprobado →
    `Payment` en la cuenta del cliente, pedido pasa al estado normal (retiro/envío) y mail de

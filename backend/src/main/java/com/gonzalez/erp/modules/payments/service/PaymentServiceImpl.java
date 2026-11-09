@@ -15,6 +15,7 @@ import com.gonzalez.erp.modules.payments.dto.request.PaymentRequest;
 import com.gonzalez.erp.modules.payments.dto.response.PaymentResponse;
 import com.gonzalez.erp.modules.payments.entity.Payment;
 import com.gonzalez.erp.modules.payments.entity.PaymentAllocation;
+import com.gonzalez.erp.modules.payments.entity.PaymentMethod;
 import com.gonzalez.erp.modules.payments.entity.PaymentStatus;
 import com.gonzalez.erp.modules.payments.exception.InvalidPaymentException;
 import com.gonzalez.erp.modules.payments.mapper.PaymentMapper;
@@ -58,6 +59,10 @@ public class PaymentServiceImpl implements PaymentService {
 
         if (request.amount() == null || request.amount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new InvalidPaymentException("Payment amount must be greater than zero");
+        }
+
+        if (request.method() == PaymentMethod.MERCADO_PAGO) {
+            throw new InvalidPaymentException("MERCADO_PAGO payments are registered only by the store");
         }
 
         Branch branch = branchAccessService.requireAccessible(request.branchId());
