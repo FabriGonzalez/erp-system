@@ -25,6 +25,8 @@ export function OrderAddressSection({
     onAddCustomerAddress,
 }: OrderAddressSectionProps) {
     const hasAddresses = customer.addressCount > 0;
+    // Las direcciones de un cliente web las administra él desde la tienda.
+    const canAddAddress = customer.origin !== 'WEB';
 
     return (
         <View style={styles.container}>
@@ -48,30 +50,33 @@ export function OrderAddressSection({
                     </View>
 
                     <Text style={styles.warningDescription}>
-                        Este cliente no tiene direcciones cargadas. Agregá una
-                        dirección antes de continuar con un envío.
+                        {canAddAddress
+                            ? 'Este cliente no tiene direcciones cargadas. Agregá una dirección antes de continuar con un envío.'
+                            : 'El cliente carga sus direcciones desde su cuenta en la tienda.'}
                     </Text>
 
-                    <Pressable
-                        style={({ pressed }) => [
-                            styles.addAddressBtn,
-                            pressed && SharedStyles.pressed,
-                        ]}
-                        onPress={onAddCustomerAddress}
-                    >
-                        <SymbolView
-                            name={{
-                                ios: 'plus.circle.fill',
-                                android: 'add_circle',
-                                web: 'add_circle',
-                            }}
-                            size={18}
-                            tintColor={Colors.primary}
-                        />
-                        <Text style={styles.addAddressBtnText}>
-                            Agregar dirección al cliente
-                        </Text>
-                    </Pressable>
+                    {canAddAddress ? (
+                        <Pressable
+                            style={({ pressed }) => [
+                                styles.addAddressBtn,
+                                pressed && SharedStyles.pressed,
+                            ]}
+                            onPress={onAddCustomerAddress}
+                        >
+                            <SymbolView
+                                name={{
+                                    ios: 'plus.circle.fill',
+                                    android: 'add_circle',
+                                    web: 'add_circle',
+                                }}
+                                size={18}
+                                tintColor={Colors.primary}
+                            />
+                            <Text style={styles.addAddressBtnText}>
+                                Agregar dirección al cliente
+                            </Text>
+                        </Pressable>
+                    ) : null}
                 </View>
             ) : selectedAddress ? (
                 <View style={styles.addressCard}>
@@ -79,14 +84,16 @@ export function OrderAddressSection({
                         <AddressSummary address={selectedAddress} />
 
                         <View style={styles.addressActions}>
-                            <Pressable
-                                onPress={onAddCustomerAddress}
-                                style={styles.linkBtn}
-                            >
-                                <Text style={styles.linkBtnText}>
-                                    Agregar dirección
-                                </Text>
-                            </Pressable>
+                            {canAddAddress ? (
+                                <Pressable
+                                    onPress={onAddCustomerAddress}
+                                    style={styles.linkBtn}
+                                >
+                                    <Text style={styles.linkBtnText}>
+                                        Agregar dirección
+                                    </Text>
+                                </Pressable>
+                            ) : null}
 
                             <Pressable
                                 onPress={onSelectAddress}
@@ -139,26 +146,28 @@ export function OrderAddressSection({
                         />
                     </Pressable>
 
-                    <Pressable
-                        style={({ pressed }) => [
-                            styles.addAddressBtn,
-                            pressed && SharedStyles.pressed,
-                        ]}
-                        onPress={onAddCustomerAddress}
-                    >
-                        <SymbolView
-                            name={{
-                                ios: 'plus.circle.fill',
-                                android: 'add_circle',
-                                web: 'add_circle',
-                            }}
-                            size={18}
-                            tintColor={Colors.primary}
-                        />
-                        <Text style={styles.addAddressBtnText}>
-                            Agregar nueva dirección
-                        </Text>
-                    </Pressable>
+                    {canAddAddress ? (
+                        <Pressable
+                            style={({ pressed }) => [
+                                styles.addAddressBtn,
+                                pressed && SharedStyles.pressed,
+                            ]}
+                            onPress={onAddCustomerAddress}
+                        >
+                            <SymbolView
+                                name={{
+                                    ios: 'plus.circle.fill',
+                                    android: 'add_circle',
+                                    web: 'add_circle',
+                                }}
+                                size={18}
+                                tintColor={Colors.primary}
+                            />
+                            <Text style={styles.addAddressBtnText}>
+                                Agregar nueva dirección
+                            </Text>
+                        </Pressable>
+                    ) : null}
                 </View>
             )}
         </View>

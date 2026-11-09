@@ -17,6 +17,7 @@ const CUSTOMER_ERRORS = {
         INVALID_CUSTOMER_ADDRESS: 'Una dirección inactiva no puede ser la principal.',
         CUSTOMER_DOCUMENT_ALREADY_EXISTS: 'Ya existe un cliente con ese tipo y número de documento.',
         INVALID_CUSTOMER_DOCUMENT: 'El número de documento no es válido para el tipo elegido.',
+        CUSTOMER_MANAGED_BY_STORE: 'Estos datos los administra el cliente desde su cuenta en la tienda.',
     },
     byStatus: {
         400: 'Revisá los datos ingresados.',
@@ -75,6 +76,7 @@ export function normalizeCustomer(data: CustomerResponse): Customer {
         documentNumber: optional(data.documentNumber),
         observations: optional(data.observations),
         active: data.active,
+        origin: data.origin,
         addressCount: data.addressCount ?? 0,
         mainAddress: data.mainAddress ? normalizeAddress(data.mainAddress) : null,
     };
@@ -87,6 +89,7 @@ export async function listCustomers(
     const query = new URLSearchParams();
     if (params.q?.trim()) query.set('q', params.q.trim());
     if (params.active !== undefined) query.set('active', String(params.active));
+    if (params.origin) query.set('origin', params.origin);
     if (params.page !== undefined) query.set('page', String(params.page));
     if (params.size !== undefined) query.set('size', String(params.size));
     if (params.sort) query.set('sort', params.sort);

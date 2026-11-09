@@ -60,6 +60,8 @@ export function CustomerForm({
     onCustomerCreated,
 }: CustomerFormProps) {
     const isEdit = Boolean(customer);
+    // En una ficha web el backend rechaza cambios en nombre, apellido, email y teléfono.
+    const isWebCustomer = customer?.origin === 'WEB';
     const createCustomer = useCreateCustomer();
     const updateCustomer = useUpdateCustomer(customer?.id ?? '');
 
@@ -79,6 +81,8 @@ export function CustomerForm({
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submitError, setSubmitError] = useState<string | null>(null);
     const isSubmitting = createCustomer.isPending || updateCustomer.isPending;
+    const buyerFieldsEditable = !isSubmitting && !isWebCustomer;
+    const buyerFieldStyle = isWebCustomer ? styles.readOnlyInput : undefined;
 
     function handleAddAddress() {
         const validationError = validateAddressDraft(addressDraft);
@@ -107,7 +111,8 @@ export function CustomerForm({
         if (!firstName.trim() && !lastName.trim()) {
             newErrors.name = 'Ingresá el nombre o el apellido del cliente.';
         }
-        if (email.trim() && !EMAIL_PATTERN.test(email.trim())) {
+        // El email de una ficha web no se puede corregir acá: no debe trabar el guardado.
+        if (!isWebCustomer && email.trim() && !EMAIL_PATTERN.test(email.trim())) {
             newErrors.email = 'El email no es válido.';
         }
 
@@ -210,7 +215,8 @@ export function CustomerForm({
                                     }}
                                     autoCapitalize="words"
                                     maxLength={100}
-                                    editable={!isSubmitting}
+                                    editable={buyerFieldsEditable}
+                                    style={buyerFieldStyle}
                                 />
                             </FormField>
 
@@ -224,13 +230,16 @@ export function CustomerForm({
                                     }}
                                     autoCapitalize="words"
                                     maxLength={100}
-                                    editable={!isSubmitting}
+                                    editable={buyerFieldsEditable}
+                                    style={buyerFieldStyle}
                                 />
                             </FormField>
                         </View>
 
                         <Text style={errors.name ? styles.errorText : styles.hint}>
-                            {errors.name || 'Completá al menos uno de los dos.'}
+                            {errors.name || (isWebCustomer
+                                ? 'Nombre, apellido, email y teléfono los administra el cliente desde su cuenta en la tienda.'
+                                : 'Completá al menos uno de los dos.')}
                         </Text>
                     </View>
 
@@ -245,7 +254,8 @@ export function CustomerForm({
                             keyboardType="email-address"
                             autoCapitalize="none"
                             maxLength={100}
-                            editable={!isSubmitting}
+                            editable={buyerFieldsEditable}
+                            style={buyerFieldStyle}
                         />
                     </FormField>
 
@@ -256,7 +266,8 @@ export function CustomerForm({
                             onChangeText={setPhone}
                             keyboardType="phone-pad"
                             maxLength={30}
-                            editable={!isSubmitting}
+                            editable={buyerFieldsEditable}
+                            style={buyerFieldStyle}
                         />
                     </FormField>
 
@@ -453,6 +464,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: Spacing.xs,
+    },
+    readOnlyInput: {
+        backgroundColor: Colors.muted,
+        color: Colors.textSecondary,
     },
     observationsInput: {
         height: 96,

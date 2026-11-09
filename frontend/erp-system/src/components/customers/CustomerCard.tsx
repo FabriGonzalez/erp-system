@@ -59,6 +59,7 @@ export function CustomerCard({ customer, onPress }: CustomerCardProps) {
                 </View>
             </View>
 
+            {customer.origin === 'WEB' ? <StatusPill label="Web" tone="teal" /> : null}
             {!customer.active ? <StatusPill label="Inactivo" tone="neutral" /> : null}
             <SymbolView
                 name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}

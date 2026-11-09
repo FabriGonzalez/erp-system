@@ -2,7 +2,7 @@
 
 Plan detallado de la segunda parte de la etapa 22 (plan general en `docs/plan-proximas-etapas.md`, sección "22B"). Rama: `feature/store-22b`, desde `feature/store-22a`. Alcance: backend, más la marca "Web" en el frontend del ERP (la única excepción de la decisión 8 de 22A).
 
-Estado al 2026-11-09: pasos 1 (aa310a4), 2 (4352ce5), 3a (9038974), 3b (6aac455), 3c (46ff9ba, bf9e783) 4a (7fa325f) y 4b commiteados. Siguen 5 y 6.
+Estado al 2026-11-09: pasos 1 (aa310a4), 2 (4352ce5), 3a (9038974), 3b (6aac455), 3c (46ff9ba, bf9e783) 4a (7fa325f), 4b (86228f6) y 5 hechos. Sigue 6.
 
 ## Lo que hay hoy (relevado el 2026-11-04)
 
@@ -86,6 +86,7 @@ Estado al 2026-11-09: pasos 1 (aa310a4), 2 (4352ce5), 3a (9038974), 3b (6aac455)
 
 - Píldora "Web" en el listado y la ficha del cliente, y filtro por origen en el listado.
 - En las fichas web, los datos del comprador de solo lectura y sin botones de direcciones.
+- **Decisiones del 2026-11-09 (5):** el filtro es una segunda fila de chips, "Todos · Local · Web", con "Todos" por defecto. El formulario de pedidos tampoco ofrece agregar direcciones a un cliente web: sin direcciones no se le puede hacer un envío hasta que cargue una en la tienda.
 
 ### Fuera de 22B
 
@@ -105,7 +106,7 @@ Cada paso es un commit, con su revisión antes:
 | 3c | Remitente por tienda | 5 |
 | 4a | Perfil y direcciones del comprador | 15 |
 | 4b | Ficha web protegida en el ERP | 5 |
-| 5 | Marca "Web" y solo lectura en el ERP (frontend) | 5 |
+| 5 | Marca "Web" y solo lectura en el ERP (frontend) | 11 |
 | 6 | Inicio con Google | 6 |
 
 ## Decisiones del usuario (2026-11-04)

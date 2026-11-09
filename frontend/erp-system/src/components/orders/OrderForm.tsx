@@ -107,6 +107,7 @@ export function OrderForm({
                 : {
                     id: initialOrder.customerId,
                     name: initialOrder.customerName,
+                    origin: 'ERP' as const,
                     active: true,
                     addressCount: 0,
                     mainAddress: null,

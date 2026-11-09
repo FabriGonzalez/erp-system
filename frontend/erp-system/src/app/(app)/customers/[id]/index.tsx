@@ -100,6 +100,9 @@ export default function CustomerDetailScreen() {
         );
     }
 
+    // Las direcciones de una ficha web las administra el comprador; el backend responde 409.
+    const isWebCustomer = customer.origin === 'WEB';
+    const canChangeAddresses = canEditAddresses && !isWebCustomer;
     const inactiveCount = addresses.filter((address) => !address.active).length;
     const visibleAddresses = showInactive ? addresses : addresses.filter((address) => address.active);
     const documentLabel = customer.documentNumber
@@ -206,7 +209,12 @@ export default function CustomerDetailScreen() {
                     </View>
                 ) : null}
 
-                {!customer.active ? <StatusPill label="Inactivo" tone="neutral" /> : null}
+                {isWebCustomer || !customer.active ? (
+                    <View style={styles.pills}>
+                        {isWebCustomer ? <StatusPill label="Web" tone="teal" /> : null}
+                        {!customer.active ? <StatusPill label="Inactivo" tone="neutral" /> : null}
+                    </View>
+                ) : null}
 
                 {documentLabel || customer.email || customer.phone || customer.observations ? (
                     <View style={SharedStyles.pageSection}>
@@ -249,8 +257,8 @@ export default function CustomerDetailScreen() {
                         title={customer.addressCount === 0
                             ? 'Direcciones'
                             : `Direcciones (${customer.addressCount} ${customer.addressCount === 1 ? 'activa' : 'activas'})`}
-                        actionLabel={canEditAddresses ? 'Agregar' : undefined}
-                        onAction={canEditAddresses
+                        actionLabel={canChangeAddresses ? 'Agregar' : undefined}
+                        onAction={canChangeAddresses
                             ? () =>
                                 router.push({
                                     pathname: '/customers/[id]/add-address',
@@ -292,8 +300,9 @@ export default function CustomerDetailScreen() {
                                 Sin direcciones
                             </Text>
                             <Text style={styles.emptyDescription}>
-                                Agregá una dirección para poder realizar
-                                pedidos con envío a este cliente.
+                                {isWebCustomer
+                                    ? 'El cliente carga sus direcciones desde su cuenta en la tienda.'
+                                    : 'Agregá una dirección para poder realizar pedidos con envío a este cliente.'}
                             </Text>
                         </View>
                     ) : (
@@ -311,7 +320,7 @@ export default function CustomerDetailScreen() {
                                         <AddressSummary address={address} />
                                     </View>
 
-                                    {canEditAddresses ? (
+                                    {canChangeAddresses ? (
                                         <View style={styles.addressActions}>
                                             {address.active ? (
                                                 <ActionChip
@@ -396,6 +405,10 @@ const styles = StyleSheet.create({
     errorBoxText: {
         color: Colors.error,
         fontSize: 13,
+    },
+    pills: {
+        flexDirection: 'row',
+        gap: Spacing.xs,
     },
     observations: {
         paddingVertical: Spacing.md,

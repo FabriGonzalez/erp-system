@@ -26,6 +26,7 @@ import {
     CustomerAddress,
     CUSTOMER_ANONYMOUS,
     CustomerCreateRequest,
+    CustomerOrigin,
     CustomerRequest,
 } from '@/types/customer';
 import { PageResponse } from '@/types/order';
@@ -41,8 +42,8 @@ export type CustomerStatusFilter = 'active' | 'inactive' | 'all';
 export const customerKeys = {
     all: ['customers'] as const,
     lists: () => [...customerKeys.all, 'list'] as const,
-    list: (query: string, status: CustomerStatusFilter, pageSize: number) =>
-        [...customerKeys.lists(), { query, status, pageSize }] as const,
+    list: (query: string, status: CustomerStatusFilter, origin: CustomerOrigin | undefined, pageSize: number) =>
+        [...customerKeys.lists(), { query, status, origin, pageSize }] as const,
     detail: (id: string) => [...customerKeys.all, 'detail', id] as const,
     addresses: (id: string) => [...customerKeys.all, 'addresses', id] as const,
 };
@@ -75,22 +76,25 @@ function isRegisteredCustomer(id: string | undefined): id is string {
 export function useCustomerList({
     query,
     status = 'active',
+    origin,
     pageSize = 20,
 }: {
     query: string;
     status?: CustomerStatusFilter;
+    origin?: CustomerOrigin;
     pageSize?: number;
 }) {
     const hasSession = useAuthStore((state) => Boolean(state.token));
     const debouncedQuery = useDebouncedValue(query.trim(), SEARCH_DEBOUNCE_MS);
 
     const result = useInfiniteQuery({
-        queryKey: customerKeys.list(debouncedQuery, status, pageSize),
+        queryKey: customerKeys.list(debouncedQuery, status, origin, pageSize),
         queryFn: ({ pageParam }) =>
             listCustomers(
                 {
                     q: debouncedQuery || undefined,
                     active: status === 'all' ? undefined : status === 'active',
+                    origin,
                     page: pageParam,
                     size: pageSize,
                     sort: 'name,asc',

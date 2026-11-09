@@ -22,6 +22,7 @@ import { Spacing } from '@/constants/spacing';
 import { CustomerStatusFilter, useCustomerList } from '@/hooks/use-customer-queries';
 import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
+import { CustomerOrigin } from '@/types/customer';
 import { hasPermission } from '@/utils/permissions';
 
 const STATUS_FILTERS: { value: CustomerStatusFilter; label: string }[] = [
@@ -30,9 +31,16 @@ const STATUS_FILTERS: { value: CustomerStatusFilter; label: string }[] = [
     { value: 'all', label: 'Todos' },
 ];
 
+const ORIGIN_FILTERS: { value: CustomerOrigin | 'all'; label: string }[] = [
+    { value: 'all', label: 'Todos' },
+    { value: 'ERP', label: 'Local' },
+    { value: 'WEB', label: 'Web' },
+];
+
 export default function CustomersScreen() {
     const [searchQuery, setSearchQuery] = useState('');
     const [status, setStatus] = useState<CustomerStatusFilter>('active');
+    const [origin, setOrigin] = useState<CustomerOrigin | 'all'>('all');
     // El backend deja crear clientes a quien los administra o crea pedidos.
     const canCreate = useAuthStore((state) =>
         hasPermission(state.user, 'ADMINISTRAR_CLIENTES') || hasPermission(state.user, 'CREAR_PEDIDOS'));
@@ -45,9 +53,9 @@ export default function CustomersScreen() {
         error,
         loadMore,
         refresh,
-    } = useCustomerList({ query: searchQuery, status });
+    } = useCustomerList({ query: searchQuery, status, origin: origin === 'all' ? undefined : origin });
     const isError = Boolean(error) && customers.length === 0;
-    const isFiltered = Boolean(searchQuery.trim()) || status !== 'active';
+    const isFiltered = Boolean(searchQuery.trim()) || status !== 'active' || origin !== 'all';
 
     function handleCreateCustomer() {
         router.push('/customers/new');
@@ -92,6 +100,16 @@ export default function CustomersScreen() {
                         />
                     ))}
                 </View>
+                <View style={styles.filters}>
+                    {ORIGIN_FILTERS.map((filter) => (
+                        <FilterChip
+                            key={filter.value}
+                            label={filter.label}
+                            selected={origin === filter.value}
+                            onPress={() => setOrigin(filter.value)}
+                        />
+                    ))}
+                </View>
             </View>
 
             {isInitialLoading && (
@@ -132,6 +150,7 @@ export default function CustomersScreen() {
                                 onAction={() => {
                                     setSearchQuery('');
                                     setStatus('active');
+                                    setOrigin('all');
                                 }}
                             />
                         ) : (

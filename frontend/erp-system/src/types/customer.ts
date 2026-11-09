@@ -1,5 +1,8 @@
 // --- Contrato del backend (/api/v1/customers) ---
 
+// WEB: se registró en la tienda; sus datos de contacto y direcciones los administra él.
+export type CustomerOrigin = 'ERP' | 'WEB';
+
 export type AddressResponse = {
     id: number | string;
     label: string | null;
@@ -32,6 +35,7 @@ export type CustomerResponse = {
     // Resumen de direcciones activas: el listado no trae las direcciones.
     addressCount: number;
     mainAddress: AddressResponse | null;
+    origin: CustomerOrigin;
     createdAt: string;
     updatedAt: string;
 };
@@ -71,6 +75,7 @@ export type CustomerCreateRequest = CustomerRequest & {
 export type CustomerListParams = {
     q?: string;
     active?: boolean;
+    origin?: CustomerOrigin;
     page?: number;
     size?: number;
     sort?: 'name,asc' | 'name,desc' | 'createdAt,asc' | 'createdAt,desc';
@@ -128,11 +133,13 @@ export type Customer = {
     active: boolean;
     addressCount: number;
     mainAddress: CustomerAddress | null;
+    origin: CustomerOrigin;
 };
 
 export const CUSTOMER_ANONYMOUS: Customer = {
     id: 'customer-anonymous',
     name: 'Consumidor final',
+    origin: 'ERP',
     active: true,
     addressCount: 0,
     mainAddress: null,

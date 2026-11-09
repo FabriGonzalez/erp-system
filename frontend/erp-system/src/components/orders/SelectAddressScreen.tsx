@@ -26,6 +26,8 @@ export function SelectAddressScreen({ flow }: SelectAddressScreenProps) {
     // Solo las activas: una inactiva no se puede elegir para un envío.
     const { addresses, error, isLoading, reload } = useCustomerAddresses(customer.id, { activeOnly: true });
     const addAddressRoute = ORDER_FORM_ROUTES[flow].addAddress;
+    // Las direcciones de un cliente web las administra él desde la tienda.
+    const canAddAddress = customer.origin !== 'WEB';
 
     function handleSelectAddress(address: CustomerAddress) {
         setDraftAddress(address);
@@ -53,19 +55,26 @@ export function SelectAddressScreen({ flow }: SelectAddressScreenProps) {
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={SharedStyles.listContent}
                 showsVerticalScrollIndicator={false}
-                ListHeaderComponent={
+                ListHeaderComponent={canAddAddress ? (
                     <Pressable style={({ pressed }) => [styles.addAddressBtn, pressed && SharedStyles.pressed]} onPress={handleAddAddress}>
                         <SymbolView name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }} size={18} tintColor={Colors.primary} />
                         <Text style={styles.addAddressBtnText}>Agregar nueva dirección</Text>
                     </Pressable>
-                }
+                ) : null}
                 ListEmptyComponent={
                     isLoading ? (
                         <LoadingState label="Cargando direcciones..." />
                     ) : error ? (
                         <EmptyState title="No se pudieron cargar las direcciones" description={error} actionLabel="Reintentar" onAction={reload} />
                     ) : (
-                        <EmptyState title="Sin direcciones registradas" description="Este cliente no tiene direcciones asociadas a su perfil." actionLabel="Agregar dirección" onAction={handleAddAddress} />
+                        <EmptyState
+                            title="Sin direcciones registradas"
+                            description={canAddAddress
+                                ? 'Este cliente no tiene direcciones asociadas a su perfil.'
+                                : 'El cliente carga sus direcciones desde su cuenta en la tienda.'}
+                            actionLabel={canAddAddress ? 'Agregar dirección' : undefined}
+                            onAction={canAddAddress ? handleAddAddress : undefined}
+                        />
                     )
                 }
                 renderItem={({ item }) => {
