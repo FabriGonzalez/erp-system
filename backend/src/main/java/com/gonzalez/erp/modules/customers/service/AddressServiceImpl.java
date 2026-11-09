@@ -6,6 +6,7 @@ import com.gonzalez.erp.modules.customers.dto.request.AddressRequest;
 import com.gonzalez.erp.modules.customers.dto.response.AddressResponse;
 import com.gonzalez.erp.modules.customers.entity.Address;
 import com.gonzalez.erp.modules.customers.entity.Customer;
+import com.gonzalez.erp.modules.customers.exception.CustomerManagedByStoreException;
 import com.gonzalez.erp.modules.customers.mapper.AddressMapper;
 import com.gonzalez.erp.modules.customers.repository.AddressRepository;
 import com.gonzalez.erp.modules.customers.repository.CustomerRepository;
@@ -40,7 +41,7 @@ public class AddressServiceImpl implements AddressService {
     @Override
     @Transactional
     public AddressResponse create(Long customerId, AddressRequest request) {
-        Customer customer = findCustomerOrThrow(customerId);
+        Customer customer = findEditableCustomerOrThrow(customerId);
         Address address = AddressMapper.toEntity(request);
         customer.addAddress(address, request.requestsMain());
         addressRepository.save(address);
@@ -50,7 +51,7 @@ public class AddressServiceImpl implements AddressService {
     @Override
     @Transactional
     public AddressResponse update(Long customerId, Long addressId, AddressRequest request) {
-        Customer customer = findCustomerOrThrow(customerId);
+        Customer customer = findEditableCustomerOrThrow(customerId);
         Address address = findAddressOrThrow(customerId, addressId);
         AddressMapper.applyFields(address, request);
         // false no le quita el rol de principal: para cambiarla se marca otra.
@@ -63,7 +64,7 @@ public class AddressServiceImpl implements AddressService {
     @Override
     @Transactional
     public AddressResponse deactivate(Long customerId, Long addressId) {
-        Customer customer = findCustomerOrThrow(customerId);
+        Customer customer = findEditableCustomerOrThrow(customerId);
         Address address = findAddressOrThrow(customerId, addressId);
         customer.deactivateAddress(address);
         return AddressMapper.toResponse(address);
@@ -72,10 +73,19 @@ public class AddressServiceImpl implements AddressService {
     @Override
     @Transactional
     public AddressResponse activate(Long customerId, Long addressId) {
-        Customer customer = findCustomerOrThrow(customerId);
+        Customer customer = findEditableCustomerOrThrow(customerId);
         Address address = findAddressOrThrow(customerId, addressId);
         customer.activateAddress(address);
         return AddressMapper.toResponse(address);
+    }
+
+    // Las direcciones de una ficha web las carga el comprador: el ERP solo las lee.
+    private Customer findEditableCustomerOrThrow(Long customerId) {
+        Customer customer = findCustomerOrThrow(customerId);
+        if (customer.isManagedByStore()) {
+            throw new CustomerManagedByStoreException();
+        }
+        return customer;
     }
 
     private Customer findCustomerOrThrow(Long customerId) {

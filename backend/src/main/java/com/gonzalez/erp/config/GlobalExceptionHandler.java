@@ -15,6 +15,7 @@ import com.gonzalez.erp.modules.branches.exception.BranchInactiveException;
 import com.gonzalez.erp.modules.branches.exception.BranchNameAlreadyExistsException;
 import com.gonzalez.erp.modules.categories.exception.CategoryNameAlreadyExistsException;
 import com.gonzalez.erp.modules.customers.exception.CustomerDocumentAlreadyExistsException;
+import com.gonzalez.erp.modules.customers.exception.CustomerManagedByStoreException;
 import com.gonzalez.erp.modules.customers.exception.InvalidCustomerAddressException;
 import com.gonzalez.erp.modules.customers.exception.InvalidCustomerDocumentException;
 import com.gonzalez.erp.modules.customers.exception.InvalidCustomerRequestException;
@@ -280,7 +281,8 @@ public class GlobalExceptionHandler {
             ProductAttributeNameAlreadyExistsException.class,
             ProductAttributeValueAlreadyExistsException.class,
             ProductCategoryNotActiveException.class,
-            CustomerDocumentAlreadyExistsException.class
+            CustomerDocumentAlreadyExistsException.class,
+            CustomerManagedByStoreException.class
     })
     public ResponseEntity<ErrorResponse> handleConflict(
             RuntimeException ex, HttpServletRequest request) {
@@ -296,6 +298,7 @@ public class GlobalExceptionHandler {
             case ProductAttributeNameAlreadyExistsException e -> "ATTRIBUTE_NAME_ALREADY_EXISTS";
             case ProductAttributeValueAlreadyExistsException e -> "ATTRIBUTE_VALUE_ALREADY_EXISTS";
             case ProductCategoryNotActiveException e -> "CATEGORY_INACTIVE";
+            case CustomerManagedByStoreException e -> "CUSTOMER_MANAGED_BY_STORE";
             default -> "CUSTOMER_DOCUMENT_ALREADY_EXISTS";
         };
         return ResponseEntity

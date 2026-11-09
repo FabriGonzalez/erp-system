@@ -74,6 +74,11 @@ public class Customer extends BaseEntity {
         this.observations = observations;
     }
 
+    /** Ficha creada en la tienda: sus datos de contacto y direcciones los administra el comprador. */
+    public boolean isManagedByStore() {
+        return origin == CustomerOrigin.WEB;
+    }
+
     /** Lo que el comprador edita desde la tienda: documento y observaciones no se tocan. */
     public void updateContact(String firstName, String lastName, String phone) {
         this.firstName = firstName;

@@ -12,6 +12,7 @@ import com.gonzalez.erp.modules.customers.entity.Address;
 import com.gonzalez.erp.modules.customers.entity.Customer;
 import com.gonzalez.erp.modules.customers.entity.CustomerOrigin;
 import com.gonzalez.erp.modules.customers.exception.CustomerDocumentAlreadyExistsException;
+import com.gonzalez.erp.modules.customers.exception.CustomerManagedByStoreException;
 import com.gonzalez.erp.modules.customers.exception.InvalidCustomerAddressException;
 import com.gonzalez.erp.modules.customers.exception.InvalidCustomerDocumentException;
 import com.gonzalez.erp.modules.customers.mapper.AddressMapper;
@@ -28,6 +29,7 @@ import com.gonzalez.erp.common.util.SearchText;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -112,6 +114,9 @@ public class CustomerServiceImpl implements CustomerService {
                     "Addresses are managed through /customers/{id}/addresses");
         }
         Customer customer = findCustomerOrThrow(id);
+        if (customer.isManagedByStore()) {
+            rejectChangesToStoreManagedData(customer, request);
+        }
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
         String documentType = normalizeDocumentType(request.documentType());
@@ -159,6 +164,27 @@ public class CustomerServiceImpl implements CustomerService {
         return customerRepository.findByIdAndCompanyId(id, companyId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Customer not found with id: " + id));
+    }
+
+    /*
+     * El formulario del ERP manda todos los campos, también los que no cambiaron. Se comparan
+     * normalizados para que editar las observaciones no falle por un espacio o una mayúscula.
+     */
+    private void rejectChangesToStoreManagedData(Customer customer, CustomerRequest request) {
+        boolean unchanged = sameValue(trim(customer.getFirstName()), trim(request.firstName()))
+                && sameValue(trim(customer.getLastName()), trim(request.lastName()))
+                && sameValue(normalizePhone(customer.getPhone()), normalizePhone(request.phone()))
+                && sameValue(normalizeEmail(customer.getEmail()), normalizeEmail(request.email()));
+        if (!unchanged) {
+            throw new CustomerManagedByStoreException();
+        }
+    }
+
+    // Vacío y ausente son lo mismo: el teléfono sin cargar puede llegar de las dos formas.
+    private static boolean sameValue(String stored, String requested) {
+        return Objects.equals(
+                stored == null || stored.isEmpty() ? null : stored,
+                requested == null || requested.isEmpty() ? null : requested);
     }
 
     private String trim(String value) {

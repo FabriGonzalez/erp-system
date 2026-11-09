@@ -392,7 +392,8 @@ class StoreAccountTests {
         String token = buyerLogin(STORE_A, "rosa@mail.test", PASSWORD);
         Long customerId = customerId(adminA, "Rosa");
         ok(call(adminA, "PATCH", "/customers/" + customerId, Map.of("firstName", "Rosa", "lastName", "Prueba",
-                "documentType", "DNI", "documentNumber", "30111222", "observations", "nota interna"), null));
+                "email", "rosa@mail.test", "documentType", "DNI", "documentNumber", "30111222",
+                "observations", "nota interna"), null));
 
         JsonNode updated = ok(call(token, "PATCH", "/store/me",
                 Map.of("firstName", " Rosana ", "lastName", "Gomez", "phone", "1155556666"), STORE_A));
@@ -533,6 +534,72 @@ class StoreAccountTests {
         assertThat(call(adminA, "GET", "/store/me/addresses", null, STORE_A).status()).isEqualTo(401);
         assertThat(call(owner, "GET", "/store/me/addresses", null, thirdStore).status()).isEqualTo(401);
         assertThat(addressStreets(owner, STORE_A)).containsExactly("Privada 1");
+    }
+
+    @Test
+    void theErpCannotChangeWhatTheBuyerManages() {
+        registerAndVerify(STORE_A, "Abril", "abril@mail.test", PASSWORD);
+        String token = buyerLogin(STORE_A, "abril@mail.test", PASSWORD);
+        ok(call(token, "PATCH", "/store/me",
+                Map.of("firstName", "Abril", "lastName", "Prueba", "phone", "1144443333"), STORE_A));
+        Long addressId = ok(createAddress(token, STORE_A, "Calle Propia 1", false)).get("id").asLong();
+        Long customerId = customerId(adminA, "Abril");
+        String customerPath = "/customers/" + customerId;
+        String addressesPath = customerPath + "/addresses";
+        Map<String, Object> newAddress = Map.of("street", "Del ERP", "city", "CABA");
+
+        for (String[] change : List.of(
+                new String[] {"Otra", "Prueba", "1144443333", "abril@mail.test"},
+                new String[] {"Abril", "Otro", "1144443333", "abril@mail.test"},
+                new String[] {"Abril", "Prueba", "1100000000", "abril@mail.test"},
+                new String[] {"Abril", "Prueba", "1144443333", "otro@mail.test"})) {
+            assertThat(call(adminA, "PATCH", customerPath, Map.of("firstName", change[0], "lastName", change[1],
+                    "phone", change[2], "email", change[3]), null).hasCode("CUSTOMER_MANAGED_BY_STORE")).isTrue();
+        }
+        // Tampoco se borra un dato por no mandarlo.
+        assertThat(call(adminA, "PATCH", customerPath, Map.of("firstName", "Abril", "lastName", "Prueba",
+                "email", "abril@mail.test"), null).hasCode("CUSTOMER_MANAGED_BY_STORE")).isTrue();
+
+        assertThat(call(adminA, "POST", addressesPath, newAddress, null).hasCode("CUSTOMER_MANAGED_BY_STORE")).isTrue();
+        assertThat(call(adminA, "PATCH", addressesPath + "/" + addressId, newAddress, null)
+                .hasCode("CUSTOMER_MANAGED_BY_STORE")).isTrue();
+        assertThat(call(adminA, "PATCH", addressesPath + "/" + addressId + "/deactivate", null, null)
+                .hasCode("CUSTOMER_MANAGED_BY_STORE")).isTrue();
+        assertThat(call(adminA, "PATCH", addressesPath + "/" + addressId + "/activate", null, null)
+                .hasCode("CUSTOMER_MANAGED_BY_STORE")).isTrue();
+
+        // Lo que no cambió no cuenta, aunque llegue con otros espacios o mayúsculas; lo interno sí se edita.
+        JsonNode edited = ok(call(adminA, "PATCH", customerPath, Map.of("firstName", " Abril ", "lastName", "Prueba",
+                "phone", " 1144443333 ", "email", "ABRIL@mail.test", "documentType", "DNI", "documentNumber", "30999888",
+                "observations", "cliente frecuente"), null));
+        assertThat(edited.get("documentNumber").asString()).isEqualTo("30999888");
+        assertThat(edited.get("observations").asString()).isEqualTo("cliente frecuente");
+
+        // El ERP sigue leyendo las direcciones y puede bloquear la ficha.
+        assertThat(ok(call(adminA, "GET", addressesPath, null, null)).size()).isEqualTo(1);
+        ok(call(adminA, "PATCH", customerPath + "/deactivate", null, null));
+        assertThat(call(token, "GET", "/store/me", null, STORE_A).status()).isEqualTo(401);
+        ok(call(adminA, "PATCH", customerPath + "/activate", null, null));
+
+        assertThat(ok(call(token, "GET", "/store/me", null, STORE_A)).get("phone").asString()).isEqualTo("1144443333");
+        assertThat(addressStreets(token, STORE_A)).containsExactly("Calle Propia 1");
+    }
+
+    @Test
+    void anErpCustomerStaysFullyEditable() {
+        Long customerId = ok(call(adminA, "POST", "/customers",
+                Map.of("firstName", "Cliente del Local", "phone", "1122223333"), null)).get("id").asLong();
+        String addressesPath = "/customers/" + customerId + "/addresses";
+
+        JsonNode edited = ok(call(adminA, "PATCH", "/customers/" + customerId,
+                Map.of("firstName", "Cliente Renombrado", "email", "local@mail.test"), null));
+        assertThat(edited.get("firstName").asString()).isEqualTo("Cliente Renombrado");
+
+        Long addressId = ok(call(adminA, "POST", addressesPath, Map.of("street", "Local 1", "city", "CABA"), null))
+                .get("id").asLong();
+        ok(call(adminA, "PATCH", addressesPath + "/" + addressId, Map.of("street", "Local 2", "city", "CABA"), null));
+        ok(call(adminA, "PATCH", addressesPath + "/" + addressId + "/deactivate", null, null));
+        ok(call(adminA, "PATCH", addressesPath + "/" + addressId + "/activate", null, null));
     }
 
     private Response changePassword(String token, String currentPassword, String newPassword) {

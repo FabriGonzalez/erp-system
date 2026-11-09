@@ -2,7 +2,7 @@
 
 Plan detallado de la segunda parte de la etapa 22 (plan general en `docs/plan-proximas-etapas.md`, sección "22B"). Rama: `feature/store-22b`, desde `feature/store-22a`. Alcance: backend, más la marca "Web" en el frontend del ERP (la única excepción de la decisión 8 de 22A).
 
-Estado al 2026-11-09: pasos 1 (aa310a4), 2 (4352ce5), 3a (9038974), 3b (6aac455), 3c (46ff9ba, bf9e783) y 4a commiteados. Siguen 4b, 5 y 6.
+Estado al 2026-11-09: pasos 1 (aa310a4), 2 (4352ce5), 3a (9038974), 3b (6aac455), 3c (46ff9ba, bf9e783) 4a (7fa325f) y 4b commiteados. Siguen 5 y 6.
 
 ## Lo que hay hoy (relevado el 2026-11-04)
 
@@ -80,6 +80,7 @@ Estado al 2026-11-09: pasos 1 (aa310a4), 2 (4352ce5), 3a (9038974), 3b (6aac455)
 
 - En un cliente `WEB` el ERP no puede cambiar nombre, apellido, teléfono ni email, ni crear, editar, activar o desactivar direcciones: 409 `CUSTOMER_MANAGED_BY_STORE`, chequeado en el backend.
 - Sí puede activar o desactivar la ficha, editar observaciones y documento, venderle y registrar sus pagos.
+- El formulario del ERP manda todos los campos: los valores se comparan normalizados (espacios, mayúsculas del email, vacío = ausente), y solo un cambio real da 409. Un campo que no llega cuenta como borrarlo, así que también da 409.
 
 ### 5. Marca "Web" en el ERP (frontend)
 
