@@ -1511,7 +1511,11 @@ ERP: sueltos (variante, cantidad) y líneas de promo (`promotionId`, `quantity`,
 unidad). El carrito **no reserva stock**: se reserva en el checkout (`PENDING_PAYMENT`).
 `POST /store/cart/quote` devuelve precios web actuales, total, disponibilidad por línea y avisos
 de cambios; el checkout vuelve a validar todo con la misma función. Carrito en el backend (varios
-dispositivos, mails de carrito abandonado) solo si un cliente lo pide.
+dispositivos, mails de carrito abandonado) solo si un cliente lo pide. **Duración del carrito
+(2026-11-10):** la empresa la configura desde el panel de la tienda; pasado ese tiempo el sitio
+vacía el carrito del navegador. Como no reserva stock, es solo de experiencia: el backend expone
+el valor en la configuración pública de la tienda y no valida nada. Falta decidir si cuenta desde
+la creación o desde el último cambio, el valor por defecto y si "sin vencimiento" es una opción.
 
 **Endpoints estimados (2026-10-28).** ★ = no estaban en el plan. Las rutas exactas se fijan en el
 plan detallado de cada parte.
@@ -1652,6 +1656,11 @@ plan detallado de cada parte.
    carrito, al estilo Full de Mercado Libre. Propuesta para el paso 4: excluir el pago en
    efectivo (Rapipago/Pago Fácil) de la preferencia, porque no se acredita antes de que venza la
    reserva; falta confirmarla.
+   **Decisiones del usuario (2026-11-09):** la ruta es `POST /store/me/checkout`; en retiro la
+   sucursal la elige el comprador entre las que arman el pedido completo; el envío pasa por una
+   interfaz `ShippingProvider` con una primera implementación "a coordinar" (costo 0, sumado al
+   total en `orders.shipping_cost`). **Antes de habilitar una tienda hay que elegir un provider
+   real** (tarifas propias o un correo: Andreani, Correo Argentino, Mercado Envíos).
 4. **Mercado Pago:** credenciales por empresa (guardadas cifradas); webhook público
    `POST /store/payments/mercadopago` con verificación de firma, idempotente; pago aprobado →
    `Payment` en la cuenta del cliente, pedido pasa al estado normal (retiro/envío) y mail de

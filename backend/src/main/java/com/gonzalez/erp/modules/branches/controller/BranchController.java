@@ -1,6 +1,7 @@
 package com.gonzalez.erp.modules.branches.controller;
 
 import com.gonzalez.erp.modules.branches.dto.request.BranchRequest;
+import com.gonzalez.erp.modules.branches.dto.request.BranchStorePriorityRequest;
 import com.gonzalez.erp.modules.branches.dto.response.BranchResponse;
 import com.gonzalez.erp.modules.branches.service.BranchService;
 import com.gonzalez.erp.modules.users.dto.response.UserResponse;
@@ -93,6 +94,20 @@ public class BranchController {
     })
     public ResponseEntity<BranchResponse> activate(@PathVariable Long id) {
         return ResponseEntity.ok(branchService.activate(id));
+    }
+
+    @PreAuthorize("hasAuthority('ADMINISTRAR_TIENDA')")
+    @PutMapping("/store-priority")
+    @Operation(summary = "Elegir las sucursales que venden por la web",
+            description = "Lista completa y ordenada: la tienda intenta armar cada pedido en ese orden. Las que no están dejan de participar.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Sucursales de la empresa con su prioridad"),
+            @ApiResponse(responseCode = "404", description = "Sucursal no encontrada"),
+            @ApiResponse(responseCode = "409", description = "Sucursal inactiva (BRANCH_INACTIVE)")
+    })
+    public ResponseEntity<List<BranchResponse>> updateStorePriority(
+            @Valid @RequestBody BranchStorePriorityRequest request) {
+        return ResponseEntity.ok(branchService.updateStorePriority(request));
     }
 
     @PreAuthorize("hasAuthority('ADMINISTRAR_USUARIOS')")

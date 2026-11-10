@@ -3,8 +3,10 @@ package com.gonzalez.erp.modules.branches.service;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.branches.dto.request.BranchRequest;
+import com.gonzalez.erp.modules.branches.dto.request.BranchStorePriorityRequest;
 import com.gonzalez.erp.modules.branches.dto.response.BranchResponse;
 import com.gonzalez.erp.modules.branches.entity.Branch;
+import com.gonzalez.erp.modules.branches.exception.BranchInactiveException;
 import com.gonzalez.erp.modules.branches.exception.BranchNameAlreadyExistsException;
 import com.gonzalez.erp.modules.branches.mapper.BranchMapper;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
@@ -20,7 +22,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -63,6 +68,32 @@ public class BranchServiceImpl implements BranchService {
         Branch saved = branchRepository.save(branch);
         assignToCreatorAndAllBranchesUsers(saved, companyId);
         return BranchMapper.toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public List<BranchResponse> updateStorePriority(BranchStorePriorityRequest request) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+        List<Branch> branches = branchRepository.findByCompanyId(companyId);
+        Map<Long, Branch> branchesById = branches.stream()
+                .collect(Collectors.toMap(Branch::getId, Function.identity()));
+
+        List<Long> orderedIds = request.branchIds().stream().distinct().toList();
+        for (Long id : orderedIds) {
+            Branch branch = branchesById.get(id);
+            if (branch == null) {
+                throw new ResourceNotFoundException("Branch not found with id: " + id);
+            }
+            if (!branch.isActive()) {
+                throw new BranchInactiveException(id);
+            }
+        }
+
+        branches.forEach(branch -> branch.assignStorePriority(null));
+        for (int position = 0; position < orderedIds.size(); position++) {
+            branchesById.get(orderedIds.get(position)).assignStorePriority(position + 1);
+        }
+        return branches.stream().map(BranchMapper::toResponse).toList();
     }
 
     /*

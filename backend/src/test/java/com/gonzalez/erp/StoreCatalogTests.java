@@ -96,6 +96,7 @@ class StoreCatalogTests {
         Long old = id(call(a, "POST", "/categories", Map.of("name", "Viejas"), STORE_A));
         ids.put("shirts", shirts);
         ids.put("central", central);
+        ids.put("warehouse", warehouse);
         ids.put("sizeM", m);
         ids.put("sizeL", l);
 
@@ -136,6 +137,7 @@ class StoreCatalogTests {
         ok(call(b, "PATCH", "/products/" + secret + "/publication", Map.of("publishedOnline", true), STORE_B));
         ids.put("secret", secret);
         ids.put("categoryB", categoryB);
+        ids.put("branchB", branchB);
     }
 
     @Test
@@ -170,6 +172,39 @@ class StoreCatalogTests {
         assertThat(sweater.get("availability").asString()).isEqualTo("OUT_OF_STOCK");
         // Sin fotos propias: la portada es la de su variante.
         assertThat(sweater.get("coverImageUrl").asString()).endsWith("/v.png");
+    }
+
+    @Test
+    void theCartIsQuotedWithWebPricesAndThePickupBranches() {
+        JsonNode quote = quote(STORE_A, Map.of("productVariantId", firstVariant(ids.get("blue")), "quantity", 3));
+
+        assertThat(decimal(quote, "total")).isEqualByComparingTo("3300");
+        assertThat(quote.get("items").get(0).get("status").asString()).isEqualTo("AVAILABLE");
+        assertThat(quote.get("fulfillment").asString()).isEqualTo("SINGLE_BRANCH");
+        assertThat(quote.get("pickupBranches").get(0).get("id").asLong()).isEqualTo(ids.get("central"));
+    }
+
+    @Test
+    void anUnpublishedProductOrOneOfAnotherStoreCannotBeQuoted() {
+        JsonNode hidden = quote(STORE_A, Map.of("productVariantId", firstVariant(ids.get("hidden")), "quantity", 1));
+        JsonNode foreign = quote(STORE_A, Map.of("productVariantId", firstVariant(ids.get("secret")), "quantity", 1));
+
+        assertThat(hidden.get("items").get(0).get("status").asString()).isEqualTo("UNAVAILABLE");
+        assertThat(foreign.get("items").get(0).get("status").asString()).isEqualTo("UNAVAILABLE");
+        assertThat(foreign.get("items").get(0).get("productName").isNull()).isTrue();
+    }
+
+    @Test
+    void theOwnerChoosesWhichBranchesSellOnline() {
+        Long central = ids.get("central");
+        JsonNode branches = ok(call(adminA, "PUT", "/branches/store-priority", Map.of("branchIds", List.of(central)), STORE_A));
+
+        assertThat(branches.findValues("storePriority").stream().filter(priority -> !priority.isNull()).toList())
+                .singleElement().satisfies(priority -> assertThat(priority.asInt()).isEqualTo(1));
+        assertThat(call(adminA, "PUT", "/branches/store-priority",
+                Map.of("branchIds", List.of(ids.get("warehouse"))), STORE_A).hasCode("BRANCH_INACTIVE")).isTrue();
+        assertThat(call(adminA, "PUT", "/branches/store-priority",
+                Map.of("branchIds", List.of(ids.get("branchB"))), STORE_A).status()).isEqualTo(404);
     }
 
     @Test
@@ -332,6 +367,10 @@ class StoreCatalogTests {
     private static Map<String, Object> variant(int price, List<Long> valueIds, Long branchId, int quantity) {
         return Map.of("price", price, "attributeValueIds", valueIds,
                 "initialStock", List.of(Map.of("branchId", branchId, "quantity", quantity)));
+    }
+
+    private JsonNode quote(String domain, Map<String, Object> item) {
+        return ok(call(null, "POST", "/store/cart/quote", Map.of("items", List.of(item)), domain));
     }
 
     private Long firstVariant(Long productId) {

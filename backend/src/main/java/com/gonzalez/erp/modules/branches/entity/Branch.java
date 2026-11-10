@@ -45,6 +45,10 @@ public class Branch extends BaseEntity {
         this.phone = phone;
     }
 
+    public void assignStorePriority(Integer storePriority) {
+        this.storePriority = storePriority;
+    }
+
     public void deactivate() {
         this.active = false;
     }

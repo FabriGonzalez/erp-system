@@ -1,5 +1,6 @@
 package com.gonzalez.erp.modules.store.repository;
 
+import com.gonzalez.erp.modules.branches.entity.Branch;
 import com.gonzalez.erp.modules.categories.entity.Category;
 import com.gonzalez.erp.modules.products.entity.Product;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
@@ -44,6 +45,13 @@ public interface StoreCatalogRepository extends Repository<Product, Long> {
         Long getProductId();
         Long getVariantId();
         Long getQuantity();
+    }
+
+    /** Stock de una variante en una sucursal que vende por la web. */
+    interface BranchVariantStock {
+        Long getBranchId();
+        Long getVariantId();
+        Integer getQuantity();
     }
 
     /*
@@ -148,4 +156,34 @@ public interface StoreCatalogRepository extends Repository<Product, Long> {
             ORDER BY pr.endDate ASC, pr.name ASC, pr.id ASC
             """)
     List<Promotion> findVisiblePromotions(@Param("companyId") Long companyId, @Param("today") LocalDate today);
+
+    /** Las variantes que se pueden comprar: activas y de un producto visible en el catálogo. */
+    @Query("""
+            SELECT v FROM ProductVariant v JOIN FETCH v.product p JOIN p.category c
+            WHERE v.id IN :variantIds AND p.company.id = :companyId
+            AND v.active = true AND p.active = true AND p.publishedOnline = true AND c.active = true
+            """)
+    List<ProductVariant> findSellableVariants(
+            @Param("companyId") Long companyId,
+            @Param("variantIds") Collection<Long> variantIds
+    );
+
+    /** Las sucursales activas elegidas para vender por la web, en el orden en que se prueban. */
+    @Query("""
+            SELECT b FROM Branch b
+            WHERE b.company.id = :companyId AND b.active = true AND b.storePriority IS NOT NULL
+            ORDER BY b.storePriority ASC, b.id ASC
+            """)
+    List<Branch> findStoreBranches(@Param("companyId") Long companyId);
+
+    @Query("""
+            SELECT b.id AS branchId, s.productVariant.id AS variantId, s.quantity AS quantity
+            FROM Stock s JOIN s.branch b
+            WHERE b.company.id = :companyId AND b.active = true AND b.storePriority IS NOT NULL
+            AND s.productVariant.id IN :variantIds
+            """)
+    List<BranchVariantStock> findStoreStock(
+            @Param("companyId") Long companyId,
+            @Param("variantIds") Collection<Long> variantIds
+    );
 }
