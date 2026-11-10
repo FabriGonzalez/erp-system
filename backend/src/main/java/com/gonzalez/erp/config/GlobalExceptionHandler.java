@@ -4,7 +4,9 @@ import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.modules.auth.exception.InvalidPasswordChangeException;
 import com.gonzalez.erp.modules.auth.exception.TooManyLoginAttemptsException;
+import com.gonzalez.erp.modules.store.dto.StoreCheckoutErrorResponse;
 import com.gonzalez.erp.modules.store.exception.StoreAuthException;
+import com.gonzalez.erp.modules.store.exception.StoreCheckoutException;
 import com.gonzalez.erp.modules.companies.exception.CompanyNameAlreadyExistsException;
 import com.gonzalez.erp.modules.companies.exception.CompanyNotActiveException;
 import com.gonzalez.erp.modules.companies.exception.CompanyTaxIdAlreadyExistsException;
@@ -75,6 +77,7 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.time.Instant;
 import java.util.List;
 
 @RestControllerAdvice
@@ -209,6 +212,21 @@ public class GlobalExceptionHandler {
                         ex.getMessage(),
                         request.getRequestURI(),
                         ex.getCode()
+                ));
+    }
+
+    @ExceptionHandler(StoreCheckoutException.class)
+    public ResponseEntity<StoreCheckoutErrorResponse> handleStoreCheckout(StoreCheckoutException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(ex.getStatus())
+                .body(new StoreCheckoutErrorResponse(
+                        Instant.now(),
+                        ex.getStatus().value(),
+                        ex.getStatus().getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        ex.getCode(),
+                        ex.getQuote()
                 ));
     }
 

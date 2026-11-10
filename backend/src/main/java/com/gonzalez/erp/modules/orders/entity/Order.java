@@ -91,6 +91,15 @@ public class Order extends BaseEntity {
     @Builder.Default
     private BigDecimal discount = BigDecimal.ZERO;
 
+    // Solo en pedidos web con envío; ya está sumado al total.
+    @Column(name = "shipping_cost", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal shippingCost = BigDecimal.ZERO;
+
+    // Clave del intento de compra en la tienda: el reintento devuelve este pedido en vez de crear otro.
+    @Column(name = "checkout_key", length = 64)
+    private String checkoutKey;
+
     @Column(nullable = false, precision = 12, scale = 2)
     @Builder.Default
     private BigDecimal total = BigDecimal.ZERO;
@@ -249,13 +258,13 @@ public class Order extends BaseEntity {
             BigDecimal promosTotal = promos.stream()
                     .map(promo -> promo.getUnitPrice().multiply(BigDecimal.valueOf(promo.getQuantity())))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            this.total = itemsTotal.add(promosTotal).subtract(discount);
+            this.total = itemsTotal.add(promosTotal).subtract(discount).add(shippingCost);
         }
     }
 
-    /** Lo que suman los productos y las promos, antes del descuento. */
+    /** Lo que suman los productos y las promos, antes del descuento y sin el envío. */
     public BigDecimal getSubtotal() {
-        return total.add(discount);
+        return total.add(discount).subtract(shippingCost);
     }
 
     public boolean isConfirmed() {

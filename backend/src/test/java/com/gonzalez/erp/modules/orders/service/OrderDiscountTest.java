@@ -244,6 +244,16 @@ class OrderDiscountTest {
                 .isInstanceOf(InvalidOrderException.class);
     }
 
+    @Test
+    void shippingIsAddedToTheTotalButNotToTheSubtotal() {
+        Order order = shipmentWith(2, new BigDecimal("1000"));
+        order.setShippingCost(new BigDecimal("2500"));
+        order.recalculateTotal();
+
+        assertThat(order.getTotal()).isEqualByComparingTo("29500");
+        assertThat(order.getSubtotal()).isEqualByComparingTo("28000");
+    }
+
     // --- Ayudas ---
 
     private OrderRequest walkIn(int quantity, BigDecimal discount) {

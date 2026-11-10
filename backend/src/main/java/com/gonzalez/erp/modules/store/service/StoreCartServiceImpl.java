@@ -51,6 +51,11 @@ public class StoreCartServiceImpl implements StoreCartService {
     }
 
     StoreCartQuoteResponse quote(Company company, StoreCartRequest request) {
+        return evaluate(company, request).quote();
+    }
+
+    @Override
+    public StoreCartEvaluation evaluate(Company company, StoreCartRequest request) {
         Map<Long, Integer> itemQuantities = mergeRepeatedVariants(orEmpty(request.items()));
         List<StoreCartRequest.Promo> promos = orEmpty(request.promos());
         Map<Long, ProductVariant> variants = sellableVariants(company, itemQuantities.keySet(), promos);
@@ -93,14 +98,17 @@ public class StoreCartServiceImpl implements StoreCartService {
                 && items.stream().allMatch(line -> line.status() == StoreCartLineStatus.AVAILABLE)
                 && promoLines.stream().allMatch(line -> line.status() == StoreCartLineStatus.AVAILABLE);
         if (!purchasable) {
-            return new StoreCartQuoteResponse(items, promoLines, total, StoreFulfillment.UNAVAILABLE, List.of());
+            StoreCartQuoteResponse quote = new StoreCartQuoteResponse(items, promoLines, total, StoreFulfillment.UNAVAILABLE, List.of());
+            return new StoreCartEvaluation(quote, variants, promotions, List.of());
         }
 
-        List<StoreCartQuoteResponse.PickupBranch> pickupBranches = branchesThatFulfill(company, demand, stock);
+        List<Branch> storeBranches = catalogRepository.findStoreBranches(company.getId());
+        List<StoreCartQuoteResponse.PickupBranch> pickupBranches = branchesThatFulfill(storeBranches, demand, stock);
         StoreFulfillment fulfillment = pickupBranches.isEmpty()
                 ? StoreFulfillment.MULTIPLE_BRANCHES
                 : StoreFulfillment.SINGLE_BRANCH;
-        return new StoreCartQuoteResponse(items, promoLines, total, fulfillment, pickupBranches);
+        StoreCartQuoteResponse quote = new StoreCartQuoteResponse(items, promoLines, total, fulfillment, pickupBranches);
+        return new StoreCartEvaluation(quote, variants, promotions, storeBranches);
     }
 
     private static Map<Long, Integer> mergeRepeatedVariants(List<StoreCartRequest.Item> items) {
@@ -176,14 +184,14 @@ public class StoreCartServiceImpl implements StoreCartService {
         return enough ? StoreCartLineStatus.AVAILABLE : StoreCartLineStatus.INSUFFICIENT_STOCK;
     }
 
-    private List<StoreCartQuoteResponse.PickupBranch> branchesThatFulfill(Company company, Map<Long, Long> demand,
-                                                                          List<BranchVariantStock> stock) {
+    private static List<StoreCartQuoteResponse.PickupBranch> branchesThatFulfill(List<Branch> storeBranches, Map<Long, Long> demand,
+                                                                                 List<BranchVariantStock> stock) {
         Map<Long, Map<Long, Integer>> stockByBranch = stock.stream().collect(Collectors.groupingBy(
                 BranchVariantStock::getBranchId,
                 Collectors.toMap(BranchVariantStock::getVariantId, BranchVariantStock::getQuantity)));
 
         List<StoreCartQuoteResponse.PickupBranch> branches = new ArrayList<>();
-        for (Branch branch : catalogRepository.findStoreBranches(company.getId())) {
+        for (Branch branch : storeBranches) {
             Map<Long, Integer> available = stockByBranch.getOrDefault(branch.getId(), Map.of());
             boolean fulfills = demand.entrySet().stream()
                     .allMatch(entry -> entry.getValue() <= available.getOrDefault(entry.getKey(), 0));

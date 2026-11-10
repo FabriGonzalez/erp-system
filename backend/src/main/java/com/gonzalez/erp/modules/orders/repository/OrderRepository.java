@@ -21,6 +21,10 @@ import java.util.Optional;
 public interface OrderRepository extends JpaRepository<Order, Long> {
     Optional<Order> findByIdAndCompanyId(Long id, Long companyId);
 
+    Optional<Order> findByCompanyIdAndCheckoutKey(Long companyId, String checkoutKey);
+
+    long countByCustomerIdAndStatus(Long customerId, OrderStatus status);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT o FROM Order o WHERE o.id = :id AND o.company.id = :companyId")
     Optional<Order> findByIdAndCompanyIdForUpdate(@Param("id") Long id, @Param("companyId") Long companyId);

@@ -31,6 +31,7 @@ import com.gonzalez.erp.modules.payments.repository.PaymentAllocationRepository;
 import com.gonzalez.erp.modules.orders.dto.response.OrderResponse;
 import com.gonzalez.erp.modules.orders.entity.DeliveryType;
 import com.gonzalez.erp.modules.orders.entity.Order;
+import com.gonzalez.erp.modules.orders.entity.OrderChannel;
 import com.gonzalez.erp.modules.orders.entity.OrderItem;
 import com.gonzalez.erp.modules.orders.entity.OrderNumberCounter;
 import com.gonzalez.erp.modules.orders.entity.OrderPromo;
@@ -215,6 +216,37 @@ public class OrderServiceImpl implements OrderService {
 
             return completeCreation(saved, shippingAddress, request, companyId, userId);
         }
+    }
+
+    @Override
+    @Transactional
+    public Order createWebOrder(WebOrderCommand command) {
+        Order order = Order.builder()
+                .orderNumber(generateOrderNumber(command.company()))
+                .branch(command.branch())
+                .customer(command.customer())
+                .company(command.company())
+                .channel(OrderChannel.WEB)
+                .status(OrderStatus.PENDING_PAYMENT)
+                .stockReserved(command.reserveStock())
+                .salesType(SalesType.WITH_PRODUCTS)
+                .deliveryType(command.deliveryType())
+                .shippingCost(command.shippingCost())
+                .checkoutKey(command.checkoutKey())
+                .amountPaid(BigDecimal.ZERO)
+                .build();
+        order.updateItems(command.items());
+        order.updatePromos(command.promos());
+        order.recalculateTotal();
+
+        Order saved = orderRepository.saveAndFlush(order);
+        if (command.reserveStock()) {
+            reserveStock(saved, command.branch().getId(), command.company().getId(), null);
+        }
+        if (command.shippingAddress() != null) {
+            saveShipment(saved, command.shippingAddress());
+        }
+        return saved;
     }
 
     /** Descuenta el stock del pedido. No depende de la sesión: empresa y autor llegan por parámetro. */

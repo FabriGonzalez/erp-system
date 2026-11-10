@@ -6,6 +6,7 @@ import com.gonzalez.erp.modules.orders.dto.request.OrderRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderUpdateRequest;
 import com.gonzalez.erp.modules.orders.dto.response.OrderResponse;
 import com.gonzalez.erp.modules.orders.entity.DeliveryType;
+import com.gonzalez.erp.modules.orders.entity.Order;
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 import com.gonzalez.erp.modules.orders.entity.PaymentStatus;
 import com.gonzalez.erp.modules.orders.entity.SalesType;
@@ -26,4 +27,7 @@ public interface OrderService {
     OrderResponse dispatch(Long id);
 
     OrderResponse cancel(Long id, OrderCancelRequest request);
+
+    /** Pedido de la tienda, pendiente de pago. No usa la sesión del empleado ni carga la cuenta del cliente. */
+    Order createWebOrder(WebOrderCommand command);
 }

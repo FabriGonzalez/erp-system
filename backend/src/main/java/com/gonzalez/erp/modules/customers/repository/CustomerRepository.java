@@ -4,13 +4,20 @@ import com.gonzalez.erp.modules.customers.entity.Customer;
 import com.gonzalez.erp.modules.customers.entity.CustomerOrigin;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
+
+    // El checkout de la tienda lo toma para que dos compras del mismo comprador vayan de a una.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM Customer c WHERE c.id = :id AND c.company.id = :companyId")
+    Optional<Customer> findByIdAndCompanyIdForUpdate(@Param("id") Long id, @Param("companyId") Long companyId);
 
     boolean existsByCompanyIdAndDocumentTypeAndDocumentNumber(
             Long companyId,

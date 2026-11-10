@@ -1661,6 +1661,22 @@ plan detallado de cada parte.
    interfaz `ShippingProvider` con una primera implementación "a coordinar" (costo 0, sumado al
    total en `orders.shipping_cost`). **Antes de habilitar una tienda hay que elegir un provider
    real** (tarifas propias o un correo: Andreani, Correo Argentino, Mercado Envíos).
+   **Hecho (2b, 2026-11-10):** `POST /store/me/checkout` crea el pedido `PENDING_PAYMENT` (canal
+   WEB, sin autor) con la misma evaluación que la cotización y el precio web; no carga la cuenta
+   del cliente (eso pasa al acreditarse el pago). Migración V11: `orders.shipping_cost` y
+   `orders.checkout_key` (única por empresa). Decisiones del usuario:
+   - Retiro solo en una sucursal que arma el pedido completo; si ninguna puede, el sitio avisa y
+     ofrece envío (409 `PICKUP_NOT_AVAILABLE` si igual llega).
+   - Para comprar hacen falta nombre y teléfono (409 `PROFILE_INCOMPLETE`); con envío, dirección
+     propia con calle, número, ciudad, provincia y código postal (409 `ADDRESS_INCOMPLETE`),
+     porque un correo real la va a necesitar.
+   - La misma `checkoutKey` devuelve el pedido ya creado (doble clic o reintento); usada por otro
+     comprador, 409 `CHECKOUT_KEY_IN_USE`.
+   - Tope de 3 pedidos sin pagar por comprador (409 `TOO_MANY_PENDING_ORDERS`); el comprador se
+     bloquea durante el checkout para que el tope y la clave no se pasen en paralelo.
+   - Límite de pedidos por IP en el checkout: va en la etapa 28.
+   El total esperado es el de la cotización, sin envío; `CART_CHANGED` y `CART_UNAVAILABLE`
+   devuelven la cotización actual en `quote`.
 4. **Mercado Pago:** credenciales por empresa (guardadas cifradas); webhook público
    `POST /store/payments/mercadopago` con verificación de firma, idempotente; pago aprobado →
    `Payment` en la cuenta del cliente, pedido pasa al estado normal (retiro/envío) y mail de
@@ -1713,7 +1729,8 @@ Menores:
 - El bloqueo de intentos de login vive en memoria (`LoginAttemptService`): se reinicia con el
   servidor y no se comparte entre instancias.
 - Límite de pedidos por IP en `/store/**` (hoy solo lectura pública: el riesgo es carga o copia
-  del catálogo, no filtración); el login, registro y checkout de la tienda ya lo tienen planeado en 22.
+  del catálogo, no filtración). Incluye `POST /store/me/checkout` (decisión del usuario del
+  2026-11-10: no se hizo en 22C; hoy solo frena el tope de 3 compras sin pagar por comprador).
 
 ## Etapa 29 — Facturación electrónica con ARCA (antes del lanzamiento; era la 23)
 
