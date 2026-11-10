@@ -2,6 +2,9 @@ package com.gonzalez.erp.modules.orders.repository;
 
 import com.gonzalez.erp.modules.orders.entity.DeliveryType;
 import com.gonzalez.erp.modules.orders.entity.Order;
+import com.gonzalez.erp.modules.orders.entity.OrderChannel;
+import com.gonzalez.erp.modules.orders.entity.OrderItem;
+import com.gonzalez.erp.modules.orders.entity.OrderPromoComponent;
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 import com.gonzalez.erp.modules.orders.entity.SalesType;
 import jakarta.persistence.LockModeType;
@@ -24,6 +27,35 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Optional<Order> findByCompanyIdAndCheckoutKey(Long companyId, String checkoutKey);
 
     long countByCustomerIdAndStatus(Long customerId, OrderStatus status);
+
+    // --- Mis pedidos de la tienda: siempre por empresa, cliente y canal juntos ---
+
+    Page<Order> findByCompanyIdAndCustomerIdAndChannel(Long companyId, Long customerId, OrderChannel channel,
+                                                       Pageable pageable);
+
+    Optional<Order> findByIdAndCompanyIdAndCustomerIdAndChannel(Long id, Long companyId, Long customerId,
+                                                                OrderChannel channel);
+
+    /** Líneas sueltas de varios pedidos con variante y producto, para armarlos sin una consulta por línea. */
+    @Query("""
+            SELECT i FROM OrderItem i
+            JOIN FETCH i.productVariant v
+            JOIN FETCH v.product
+            WHERE i.order.id IN :orderIds
+            ORDER BY i.id ASC
+            """)
+    List<OrderItem> findItemsWithProductByOrderIdIn(@Param("orderIds") Collection<Long> orderIds);
+
+    /** Componentes de promo de varios pedidos con su línea, variante y producto. */
+    @Query("""
+            SELECT c FROM OrderPromoComponent c
+            JOIN FETCH c.orderPromo p
+            JOIN FETCH c.productVariant v
+            JOIN FETCH v.product
+            WHERE p.order.id IN :orderIds
+            ORDER BY p.id ASC, c.id ASC
+            """)
+    List<OrderPromoComponent> findPromoComponentsWithProductByOrderIdIn(@Param("orderIds") Collection<Long> orderIds);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT o FROM Order o WHERE o.id = :id AND o.company.id = :companyId")

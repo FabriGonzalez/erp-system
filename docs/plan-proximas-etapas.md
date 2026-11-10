@@ -1677,6 +1677,22 @@ plan detallado de cada parte.
    - Límite de pedidos por IP en el checkout: va en la etapa 28.
    El total esperado es el de la cotización, sin envío; `CART_CHANGED` y `CART_UNAVAILABLE`
    devuelven la cotización actual en `quote`.
+   **Hecho (paso 3, "Mis pedidos", 2026-11-10):** `GET /store/me/orders` (paginado, los más nuevos
+   primero), `GET /store/me/orders/{id}` y `POST /store/me/orders/{id}/cancel`. Solo pedidos del
+   comprador con canal WEB; uno ajeno o una venta del local dan 404. Decisiones del usuario:
+   - Estado propio de la tienda (`StoreOrderStatus`): `AWAITING_PAYMENT`, `PREPARING` (incluye
+     `TO_ASSIGN`), `READY_FOR_PICKUP` (retiro pagado), `SHIPPED`, `CANCELLED`.
+   - Los cancelados se muestran. Cada línea lleva foto (la de la variante o la portada).
+   - El comprador cancela solo pedidos **sin pagar**, sin límite de tiempo (409
+     `ORDER_NOT_CANCELLABLE` si ya se pagó o se canceló). Una vez pagado no se cancela desde la
+     tienda.
+   **Requisito antes de habilitar una tienda — botón de arrepentimiento** (Ley 24.240 art. 34 y
+   Res. 424/2020; confirmarlo con un profesional): el comprador puede revocar la compra desde que
+   paga hasta 10 días corridos después de recibirla. No cancela solo: manda una solicitud que el
+   local resuelve en el ERP (frenar el despacho o coordinar la devolución, a cargo del vendedor, y
+   reintegrar por Mercado Pago). Necesita saber la fecha de entrega ("retirado/entregado", 22D).
+   Va después del paso 4. Un producto fallado es garantía, no arrepentimiento: al principio, por
+   contacto con el local.
 4. **Mercado Pago:** credenciales por empresa (guardadas cifradas); webhook público
    `POST /store/payments/mercadopago` con verificación de firma, idempotente; pago aprobado →
    `Payment` en la cuenta del cliente, pedido pasa al estado normal (retiro/envío) y mail de

@@ -60,6 +60,12 @@ public class StoreCheckoutException extends RuntimeException {
                 "The checkout key was already used", null);
     }
 
+    /** Ya se pagó o ya estaba cancelado: desde la tienda solo se cancela lo que espera el pago. */
+    public static StoreCheckoutException orderNotCancellable() {
+        return new StoreCheckoutException(HttpStatus.CONFLICT, "ORDER_NOT_CANCELLABLE",
+                "Only orders waiting for payment can be cancelled", null);
+    }
+
     public static StoreCheckoutException invalidDelivery(String message) {
         return new StoreCheckoutException(HttpStatus.BAD_REQUEST, "INVALID_DELIVERY", message, null);
     }

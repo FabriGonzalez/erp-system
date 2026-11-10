@@ -9,9 +9,7 @@ import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.products.entity.Product;
 import com.gonzalez.erp.modules.products.entity.ProductImage;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
-import com.gonzalez.erp.modules.products.entity.ProductVariantAttribute;
 import com.gonzalez.erp.modules.products.repository.ProductImageRepository;
-import com.gonzalez.erp.modules.products.service.ImageStorage;
 import com.gonzalez.erp.modules.promotions.entity.Promotion;
 import com.gonzalez.erp.modules.promotions.entity.PromotionItem;
 import com.gonzalez.erp.modules.store.dto.StoreAvailability;
@@ -35,7 +33,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -50,7 +47,7 @@ public class StoreCatalogServiceImpl implements StoreCatalogService {
     private final StoreCatalogRepository catalogRepository;
     private final ProductImageRepository imageRepository;
     private final CompanyRepository companyRepository;
-    private final ImageStorage storage;
+    private final StoreProductViews views;
 
     @Override
     public List<StoreCategoryResponse> findCategories() {
@@ -75,7 +72,7 @@ public class StoreCatalogServiceImpl implements StoreCatalogService {
         Map<Long, List<VariantStock>> stockByProduct = catalogRepository.findActiveVariantStock(productIds).stream()
                 .collect(Collectors.groupingBy(VariantStock::getProductId));
         Map<Long, List<ProductImage>> imagesByProduct = imageRepository.findVisibleOfProducts(productIds).stream()
-                .collect(Collectors.groupingBy(StoreCatalogServiceImpl::ownerProductId));
+                .collect(Collectors.groupingBy(StoreProductViews::ownerProductId));
 
         return PageResponse.of(page, row -> {
             boolean anyInStock = stockByProduct.getOrDefault(row.getId(), List.of()).stream()
@@ -85,7 +82,7 @@ public class StoreCatalogServiceImpl implements StoreCatalogService {
                     row.getName(),
                     row.getCategoryId(),
                     row.getCategoryName(),
-                    coverOf(imagesByProduct.getOrDefault(row.getId(), List.of())),
+                    views.coverOf(imagesByProduct.getOrDefault(row.getId(), List.of())),
                     StorePrices.webPrice(row.getMinPrice(), company),
                     StorePrices.webPrice(row.getMaxPrice(), company),
                     anyInStock ? StoreAvailability.AVAILABLE : StoreAvailability.OUT_OF_STOCK
@@ -105,17 +102,17 @@ public class StoreCatalogServiceImpl implements StoreCatalogService {
                 .collect(Collectors.toMap(VariantStock::getVariantId, VariantStock::getQuantity));
         List<ProductImage> images = imageRepository.findVisibleOfProducts(List.of(product.getId()));
 
-        List<String> productImages = urls(images.stream().filter(image -> image.getVariant() == null).toList());
+        List<String> productImages = views.urls(images.stream().filter(image -> image.getVariant() == null).toList());
         Map<Long, List<ProductImage>> imagesByVariant = images.stream()
                 .filter(image -> image.getVariant() != null)
                 .collect(Collectors.groupingBy(image -> image.getVariant().getId()));
 
         List<StoreProductResponse.Variant> variantResponses = variants.stream()
                 .map(variant -> {
-                    List<String> own = urls(imagesByVariant.getOrDefault(variant.getId(), List.of()));
+                    List<String> own = views.urls(imagesByVariant.getOrDefault(variant.getId(), List.of()));
                     return new StoreProductResponse.Variant(
                             variant.getId(),
-                            attributesOf(variant),
+                            StoreProductViews.attributesOf(variant),
                             StorePrices.webPrice(variant.getPrice(), company),
                             own.isEmpty() ? productImages : own,
                             availabilityOf(stockByVariant.getOrDefault(variant.getId(), 0L))
@@ -125,7 +122,7 @@ public class StoreCatalogServiceImpl implements StoreCatalogService {
 
         BigDecimal minPrice = variants.stream().map(ProductVariant::getPrice).min(Comparator.naturalOrder()).orElseThrow();
         BigDecimal maxPrice = variants.stream().map(ProductVariant::getPrice).max(Comparator.naturalOrder()).orElseThrow();
-        String cover = coverOf(images);
+        String cover = views.coverOf(images);
         return new StoreProductResponse(
                 product.getId(),
                 product.getName(),
@@ -160,8 +157,8 @@ public class StoreCatalogServiceImpl implements StoreCatalogService {
                         Collectors.summingLong(VariantStock::getQuantity)));
         Map<Long, String> coverByProduct = new HashMap<>();
         imageRepository.findVisibleOfProducts(productIds).stream()
-                .collect(Collectors.groupingBy(StoreCatalogServiceImpl::ownerProductId))
-                .forEach((productId, images) -> coverByProduct.put(productId, coverOf(images)));
+                .collect(Collectors.groupingBy(StoreProductViews::ownerProductId))
+                .forEach((productId, images) -> coverByProduct.put(productId, views.coverOf(images)));
 
         return promotions.stream()
                 .map(promotion -> toPromotionResponse(promotion, company, minPriceByProduct, stockByProduct, coverByProduct))
@@ -225,39 +222,5 @@ public class StoreCatalogServiceImpl implements StoreCatalogService {
         Long companyId = CurrentStore.require().companyId();
         return companyRepository.findById(companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Store not found"));
-    }
-
-    /**
-     * Portada: la primera foto del producto o, si no tiene, la primera de la primera variante
-     * (por id) que tenga. Las fotos llegan ordenadas por sortOrder.
-     */
-    private String coverOf(List<ProductImage> images) {
-        return images.stream()
-                .filter(image -> image.getVariant() == null)
-                .findFirst()
-                .or(() -> images.stream()
-                        .filter(image -> image.getVariant() != null)
-                        .min(Comparator.comparing((ProductImage image) -> image.getVariant().getId())
-                                .thenComparingInt(ProductImage::getSortOrder)
-                                .thenComparing(ProductImage::getId)))
-                .map(image -> storage.publicUrl(image.getStorageKey()))
-                .orElse(null);
-    }
-
-    private List<String> urls(List<ProductImage> images) {
-        return images.stream().map(image -> storage.publicUrl(image.getStorageKey())).toList();
-    }
-
-    private static List<StoreProductResponse.Attribute> attributesOf(ProductVariant variant) {
-        return variant.getAttributes().stream()
-                .map(ProductVariantAttribute::getAttributeValue)
-                .filter(Objects::nonNull)
-                .map(value -> new StoreProductResponse.Attribute(value.getAttribute().getName(), value.getValue()))
-                .sorted(Comparator.comparing(StoreProductResponse.Attribute::name))
-                .toList();
-    }
-
-    private static Long ownerProductId(ProductImage image) {
-        return image.getProduct() != null ? image.getProduct().getId() : image.getVariant().getProduct().getId();
     }
 }

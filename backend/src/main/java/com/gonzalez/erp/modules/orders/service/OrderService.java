@@ -30,4 +30,10 @@ public interface OrderService {
 
     /** Pedido de la tienda, pendiente de pago. No usa la sesión del empleado ni carga la cuenta del cliente. */
     Order createWebOrder(WebOrderCommand command);
+
+    /**
+     * Cancela un pedido web todavía sin pagar y devuelve el stock reservado. Recibe el pedido ya
+     * bloqueado: quién puede cancelarlo lo decide quien llama.
+     */
+    void cancelUnpaidWebOrder(Order order);
 }

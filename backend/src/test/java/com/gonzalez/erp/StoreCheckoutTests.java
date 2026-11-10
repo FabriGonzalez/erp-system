@@ -1,5 +1,6 @@
 package com.gonzalez.erp;
 
+import com.gonzalez.erp.common.util.BusinessDate;
 import com.gonzalez.erp.modules.store.repository.StoreAccountRepository;
 import com.gonzalez.erp.modules.store.security.StoreTokenService;
 import org.junit.jupiter.api.AfterAll;
@@ -22,6 +23,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -252,6 +254,122 @@ class StoreCheckoutTests {
         assertThat(call(owner.token(), "POST", "/store/me/checkout", pickup(centro, cart(variant, 1)), STORE_B).status())
                 .isEqualTo(401);
         assertThat(stock(variant, centro)).isEqualTo(5);
+    }
+
+    // --- Mis pedidos ---
+
+    @Test
+    void myOrdersListOnlyTheBuyersWebOrdersNewestFirst() {
+        Long variant = variant("Remera Historial", Map.of(centro, 10));
+        Buyer buyer = buyer("Karina", "1155550011");
+        Buyer other = buyer("Lucas", "1155550012");
+        Long older = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        Long newer = ok(checkout(buyer, pickup(centro, cart(variant, 3)))).get("orderId").asLong();
+        // Una venta del local cargada a la misma ficha no es un pedido de la tienda.
+        Long localSale = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        jdbc.update("UPDATE orders SET channel = 'ERP' WHERE id = ?", localSale);
+        Long othersOrder = ok(checkout(other, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+
+        JsonNode page = ok(call(buyer.token(), "GET", "/store/me/orders", null, STORE_A));
+
+        assertThat(page.get("totalElements").asLong()).isEqualTo(2);
+        JsonNode first = page.get("content").get(0);
+        assertThat(first.get("id").asLong()).isEqualTo(newer);
+        assertThat(page.get("content").get(1).get("id").asLong()).isEqualTo(older);
+        assertThat(first.get("status").asString()).isEqualTo("AWAITING_PAYMENT");
+        assertThat(first.get("units").asInt()).isEqualTo(3);
+        assertThat(new BigDecimal(first.get("total").asString())).isEqualByComparingTo("3000");
+        assertThat(first.get("coverImageUrl").asString()).endsWith("/foto.png");
+
+        assertThat(myOrder(buyer, localSale).status()).isEqualTo(404);
+        assertThat(myOrder(buyer, othersOrder).status()).isEqualTo(404);
+        assertThat(call(buyer.token(), "POST", "/store/me/orders/" + othersOrder + "/cancel", null, STORE_A).status())
+                .isEqualTo(404);
+        assertThat(call(null, "GET", "/store/me/orders", null, STORE_A).status()).isEqualTo(401);
+        assertThat(call(buyer.token(), "GET", "/store/me/orders", null, STORE_B).status()).isEqualTo(401);
+        assertThat(call(buyer.token(), "GET", "/store/me/orders?size=0", null, STORE_A).status()).isEqualTo(400);
+    }
+
+    @Test
+    void theDetailShowsWhatWasBoughtAtTheChargedPricesAndWhereItGoes() {
+        Long variant = variant("Remera Detalle", Map.of(centro, 10));
+        Long product = jdbc.queryForObject("SELECT product_id FROM product_variants WHERE id = ?", Long.class, variant);
+        LocalDate today = BusinessDate.today();
+        Long promotion = id(call(adminA, "POST", "/promotions", Map.of("name", "Dos Remeras", "price", 1500,
+                "startDate", today.minusDays(1).toString(), "endDate", today.plusDays(5).toString(),
+                "items", List.of(Map.of("productId", product, "quantity", 2))), null));
+        Buyer buyer = buyer("Marta", "1155550013");
+        Long address = address(buyer, "Sarmiento", "800", "1041");
+
+        Map<String, Object> cart = Map.of(
+                "items", List.of(Map.of("productVariantId", variant, "quantity", 1)),
+                "promos", List.of(Map.of("promotionId", promotion, "quantity", 1,
+                        "variants", List.of(Map.of("productVariantId", variant, "quantity", 2)))));
+        Long orderId = ok(checkout(buyer, Map.of("cart", cart, "deliveryType", "SHIPPING", "addressId", address,
+                "expectedTotal", 2500, "checkoutKey", UUID.randomUUID().toString()))).get("orderId").asLong();
+        // Cambiar el precio después no altera el pedido.
+        jdbc.update("UPDATE product_variants SET price = 5000 WHERE id = ?", variant);
+
+        JsonNode order = ok(myOrder(buyer, orderId));
+
+        assertThat(order.get("status").asString()).isEqualTo("AWAITING_PAYMENT");
+        assertThat(order.get("cancellable").asBoolean()).isTrue();
+        assertThat(order.get("deliveryType").asString()).isEqualTo("SHIPPING");
+        assertThat(order.get("pickupBranch").isNull()).isTrue();
+        assertThat(order.get("shippingAddress").get("street").asString()).isEqualTo("Sarmiento");
+        assertThat(order.get("shippingAddress").get("postalCode").asString()).isEqualTo("1041");
+        JsonNode item = order.get("items").get(0);
+        assertThat(item.get("productName").asString()).isEqualTo("Remera Detalle");
+        assertThat(item.get("quantity").asInt()).isEqualTo(1);
+        assertThat(new BigDecimal(item.get("unitPrice").asString())).isEqualByComparingTo("1000");
+        assertThat(item.get("imageUrl").asString()).endsWith("/foto.png");
+        assertThat(item.has("sku")).isFalse();
+        JsonNode promo = order.get("promos").get(0);
+        assertThat(promo.get("name").asString()).isEqualTo("Dos Remeras");
+        assertThat(new BigDecimal(promo.get("lineTotal").asString())).isEqualByComparingTo("1500");
+        assertThat(promo.get("components").get(0).get("quantity").asInt()).isEqualTo(2);
+        assertThat(new BigDecimal(order.get("total").asString())).isEqualByComparingTo("2500");
+        assertThat(ok(call(buyer.token(), "GET", "/store/me/orders", null, STORE_A))
+                .get("content").get(0).get("units").asInt()).isEqualTo(3);
+    }
+
+    @Test
+    void anUnpaidOrderCanBeCancelledOnceAndGivesTheStockBack() {
+        Long variant = variant("Remera Arrepentida", Map.of(centro, 5));
+        Buyer buyer = buyer("Nora", "1155550014");
+        Long orderId = ok(checkout(buyer, pickup(centro, cart(variant, 2)))).get("orderId").asLong();
+        assertThat(stock(variant, centro)).isEqualTo(3);
+
+        JsonNode cancelled = ok(call(buyer.token(), "POST", "/store/me/orders/" + orderId + "/cancel", null, STORE_A));
+
+        assertThat(cancelled.get("status").asString()).isEqualTo("CANCELLED");
+        assertThat(cancelled.get("cancellable").asBoolean()).isFalse();
+        assertThat(stock(variant, centro)).isEqualTo(5);
+        assertThat(call(buyer.token(), "POST", "/store/me/orders/" + orderId + "/cancel", null, STORE_A)
+                .hasCode("ORDER_NOT_CANCELLABLE")).isTrue();
+        // Sigue en el listado, como cancelado.
+        assertThat(ok(call(buyer.token(), "GET", "/store/me/orders", null, STORE_A))
+                .get("content").get(0).get("status").asString()).isEqualTo("CANCELLED");
+
+        // Uno pagado (acá, simulado en la base) no se cancela desde la tienda.
+        Long paid = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        jdbc.update("UPDATE orders SET status = 'CONFIRMED' WHERE id = ?", paid);
+        assertThat(call(buyer.token(), "POST", "/store/me/orders/" + paid + "/cancel", null, STORE_A)
+                .hasCode("ORDER_NOT_CANCELLABLE")).isTrue();
+        assertThat(ok(myOrder(buyer, paid)).get("status").asString()).isEqualTo("READY_FOR_PICKUP");
+        assertThat(stock(variant, centro)).isEqualTo(4);
+
+        // Sin reserva (sale de varias sucursales) se cancela sin tocar el stock.
+        Long spread = variant("Remera Repartida Cancelada", Map.of(centro, 1, norte, 1));
+        Long address = address(buyer, "Tucuman", "10", "1049");
+        Long unreserved = ok(checkout(buyer, shipping(address, cart(spread, 2)))).get("orderId").asLong();
+        ok(call(buyer.token(), "POST", "/store/me/orders/" + unreserved + "/cancel", null, STORE_A));
+        assertThat(stock(spread, centro)).isEqualTo(1);
+        assertThat(stock(spread, norte)).isEqualTo(1);
+    }
+
+    private Response myOrder(Buyer buyer, Long orderId) {
+        return call(buyer.token(), "GET", "/store/me/orders/" + orderId, null, STORE_A);
     }
 
     private record Buyer(String token, Long customerId) {}

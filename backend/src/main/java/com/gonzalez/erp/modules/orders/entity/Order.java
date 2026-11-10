@@ -151,7 +151,9 @@ public class Order extends BaseEntity {
                     "Order is already cancelled");
         }
 
-        if (status != OrderStatus.CONFIRMED && status != OrderStatus.TO_PREPARE) {
+        // Un pedido web sin pagar se cancela desde la tienda (o al vencer); el ERP sigue usando canCancel().
+        if (status != OrderStatus.CONFIRMED && status != OrderStatus.TO_PREPARE
+                && status != OrderStatus.PENDING_PAYMENT) {
             throw new InvalidOrderException(
                     "Cannot cancel order in status: " + status);
         }

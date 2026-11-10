@@ -249,6 +249,21 @@ public class OrderServiceImpl implements OrderService {
         return saved;
     }
 
+    @Override
+    @Transactional
+    public void cancelUnpaidWebOrder(Order order) {
+        if (order.getChannel() != OrderChannel.WEB || order.getStatus() != OrderStatus.PENDING_PAYMENT) {
+            throw new InvalidOrderStatusTransitionException(
+                    "Only unpaid web orders can be cancelled this way. Status: " + order.getStatus());
+        }
+        // Sin pago no hubo cargo en la cuenta: solo se devuelve el stock, si se llegó a descontar.
+        if (order.isStockReserved()) {
+            releaseStock(order, order.getCompany().getId(), null);
+        }
+        order.cancel();
+        orderRepository.save(order);
+    }
+
     /** Descuenta el stock del pedido. No depende de la sesión: empresa y autor llegan por parámetro. */
     private void reserveStock(Order order, Long branchId, Long companyId, Long userId) {
         // Una variante puede ir suelta y dentro de una promo: el stock se mide por el total.
