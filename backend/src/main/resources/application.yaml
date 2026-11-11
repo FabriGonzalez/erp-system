@@ -74,6 +74,8 @@ app:
   store:
     link-scheme: ${STORE_LINK_SCHEME:https}
     link-port: ${STORE_LINK_PORT:}
+    # Cuánto se reserva el stock de una compra sin pagar; el link de Mercado Pago vence a la vez.
+    payment-window: ${STORE_PAYMENT_WINDOW:30m}
     # Client ID de la app de Google Cloud. Vacío = "Continuar con Google" deshabilitado (503).
     google-client-id: ${GOOGLE_CLIENT_ID:}
   # Clave para los secretos que hay que poder leer de nuevo (tokens de Mercado Pago): base64 de 32

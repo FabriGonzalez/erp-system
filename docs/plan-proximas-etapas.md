@@ -1718,6 +1718,22 @@ plan detallado de cada parte.
    de la tienda muestra un cartel con `reconnectRequired` de `GET /companies/me/mercadopago`. En
    el 4b, con la conexión para reconectar, el checkout responde que el pago no está disponible.
    Sin bloqueo entre servidores (una sola instancia); con varias, agregar uno (p. ej. ShedLock).
+   **Hecho (4b, 2026-11-11):** el checkout arma la preferencia de Mercado Pago con el token de la
+   empresa y devuelve `paymentUrl` y `paymentExpiresAt`. Migración V14: `orders.payment_expires_at`,
+   `mp_preference_id` y `payment_url`. Decisiones del usuario:
+   - La reserva dura 30 minutos para todas las empresas (`STORE_PAYMENT_WINDOW`) y la preferencia
+     vence a la vez (`expires` + `expiration_date_to`).
+   - Sin comisión de la plataforma por venta (`marketplace_fee` no se manda) por ahora.
+   - La llamada a Mercado Pago va dentro de la transacción del checkout: si falla (502
+     `MERCADOPAGO_UNAVAILABLE`/`MERCADOPAGO_REJECTED`) no queda pedido ni reserva y se reintenta
+     con la misma `checkoutKey`. Si algún día el volumen lo pide, se pasa a pedirla después del commit.
+   - Sin conexión, para reconectar o con el token vencido: 409 `PAYMENT_UNAVAILABLE`, antes de reservar.
+   - `notification_url` va en el 4c, junto con el webhook.
+   Cómo se arma: un solo ítem por el total ("Pedido N - tienda"), `external_reference` = id del
+   pedido, email del comprador, `binary_mode` (sin pagos pendientes que se acrediten tarde),
+   sin `ticket` ni `atm`, vuelta a `https://{dominio}/pedidos/{id}` con `auto_return` solo si
+   la URL es https. Retomar el pago: "Mis pedidos" (detalle) y la misma `checkoutKey` devuelven
+   el link mientras el pedido espera el pago y la reserva no venció; no hay endpoint aparte.
 5. **Vencimiento de reservas:** tarea `@Scheduled` que cancela pedidos `PENDING_PAYMENT` viejos
    (p. ej. 30 min) y devuelve el stock.
 

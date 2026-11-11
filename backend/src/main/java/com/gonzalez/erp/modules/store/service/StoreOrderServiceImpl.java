@@ -32,6 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -187,7 +188,8 @@ public class StoreOrderServiceImpl implements StoreOrderService {
                 order.getSubtotal(),
                 order.getShippingCost(),
                 order.getTotal(),
-                null
+                order.pendingPaymentUrl(Instant.now()),
+                order.getPaymentExpiresAt()
         );
     }
 

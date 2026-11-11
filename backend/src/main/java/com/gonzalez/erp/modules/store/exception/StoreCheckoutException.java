@@ -54,6 +54,12 @@ public class StoreCheckoutException extends RuntimeException {
                 "There are too many orders waiting for payment", null);
     }
 
+    /** La tienda no puede cobrar: sin Mercado Pago conectado, o la cuenta hay que reconectarla. */
+    public static StoreCheckoutException paymentUnavailable() {
+        return new StoreCheckoutException(HttpStatus.CONFLICT, "PAYMENT_UNAVAILABLE",
+                "The store cannot take payments right now", null);
+    }
+
     /** La clave ya se usó para un pedido de otro comprador. */
     public static StoreCheckoutException checkoutKeyInUse() {
         return new StoreCheckoutException(HttpStatus.CONFLICT, "CHECKOUT_KEY_IN_USE",

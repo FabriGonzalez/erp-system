@@ -100,6 +100,16 @@ public class Order extends BaseEntity {
     @Column(name = "checkout_key", length = 64)
     private String checkoutKey;
 
+    // Pedidos web: hasta cuándo vale la reserva y el link de pago de Mercado Pago.
+    @Column(name = "payment_expires_at")
+    private Instant paymentExpiresAt;
+
+    @Column(name = "mp_preference_id", length = 100)
+    private String mpPreferenceId;
+
+    @Column(name = "payment_url", length = 500)
+    private String paymentUrl;
+
     @Column(nullable = false, precision = 12, scale = 2)
     @Builder.Default
     private BigDecimal total = BigDecimal.ZERO;
@@ -160,6 +170,19 @@ public class Order extends BaseEntity {
 
         this.status = OrderStatus.CANCELLED;
         this.cancelledAt = Instant.now();
+    }
+
+    public void attachPaymentLink(String preferenceId, String url, Instant expiresAt) {
+        this.mpPreferenceId = preferenceId;
+        this.paymentUrl = url;
+        this.paymentExpiresAt = expiresAt;
+    }
+
+    /** El link sirve solo mientras el pedido espera el pago y la reserva no venció. */
+    public String pendingPaymentUrl(Instant now) {
+        boolean payable = status == OrderStatus.PENDING_PAYMENT
+                && paymentExpiresAt != null && paymentExpiresAt.isAfter(now);
+        return payable ? paymentUrl : null;
     }
 
     public void addItem(OrderItem item) {

@@ -1,5 +1,6 @@
 package com.gonzalez.erp.modules.store.mail;
 
+import com.gonzalez.erp.modules.store.web.StoreSiteUrls;
 import jakarta.mail.internet.InternetAddress;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,18 +27,15 @@ public class StoreMailSender {
 
     private final JavaMailSender mailSender;
     private final String from;
-    private final String linkScheme;
-    private final String linkPort;
+    private final StoreSiteUrls siteUrls;
 
     public StoreMailSender(
             JavaMailSender mailSender,
             @Value("${app.mail.from}") String from,
-            @Value("${app.store.link-scheme}") String linkScheme,
-            @Value("${app.store.link-port:}") String linkPort) {
+            StoreSiteUrls siteUrls) {
         this.mailSender = mailSender;
         this.from = from;
-        this.linkScheme = linkScheme;
-        this.linkPort = linkPort;
+        this.siteUrls = siteUrls;
     }
 
     @Async
@@ -66,9 +64,7 @@ public class StoreMailSender {
         }
     }
 
-    // El dominio ya está validado como hostname (StoreDomains): no puede traer ruta ni otra URL.
     private String storeUrl(StoreMailEvent event) {
-        String port = linkPort == null || linkPort.isBlank() ? "" : ":" + linkPort.trim();
-        return linkScheme + "://" + event.storeDomain() + port;
+        return siteUrls.home(event.storeDomain());
     }
 }

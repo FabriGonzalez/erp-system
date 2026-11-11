@@ -29,8 +29,9 @@ public class StoreCheckoutController {
 
     @PostMapping
     @Operation(summary = "Comprar el carrito",
-            description = "Vuelve a cotizar el carrito, reserva el stock y crea el pedido esperando el pago. "
-                    + "Repetir la misma checkoutKey devuelve el mismo pedido.")
+            description = "Vuelve a cotizar el carrito, reserva el stock, crea el pedido esperando el pago y "
+                    + "devuelve el link de Mercado Pago (vale lo mismo que la reserva). "
+                    + "Repetir la misma checkoutKey devuelve el mismo pedido y el mismo link.")
     @ApiResponse(responseCode = "201", description = "Pedido creado (o el ya creado con esa checkoutKey)")
     @ApiResponse(responseCode = "400", description = "Datos inválidos o retiro/envío mal armado (INVALID_DELIVERY)",
             content = @Content(schema = @Schema(implementation = StoreCheckoutErrorResponse.class)))
@@ -38,8 +39,12 @@ public class StoreCheckoutController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @ApiResponse(responseCode = "409", description = "CART_UNAVAILABLE o CART_CHANGED (con la cotización actual), "
             + "PICKUP_NOT_AVAILABLE, PROFILE_INCOMPLETE, ADDRESS_INCOMPLETE, TOO_MANY_PENDING_ORDERS, "
-            + "CHECKOUT_KEY_IN_USE o INSUFFICIENT_STOCK (otra compra se llevó lo último)",
+            + "CHECKOUT_KEY_IN_USE, PAYMENT_UNAVAILABLE (la tienda no tiene Mercado Pago conectado y vigente) "
+            + "o INSUFFICIENT_STOCK (otra compra se llevó lo último)",
             content = @Content(schema = @Schema(implementation = StoreCheckoutErrorResponse.class)))
+    @ApiResponse(responseCode = "502", description = "Mercado Pago no creó el cobro (MERCADOPAGO_UNAVAILABLE o "
+            + "MERCADOPAGO_REJECTED): no queda pedido ni reserva; se puede reintentar con la misma checkoutKey",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<StoreCheckoutResponse> checkout(@Valid @RequestBody StoreCheckoutRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(checkoutService.checkout(request));
     }

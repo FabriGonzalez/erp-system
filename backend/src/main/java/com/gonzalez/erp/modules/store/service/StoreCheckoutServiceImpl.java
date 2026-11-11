@@ -8,6 +8,9 @@ import com.gonzalez.erp.modules.customers.entity.Address;
 import com.gonzalez.erp.modules.customers.entity.Customer;
 import com.gonzalez.erp.modules.customers.repository.AddressRepository;
 import com.gonzalez.erp.modules.customers.repository.CustomerRepository;
+import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoPreferenceClient.PreferenceRequest;
+import com.gonzalez.erp.modules.mercadopago.service.MercadoPagoPaymentService;
+import com.gonzalez.erp.modules.mercadopago.service.MercadoPagoPaymentService.PaymentLink;
 import com.gonzalez.erp.modules.orders.entity.DeliveryType;
 import com.gonzalez.erp.modules.orders.entity.Order;
 import com.gonzalez.erp.modules.orders.entity.OrderItem;
@@ -22,14 +25,19 @@ import com.gonzalez.erp.modules.store.dto.StoreCartRequest;
 import com.gonzalez.erp.modules.store.dto.StoreCheckoutRequest;
 import com.gonzalez.erp.modules.store.dto.StoreCheckoutResponse;
 import com.gonzalez.erp.modules.store.dto.StoreFulfillment;
+import com.gonzalez.erp.modules.store.entity.StoreAccount;
 import com.gonzalez.erp.modules.store.exception.StoreCheckoutException;
+import com.gonzalez.erp.modules.store.repository.StoreAccountRepository;
 import com.gonzalez.erp.modules.store.security.StoreCustomer;
 import com.gonzalez.erp.modules.store.shipping.ShippingProvider;
-import lombok.RequiredArgsConstructor;
+import com.gonzalez.erp.modules.store.web.StoreSiteUrls;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,11 +46,11 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
- * Convierte el carrito en un pedido web esperando el pago: reserva el stock pero todavía no
- * cobra ni carga la cuenta del cliente (eso pasa cuando se acredita el pago).
+ * Convierte el carrito en un pedido web esperando el pago: reserva el stock y arma el cobro en
+ * Mercado Pago, pero todavía no carga la cuenta del cliente (eso pasa cuando se acredita el pago).
+ * Todo va en una transacción: si Mercado Pago falla, no queda ni el pedido ni la reserva.
  */
 @Service
-@RequiredArgsConstructor
 @Transactional
 public class StoreCheckoutServiceImpl implements StoreCheckoutService {
 
@@ -56,6 +64,35 @@ public class StoreCheckoutServiceImpl implements StoreCheckoutService {
     private final OrderService orderService;
     private final StoreCartService cartService;
     private final ShippingProvider shippingProvider;
+    private final StoreAccountRepository accountRepository;
+    private final MercadoPagoPaymentService paymentService;
+    private final StoreSiteUrls siteUrls;
+    private final Duration paymentWindow;
+
+    public StoreCheckoutServiceImpl(
+            CompanyRepository companyRepository,
+            CustomerRepository customerRepository,
+            AddressRepository addressRepository,
+            OrderRepository orderRepository,
+            OrderService orderService,
+            StoreCartService cartService,
+            ShippingProvider shippingProvider,
+            StoreAccountRepository accountRepository,
+            MercadoPagoPaymentService paymentService,
+            StoreSiteUrls siteUrls,
+            @Value("${app.store.payment-window}") Duration paymentWindow) {
+        this.companyRepository = companyRepository;
+        this.customerRepository = customerRepository;
+        this.addressRepository = addressRepository;
+        this.orderRepository = orderRepository;
+        this.orderService = orderService;
+        this.cartService = cartService;
+        this.shippingProvider = shippingProvider;
+        this.accountRepository = accountRepository;
+        this.paymentService = paymentService;
+        this.siteUrls = siteUrls;
+        this.paymentWindow = paymentWindow;
+    }
 
     @Override
     public StoreCheckoutResponse checkout(StoreCheckoutRequest request) {
@@ -77,6 +114,10 @@ public class StoreCheckoutServiceImpl implements StoreCheckoutService {
         Address shippingAddress = resolveShippingAddress(request, customer);
         if (orderRepository.countByCustomerIdAndStatus(customer.getId(), OrderStatus.PENDING_PAYMENT) >= MAX_PENDING_ORDERS) {
             throw StoreCheckoutException.tooManyPendingOrders();
+        }
+        // Antes de reservar: sin forma de cobrar, la compra no tiene sentido.
+        if (!paymentService.canCharge(current.companyId())) {
+            throw StoreCheckoutException.paymentUnavailable();
         }
 
         Company company = companyRepository.findById(current.companyId())
@@ -112,7 +153,24 @@ public class StoreCheckoutServiceImpl implements StoreCheckoutService {
                 shippingCost,
                 request.checkoutKey()
         ));
+        attachPaymentLink(order, company, current);
         return toResponse(order);
+    }
+
+    /** El link vence junto con la reserva: después, Mercado Pago ya no deja pagar. */
+    private void attachPaymentLink(Order order, Company company, StoreCustomer current) {
+        String payerEmail = accountRepository.findById(current.accountId())
+                .map(StoreAccount::getEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Store account not found"));
+        Instant expiresAt = Instant.now().plus(paymentWindow);
+        PaymentLink link = paymentService.createPaymentLink(company.getId(), new PreferenceRequest(
+                order.getId().toString(),
+                "Pedido " + order.getOrderNumber() + " - " + company.getName(),
+                order.getTotal(),
+                payerEmail,
+                siteUrls.order(company.getStoreDomain(), order.getId()),
+                expiresAt));
+        order.attachPaymentLink(link.preferenceId(), link.url(), expiresAt);
     }
 
     private static void requireCompleteProfile(Customer customer) {
@@ -215,7 +273,8 @@ public class StoreCheckoutServiceImpl implements StoreCheckoutService {
                 order.getSubtotal(),
                 order.getShippingCost(),
                 order.getTotal(),
-                null
+                order.pendingPaymentUrl(Instant.now()),
+                order.getPaymentExpiresAt()
         );
     }
 

@@ -4,13 +4,15 @@ import com.gonzalez.erp.modules.orders.entity.DeliveryType;
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 /**
  * El pedido creado, esperando el pago.
  *
  * @param fulfillment  MULTIPLE_BRANCHES si sale de varias sucursales: el sitio avisa que puede demorar.
  * @param pickupBranch solo en retiro.
- * @param paymentUrl   null hasta que exista el cobro con Mercado Pago.
+ * @param paymentUrl       pantalla de pago de Mercado Pago; null si ya no espera el pago o la reserva venció.
+ * @param paymentExpiresAt hasta cuándo se puede pagar (vence la reserva del stock).
  */
 public record StoreCheckoutResponse(
         Long orderId,
@@ -22,5 +24,6 @@ public record StoreCheckoutResponse(
         BigDecimal subtotal,
         BigDecimal shippingCost,
         BigDecimal total,
-        String paymentUrl
+        String paymentUrl,
+        Instant paymentExpiresAt
 ) {}

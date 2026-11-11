@@ -14,7 +14,8 @@ import java.util.List;
  * @param fulfillment     MULTIPLE_BRANCHES si sale de varias sucursales: el sitio avisa que puede demorar.
  * @param pickupBranch    solo en retiro.
  * @param shippingAddress solo en envío: la dirección como quedó al comprar.
- * @param paymentUrl      null hasta que exista el cobro con Mercado Pago.
+ * @param paymentUrl       para retomar el pago; null si ya no espera el pago o la reserva venció.
+ * @param paymentExpiresAt hasta cuándo se puede pagar; null en pedidos anteriores al cobro con Mercado Pago.
  */
 public record StoreOrderResponse(
         Long id,
@@ -32,7 +33,8 @@ public record StoreOrderResponse(
         BigDecimal subtotal,
         BigDecimal shippingCost,
         BigDecimal total,
-        String paymentUrl
+        String paymentUrl,
+        Instant paymentExpiresAt
 ) {
     public record Item(
             Long productId,

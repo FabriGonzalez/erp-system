@@ -1,10 +1,17 @@
 package com.gonzalez.erp;
 
+import com.gonzalez.erp.common.crypto.AesGcmTokenCipher;
 import com.gonzalez.erp.common.util.BusinessDate;
+import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoPreferenceClient;
+import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoPreferenceClient.Preference;
+import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoPreferenceClient.PreferenceRequest;
+import com.gonzalez.erp.modules.mercadopago.exception.MercadoPagoException;
 import com.gonzalez.erp.modules.store.repository.StoreAccountRepository;
 import com.gonzalez.erp.modules.store.security.StoreTokenService;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +19,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -23,6 +31,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
@@ -31,6 +41,13 @@ import java.util.TimeZone;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 /*
  * Checkout de la tienda contra Postgres real: reserva de stock en la sucursal que corresponde, sin
@@ -38,10 +55,17 @@ import static org.assertj.core.api.Assertions.assertThat;
  * cambiado, datos del comprador, tope de compras sin pagar y aislamiento entre compradores y
  * tiendas. Cada test usa su propio producto y comprador: comparten la tienda.
  * Las cuentas de comprador se insertan directo en la base (el registro se prueba en StoreAccountTests).
+ * La tienda A tiene Mercado Pago conectado (insertado en la base); el cobro está simulado y
+ * devuelve un link con el id del pedido.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "app.jwt.secret=test-secret-de-al-menos-32-bytes-para-hs256-0123456789",
-        "app.platform-admin.password=test-platform-admin"
+        "app.platform-admin.password=test-platform-admin",
+        "app.encryption.key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "app.mercadopago.client-id=123456",
+        "app.mercadopago.client-secret=secreto-de-la-app",
+        "app.mercadopago.redirect-uri=https://api.erp.test/api/v1/mercadopago/oauth/callback",
+        "app.mercadopago.renewal-cron=-"
 })
 @Testcontainers(disabledWithoutDocker = true)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -75,6 +99,12 @@ class StoreCheckoutTests {
     @Autowired
     private StoreTokenService tokenService;
 
+    @Autowired
+    private AesGcmTokenCipher tokenCipher;
+
+    @MockitoBean
+    private MercadoPagoPreferenceClient preferenceClient;
+
     private String adminA;
     private Long companyA;
     private Long centro;
@@ -105,6 +135,23 @@ class StoreCheckoutTests {
         Long categoryB = id(call(adminB, "POST", "/categories", Map.of("name", "Secreta"), null));
         Long companyB = jdbc.queryForObject("SELECT company_id FROM branches WHERE id = ?", Long.class, branchB);
         foreignVariant = publishedVariant(adminB, companyB, categoryB, "B Secreto", Map.of(branchB, 5));
+
+        jdbc.update("""
+                INSERT INTO mercado_pago_connections (id, company_id, mp_user_id, access_token_encrypted,
+                    refresh_token_encrypted, live_mode, expires_at, connected_at, status, created_at, updated_at)
+                VALUES (nextval('mercado_pago_connections_seq'), ?, 7001, ?, ?, true, now() + interval '90 days',
+                    now(), 'CONNECTED', now(), now())
+                """, companyA, tokenCipher.encrypt("APP_USR-token-a"), tokenCipher.encrypt("TG-refresh-a"));
+    }
+
+    // Los mocks se reinician después de cada test: el cobro simulado se arma de nuevo en cada uno.
+    @BeforeEach
+    void simulateMercadoPago() {
+        // doAnswer y no when(...): when llama al mock y, si ya tenía esta respuesta, la corre con argumentos nulos.
+        doAnswer(invocation -> {
+            String reference = invocation.<PreferenceRequest>getArgument(1).externalReference();
+            return new Preference("pref-" + reference, paymentUrl(reference), "https://sandbox.mp.test/pay/" + reference);
+        }).when(preferenceClient).create(anyString(), any());
     }
 
     @Test
@@ -118,7 +165,7 @@ class StoreCheckoutTests {
         assertThat(order.get("fulfillment").asString()).isEqualTo("SINGLE_BRANCH");
         assertThat(order.get("pickupBranch").get("id").asLong()).isEqualTo(norte);
         assertThat(new BigDecimal(order.get("total").asString())).isEqualByComparingTo("2000");
-        assertThat(order.get("paymentUrl").isNull()).isTrue();
+        assertThat(order.get("paymentUrl").asString()).isEqualTo(paymentUrl(order.get("orderId").asString()));
         assertThat(stock(variant, norte)).isEqualTo(3);
         assertThat(stock(variant, centro)).isEqualTo(5);
 
@@ -368,11 +415,108 @@ class StoreCheckoutTests {
         assertThat(stock(spread, norte)).isEqualTo(1);
     }
 
+    // --- Cobro con Mercado Pago ---
+
+    @Test
+    void theCheckoutCreatesTheChargeWithTheStoresAccountAndItExpiresWithTheReservation() {
+        Long variant = variant("Remera Cobro", Map.of(centro, 5));
+        Buyer buyer = buyer("Olga", "1155550015");
+        Instant before = Instant.now();
+
+        JsonNode order = ok(checkout(buyer, pickup(centro, cart(variant, 2))));
+
+        Long orderId = order.get("orderId").asLong();
+        ArgumentCaptor<PreferenceRequest> sent = ArgumentCaptor.forClass(PreferenceRequest.class);
+        verify(preferenceClient).create(eq("APP_USR-token-a"), sent.capture());
+        PreferenceRequest request = sent.getValue();
+        assertThat(request.externalReference()).isEqualTo(orderId.toString());
+        assertThat(request.amount()).isEqualByComparingTo("2000");
+        assertThat(request.title()).startsWith("Pedido ").endsWith(" - Checkout A");
+        assertThat(request.payerEmail()).isEqualTo(buyer.email());
+        assertThat(request.backUrl()).isEqualTo("https://" + STORE_A + "/pedidos/" + orderId);
+        assertThat(request.expiresAt()).isBetween(before.plus(Duration.ofMinutes(30)), Instant.now().plus(Duration.ofMinutes(30)));
+        assertThat(Instant.parse(order.get("paymentExpiresAt").asString())).isEqualTo(request.expiresAt());
+
+        Map<String, Object> saved = jdbc.queryForMap("SELECT mp_preference_id, payment_url FROM orders WHERE id = ?", orderId);
+        assertThat(saved.get("mp_preference_id")).isEqualTo("pref-" + orderId);
+        assertThat(saved.get("payment_url")).isEqualTo(paymentUrl(orderId.toString()));
+    }
+
+    @Test
+    void theLinkIsResumedFromMyOrdersOrTheSameKeyUntilTheReservationExpires() {
+        Long variant = variant("Remera Retomada", Map.of(centro, 5));
+        Buyer buyer = buyer("Pablo", "1155550016");
+        Map<String, Object> request = pickup(centro, cart(variant, 1));
+        Long orderId = ok(checkout(buyer, request)).get("orderId").asLong();
+        String link = paymentUrl(orderId.toString());
+
+        assertThat(ok(myOrder(buyer, orderId)).get("paymentUrl").asString()).isEqualTo(link);
+        // El reintento devuelve el mismo link sin armar otro cobro.
+        assertThat(ok(checkout(buyer, request)).get("paymentUrl").asString()).isEqualTo(link);
+        verify(preferenceClient, times(1)).create(anyString(), any());
+
+        jdbc.update("UPDATE orders SET payment_expires_at = now() - interval '1 minute' WHERE id = ?", orderId);
+        assertThat(ok(myOrder(buyer, orderId)).get("paymentUrl").isNull()).isTrue();
+
+        jdbc.update("UPDATE orders SET payment_expires_at = now() + interval '10 minutes' WHERE id = ?", orderId);
+        ok(call(buyer.token(), "POST", "/store/me/orders/" + orderId + "/cancel", null, STORE_A));
+        assertThat(ok(myOrder(buyer, orderId)).get("paymentUrl").isNull()).isTrue();
+    }
+
+    @Test
+    void withoutAUsableMercadoPagoAccountNothingIsReserved() {
+        Long variant = variant("Remera Sin Cobro", Map.of(centro, 5));
+        Buyer buyer = buyer("Quique", "1155550017");
+        try {
+            jdbc.update("UPDATE mercado_pago_connections SET status = 'RECONNECT_REQUIRED' WHERE company_id = ?", companyA);
+            assertThat(checkout(buyer, pickup(centro, cart(variant, 1))).hasCode("PAYMENT_UNAVAILABLE")).isTrue();
+
+            jdbc.update("""
+                    UPDATE mercado_pago_connections SET status = 'CONNECTED', expires_at = now() - interval '1 minute'
+                    WHERE company_id = ?
+                    """, companyA);
+            assertThat(checkout(buyer, pickup(centro, cart(variant, 1))).hasCode("PAYMENT_UNAVAILABLE")).isTrue();
+        } finally {
+            jdbc.update("""
+                    UPDATE mercado_pago_connections SET status = 'CONNECTED', expires_at = now() + interval '90 days'
+                    WHERE company_id = ?
+                    """, companyA);
+        }
+        assertThat(stock(variant, centro)).isEqualTo(5);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM orders WHERE customer_id = ?", Long.class, buyer.customerId()))
+                .isEqualTo(0);
+    }
+
+    @Test
+    void ifMercadoPagoFailsTheOrderAndTheReservationAreUndoneAndTheSameKeyCanRetry() {
+        Long variant = variant("Remera Reintento", Map.of(centro, 5));
+        Buyer buyer = buyer("Rosa", "1155550018");
+        Map<String, Object> request = pickup(centro, cart(variant, 2));
+        doThrow(MercadoPagoException.unavailable()).when(preferenceClient).create(anyString(), any());
+
+        Response failed = checkout(buyer, request);
+
+        assertThat(failed.status()).isEqualTo(502);
+        assertThat(failed.body()).contains("MERCADOPAGO_UNAVAILABLE");
+        assertThat(stock(variant, centro)).isEqualTo(5);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM orders WHERE customer_id = ?", Long.class, buyer.customerId()))
+                .isEqualTo(0);
+
+        simulateMercadoPago();
+        JsonNode order = ok(checkout(buyer, request));
+        assertThat(order.get("paymentUrl").asString()).isEqualTo(paymentUrl(order.get("orderId").asString()));
+        assertThat(stock(variant, centro)).isEqualTo(3);
+    }
+
+    private static String paymentUrl(String orderId) {
+        return "https://mp.test/pay/" + orderId;
+    }
+
     private Response myOrder(Buyer buyer, Long orderId) {
         return call(buyer.token(), "GET", "/store/me/orders/" + orderId, null, STORE_A);
     }
 
-    private record Buyer(String token, Long customerId) {}
+    private record Buyer(String token, Long customerId, String email) {}
 
     /** Ficha creada desde el ERP y cuenta verificada insertada a mano, con su token. */
     private Buyer buyer(String firstName, String phone) {
@@ -382,11 +526,12 @@ class StoreCheckoutTests {
         }
         Long customerId = id(call(adminA, "POST", "/customers", customer, null));
         Long accountId = jdbc.queryForObject("SELECT nextval('store_accounts_seq')", Long.class);
+        String email = UUID.randomUUID() + "@mail.test";
         jdbc.update("""
                 INSERT INTO store_accounts (id, company_id, customer_id, email, password_hash, email_verified_at, created_at, updated_at)
                 VALUES (?, ?, ?, ?, 'sin-uso', now(), now(), now())
-                """, accountId, companyA, customerId, UUID.randomUUID() + "@mail.test");
-        return new Buyer(tokenService.generate(accountRepository.findById(accountId).orElseThrow()), customerId);
+                """, accountId, companyA, customerId, email);
+        return new Buyer(tokenService.generate(accountRepository.findById(accountId).orElseThrow()), customerId, email);
     }
 
     private Long address(Buyer buyer, String street, String number, String postalCode) {
