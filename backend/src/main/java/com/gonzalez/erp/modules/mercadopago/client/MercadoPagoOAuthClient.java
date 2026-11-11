@@ -10,6 +10,13 @@ public interface MercadoPagoOAuthClient {
      */
     Tokens exchangeCode(String code, String codeVerifier);
 
+    /**
+     * Pide tokens nuevos antes de que venzan. Mercado Pago devuelve también un refresh token
+     * nuevo. Falla con {@code MercadoPagoException}: {@code isRejected()} si Mercado Pago dijo que
+     * no (no sirve reintentar), si no, porque no respondió.
+     */
+    Tokens refresh(String refreshToken);
+
     record Tokens(String accessToken, String refreshToken, long expiresInSeconds, long userId, boolean liveMode) {
 
         // Sin los secretos: el toString de un record los imprimiría en cualquier log.

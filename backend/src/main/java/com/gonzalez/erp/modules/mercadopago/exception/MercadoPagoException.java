@@ -34,9 +34,25 @@ public class MercadoPagoException extends RuntimeException {
                 "The connection link is invalid or has expired");
     }
 
-    /** Mercado Pago rechazó el código o no respondió. */
+    /** No llegó el código en el callback. */
     public static MercadoPagoException connectionFailed() {
         return new MercadoPagoException(HttpStatus.BAD_GATEWAY, "MERCADOPAGO_CONNECTION_FAILED",
                 "Could not connect the Mercado Pago account");
+    }
+
+    /** Mercado Pago dijo que no (código vencido, permiso revocado): reintentar no sirve. */
+    public static MercadoPagoException rejected() {
+        return new MercadoPagoException(HttpStatus.BAD_GATEWAY, "MERCADOPAGO_REJECTED",
+                "Mercado Pago rejected the request");
+    }
+
+    /** Mercado Pago no respondió o falló de su lado: puede andar más tarde. */
+    public static MercadoPagoException unavailable() {
+        return new MercadoPagoException(HttpStatus.BAD_GATEWAY, "MERCADOPAGO_UNAVAILABLE",
+                "Mercado Pago is not responding");
+    }
+
+    public boolean isRejected() {
+        return "MERCADOPAGO_REJECTED".equals(code);
     }
 }

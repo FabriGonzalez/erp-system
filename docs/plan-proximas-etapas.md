@@ -1710,8 +1710,14 @@ plan detallado de cada parte.
      sin dudas de qué empresa es cada pago.
    - Sin `MERCADOPAGO_CLIENT_ID` la conexión responde 503; con Mercado Pago habilitado y sin clave
      de cifrado el backend no arranca. La app de Mercado Pago necesita `offline_access` (renovar).
-   4a2: tarea diaria que renueva los tokens con menos de 30 días (el `refresh_token` cambia en
-   cada renovación); si falla, la conexión queda para reconectar y se avisa por mail.
+   4a2: tarea diaria (4 h, hora de Argentina) que renueva los tokens con menos de 30 días (el
+   `refresh_token` cambia en cada renovación), una transacción por conexión. Decidido el
+   2026-11-11: si Mercado Pago rechaza la renovación o el token ya venció, la conexión pasa a
+   `RECONNECT_REQUIRED` y se manda un mail, una sola vez, solo a quien la conectó (si sigue activo
+   y tiene email); si Mercado Pago no responde, se reintenta al día siguiente sin avisar. El panel
+   de la tienda muestra un cartel con `reconnectRequired` de `GET /companies/me/mercadopago`. En
+   el 4b, con la conexión para reconectar, el checkout responde que el pago no está disponible.
+   Sin bloqueo entre servidores (una sola instancia); con varias, agregar uno (p. ej. ShedLock).
 5. **Vencimiento de reservas:** tarea `@Scheduled` que cancela pedidos `PENDING_PAYMENT` viejos
    (p. ej. 30 min) y devuelve el stock.
 

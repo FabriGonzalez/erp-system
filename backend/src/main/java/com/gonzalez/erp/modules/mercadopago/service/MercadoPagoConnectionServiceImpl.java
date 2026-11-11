@@ -64,6 +64,7 @@ public class MercadoPagoConnectionServiceImpl implements MercadoPagoConnectionSe
                 .map(connection -> new MercadoPagoConnectionResponse(
                         properties.enabled(),
                         true,
+                        connection.isReconnectRequired(),
                         connection.getMpUserId(),
                         connection.isLiveMode(),
                         connection.getConnectedAt(),

@@ -88,6 +88,8 @@ app:
     client-secret: ${MERCADOPAGO_CLIENT_SECRET:}
     redirect-uri: ${MERCADOPAGO_REDIRECT_URI:}
     test-mode: ${MERCADOPAGO_TEST_MODE:false}
+    # Renovación de tokens: todos los días a las 4 (hora de Argentina). "-" la apaga.
+    renewal-cron: ${MERCADOPAGO_RENEWAL_CRON:0 0 4 * * *}
   platform-admin:
     username: ${ERP_PLATFORM_ADMIN_USERNAME:platform_admin}
     email: ${ERP_PLATFORM_ADMIN_EMAIL:platform@erp.local}

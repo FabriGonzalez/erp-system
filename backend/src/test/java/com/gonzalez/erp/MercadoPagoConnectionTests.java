@@ -4,6 +4,11 @@ import com.gonzalez.erp.common.crypto.AesGcmTokenCipher;
 import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoOAuthClient;
 import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoOAuthClient.Tokens;
 import com.gonzalez.erp.modules.mercadopago.exception.MercadoPagoException;
+import com.gonzalez.erp.modules.mercadopago.service.MercadoPagoTokenRenewalService;
+import org.mockito.Mockito;
+import org.mockito.invocation.Invocation;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -33,7 +38,9 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
 
@@ -41,6 +48,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -56,7 +64,9 @@ import static org.mockito.Mockito.when;
         "app.encryption.key=" + MercadoPagoConnectionTests.ENCRYPTION_KEY,
         "app.mercadopago.client-id=123456",
         "app.mercadopago.client-secret=secreto-de-la-app",
-        "app.mercadopago.redirect-uri=https://api.erp.test/api/v1/mercadopago/oauth/callback"
+        "app.mercadopago.redirect-uri=https://api.erp.test/api/v1/mercadopago/oauth/callback",
+        // La renovación la disparan los tests, no el reloj.
+        "app.mercadopago.renewal-cron=-"
 })
 @Testcontainers(disabledWithoutDocker = true)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -83,6 +93,12 @@ class MercadoPagoConnectionTests {
 
     @MockitoBean
     private MercadoPagoOAuthClient oauthClient;
+
+    @MockitoBean
+    private JavaMailSender mailSender;
+
+    @Autowired
+    private MercadoPagoTokenRenewalService renewalService;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -223,6 +239,138 @@ class MercadoPagoConnectionTests {
         assertThat(call(null, "GET", "/companies/me/mercadopago/connect", null).status()).isEqualTo(401);
         assertThat(call(null, "GET", "/companies/me/mercadopago", null).status()).isEqualTo(401);
         assertThat(call(null, "DELETE", "/companies/me/mercadopago", null).status()).isEqualTo(401);
+    }
+
+    @Test
+    void renewsTheTokensThatExpireSoonAndLeavesTheOthers() {
+        Company soon = provision("MP Renueva", "admin_mp_renueva");
+        Company later = provision("MP No Renueva", "admin_mp_no_renueva");
+        connect(soon, "code-renueva", 4001L, "TG-renueva-vieja", TEN_DAYS);
+        connect(later, "code-no-renueva", 4002L, "TG-no-renueva", 15_552_000);
+        when(oauthClient.refresh("TG-renueva-vieja"))
+                .thenReturn(new Tokens("APP_USR-renovado", "TG-renueva-nueva", 15_552_000, 4001L, false));
+
+        renewalService.renewExpiringTokens();
+
+        AesGcmTokenCipher cipher = new AesGcmTokenCipher(ENCRYPTION_KEY);
+        Map<String, Object> row = connectionRow(soon);
+        assertThat(cipher.decrypt((String) row.get("access_token_encrypted"))).isEqualTo("APP_USR-renovado");
+        // Mercado Pago cambia el refresh token en cada renovación: hay que guardar el nuevo.
+        assertThat(cipher.decrypt((String) row.get("refresh_token_encrypted"))).isEqualTo("TG-renueva-nueva");
+        assertThat(row.get("status")).isEqualTo("CONNECTED");
+        assertThat(row.get("last_refreshed_at")).isNotNull();
+        assertThat(((java.sql.Timestamp) row.get("expires_at")).toInstant())
+                .isAfter(Instant.now().plus(java.time.Duration.ofDays(170)));
+        verify(oauthClient, never()).refresh("TG-no-renueva");
+    }
+
+    @Test
+    void aRejectedRenewalAsksToReconnectAndMailsWhoConnectedOnce() {
+        Company company = provision("MP Rechazo", "admin_mp_rechazo");
+        connect(company, "code-rechazo", 5001L, "TG-rechazo", TEN_DAYS);
+        when(oauthClient.refresh("TG-rechazo")).thenThrow(MercadoPagoException.rejected());
+
+        renewalService.renewExpiringTokens();
+
+        JsonNode connection = ok(call(company.token(), "GET", "/companies/me/mercadopago", null));
+        assertThat(connection.get("connected").asBoolean()).isTrue();
+        assertThat(connection.get("reconnectRequired").asBoolean()).isTrue();
+        SimpleMailMessage mail = waitMailsTo("admin_mp_rechazo@x.com", 1).getFirst();
+        assertThat(mail.getSubject()).contains("Reconectá Mercado Pago");
+        assertThat(mail.getText()).contains("MP Rechazo");
+
+        // Una sola vez: en la próxima pasada ya no se toca.
+        renewalService.renewExpiringTokens();
+        pause();
+        assertThat(mailsTo("admin_mp_rechazo@x.com")).hasSize(1);
+        verify(oauthClient, times(1)).refresh("TG-rechazo");
+
+        // Reconectar la deja como nueva.
+        connect(company, "code-rechazo-2", 5001L, "TG-rechazo-2", 15_552_000);
+        assertThat(ok(call(company.token(), "GET", "/companies/me/mercadopago", null))
+                .get("reconnectRequired").asBoolean()).isFalse();
+    }
+
+    @Test
+    void whenMercadoPagoDoesNotAnswerItRetriesUntilTheTokenExpires() {
+        Company company = provision("MP Caido", "admin_mp_caido");
+        connect(company, "code-caido", 6001L, "TG-caido", TEN_DAYS);
+        when(oauthClient.refresh("TG-caido")).thenThrow(MercadoPagoException.unavailable());
+
+        renewalService.renewExpiringTokens();
+
+        assertThat(connectionRow(company).get("status")).isEqualTo("CONNECTED");
+        pause();
+        assertThat(mailsTo("admin_mp_caido@x.com")).isEmpty();
+
+        // Si el token ya venció, no hay más tiempo para reintentar.
+        jdbc.update("UPDATE mercado_pago_connections SET expires_at = now() - interval '1 day' WHERE company_id = ?",
+                company.id());
+        renewalService.renewExpiringTokens();
+
+        assertThat(connectionRow(company).get("status")).isEqualTo("RECONNECT_REQUIRED");
+        assertThat(waitMailsTo("admin_mp_caido@x.com", 1)).hasSize(1);
+    }
+
+    @Test
+    void withoutAnActiveUserWhoConnectedNoMailIsSentButTheStatusChanges() {
+        Company company = provision("MP Sin Usuario", "admin_mp_sin_usuario");
+        connect(company, "code-sin-usuario", 7001L, "TG-sin-usuario", TEN_DAYS);
+        when(oauthClient.refresh("TG-sin-usuario")).thenThrow(MercadoPagoException.rejected());
+        jdbc.update("UPDATE users SET active = false WHERE username = ?", "admin_mp_sin_usuario");
+
+        renewalService.renewExpiringTokens();
+
+        assertThat(connectionRow(company).get("status")).isEqualTo("RECONNECT_REQUIRED");
+        pause();
+        assertThat(mailsTo("admin_mp_sin_usuario@x.com")).isEmpty();
+    }
+
+    private static final long TEN_DAYS = 864_000;
+
+    private void connect(Company company, String code, long mpUserId, String refreshToken, long expiresInSeconds) {
+        when(oauthClient.exchangeCode(eq(code), anyString()))
+                .thenReturn(new Tokens("APP_USR-" + code, refreshToken, expiresInSeconds, mpUserId, false));
+        assertThat(callback(code, authorizationParams(company.token()).getFirst("state")).status()).isEqualTo(200);
+    }
+
+    private Map<String, Object> connectionRow(Company company) {
+        return jdbc.queryForMap("SELECT * FROM mercado_pago_connections WHERE company_id = ?", company.id());
+    }
+
+    /** El mail sale después del commit y en otro hilo: hay que esperarlo. */
+    private List<SimpleMailMessage> waitMailsTo(String email, int count) {
+        long deadline = System.currentTimeMillis() + 10_000;
+        while (System.currentTimeMillis() < deadline) {
+            List<SimpleMailMessage> mails = mailsTo(email);
+            if (mails.size() >= count) {
+                return mails;
+            }
+            pause();
+        }
+        throw new AssertionError("Expected " + count + " mails to " + email + " but got " + mailsTo(email).size());
+    }
+
+    private List<SimpleMailMessage> mailsTo(String email) {
+        List<SimpleMailMessage> mails = new ArrayList<>();
+        for (Invocation invocation : List.copyOf(Mockito.mockingDetails(mailSender).getInvocations())) {
+            for (Object argument : invocation.getArguments()) {
+                if (argument instanceof SimpleMailMessage message
+                        && message.getTo() != null && List.of(message.getTo()).contains(email)) {
+                    mails.add(message);
+                }
+            }
+        }
+        return mails;
+    }
+
+    // Lo que se espera que no llegue tiene que tener tiempo de llegar si fuera a llegar.
+    private static void pause() {
+        try {
+            Thread.sleep(300);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private record Company(long id, String token) {}

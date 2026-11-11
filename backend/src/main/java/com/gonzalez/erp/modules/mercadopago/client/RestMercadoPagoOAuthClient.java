@@ -48,6 +48,16 @@ public class RestMercadoPagoOAuthClient implements MercadoPagoOAuthClient {
         return requestTokens(body);
     }
 
+    @Override
+    public Tokens refresh(String refreshToken) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("client_id", properties.clientId());
+        body.put("client_secret", properties.clientSecret());
+        body.put("grant_type", "refresh_token");
+        body.put("refresh_token", refreshToken);
+        return requestTokens(body);
+    }
+
     private Tokens requestTokens(Map<String, Object> body) {
         TokenResponse response;
         try {
@@ -60,16 +70,17 @@ public class RestMercadoPagoOAuthClient implements MercadoPagoOAuthClient {
                     .body(TokenResponse.class);
         } catch (RestClientResponseException e) {
             // Sin el cuerpo: alcanza con el estado, y así no hay riesgo de loguear datos de la cuenta.
-            log.warn("Mercado Pago rejected the token request with status {}", e.getStatusCode().value());
-            throw MercadoPagoException.connectionFailed();
+            log.warn("Mercado Pago answered the token request with status {}", e.getStatusCode().value());
+            // 4xx: Mercado Pago dijo que no (código usado, permiso revocado). 5xx: falla de su lado.
+            throw e.getStatusCode().is4xxClientError() ? MercadoPagoException.rejected() : MercadoPagoException.unavailable();
         } catch (RestClientException e) {
             log.warn("Mercado Pago token request failed: {}", e.getMessage());
-            throw MercadoPagoException.connectionFailed();
+            throw MercadoPagoException.unavailable();
         }
         if (response == null || isBlank(response.accessToken()) || isBlank(response.refreshToken())
                 || response.userId() == null || response.expiresIn() == null) {
             log.warn("Mercado Pago token response is incomplete");
-            throw MercadoPagoException.connectionFailed();
+            throw MercadoPagoException.unavailable();
         }
         return new Tokens(response.accessToken(), response.refreshToken(), response.expiresIn(),
                 response.userId(), Boolean.TRUE.equals(response.liveMode()));

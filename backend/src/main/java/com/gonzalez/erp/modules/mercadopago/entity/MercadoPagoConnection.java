@@ -4,6 +4,8 @@ import com.gonzalez.erp.common.entity.BaseEntity;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
@@ -46,6 +48,13 @@ public class MercadoPagoConnection extends BaseEntity {
     @Column(name = "connected_by_user_id")
     private Long connectedByUserId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private MercadoPagoConnectionStatus status = MercadoPagoConnectionStatus.CONNECTED;
+
+    @Column(name = "last_refreshed_at")
+    private Instant lastRefreshedAt;
+
     public MercadoPagoConnection(Company company) {
         this.company = company;
     }
@@ -60,5 +69,27 @@ public class MercadoPagoConnection extends BaseEntity {
         this.expiresAt = expiresAt;
         this.connectedByUserId = connectedByUserId;
         this.connectedAt = now;
+        this.lastRefreshedAt = null;
+        this.status = MercadoPagoConnectionStatus.CONNECTED;
+    }
+
+    /** Mercado Pago cambia los dos tokens en cada renovación: el refresh token viejo ya no sirve. */
+    public void renew(String accessTokenEncrypted, String refreshTokenEncrypted, Instant expiresAt, Instant now) {
+        this.accessTokenEncrypted = accessTokenEncrypted;
+        this.refreshTokenEncrypted = refreshTokenEncrypted;
+        this.expiresAt = expiresAt;
+        this.lastRefreshedAt = now;
+    }
+
+    public void requireReconnect() {
+        this.status = MercadoPagoConnectionStatus.RECONNECT_REQUIRED;
+    }
+
+    public boolean isReconnectRequired() {
+        return status == MercadoPagoConnectionStatus.RECONNECT_REQUIRED;
+    }
+
+    public boolean isExpired(Instant now) {
+        return !expiresAt.isAfter(now);
     }
 }
