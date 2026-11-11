@@ -76,6 +76,10 @@ app:
     link-port: ${STORE_LINK_PORT:}
     # Cuánto se reserva el stock de una compra sin pagar; el link de Mercado Pago vence a la vez.
     payment-window: ${STORE_PAYMENT_WINDOW:30m}
+    # Vencimiento de reservas: cada 5 minutos cancela las compras sin pagar cuyo link venció hace
+    # más que el margen (deja terminar los pagos en curso). "-" en el cron la apaga.
+    expiry-cron: ${STORE_EXPIRY_CRON:0 */5 * * * *}
+    expiry-grace: ${STORE_EXPIRY_GRACE:10m}
     # Client ID de la app de Google Cloud. Vacío = "Continuar con Google" deshabilitado (503).
     google-client-id: ${GOOGLE_CLIENT_ID:}
   # Clave para los secretos que hay que poder leer de nuevo (tokens de Mercado Pago): base64 de 32

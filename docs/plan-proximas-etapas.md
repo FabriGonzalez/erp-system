@@ -1771,6 +1771,16 @@ plan detallado de cada parte.
    (p. ej. 30 min) y devuelve el stock. Decidido en el 4c: cancela con **10 minutos de margen**
    después de `payment_expires_at` (el link ya no acepta pagos y terminan los que estaban en curso).
    También va acá el mail de "pedido confirmado" al acreditarse el pago.
+   **Hecho (2026-11-11):**
+   - `StoreReservationExpiryJob` cada 5 minutos (`STORE_EXPIRY_CRON`, margen `STORE_EXPIRY_GRACE`,
+     10 min). Cada pedido en su propia transacción, bloqueado y revisado de nuevo antes de
+     cancelarlo: un pago que entra a la vez gana y el pedido se saltea; uno que falla no frena al
+     resto. No vence el link en Mercado Pago (ya venció solo).
+   - Mail al comprador cuando vence ("se canceló, no se te cobró nada", decisión del usuario).
+   - Mail de pedido confirmado con las líneas (producto, variante y cantidad; promos con sus
+     productos, sin precio por línea), total, retiro o envío y link al pedido (decisión del usuario).
+     Pedidos publica `WebOrderPaidEvent` y la tienda arma el mail (`StoreOrderMails`): pedidos y
+     Mercado Pago no dependen de la tienda.
 
 ### 22D — Pedidos web en el ERP
 

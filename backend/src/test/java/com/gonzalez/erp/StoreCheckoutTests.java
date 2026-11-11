@@ -10,6 +10,17 @@ import com.gonzalez.erp.modules.mercadopago.exception.MercadoPagoException;
 import com.gonzalez.erp.modules.mercadopago.service.MercadoPagoOrderReference;
 import com.gonzalez.erp.modules.store.repository.StoreAccountRepository;
 import com.gonzalez.erp.modules.store.security.StoreTokenService;
+import com.gonzalez.erp.modules.store.service.StoreReservationExpiryService;
+import jakarta.mail.Multipart;
+import jakarta.mail.Part;
+import jakarta.mail.Session;
+import jakarta.mail.internet.MimeMessage;
+import org.mockito.Mockito;
+import org.mockito.invocation.Invocation;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessagePreparator;
+import java.util.ArrayList;
+import java.util.Properties;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,6 +88,7 @@ import static org.mockito.Mockito.verify;
         "app.mercadopago.client-secret=secreto-de-la-app",
         "app.mercadopago.redirect-uri=https://api.erp.test/api/v1/mercadopago/oauth/callback",
         "app.mercadopago.renewal-cron=-",
+        "app.store.expiry-cron=-",
         "app.mercadopago.webhook-secret=" + StoreCheckoutTests.WEBHOOK_SECRET
 })
 @Testcontainers(disabledWithoutDocker = true)
@@ -118,6 +130,12 @@ class StoreCheckoutTests {
 
     @MockitoBean
     private MercadoPagoCheckoutClient checkoutClient;
+
+    @MockitoBean
+    private JavaMailSender mailSender;
+
+    @Autowired
+    private StoreReservationExpiryService expiryService;
 
     private String adminA;
     private Long companyA;
@@ -725,6 +743,145 @@ class StoreCheckoutTests {
         assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, orderId)).isEqualTo("CANCELLED");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payments WHERE customer_id = ?", Long.class, buyer.customerId()))
                 .isEqualTo(0);
+    }
+
+    // --- Mails de pedido y vencimiento de reservas ---
+
+    @Test
+    void anApprovedPaymentMailsTheConfirmationOnceWithWhatWasBought() {
+        Long variant = variant("Remera Confirmada", Map.of(centro, 5));
+        Buyer buyer = buyer("Bruno", "1155550028");
+        Long orderId = ok(checkout(buyer, pickup(centro, cart(variant, 2)))).get("orderId").asLong();
+        approved("mp-10001", orderId, "2000");
+
+        ok(webhook("mp-10001"));
+        ok(webhook("mp-10001"));
+
+        Mail mail = awaitMail(buyer.email(), "Recibimos tu pago");
+        assertThat(mail.subject()).contains(orderNumber(orderId), "Checkout A");
+        assertThat(mail.body()).contains("Hola Bruno", "2 x Remera Confirmada", "$ 2.000", "sucursal Centro",
+                "/pedidos/" + orderId);
+        // El aviso repetido no manda otro mail.
+        pause();
+        assertThat(mailsTo(buyer.email())).hasSize(1);
+    }
+
+    @Test
+    void theConfirmationOfAShipmentFromSeveralBranchesSaysWhereItGoesAndThatItMayTakeLonger() {
+        Long spread = variant("Remera Repartida Avisada", Map.of(centro, 1, norte, 1));
+        Buyer buyer = buyer("Camila", "1155550029");
+        Long address = address(buyer, "Belgrano", "20", "1092");
+        Long orderId = ok(checkout(buyer, shipping(address, cart(spread, 2)))).get("orderId").asLong();
+        approved("mp-10002", orderId, "2000");
+
+        ok(webhook("mp-10002"));
+
+        Mail mail = awaitMail(buyer.email(), "Recibimos tu pago");
+        assertThat(mail.body()).contains("Belgrano 20, CABA, Buenos Aires (CP 1092)", "distintas sucursales");
+    }
+
+    @Test
+    void anUnpaidReservationExpiresAfterTheMarginGivesTheStockBackAndTellsTheBuyer() {
+        Long variant = variant("Remera Vencida", Map.of(centro, 5));
+        Buyer buyer = buyer("Dario", "1155550030");
+        Long paid = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        approved("mp-10003", paid, "1000");
+        ok(webhook("mp-10003"));
+        Long expired = ok(checkout(buyer, pickup(centro, cart(variant, 2)))).get("orderId").asLong();
+        Long withinMargin = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        assertThat(stock(variant, centro)).isEqualTo(1);
+
+        jdbc.update("UPDATE orders SET payment_expires_at = now() - interval '11 minutes' WHERE id = ?", expired);
+        jdbc.update("UPDATE orders SET payment_expires_at = now() - interval '5 minutes' WHERE id = ?", withinMargin);
+        jdbc.update("UPDATE orders SET payment_expires_at = now() - interval '1 hour' WHERE id = ?", paid);
+
+        assertThat(expiryService.expireOverdueOrders()).isGreaterThanOrEqualTo(1);
+
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, expired)).isEqualTo("CANCELLED");
+        assertThat(jdbc.queryForObject("SELECT cancelled_at FROM orders WHERE id = ?", Instant.class, expired)).isNotNull();
+        // Dentro del margen todavía puede estar entrando un pago; el pagado no se toca.
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, withinMargin))
+                .isEqualTo("PENDING_PAYMENT");
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, paid)).isEqualTo("CONFIRMED");
+        assertThat(stock(variant, centro)).isEqualTo(3);
+        // El link ya venció solo: no hace falta pedirle nada a Mercado Pago.
+        verify(checkoutClient, never()).expirePreference(anyString(), eq("pref-" + expired));
+
+        Mail mail = awaitMail(buyer.email(), "Se canceló");
+        assertThat(mail.subject()).contains(orderNumber(expired));
+        assertThat(mail.body()).contains("Hola Dario", "No se te cobró nada");
+
+        // La segunda pasada no lo cancela de nuevo ni devuelve el stock dos veces.
+        expiryService.expireOverdueOrders();
+        assertThat(stock(variant, centro)).isEqualTo(3);
+        pause();
+        assertThat(mailsTo(buyer.email()).stream().filter(m -> m.subject().startsWith("Se canceló"))).hasSize(1);
+    }
+
+    private String orderNumber(Long orderId) {
+        return jdbc.queryForObject("SELECT order_number FROM orders WHERE id = ?", String.class, orderId);
+    }
+
+    private record Mail(String subject, String body) {}
+
+    /** Espera el primer mail a ese email cuyo asunto empieza así (sale en otro hilo, después del commit). */
+    private Mail awaitMail(String email, String subjectStart) {
+        long deadline = System.currentTimeMillis() + 10_000;
+        while (System.currentTimeMillis() < deadline) {
+            Optional<Mail> found = mailsTo(email).stream().filter(m -> m.subject().startsWith(subjectStart)).findFirst();
+            if (found.isPresent()) {
+                return found.get();
+            }
+            pause(200);
+        }
+        throw new AssertionError("No mail \"" + subjectStart + "...\" to " + email + ": " + mailsTo(email));
+    }
+
+    private List<Mail> mailsTo(String email) {
+        List<Mail> mails = new ArrayList<>();
+        for (Invocation invocation : List.copyOf(Mockito.mockingDetails(mailSender).getInvocations())) {
+            if (invocation.getArguments().length == 1
+                    && invocation.getArgument(0) instanceof MimeMessagePreparator preparator) {
+                try {
+                    MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
+                    preparator.prepare(message);
+                    if (message.getAllRecipients()[0].toString().equals(email)) {
+                        mails.add(new Mail(message.getSubject(), text(message)));
+                    }
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+        }
+        return mails;
+    }
+
+    // Junta el texto plano y el HTML.
+    private static String text(Part part) throws Exception {
+        Object content = part.getContent();
+        if (content instanceof String text) {
+            return text;
+        }
+        StringBuilder all = new StringBuilder();
+        if (content instanceof Multipart multipart) {
+            for (int i = 0; i < multipart.getCount(); i++) {
+                all.append(text(multipart.getBodyPart(i))).append('\n');
+            }
+        }
+        return all.toString();
+    }
+
+    // Lo que se espera que no llegue tiene que tener tiempo de llegar si fuera a llegar.
+    private static void pause() {
+        pause(1_000);
+    }
+
+    private static void pause(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private void approved(String paymentId, Long orderId, String amount) {

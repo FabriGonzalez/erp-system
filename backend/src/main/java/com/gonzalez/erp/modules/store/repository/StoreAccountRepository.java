@@ -12,6 +12,9 @@ public interface StoreAccountRepository extends JpaRepository<StoreAccount, Long
 
     boolean existsByCompanyIdAndEmail(Long companyId, String email);
 
+    // La ficha ya es de una sola empresa: alcanza con el cliente.
+    Optional<StoreAccount> findByCustomerId(Long customerId);
+
     @Query("""
             SELECT a FROM StoreAccount a JOIN FETCH a.customer
             WHERE a.company.id = :companyId AND a.email = :email

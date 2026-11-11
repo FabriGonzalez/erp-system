@@ -61,7 +61,9 @@ import com.gonzalez.erp.modules.shipments.entity.Shipment;
 import com.gonzalez.erp.modules.shipments.repository.ShipmentRepository;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import com.gonzalez.erp.modules.orders.entity.PaymentStatus;
+import com.gonzalez.erp.modules.orders.event.WebOrderPaidEvent;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -106,6 +108,7 @@ public class OrderServiceImpl implements OrderService {
     private final AddressRepository addressRepository;
     private final ShipmentRepository shipmentRepository;
     private final PromotionRepository promotionRepository;
+    private final ApplicationEventPublisher events;
 
     @Override
     public PageResponse<OrderResponse> findAll(OrderStatus status, Long branchId, SalesType salesType,
@@ -284,6 +287,7 @@ public class OrderServiceImpl implements OrderService {
         orderPaymentService.registerMercadoPagoPayment(order, order.getTotal(), mpPaymentId, companyId);
         order.markPaid(Instant.now());
         orderRepository.save(order);
+        events.publishEvent(new WebOrderPaidEvent(order));
     }
 
     /** Descuenta el stock del pedido. No depende de la sesión: empresa y autor llegan por parámetro. */

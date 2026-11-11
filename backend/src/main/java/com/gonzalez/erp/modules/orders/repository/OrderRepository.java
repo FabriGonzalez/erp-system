@@ -61,6 +61,21 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o FROM Order o WHERE o.id = :id AND o.company.id = :companyId")
     Optional<Order> findByIdAndCompanyIdForUpdate(@Param("id") Long id, @Param("companyId") Long companyId);
 
+    // Sin empresa a propósito: lo usa la tarea de vencimiento, que recorre todas las tiendas.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Order o WHERE o.id = :id")
+    Optional<Order> findByIdForUpdate(@Param("id") Long id);
+
+    /** Pedidos de la tienda sin pagar cuya reserva venció antes de {@code cutoff}, los más viejos primero. */
+    @Query("""
+            SELECT o.id FROM Order o
+            WHERE o.channel = com.gonzalez.erp.modules.orders.entity.OrderChannel.WEB
+            AND o.status = com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT
+            AND o.paymentExpiresAt < :cutoff
+            ORDER BY o.paymentExpiresAt ASC
+            """)
+    List<Long> findExpiredWebOrderIds(@Param("cutoff") Instant cutoff);
+
     // Órdenes que pueden recibir pagos: cualquier orden no cancelada del cliente.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

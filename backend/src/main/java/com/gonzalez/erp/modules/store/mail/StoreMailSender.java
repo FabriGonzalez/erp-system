@@ -48,6 +48,9 @@ public class StoreMailSender {
             case StoreMailEvent.PasswordReset r ->
                     StoreMailTemplates.passwordReset(r, storeUrl(r) + "/cuenta/restablecer?token=" + r.token());
             case StoreMailEvent.PasswordChanged c -> StoreMailTemplates.passwordChanged(c, storeUrl(c));
+            case StoreMailEvent.OrderConfirmed o ->
+                    StoreMailTemplates.orderConfirmed(o, siteUrls.order(o.storeDomain(), o.orderId()));
+            case StoreMailEvent.OrderExpired e -> StoreMailTemplates.orderExpired(e, storeUrl(e));
         };
         try {
             mailSender.send(message -> {
