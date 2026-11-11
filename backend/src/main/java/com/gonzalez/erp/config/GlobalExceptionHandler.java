@@ -4,6 +4,7 @@ import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.modules.auth.exception.InvalidPasswordChangeException;
 import com.gonzalez.erp.modules.auth.exception.TooManyLoginAttemptsException;
+import com.gonzalez.erp.modules.mercadopago.exception.MercadoPagoException;
 import com.gonzalez.erp.modules.store.dto.StoreCheckoutErrorResponse;
 import com.gonzalez.erp.modules.store.exception.StoreAuthException;
 import com.gonzalez.erp.modules.store.exception.StoreCheckoutException;
@@ -204,6 +205,19 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(StoreAuthException.class)
     public ResponseEntity<ErrorResponse> handleStoreAuth(StoreAuthException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(ex.getStatus())
+                .body(ErrorResponse.of(
+                        ex.getStatus().value(),
+                        ex.getStatus().getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        ex.getCode()
+                ));
+    }
+
+    @ExceptionHandler(MercadoPagoException.class)
+    public ResponseEntity<ErrorResponse> handleMercadoPago(MercadoPagoException ex, HttpServletRequest request) {
         return ResponseEntity
                 .status(ex.getStatus())
                 .body(ErrorResponse.of(

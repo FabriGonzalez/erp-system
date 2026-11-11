@@ -76,6 +76,18 @@ app:
     link-port: ${STORE_LINK_PORT:}
     # Client ID de la app de Google Cloud. Vacío = "Continuar con Google" deshabilitado (503).
     google-client-id: ${GOOGLE_CLIENT_ID:}
+  # Clave para los secretos que hay que poder leer de nuevo (tokens de Mercado Pago): base64 de 32
+  # bytes al azar (p. ej. `openssl rand -base64 32`). Si se pierde, hay que reconectar las cuentas.
+  encryption:
+    key: ${APP_ENCRYPTION_KEY:}
+  # App de Mercado Pago de la plataforma (OAuth, con PKCE y offline_access). Sin client ID, la
+  # conexión de cuentas responde 503. La redirect URI es la del callback del backend y tiene que
+  # estar cargada igual en la app de Mercado Pago. TEST_MODE=true con credenciales de prueba.
+  mercadopago:
+    client-id: ${MERCADOPAGO_CLIENT_ID:}
+    client-secret: ${MERCADOPAGO_CLIENT_SECRET:}
+    redirect-uri: ${MERCADOPAGO_REDIRECT_URI:}
+    test-mode: ${MERCADOPAGO_TEST_MODE:false}
   platform-admin:
     username: ${ERP_PLATFORM_ADMIN_USERNAME:platform_admin}
     email: ${ERP_PLATFORM_ADMIN_EMAIL:platform@erp.local}

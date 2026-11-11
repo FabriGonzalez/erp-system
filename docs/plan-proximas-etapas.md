@@ -1697,6 +1697,21 @@ plan detallado de cada parte.
    `POST /store/payments/mercadopago` con verificación de firma, idempotente; pago aprobado →
    `Payment` en la cuenta del cliente, pedido pasa al estado normal (retiro/envío) y mail de
    confirmación. Rechazado o vencido → se cancela y devuelve stock.
+   Partido en 4a1 (conectar la cuenta), 4a2 (renovación automática), 4b (preferencia y retomar el
+   pago) y 4c (webhook). Decidido el 2026-11-11 para el 4a1:
+   - OAuth con PKCE: `GET /companies/me/mercadopago/connect` (`ADMINISTRAR_TIENDA`) devuelve la URL
+     de autorización; Mercado Pago vuelve a `GET /mercadopago/oauth/callback` (público), que cambia
+     el código por los tokens y muestra una página HTML simple (cuando exista el panel de la tienda,
+     redirige ahí). También `GET` (estado) y `DELETE` (desconectar, solo de nuestro lado).
+   - El `state` va cifrado (empresa, usuario, vencimiento de 10 min y verificador de PKCE), sin tabla.
+   - Tokens cifrados con AES-GCM y `APP_ENCRYPTION_KEY` (general, la reutiliza ARCA); el texto
+     cifrado lleva la versión de la clave (`v1:`) para poder rotarla.
+   - Una cuenta de Mercado Pago no se puede conectar a dos empresas (409): el webhook del 4c sabe
+     sin dudas de qué empresa es cada pago.
+   - Sin `MERCADOPAGO_CLIENT_ID` la conexión responde 503; con Mercado Pago habilitado y sin clave
+     de cifrado el backend no arranca. La app de Mercado Pago necesita `offline_access` (renovar).
+   4a2: tarea diaria que renueva los tokens con menos de 30 días (el `refresh_token` cambia en
+   cada renovación); si falla, la conexión queda para reconectar y se avisa por mail.
 5. **Vencimiento de reservas:** tarea `@Scheduled` que cancela pedidos `PENDING_PAYMENT` viejos
    (p. ej. 30 min) y devuelve el stock.
 

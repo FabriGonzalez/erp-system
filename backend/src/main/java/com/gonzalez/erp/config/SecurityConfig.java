@@ -168,7 +168,10 @@ public class SecurityConfig {
                         .authenticationEntryPoint(authenticationEntryPoint())
                         .accessDeniedHandler(accessDeniedHandler()))
                 .authorizeHttpRequests(auth -> {
-                    auth.requestMatchers("/api/v1/auth/login", "/error").permitAll();
+                    // El callback de Mercado Pago lo abre el navegador del admin, sin el token del
+                    // ERP; la empresa sale del state cifrado.
+                    auth.requestMatchers("/api/v1/auth/login", "/api/v1/mercadopago/oauth/callback", "/error")
+                            .permitAll();
                     if (dev) {
                         auth.requestMatchers(
                                 "/swagger-ui.html",
