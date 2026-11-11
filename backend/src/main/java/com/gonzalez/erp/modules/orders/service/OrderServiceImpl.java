@@ -264,6 +264,28 @@ public class OrderServiceImpl implements OrderService {
         orderRepository.save(order);
     }
 
+    @Override
+    @Transactional
+    public void confirmWebOrderPayment(Order order, String mpPaymentId) {
+        if (order.getChannel() != OrderChannel.WEB || order.getStatus() != OrderStatus.PENDING_PAYMENT) {
+            throw new InvalidOrderStatusTransitionException(
+                    "Only unpaid web orders can be paid this way. Status: " + order.getStatus());
+        }
+        Long companyId = order.getCompany().getId();
+        // El cargo y el pago van juntos: la cuenta del cliente queda en cero para este pedido.
+        customerAccountService.applyTransaction(
+                order.getCustomer().getId(),
+                companyId,
+                order.getTotal(),
+                TransactionType.ORDER_CHARGE,
+                order.getBranch(),
+                "Cargo por pedido #" + order.getOrderNumber()
+        );
+        orderPaymentService.registerMercadoPagoPayment(order, order.getTotal(), mpPaymentId, companyId);
+        order.markPaid(Instant.now());
+        orderRepository.save(order);
+    }
+
     /** Descuenta el stock del pedido. No depende de la sesión: empresa y autor llegan por parámetro. */
     private void reserveStock(Order order, Long branchId, Long companyId, Long userId) {
         // Una variante puede ir suelta y dentro de una promo: el stock se mide por el total.

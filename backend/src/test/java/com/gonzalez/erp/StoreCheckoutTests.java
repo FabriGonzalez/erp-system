@@ -2,10 +2,12 @@ package com.gonzalez.erp;
 
 import com.gonzalez.erp.common.crypto.AesGcmTokenCipher;
 import com.gonzalez.erp.common.util.BusinessDate;
-import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoPreferenceClient;
-import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoPreferenceClient.Preference;
-import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoPreferenceClient.PreferenceRequest;
+import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoCheckoutClient;
+import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoCheckoutClient.Payment;
+import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoCheckoutClient.Preference;
+import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoCheckoutClient.PreferenceRequest;
 import com.gonzalez.erp.modules.mercadopago.exception.MercadoPagoException;
+import com.gonzalez.erp.modules.mercadopago.service.MercadoPagoOrderReference;
 import com.gonzalez.erp.modules.store.repository.StoreAccountRepository;
 import com.gonzalez.erp.modules.store.security.StoreTokenService;
 import org.junit.jupiter.api.AfterAll;
@@ -31,21 +33,29 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
+import java.util.HexFormat;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TimeZone;
 import java.util.UUID;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -56,7 +66,8 @@ import static org.mockito.Mockito.verify;
  * tiendas. Cada test usa su propio producto y comprador: comparten la tienda.
  * Las cuentas de comprador se insertan directo en la base (el registro se prueba en StoreAccountTests).
  * La tienda A tiene Mercado Pago conectado (insertado en la base); el cobro está simulado y
- * devuelve un link con el id del pedido.
+ * devuelve un link con el id del pedido. En el webhook, la consulta y la devolución de pagos
+ * también están simuladas; la firma de los avisos es real.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "app.jwt.secret=test-secret-de-al-menos-32-bytes-para-hs256-0123456789",
@@ -65,7 +76,8 @@ import static org.mockito.Mockito.verify;
         "app.mercadopago.client-id=123456",
         "app.mercadopago.client-secret=secreto-de-la-app",
         "app.mercadopago.redirect-uri=https://api.erp.test/api/v1/mercadopago/oauth/callback",
-        "app.mercadopago.renewal-cron=-"
+        "app.mercadopago.renewal-cron=-",
+        "app.mercadopago.webhook-secret=" + StoreCheckoutTests.WEBHOOK_SECRET
 })
 @Testcontainers(disabledWithoutDocker = true)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -75,6 +87,8 @@ class StoreCheckoutTests {
     @ServiceConnection
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17");
 
+    static final String WEBHOOK_SECRET = "clave-del-webhook";
+    private static final long MP_USER_A = 7001;
     private static final TimeZone originalTimeZone = TimeZone.getDefault();
     private static final String STORE_A = "checkout-a.test";
     private static final String STORE_B = "checkout-b.test";
@@ -103,7 +117,7 @@ class StoreCheckoutTests {
     private AesGcmTokenCipher tokenCipher;
 
     @MockitoBean
-    private MercadoPagoPreferenceClient preferenceClient;
+    private MercadoPagoCheckoutClient checkoutClient;
 
     private String adminA;
     private Long companyA;
@@ -139,9 +153,9 @@ class StoreCheckoutTests {
         jdbc.update("""
                 INSERT INTO mercado_pago_connections (id, company_id, mp_user_id, access_token_encrypted,
                     refresh_token_encrypted, live_mode, expires_at, connected_at, status, created_at, updated_at)
-                VALUES (nextval('mercado_pago_connections_seq'), ?, 7001, ?, ?, true, now() + interval '90 days',
+                VALUES (nextval('mercado_pago_connections_seq'), ?, ?, ?, ?, true, now() + interval '90 days',
                     now(), 'CONNECTED', now(), now())
-                """, companyA, tokenCipher.encrypt("APP_USR-token-a"), tokenCipher.encrypt("TG-refresh-a"));
+                """, companyA, MP_USER_A, tokenCipher.encrypt("APP_USR-token-a"), tokenCipher.encrypt("TG-refresh-a"));
     }
 
     // Los mocks se reinician después de cada test: el cobro simulado se arma de nuevo en cada uno.
@@ -149,9 +163,10 @@ class StoreCheckoutTests {
     void simulateMercadoPago() {
         // doAnswer y no when(...): when llama al mock y, si ya tenía esta respuesta, la corre con argumentos nulos.
         doAnswer(invocation -> {
-            String reference = invocation.<PreferenceRequest>getArgument(1).externalReference();
-            return new Preference("pref-" + reference, paymentUrl(reference), "https://sandbox.mp.test/pay/" + reference);
-        }).when(preferenceClient).create(anyString(), any());
+            String orderId = MercadoPagoOrderReference.parse(invocation.<PreferenceRequest>getArgument(1).externalReference())
+                    .orElseThrow().toString();
+            return new Preference("pref-" + orderId, paymentUrl(orderId), "https://sandbox.mp.test/pay/" + orderId);
+        }).when(checkoutClient).createPreference(anyString(), any());
     }
 
     @Test
@@ -427,9 +442,9 @@ class StoreCheckoutTests {
 
         Long orderId = order.get("orderId").asLong();
         ArgumentCaptor<PreferenceRequest> sent = ArgumentCaptor.forClass(PreferenceRequest.class);
-        verify(preferenceClient).create(eq("APP_USR-token-a"), sent.capture());
+        verify(checkoutClient).createPreference(eq("APP_USR-token-a"), sent.capture());
         PreferenceRequest request = sent.getValue();
-        assertThat(request.externalReference()).isEqualTo(orderId.toString());
+        assertThat(request.externalReference()).isEqualTo("erp-order-" + orderId);
         assertThat(request.amount()).isEqualByComparingTo("2000");
         assertThat(request.title()).startsWith("Pedido ").endsWith(" - Checkout A");
         assertThat(request.payerEmail()).isEqualTo(buyer.email());
@@ -453,7 +468,7 @@ class StoreCheckoutTests {
         assertThat(ok(myOrder(buyer, orderId)).get("paymentUrl").asString()).isEqualTo(link);
         // El reintento devuelve el mismo link sin armar otro cobro.
         assertThat(ok(checkout(buyer, request)).get("paymentUrl").asString()).isEqualTo(link);
-        verify(preferenceClient, times(1)).create(anyString(), any());
+        verify(checkoutClient, times(1)).createPreference(anyString(), any());
 
         jdbc.update("UPDATE orders SET payment_expires_at = now() - interval '1 minute' WHERE id = ?", orderId);
         assertThat(ok(myOrder(buyer, orderId)).get("paymentUrl").isNull()).isTrue();
@@ -492,7 +507,7 @@ class StoreCheckoutTests {
         Long variant = variant("Remera Reintento", Map.of(centro, 5));
         Buyer buyer = buyer("Rosa", "1155550018");
         Map<String, Object> request = pickup(centro, cart(variant, 2));
-        doThrow(MercadoPagoException.unavailable()).when(preferenceClient).create(anyString(), any());
+        doThrow(MercadoPagoException.unavailable()).when(checkoutClient).createPreference(anyString(), any());
 
         Response failed = checkout(buyer, request);
 
@@ -506,6 +521,266 @@ class StoreCheckoutTests {
         JsonNode order = ok(checkout(buyer, request));
         assertThat(order.get("paymentUrl").asString()).isEqualTo(paymentUrl(order.get("orderId").asString()));
         assertThat(stock(variant, centro)).isEqualTo(3);
+    }
+
+    // --- Webhook de Mercado Pago ---
+
+    @Test
+    void anApprovedPaymentConfirmsThePickupAndLeavesTheAccountSquared() {
+        Long variant = variant("Remera Pagada", Map.of(centro, 5));
+        Buyer buyer = buyer("Sergio", "1155550019");
+        Long orderId = ok(checkout(buyer, pickup(centro, cart(variant, 2)))).get("orderId").asLong();
+        approved("mp-1001", orderId, "2000");
+
+        assertThat(webhook("mp-1001").status()).isEqualTo(200);
+
+        Map<String, Object> order = jdbc.queryForMap("SELECT status, confirmed_at FROM orders WHERE id = ?", orderId);
+        assertThat(order.get("status")).isEqualTo("CONFIRMED");
+        assertThat(order.get("confirmed_at")).isNotNull();
+        Map<String, Object> payment = jdbc.queryForMap(
+                "SELECT amount, method, created_by, mp_payment_id FROM payments WHERE customer_id = ?", buyer.customerId());
+        assertThat((BigDecimal) payment.get("amount")).isEqualByComparingTo("2000");
+        assertThat(payment.get("method")).isEqualTo("MERCADO_PAGO");
+        assertThat(payment.get("created_by")).isNull();
+        assertThat(payment.get("mp_payment_id")).isEqualTo("mp-1001");
+        assertThat(jdbc.queryForObject("SELECT amount FROM payment_allocations WHERE order_id = ?", BigDecimal.class, orderId))
+                .isEqualByComparingTo("2000");
+        // Cargo y pago juntos: no queda deuda.
+        assertThat(balance(buyer)).isEqualByComparingTo("0");
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM account_transactions t JOIN customer_accounts a ON a.id = t.account_id
+                WHERE a.customer_id = ?
+                """, Long.class, buyer.customerId())).isEqualTo(2);
+        assertThat(stock(variant, centro)).isEqualTo(3);
+        assertThat(ok(myOrder(buyer, orderId)).get("status").asString()).isEqualTo("READY_FOR_PICKUP");
+
+        // Mercado Pago repite los avisos: el segundo no cambia nada.
+        assertThat(webhook("mp-1001").status()).isEqualTo(200);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payments WHERE customer_id = ?", Long.class, buyer.customerId()))
+                .isEqualTo(1);
+        assertThat(balance(buyer)).isEqualByComparingTo("0");
+        verify(checkoutClient, never()).refundPayment(anyString(), anyString());
+    }
+
+    @Test
+    void aPaidShipmentGoesToPrepareAndOneWithoutReservationToAssign() {
+        Long variant = variant("Remera Enviada", Map.of(centro, 5));
+        Long spread = variant("Remera Repartida Pagada", Map.of(centro, 1, norte, 1));
+        Buyer buyer = buyer("Tania", "1155550020");
+        Long address = address(buyer, "Belgrano", "20", "1092");
+        Long shipped = ok(checkout(buyer, shipping(address, cart(variant, 1)))).get("orderId").asLong();
+        Long unreserved = ok(checkout(buyer, shipping(address, cart(spread, 2)))).get("orderId").asLong();
+        approved("mp-2001", shipped, "1000");
+        approved("mp-2002", unreserved, "2000");
+
+        ok(webhook("mp-2001"));
+        ok(webhook("mp-2002"));
+
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, shipped)).isEqualTo("TO_PREPARE");
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, unreserved)).isEqualTo("TO_ASSIGN");
+        assertThat(ok(myOrder(buyer, unreserved)).get("status").asString()).isEqualTo("PREPARING");
+        assertThat(stock(spread, centro)).isEqualTo(1);
+        assertThat(balance(buyer)).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void withoutAValidSignatureNothingIsLookedUp() {
+        Long variant = variant("Remera Falsa", Map.of(centro, 5));
+        Buyer buyer = buyer("Ulises", "1155550021");
+        Long orderId = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        approved("mp-3001", orderId, "1000");
+
+        assertThat(webhook("mp-3001", "ts=1700000000,v1=" + "0".repeat(64), MP_USER_A).status()).isEqualTo(401);
+        assertThat(webhook("mp-3001", null, MP_USER_A).status()).isEqualTo(401);
+        // Firmado para otro pago: no sirve para este.
+        assertThat(webhook("mp-3001", signature("mp-9999", "req-1", "1700000000"), MP_USER_A).status()).isEqualTo(401);
+        // Otros eventos se reciben y se ignoran.
+        assertThat(rawWebhook("/mercadopago/webhook?data.id=mp-3001&type=merchant_order", null, null, "{}").status())
+                .isEqualTo(200);
+
+        verify(checkoutClient, never()).findPayment(anyString(), anyString());
+        verify(checkoutClient, never()).refundPayment(anyString(), anyString());
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, orderId))
+                .isEqualTo("PENDING_PAYMENT");
+    }
+
+    @Test
+    void rejectedForeignOrMismatchedPaymentsDoNotChangeTheOrder() {
+        Long variant = variant("Remera Rechazada", Map.of(centro, 5));
+        Buyer buyer = buyer("Valeria", "1155550022");
+        Long orderId = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+
+        // Rechazado: el comprador puede reintentar con otra tarjeta.
+        doReturn(Optional.of(new Payment("mp-4001", "rejected", "erp-order-" + orderId, new BigDecimal("1000"), "ARS")))
+                .when(checkoutClient).findPayment("APP_USR-token-a", "mp-4001");
+        ok(webhook("mp-4001"));
+        // Aprobado por menos de lo que vale el pedido.
+        approved("mp-4002", orderId, "10");
+        ok(webhook("mp-4002"));
+        // Una cuenta de Mercado Pago que no es de ninguna empresa.
+        ok(webhook("mp-4003", signature("mp-4003", "req-mp-4003", "1700000000"), 99999L));
+        // Un pago que Mercado Pago no conoce para esta cuenta.
+        doReturn(Optional.empty()).when(checkoutClient).findPayment("APP_USR-token-a", "mp-4004");
+        ok(webhook("mp-4004"));
+
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, orderId))
+                .isEqualTo("PENDING_PAYMENT");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payments WHERE customer_id = ?", Long.class, buyer.customerId()))
+                .isEqualTo(0);
+        verify(checkoutClient, never()).refundPayment(anyString(), anyString());
+    }
+
+    @Test
+    void cancellingExpiresTheLinkAndAPaymentThatStillArrivesIsRefunded() {
+        Long variant = variant("Remera Devuelta", Map.of(centro, 5));
+        Buyer buyer = buyer("Walter", "1155550023");
+        Long orderId = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+
+        ok(call(buyer.token(), "POST", "/store/me/orders/" + orderId + "/cancel", null, STORE_A));
+        verify(checkoutClient).expirePreference("APP_USR-token-a", "pref-" + orderId);
+
+        approved("mp-5001", orderId, "1000");
+        ok(webhook("mp-5001"));
+
+        verify(checkoutClient).refundPayment("APP_USR-token-a", "mp-5001");
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, orderId)).isEqualTo("CANCELLED");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payments WHERE customer_id = ?", Long.class, buyer.customerId()))
+                .isEqualTo(0);
+        assertThat(stock(variant, centro)).isEqualTo(5);
+    }
+
+    @Test
+    void aSecondPaymentForAnAlreadyPaidOrderIsRefunded() {
+        Long variant = variant("Remera Doble Pago", Map.of(centro, 5));
+        Buyer buyer = buyer("Ximena", "1155550024");
+        Long orderId = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        approved("mp-6001", orderId, "1000");
+        approved("mp-6002", orderId, "1000");
+
+        ok(webhook("mp-6001"));
+        ok(webhook("mp-6002"));
+
+        verify(checkoutClient).refundPayment("APP_USR-token-a", "mp-6002");
+        verify(checkoutClient, never()).refundPayment("APP_USR-token-a", "mp-6001");
+        assertThat(jdbc.queryForObject("SELECT mp_payment_id FROM payments WHERE customer_id = ?", String.class,
+                buyer.customerId())).isEqualTo("mp-6001");
+    }
+
+    @Test
+    void ifMercadoPagoDoesNotAnswerTheNotificationIsRetried() {
+        Long variant = variant("Remera Reintentada", Map.of(centro, 5));
+        Buyer buyer = buyer("Yanina", "1155550025");
+        Long orderId = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        doThrow(MercadoPagoException.unavailable()).when(checkoutClient).findPayment("APP_USR-token-a", "mp-7001");
+
+        assertThat(webhook("mp-7001").status()).isEqualTo(502);
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, orderId))
+                .isEqualTo("PENDING_PAYMENT");
+
+        approved("mp-7001", orderId, "1000");
+        ok(webhook("mp-7001"));
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, orderId)).isEqualTo("CONFIRMED");
+    }
+
+    @Test
+    void aSaleOfTheSameAccountWithAPlainNumberAsReferenceIsNeitherCreditedNorRefunded() {
+        Long variant = variant("Remera Ajena Al Sistema", Map.of(centro, 5));
+        Buyer buyer = buyer("Zoe", "1155550026");
+        Long pending = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        Long cancelled = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        ok(call(buyer.token(), "POST", "/store/me/orders/" + cancelled + "/cancel", null, STORE_A));
+        // Otro sistema del local cobra con la misma cuenta y usa números como referencia.
+        approvedWithReference("mp-8001", pending.toString(), "1000");
+        approvedWithReference("mp-8002", cancelled.toString(), "1000");
+        approvedWithReference("mp-8003", "erp-order-" + cancelled + "-x", "1000");
+
+        ok(webhook("mp-8001"));
+        ok(webhook("mp-8002"));
+        ok(webhook("mp-8003"));
+
+        verify(checkoutClient, never()).refundPayment(anyString(), anyString());
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, pending))
+                .isEqualTo("PENDING_PAYMENT");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payments WHERE customer_id = ?", Long.class, buyer.customerId()))
+                .isEqualTo(0);
+    }
+
+    @Test
+    void aRejectedRefundIsNotRetriedButAnUnansweredOneIs() {
+        Long variant = variant("Remera Sin Saldo", Map.of(centro, 5));
+        Buyer buyer = buyer("Abril", "1155550027");
+        Long orderId = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        ok(call(buyer.token(), "POST", "/store/me/orders/" + orderId + "/cancel", null, STORE_A));
+        approved("mp-9001", orderId, "1000");
+        approved("mp-9002", orderId, "1000");
+
+        // Rechazada (sin saldo, pago viejo): reintentar no sirve, queda el error para devolverla a mano.
+        doThrow(MercadoPagoException.rejected()).when(checkoutClient).refundPayment("APP_USR-token-a", "mp-9001");
+        assertThat(webhook("mp-9001").status()).isEqualTo(200);
+
+        // Mercado Pago no respondió: el aviso vuelve a llegar y se intenta otra vez.
+        doThrow(MercadoPagoException.unavailable()).when(checkoutClient).refundPayment("APP_USR-token-a", "mp-9002");
+        assertThat(webhook("mp-9002").status()).isEqualTo(502);
+
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, orderId)).isEqualTo("CANCELLED");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payments WHERE customer_id = ?", Long.class, buyer.customerId()))
+                .isEqualTo(0);
+    }
+
+    private void approved(String paymentId, Long orderId, String amount) {
+        approvedWithReference(paymentId, "erp-order-" + orderId, amount);
+    }
+
+    private void approvedWithReference(String paymentId, String externalReference, String amount) {
+        doReturn(Optional.of(new Payment(paymentId, "approved", externalReference, new BigDecimal(amount), "ARS")))
+                .when(checkoutClient).findPayment("APP_USR-token-a", paymentId);
+    }
+
+    private BigDecimal balance(Buyer buyer) {
+        return jdbc.queryForObject("SELECT COALESCE(SUM(balance), 0) FROM customer_accounts WHERE customer_id = ?",
+                BigDecimal.class, buyer.customerId());
+    }
+
+    /** Aviso de pago de la cuenta de la tienda A, firmado como lo firma Mercado Pago. */
+    private Response webhook(String paymentId) {
+        String ts = String.valueOf(Instant.now().getEpochSecond());
+        return webhook(paymentId, signature(paymentId, "req-" + paymentId, ts), MP_USER_A);
+    }
+
+    private Response webhook(String paymentId, String signatureHeader, long mpUserId) {
+        String requestId = signatureHeader == null ? null : "req-" + paymentId;
+        String body = json.writeValueAsString(Map.of("type", "payment", "action", "payment.updated",
+                "user_id", mpUserId, "data", Map.of("id", paymentId)));
+        return rawWebhook("/mercadopago/webhook?data.id=" + paymentId + "&type=payment", signatureHeader, requestId, body);
+    }
+
+    private static String signature(String dataId, String requestId, String ts) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(WEBHOOK_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            String manifest = "id:" + dataId + ";request-id:" + requestId + ";ts:" + ts + ";";
+            return "ts=" + ts + ",v1=" + HexFormat.of().formatHex(mac.doFinal(manifest.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private Response rawWebhook(String path, String signatureHeader, String requestId, String body) {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1" + path))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body));
+        if (signatureHeader != null) {
+            builder.header("x-signature", signatureHeader);
+        }
+        if (requestId != null) {
+            builder.header("x-request-id", requestId);
+        }
+        try {
+            HttpResponse<String> response = http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+            return new Response(response.statusCode(), response.body());
+        } catch (Exception e) {
+            throw new IllegalStateException("POST " + path, e);
+        }
     }
 
     private static String paymentUrl(String orderId) {

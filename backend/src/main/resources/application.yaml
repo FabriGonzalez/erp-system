@@ -90,6 +90,10 @@ app:
     client-secret: ${MERCADOPAGO_CLIENT_SECRET:}
     redirect-uri: ${MERCADOPAGO_REDIRECT_URI:}
     test-mode: ${MERCADOPAGO_TEST_MODE:false}
+    # Webhook de pagos: la clave secreta de la app (obligatoria con client ID) y la URL pública de
+    # POST /api/v1/mercadopago/webhook que va en cada preferencia (vacía = sin avisos, desarrollo).
+    webhook-secret: ${MERCADOPAGO_WEBHOOK_SECRET:}
+    notification-url: ${MERCADOPAGO_NOTIFICATION_URL:}
     # Renovación de tokens: todos los días a las 4 (hora de Argentina). "-" la apaga.
     renewal-cron: ${MERCADOPAGO_RENEWAL_CRON:0 0 4 * * *}
   platform-admin:

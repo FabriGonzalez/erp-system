@@ -14,20 +14,43 @@ public class MercadoPagoProperties {
     private final String clientSecret;
     private final String redirectUri;
     private final boolean testMode;
+    private final String webhookSecret;
+    private final String notificationUrl;
 
     public MercadoPagoProperties(
             @Value("${app.mercadopago.client-id:}") String clientId,
             @Value("${app.mercadopago.client-secret:}") String clientSecret,
             @Value("${app.mercadopago.redirect-uri:}") String redirectUri,
-            @Value("${app.mercadopago.test-mode:false}") boolean testMode) {
+            @Value("${app.mercadopago.test-mode:false}") boolean testMode,
+            @Value("${app.mercadopago.webhook-secret:}") String webhookSecret,
+            @Value("${app.mercadopago.notification-url:}") String notificationUrl) {
         this.clientId = clientId == null ? "" : clientId.trim();
         this.clientSecret = clientSecret == null ? "" : clientSecret.trim();
         this.redirectUri = redirectUri == null ? "" : redirectUri.trim();
         this.testMode = testMode;
+        this.webhookSecret = webhookSecret == null ? "" : webhookSecret.trim();
+        this.notificationUrl = notificationUrl == null ? "" : notificationUrl.trim();
         if (enabled() && (this.clientSecret.isEmpty() || this.redirectUri.isEmpty())) {
             throw new IllegalStateException(
                     "MERCADOPAGO_CLIENT_SECRET and MERCADOPAGO_REDIRECT_URI are required with MERCADOPAGO_CLIENT_ID");
         }
+        // Sin la clave no se puede comprobar ningún aviso: los pagos no se acreditarían nunca.
+        if (enabled() && this.webhookSecret.isEmpty()) {
+            throw new IllegalStateException("MERCADOPAGO_WEBHOOK_SECRET is required with MERCADOPAGO_CLIENT_ID");
+        }
+    }
+
+    /** Clave secreta de la app para comprobar la firma de los avisos (panel de la app, sección Webhooks). */
+    public String webhookSecret() {
+        return webhookSecret;
+    }
+
+    /**
+     * URL pública del webhook que va en cada preferencia. Vacía en desarrollo: Mercado Pago no
+     * llega a localhost y la preferencia sale sin avisos.
+     */
+    public String notificationUrl() {
+        return notificationUrl;
     }
 
     public boolean enabled() {

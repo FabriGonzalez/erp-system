@@ -8,7 +8,8 @@ import com.gonzalez.erp.modules.customers.entity.Address;
 import com.gonzalez.erp.modules.customers.entity.Customer;
 import com.gonzalez.erp.modules.customers.repository.AddressRepository;
 import com.gonzalez.erp.modules.customers.repository.CustomerRepository;
-import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoPreferenceClient.PreferenceRequest;
+import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoCheckoutClient.PreferenceRequest;
+import com.gonzalez.erp.modules.mercadopago.service.MercadoPagoOrderReference;
 import com.gonzalez.erp.modules.mercadopago.service.MercadoPagoPaymentService;
 import com.gonzalez.erp.modules.mercadopago.service.MercadoPagoPaymentService.PaymentLink;
 import com.gonzalez.erp.modules.orders.entity.DeliveryType;
@@ -164,7 +165,7 @@ public class StoreCheckoutServiceImpl implements StoreCheckoutService {
                 .orElseThrow(() -> new ResourceNotFoundException("Store account not found"));
         Instant expiresAt = Instant.now().plus(paymentWindow);
         PaymentLink link = paymentService.createPaymentLink(company.getId(), new PreferenceRequest(
-                order.getId().toString(),
+                MercadoPagoOrderReference.of(order.getId()),
                 "Pedido " + order.getOrderNumber() + " - " + company.getName(),
                 order.getTotal(),
                 payerEmail,

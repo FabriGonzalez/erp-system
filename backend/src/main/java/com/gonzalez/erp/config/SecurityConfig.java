@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
@@ -169,9 +170,11 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler()))
                 .authorizeHttpRequests(auth -> {
                     // El callback de Mercado Pago lo abre el navegador del admin, sin el token del
-                    // ERP; la empresa sale del state cifrado.
+                    // ERP; la empresa sale del state cifrado. El webhook lo llama Mercado Pago y se
+                    // protege con la firma.
                     auth.requestMatchers("/api/v1/auth/login", "/api/v1/mercadopago/oauth/callback", "/error")
                             .permitAll();
+                    auth.requestMatchers(HttpMethod.POST, "/api/v1/mercadopago/webhook").permitAll();
                     if (dev) {
                         auth.requestMatchers(
                                 "/swagger-ui.html",

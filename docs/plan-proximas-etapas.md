@@ -1734,8 +1734,43 @@ plan detallado de cada parte.
    sin `ticket` ni `atm`, vuelta a `https://{dominio}/pedidos/{id}` con `auto_return` solo si
    la URL es https. Retomar el pago: "Mis pedidos" (detalle) y la misma `checkoutKey` devuelven
    el link mientras el pedido espera el pago y la reserva no venció; no hay endpoint aparte.
+   **Hecho (4c, 2026-11-11):** webhook `POST /api/v1/mercadopago/webhook` (público, fuera de la
+   cadena de la tienda porque Mercado Pago no llega por el dominio de ninguna tienda; cambia la ruta
+   `/store/payments/mercadopago` de arriba). Migración V15: `payments.mp_payment_id` única.
+   - Firma `x-signature` (HMAC-SHA256 con `MERCADOPAGO_WEBHOOK_SECRET` sobre
+     `id:{data.id};request-id:{x-request-id};ts:{ts};`): inválida → 401. Con Mercado Pago habilitado
+     y sin la clave, el backend no arranca. `MERCADOPAGO_NOTIFICATION_URL` va en cada preferencia
+     (vacía en desarrollo).
+   - Del aviso solo se usan `user_id` (qué empresa) y `data.id` (qué pago); el pago se consulta a
+     Mercado Pago con el token de la empresa y se valida pedido WEB de esa empresa, `approved`, ARS
+     y monto igual al total. Pedido bloqueado + `mp_payment_id` único: el aviso repetido no cobra dos veces.
+   - Aprobado → cargo + pago `MERCADO_PAGO` sin autor (la cuenta queda en cero) y el pedido pasa a
+     `CONFIRMED` (retiro), `TO_PREPARE` (envío) o `TO_ASSIGN` (sin stock descontado).
+   - Decisiones del usuario: un pago **rechazado no cancela** (el comprador reintenta mientras dure
+     la reserva; cambia "rechazado → se cancela" de arriba). Un pago aprobado de un pedido que ya no
+     lo espera (cancelado, o pagado dos veces desde dos pestañas) **se devuelve entero** por Mercado
+     Pago. Al cancelar desde "Mis pedidos" se vence el link en Mercado Pago después del commit; si
+     falla, la cancelación queda igual y la devolución cubre un pago que entre.
+   - Monto o moneda distintos: no se aplica y queda un log de error. Devoluciones y contracargos
+     hechos después desde el panel de Mercado Pago: fuera de alcance por ahora.
+   - `external_reference` = `erp-order-{id}` (cambia el número pelado del 4b): la cuenta es del
+     local y puede cobrar otras ventas con referencias propias; un número que coincida con un
+     pedido nuestro no se acredita ni se devuelve. Solo se reconoce ese formato exacto.
+   - Devolución rechazada por Mercado Pago (sin saldo, pago viejo): log `MANUAL REFUND NEEDED` y
+     200, sin reintentar en loop; si Mercado Pago no responde, 502 y el aviso se reintenta. En la
+     22D, mostrarle al local en el ERP los pagos que hay que devolver a mano.
+   **Requisito antes de habilitar una tienda — prueba con el sandbox de Mercado Pago** (decidido
+   el 2026-11-11; se hace cuando exista el sitio de la tienda), con cuentas de prueba de vendedor
+   y comprador, el backend expuesto por https y tarjetas de prueba: pagar un pedido (pasa a
+   pagado, cuenta en cero); cancelar con el link abierto (el link deja de aceptar pagos); pagar
+   dos veces el mismo pedido (el segundo aparece devuelto en ambos paneles); reenviar un aviso
+   desde el panel de notificaciones (no duplica nada); y ver si los avisos de `notification_url`
+   llegan firmados (si no, configurar el webhook en el panel de la app en lugar de la preferencia).
+   Los tests simulan Mercado Pago: prueban qué decide el backend, no la llamada real.
 5. **Vencimiento de reservas:** tarea `@Scheduled` que cancela pedidos `PENDING_PAYMENT` viejos
-   (p. ej. 30 min) y devuelve el stock.
+   (p. ej. 30 min) y devuelve el stock. Decidido en el 4c: cancela con **10 minutos de margen**
+   después de `payment_expires_at` (el link ya no acepta pagos y terminan los que estaban en curso).
+   También va acá el mail de "pedido confirmado" al acreditarse el pago.
 
 ### 22D — Pedidos web en el ERP
 

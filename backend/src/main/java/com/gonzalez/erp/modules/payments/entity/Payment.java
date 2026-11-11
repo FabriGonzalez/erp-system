@@ -52,6 +52,10 @@ public class Payment extends BaseEntity {
     @JoinColumn(name = "created_by")
     private User createdBy;
 
+    // Solo en los pagos de la tienda: evita registrar dos veces el mismo pago de Mercado Pago.
+    @Column(name = "mp_payment_id", length = 50, unique = true)
+    private String mpPaymentId;
+
     @Column(name = "cancelled_at")
     private Instant cancelledAt;
 

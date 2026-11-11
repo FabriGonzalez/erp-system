@@ -63,6 +63,7 @@ import static org.mockito.Mockito.when;
         "app.security.login.max-failures-per-ip=1000",
         "app.encryption.key=" + MercadoPagoConnectionTests.ENCRYPTION_KEY,
         "app.mercadopago.client-id=123456",
+        "app.mercadopago.webhook-secret=clave-del-webhook",
         "app.mercadopago.client-secret=secreto-de-la-app",
         "app.mercadopago.redirect-uri=https://api.erp.test/api/v1/mercadopago/oauth/callback",
         // La renovación la disparan los tests, no el reloj.

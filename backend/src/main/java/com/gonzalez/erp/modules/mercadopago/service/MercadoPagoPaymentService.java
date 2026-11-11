@@ -1,6 +1,6 @@
 package com.gonzalez.erp.modules.mercadopago.service;
 
-import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoPreferenceClient.PreferenceRequest;
+import com.gonzalez.erp.modules.mercadopago.client.MercadoPagoCheckoutClient.PreferenceRequest;
 
 /** Cobros con la cuenta de Mercado Pago de cada empresa. */
 public interface MercadoPagoPaymentService {
@@ -13,6 +13,12 @@ public interface MercadoPagoPaymentService {
      * cuenta dejó de estar vigente o Mercado Pago no lo crea.
      */
     PaymentLink createPaymentLink(Long companyId, PreferenceRequest request);
+
+    /**
+     * Vence el link de un pedido cancelado para que no se pueda pagar. Sin garantía: si Mercado
+     * Pago no responde solo queda un log, y un pago que igual entre se devuelve en el webhook.
+     */
+    void expirePaymentLink(Long companyId, String preferenceId);
 
     record PaymentLink(String preferenceId, String url) {}
 }

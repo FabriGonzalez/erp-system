@@ -36,4 +36,11 @@ public interface OrderService {
      * bloqueado: quién puede cancelarlo lo decide quien llama.
      */
     void cancelUnpaidWebOrder(Order order);
+
+    /**
+     * Acredita el pago de Mercado Pago de un pedido web: carga el total en la cuenta del cliente,
+     * registra el pago por el mismo importe y el pedido pasa a su estado normal. Recibe el pedido
+     * ya bloqueado y el pago ya validado contra Mercado Pago.
+     */
+    void confirmWebOrderPayment(Order order, String mpPaymentId);
 }

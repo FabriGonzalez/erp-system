@@ -172,6 +172,25 @@ public class Order extends BaseEntity {
         this.cancelledAt = Instant.now();
     }
 
+    /**
+     * Pedido web pagado: sigue el mismo camino que una venta del local (retiro listo o envío a
+     * preparar). Si no se descontó stock, falta elegir la sucursal que lo arma.
+     */
+    public void markPaid(Instant now) {
+        if (status != OrderStatus.PENDING_PAYMENT) {
+            throw new InvalidOrderException("Only PENDING_PAYMENT orders can be paid. Current status: " + status);
+        }
+        if (!stockReserved) {
+            this.status = OrderStatus.TO_ASSIGN;
+        } else if (deliveryType == DeliveryType.SHIPPING) {
+            this.status = OrderStatus.TO_PREPARE;
+            this.preparedAt = now;
+        } else {
+            this.status = OrderStatus.CONFIRMED;
+            this.confirmedAt = now;
+        }
+    }
+
     public void attachPaymentLink(String preferenceId, String url, Instant expiresAt) {
         this.mpPreferenceId = preferenceId;
         this.paymentUrl = url;

@@ -19,6 +19,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     Optional<Payment> findByIdAndCompanyId(Long id, Long companyId);
 
+    boolean existsByMpPaymentId(String mpPaymentId);
+
     /**
      * Pagos vigentes por medio, con createdAt en [from, to). Un pago anulado deja de contar.
      * Cada fila es [method (PaymentMethod), total (BigDecimal)].

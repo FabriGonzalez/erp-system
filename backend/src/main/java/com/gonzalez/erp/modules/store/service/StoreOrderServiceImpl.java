@@ -3,6 +3,7 @@ package com.gonzalez.erp.modules.store.service;
 import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.modules.branches.entity.Branch;
+import com.gonzalez.erp.modules.mercadopago.service.MercadoPagoPaymentService;
 import com.gonzalez.erp.modules.orders.entity.DeliveryType;
 import com.gonzalez.erp.modules.orders.entity.Order;
 import com.gonzalez.erp.modules.orders.entity.OrderChannel;
@@ -30,6 +31,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -58,6 +61,7 @@ public class StoreOrderServiceImpl implements StoreOrderService {
     private final ProductImageRepository imageRepository;
     private final OrderService orderService;
     private final StoreProductViews views;
+    private final MercadoPagoPaymentService mercadoPagoPaymentService;
 
     @Override
     public PageResponse<StoreOrderSummaryResponse> findMine(int page, int size) {
@@ -96,7 +100,22 @@ public class StoreOrderServiceImpl implements StoreOrderService {
             throw StoreCheckoutException.orderNotCancellable();
         }
         orderService.cancelUnpaidWebOrder(order);
+        expireLinkAfterCommit(current.companyId(), order.getMpPreferenceId());
         return toResponse(order);
+    }
+
+    /**
+     * El link de Mercado Pago sigue vivo hasta vencer: se vence ya para que no se pueda pagar un
+     * pedido cancelado. Después del commit, para no tener el pedido bloqueado mientras Mercado
+     * Pago responde; si falla, la cancelación ya quedó y un pago que entre igual se devuelve.
+     */
+    private void expireLinkAfterCommit(Long companyId, String preferenceId) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                mercadoPagoPaymentService.expirePaymentLink(companyId, preferenceId);
+            }
+        });
     }
 
     private StoreOrderSummaryResponse toSummary(Order order, OrderLines lines, Map<Long, List<ProductImage>> images) {
