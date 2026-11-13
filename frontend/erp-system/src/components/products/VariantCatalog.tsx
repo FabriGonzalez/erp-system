@@ -90,9 +90,12 @@ export function VariantCatalog({
         { enabled: Boolean(branchId), staleTime: 0 },
     );
 
-    // Se elige entre las variantes con stock que coinciden con el filtro de atributos.
+    // Se elige entre las variantes activas con stock que coinciden con el filtro de atributos.
+    // Una desactivada puede seguir teniendo stock: no se ofrece.
     function isSelectable(variant: ProductVariant) {
-        return (variant.stockByBranch[branchId] ?? 0) > 0 && variantMatchesFilter(variant, attributeFilter);
+        return variant.active !== false
+            && (variant.stockByBranch[branchId] ?? 0) > 0
+            && variantMatchesFilter(variant, attributeFilter);
     }
 
     function getSelectedVariant(product: Product) {

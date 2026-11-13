@@ -25,6 +25,7 @@ const ORDER_ERRORS = {
         QUICK_SALE_INVALID:
             'La venta rápida es solo con retiro en el local y necesita un importe mayor a $0.',
         CUSTOMER_INACTIVE: 'El cliente está inactivo y no puede recibir pedidos nuevos.',
+        VARIANT_INACTIVE: 'Uno de los productos o variantes está desactivado: sacalo del pedido.',
         // En el alta: el pago inicial no puede superar el saldo del pedido.
         INVALID_PAYMENT: 'El pago inicial no es válido: no puede superar el total del pedido.',
         INVALID_SHIPPING_ADDRESS:

@@ -28,6 +28,7 @@ import com.gonzalez.erp.modules.inventory.exception.InvalidStockMovementQueryExc
 import com.gonzalez.erp.modules.inventory.exception.InvalidStockQueryException;
 import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
 import com.gonzalez.erp.modules.orders.exception.InactiveOrderCustomerException;
+import com.gonzalez.erp.modules.orders.exception.InactiveOrderVariantException;
 import com.gonzalez.erp.modules.orders.exception.InsufficientStockForEditException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderStatusTransitionException;
@@ -574,6 +575,7 @@ public class GlobalExceptionHandler {
             QuickSaleValidationException.class,
             InvalidPaymentException.class,
             InactiveOrderCustomerException.class,
+            InactiveOrderVariantException.class,
             InvalidShippingAddressException.class,
             InvalidShipmentException.class
     })
@@ -581,6 +583,7 @@ public class GlobalExceptionHandler {
             RuntimeException ex, HttpServletRequest request) {
         String code = ex instanceof QuickSaleValidationException ? "QUICK_SALE_INVALID"
                 : ex instanceof InactiveOrderCustomerException ? "CUSTOMER_INACTIVE"
+                : ex instanceof InactiveOrderVariantException ? "VARIANT_INACTIVE"
                 : ex instanceof InvalidShippingAddressException ? "INVALID_SHIPPING_ADDRESS"
                 : ex instanceof InvalidShipmentException ? "INVALID_SHIPMENT"
                 : ex instanceof InvalidPaymentException ? "INVALID_PAYMENT"

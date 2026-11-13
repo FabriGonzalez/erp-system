@@ -40,6 +40,7 @@ import com.gonzalez.erp.modules.orders.entity.OrderPromoComponent;
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 import com.gonzalez.erp.modules.orders.entity.SalesType;
 import com.gonzalez.erp.modules.orders.exception.InactiveOrderCustomerException;
+import com.gonzalez.erp.modules.orders.exception.InactiveOrderVariantException;
 import com.gonzalez.erp.modules.orders.exception.InsufficientStockForEditException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderStatusTransitionException;
@@ -863,6 +864,12 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    private static void requireSellable(ProductVariant variant) {
+        if (!variant.isActive() || !variant.getProduct().isActive()) {
+            throw new InactiveOrderVariantException(variant.getId());
+        }
+    }
+
     private static <T> List<T> orEmpty(List<T> list) {
         return list != null ? list : List.of();
     }
@@ -893,6 +900,10 @@ public class OrderServiceImpl implements OrderService {
             if (variant.getCompany() == null || !companyId.equals(variant.getCompany().getId())) {
                 throw new ResourceNotFoundException(
                         "Product variant not found with id: " + itemRequest.productVariantId());
+            }
+            // Lo que el pedido ya tenía se conserva aunque después lo desactiven; lo nuevo, no.
+            if (!soldPrices.containsKey(variant.getId())) {
+                requireSellable(variant);
             }
 
             orderItems.add(OrderItem.builder()
