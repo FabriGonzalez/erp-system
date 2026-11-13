@@ -83,7 +83,9 @@ export function VariantCatalog({
             q: searchQuery,
             categoryId: selectedCategoryId ?? undefined,
             active: true,
-            stock: 'IN_STOCK',
+            // Solo cuenta el stock de variantes activas: si todas las que tienen stock están
+            // desactivadas, el producto no aparece.
+            stock: 'SELLABLE',
             branchId,
             attributeValueIds: attributeValueIds.length ? attributeValueIds : undefined,
         },

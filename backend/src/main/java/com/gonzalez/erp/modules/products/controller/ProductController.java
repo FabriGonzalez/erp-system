@@ -43,6 +43,7 @@ public class ProductController {
                description = "Paginado. q busca por nombre o SKU de alguna variante, sin distinguir mayúsculas ni tildes. "
                        + "stock filtra por la suma de las variantes en branchId o, sin branchId, en toda la empresa; "
                        + "con attributeValueIds, solo de las variantes que coinciden. "
+                       + "SELLABLE es IN_STOCK contando solo las variantes activas. "
                        + "sort: name o createdAt, con ,asc o ,desc. Cada variante trae su stock por sucursal.")
     @ApiResponse(responseCode = "400", description = "Parámetros de paginación u orden inválidos",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -53,7 +54,7 @@ public class ProductController {
             @RequestParam(required = false) Long categoryId,
             @Parameter(description = "Texto a buscar en el nombre o el SKU")
             @RequestParam(required = false) String q,
-            @Parameter(description = "IN_STOCK u OUT_OF_STOCK")
+            @Parameter(description = "IN_STOCK, OUT_OF_STOCK o SELLABLE")
             @RequestParam(required = false) ProductStockFilter stock,
             @Parameter(description = "Sucursal en la que se mide el filtro de stock")
             @RequestParam(required = false) Long branchId,

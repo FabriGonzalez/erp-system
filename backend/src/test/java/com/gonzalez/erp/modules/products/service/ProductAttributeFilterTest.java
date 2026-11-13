@@ -87,23 +87,23 @@ class ProductAttributeFilterTest {
 
     @Test
     void valuesOfTheSameAttributeCountAsOne() {
-        when(productRepository.search(COMPANY_ID, null, null, false, "%", false, false, null, true,
+        when(productRepository.search(COMPANY_ID, null, null, false, "%", false, false, false, null, true,
                 List.of(20L, 21L), 1L, pageable)).thenReturn(Page.empty(pageable));
 
         productService.findAll(criteria(null, List.of(20L, 21L, 20L)), pageable);
 
-        verify(productRepository).search(COMPANY_ID, null, null, false, "%", false, false, null, true,
+        verify(productRepository).search(COMPANY_ID, null, null, false, "%", false, false, false, null, true,
                 List.of(20L, 21L), 1L, pageable);
     }
 
     @Test
     void valuesOfDifferentAttributesMustAllMatchTheSameVariant() {
-        when(productRepository.search(COMPANY_ID, null, null, false, "%", true, false, null, true,
+        when(productRepository.search(COMPANY_ID, null, null, false, "%", true, false, false, null, true,
                 List.of(20L, 21L, 30L), 2L, pageable)).thenReturn(Page.empty(pageable));
 
         productService.findAll(criteria(ProductStockFilter.IN_STOCK, List.of(20L, 21L, 30L)), pageable);
 
-        verify(productRepository).search(COMPANY_ID, null, null, false, "%", true, false, null, true,
+        verify(productRepository).search(COMPANY_ID, null, null, false, "%", true, false, false, null, true,
                 List.of(20L, 21L, 30L), 2L, pageable);
     }
 
@@ -112,7 +112,7 @@ class ProductAttributeFilterTest {
         assertThatThrownBy(() -> productService.findAll(criteria(null, List.of(20L, 99L)), pageable))
                 .isInstanceOf(ResourceNotFoundException.class);
         verify(productRepository, never()).search(any(), any(), any(), anyBoolean(), any(), anyBoolean(),
-                anyBoolean(), any(), anyBoolean(), any(), anyLong(), any());
+                anyBoolean(), anyBoolean(), any(), anyBoolean(), any(), anyLong(), any());
     }
 
     private static ProductSearchCriteria criteria(ProductStockFilter stock, List<Long> attributeValueIds) {
