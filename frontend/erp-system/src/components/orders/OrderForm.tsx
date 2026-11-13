@@ -372,7 +372,8 @@ export function OrderForm({
                     </View>
                 ) : null}
 
-                {needsAddress && (
+                {/* Sin cliente elegido todavía no hay direcciones para elegir ni agregar. */}
+                {needsAddress && !isAnonymousCustomer && (
                     <OrderAddressSection
                         customer={currentCustomer}
                         selectedAddress={selectedAddress}
