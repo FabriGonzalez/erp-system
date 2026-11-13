@@ -290,6 +290,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleResourceNotFound(
             ResourceNotFoundException ex, HttpServletRequest request) {
+        logNotFound(request, ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of(
@@ -442,6 +443,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(StockNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleStockNotFound(
             StockNotFoundException ex, HttpServletRequest request) {
+        logNotFound(request, ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of(
@@ -716,6 +718,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNoResource(
             NoResourceFoundException ex, HttpServletRequest request) {
+        logNotFound(request, "Endpoint not found");
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of(
@@ -725,6 +728,11 @@ public class GlobalExceptionHandler {
                         request.getRequestURI(),
                         "NOT_FOUND"
                 ));
+    }
+
+    /** Sin stack trace: alcanza con saber qué recurso faltó y en qué request. */
+    private void logNotFound(HttpServletRequest request, String message) {
+        log.warn("404 on {} {}: {}", request.getMethod(), request.getRequestURI(), message);
     }
 
     /** Lo inesperado se loguea completo y no se le muestra el detalle interno al cliente. */
