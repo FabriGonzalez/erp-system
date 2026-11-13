@@ -1788,6 +1788,37 @@ plan detallado de cada parte.
 2. Pedidos `TO_ASSIGN`: elegir sucursal (con transferencia previa si hace falta) y descontar.
 3. Reportes: las ventas web suman cuando están pagadas.
 
+**Relevamiento (2026-11-13).** Los reportes ya excluyen `PENDING_PAYMENT` (paso 1 de 22C). El
+listado del ERP mezcla los web sin pagar con las ventas y no recibe el canal. `TO_ASSIGN` no se
+puede despachar, cancelar ni editar, y no hay cómo asignarle sucursal; se ve solo en la sucursal
+provisoria. Un pedido web pagado se podría editar y cancelar como una venta del local (con saldo a
+favor o devolución en efectivo). `PaymentMethodPicker` arma la lista desde las etiquetas: agregar
+la de `MERCADO_PAGO` la volvería elegible. Con una sola sucursal en la tienda nunca hay
+`TO_ASSIGN`: el checkout reserva en esa sucursal o rechaza la compra.
+
+**Decisiones del usuario (2026-11-13):**
+- Los `PENDING_PAYMENT` se ocultan por defecto en el listado; se ven con el filtro de estado
+  "Esperando pago".
+- Un pedido web pagado se puede cancelar desde el ERP con devolución total automática por
+  Mercado Pago (reusa la del webhook). Si Mercado Pago la rechaza, no se cancela y se muestra el
+  error. Casos: falta física del producto, comprador que pide cancelar antes del despacho.
+- Mostrar en el ERP las devoluciones que rechazó Mercado Pago: más adelante (hoy solo el log).
+- Fecha de retirado/entregado: más adelante, junto con el botón de arrepentimiento.
+- Asignar sucursal usa el permiso `CREAR_PEDIDOS` (el mismo que cancelar).
+
+**Partes (un commit cada una):**
+- **22D.1 — backend.** `GET /orders` con filtro `channel` y sin `PENDING_PAYMENT` salvo que se pida
+  ese estado; `channel` en `OrderResponse`. `POST /orders/{id}/assign-branch` (`branchId`): solo
+  `TO_ASSIGN`, sucursal asignada y activa con todo el stock (si no, 409 y el local hace antes una
+  transferencia); descuenta, `stockReserved = true` y pasa a `TO_PREPARE`. Cargo y pago quedan en
+  la sucursal provisoria. Editar un pedido web → 409. Cancelar un web pagado (`TO_PREPARE`,
+  `CONFIRMED`, `TO_ASSIGN`) → devolución por Mercado Pago, stock solo si se descontó. Dashboard:
+  contador de pedidos web a asignar en la tarjeta de atención.
+- **22D.2 — frontend del ERP.** Estados y etiquetas ("Esperando pago", "A asignar", "Pago en
+  tienda web"); `PaymentMethodPicker` con lista fija de 4; filtro Todos/Local/Web y marca "Web"
+  en el listado; detalle con marca, modal "Asignar sucursal" y cancelar adaptado (sin elegir saldo
+  a favor ni efectivo); servicio, hook y mensajes de los códigos nuevos.
+
 ### Validación (cada parte)
 
 - Backend: tests unitarios en la copia del scratchpad (resolución de tienda y CORS, aislamiento
