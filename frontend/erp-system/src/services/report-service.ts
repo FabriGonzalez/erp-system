@@ -62,6 +62,7 @@ function normalizeDashboard(data: DashboardResponse): Dashboard {
         pendingOrders: {
             count: Number(data.pendingOrders.count),
             oldestCreatedAt: data.pendingOrders.oldestCreatedAt,
+            toAssign: Number(data.pendingOrders.toAssign ?? 0),
         },
         lowStock: {
             threshold: Number(data.lowStock.threshold),

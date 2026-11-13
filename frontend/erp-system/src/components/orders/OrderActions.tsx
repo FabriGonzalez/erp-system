@@ -8,23 +8,34 @@ interface OrderActionsProps {
     canEdit: boolean;
     canDispatch: boolean;
     canCancel: boolean;
+    /** Pedido web a asignar: abre el modal para elegir la sucursal. */
+    canAssign?: boolean;
     isBusy?: boolean;
     onEdit: () => void;
     onDispatch: () => void;
     onCancel: () => void;
+    onAssign?: () => void;
 }
 
 export function OrderActions({
     canEdit,
     canDispatch,
     canCancel,
+    canAssign = false,
     isBusy = false,
     onEdit,
     onDispatch,
     onCancel,
+    onAssign,
 }: OrderActionsProps) {
     return (
         <View style={styles.container}>
+            {canAssign && (
+                <Pressable style={SharedStyles.buttonPrimary} onPress={onAssign} disabled={isBusy}>
+                    <Text style={SharedStyles.buttonPrimaryText}>Asignar sucursal</Text>
+                </Pressable>
+            )}
+
             {canEdit && (
                 <Pressable style={SharedStyles.buttonSecondary} onPress={onEdit} disabled={isBusy}>
                     <Text style={SharedStyles.buttonSecondaryText}>Editar</Text>

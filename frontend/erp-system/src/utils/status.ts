@@ -37,6 +37,8 @@ export function orderStatusTone(status: OrderStatus): Tone {
             return 'violet';
         case 'CANCELLED':
             return 'danger';
+        case 'TO_ASSIGN':
+            return 'rose';
         default:
             return 'neutral';
     }

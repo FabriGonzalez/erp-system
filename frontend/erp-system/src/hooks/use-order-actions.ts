@@ -4,6 +4,7 @@ import { chooseAction } from '@/stores/dialog-store';
 import { showToast } from '@/stores/toast-store';
 import { Order, RefundAction } from '@/types/order';
 import { confirmAction } from '@/utils/confirm';
+import { formatCurrency } from '@/utils/format';
 
 import { useCancelOrder, useDispatchOrder } from './use-order-queries';
 
@@ -48,8 +49,20 @@ export function useOrderActions(successMessages: { cancel: string; dispatch: str
         let refundAction: RefundAction | undefined;
 
         // Cancelar no se puede deshacer: siempre se confirma. Con pagos, la elección de qué
-        // hacer con el dinero ya es la confirmación.
-        if (order.amountPaid > 0) {
+        // hacer con el dinero ya es la confirmación. Un pedido web se pagó por Mercado Pago y
+        // la plata vuelve por ahí: no hay nada que elegir.
+        if (order.channel === 'WEB') {
+            const confirmed = await confirmAction({
+                title: 'Cancelar pedido web',
+                message: `Se le devuelven ${formatCurrency(order.amountPaid)} al comprador por Mercado Pago`
+                    + (order.status === 'TO_ASSIGN' ? '.' : ' y el stock vuelve a la sucursal.')
+                    + ' No se puede deshacer.',
+                confirmLabel: 'Cancelar y devolver',
+                cancelLabel: 'Volver',
+                destructive: true,
+            });
+            if (!confirmed) return;
+        } else if (order.amountPaid > 0) {
             const answer = await askRefundAction();
             if (!answer) return;
             refundAction = answer;

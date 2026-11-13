@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 
 import {
+    assignOrderBranch,
     cancelOrder,
     createOrder,
     dispatchOrder,
@@ -22,11 +23,12 @@ import {
 import { refreshStockAfterChange } from './catalog-keys';
 import { invalidateCustomerAccount } from './customer-account-keys';
 import { errorText, findInPagedLists, requireToken, usePagedList } from './use-paged-list';
+import { reportKeys } from './use-report-queries';
 
 const PAGE_SIZE = 20;
 
 /** Filtros de un listado; cada combinación tiene su propia caché. */
-export type OrderListFilters = Pick<OrderListParams, 'branchId' | 'status' | 'deliveryType'>;
+export type OrderListFilters = Pick<OrderListParams, 'branchId' | 'status' | 'deliveryType' | 'channel'>;
 
 export const orderKeys = {
     all: ['orders'] as const,
@@ -151,5 +153,23 @@ export function useDispatchOrder() {
     return useMutation({
         mutationFn: (id: string) => dispatchOrder(id, requireToken()),
         onSuccess: syncOrder,
+    });
+}
+
+export type AssignOrderBranchInput = {
+    id: string;
+    branchId: string;
+};
+
+/** Pedido web a asignar: descuenta stock en la sucursal y cambia el contador del dashboard. */
+export function useAssignOrderBranch() {
+    return useMutation({
+        mutationFn: ({ id, branchId }: AssignOrderBranchInput) =>
+            assignOrderBranch(id, branchId, requireToken()),
+        onSuccess: (order) => {
+            syncOrder(order);
+            syncAccountAndStock(order);
+            void queryClient.invalidateQueries({ queryKey: reportKeys.all });
+        },
     });
 }

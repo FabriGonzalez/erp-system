@@ -18,6 +18,7 @@ interface OrderInfoCardProps {
 /** Cobro (total, entregó, debe) y los datos del pedido. */
 export function OrderInfoCard({ order }: OrderInfoCardProps) {
     const isShipping = order.deliveryType === 'SHIPPING';
+    const isWeb = order.channel === 'WEB';
 
     return (
         <>
@@ -32,6 +33,7 @@ export function OrderInfoCard({ order }: OrderInfoCardProps) {
             <View style={SharedStyles.pageSection}>
                 <SectionHeader title="Datos" />
                 <ListGroup>
+                    {isWeb ? <InfoRow label="Origen" value="Tienda web" /> : null}
                     <InfoRow label="Cliente" value={order.customerName} />
                     <InfoRow label="Entrega" value={DELIVERY_TYPE_LABELS[order.deliveryType]} />
                     {isShipping ? (
@@ -42,9 +44,15 @@ export function OrderInfoCard({ order }: OrderInfoCardProps) {
                                 : 'Sin dirección registrada'}
                         />
                     ) : null}
-                    <InfoRow label="Sucursal" value={order.branchName} />
+                    <InfoRow
+                        label="Sucursal"
+                        // A asignar: la sucursal es la provisoria (la primera de la tienda), todavía no la que lo arma.
+                        value={order.status === 'TO_ASSIGN' ? `${order.branchName} (provisoria)` : order.branchName}
+                    />
                     {order.paymentMethod ? (
                         <InfoRow label="Medio de pago" value={PAYMENT_METHOD_LABELS[order.paymentMethod]} />
+                    ) : isWeb ? (
+                        <InfoRow label="Medio de pago" value={PAYMENT_METHOD_LABELS.MERCADO_PAGO} />
                     ) : null}
                     <InfoRow
                         label="Cobro"

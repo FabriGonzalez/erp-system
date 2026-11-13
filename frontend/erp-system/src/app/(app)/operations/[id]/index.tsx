@@ -1,6 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 
+import { AssignBranchModal } from '@/components/orders/AssignBranchModal';
 import { OrderActions } from '@/components/orders/OrderActions';
 import { OrderHeader } from '@/components/orders/OrderHeader';
 import { OrderInfoCard } from '@/components/orders/OrderInfoCard';
@@ -21,6 +23,7 @@ export default function OperationDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const user = useAuthStore((state) => state.user);
     const { order, isLoading, loadError } = useOrder(id);
+    const [isAssigning, setIsAssigning] = useState(false);
     // El éxito se avisa con un toast; el error queda junto a las acciones.
     const { isBusy, errorMessage, handleCancel, handleDispatch } = useOrderActions(
         { cancel: 'Operación cancelada', dispatch: 'Envío despachado correctamente' },
@@ -52,9 +55,12 @@ export default function OperationDetailScreen() {
     const canManageOrders = hasPermission(user, 'CREAR_PEDIDOS');
     const isShipping = currentOrder.deliveryType === 'SHIPPING';
     const isToPrepare = currentOrder.status === 'TO_PREPARE';
-    const canCancel = canManageOrders && (currentOrder.status === 'CONFIRMED' || isToPrepare);
+    const isToAssign = currentOrder.status === 'TO_ASSIGN';
+    const canCancel = canManageOrders && (currentOrder.status === 'CONFIRMED' || isToPrepare || isToAssign);
     const canDispatch = hasPermission(user, 'PREPARAR_PEDIDOS') && isShipping && isToPrepare;
-    const canEdit = canManageOrders && isShipping && isToPrepare;
+    // Un pedido web ya se pagó con ese total: no se edita.
+    const canEdit = canManageOrders && isShipping && isToPrepare && currentOrder.channel !== 'WEB';
+    const canAssign = canManageOrders && isToAssign;
 
     return (
         <Screen style={styles.screen}>
@@ -65,17 +71,20 @@ export default function OperationDetailScreen() {
                 <OrderTimeline order={currentOrder} />
             </ScrollView>
             {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
-            {(canCancel || canDispatch || canEdit) && (
+            {(canCancel || canDispatch || canEdit || canAssign) && (
                 <OrderActions
                     canEdit={canEdit}
                     canDispatch={canDispatch}
                     canCancel={canCancel}
+                    canAssign={canAssign}
                     isBusy={isBusy}
                     onEdit={() => router.push({ pathname: '/operations/[id]/edit', params: { id: currentOrder.id } })}
                     onDispatch={() => void handleDispatch(currentOrder)}
                     onCancel={() => void handleCancel(currentOrder)}
+                    onAssign={() => setIsAssigning(true)}
                 />
             )}
+            {isAssigning ? <AssignBranchModal order={currentOrder} onClose={() => setIsAssigning(false)} /> : null}
         </Screen>
     );
 }

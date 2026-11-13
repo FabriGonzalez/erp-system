@@ -104,6 +104,52 @@ export function useVariantStock(branchId: string | undefined, variantIds: string
     };
 }
 
+/** Stock de esas variantes en todas las sucursales de la empresa, todas las páginas. */
+async function fetchCompanyVariantStocks(variantIds: string[]): Promise<Stock[]> {
+    const token = requireToken();
+    const stocks: Stock[] = [];
+
+    for (let page = 0; ; page += 1) {
+        const result = await getStocks({ variantIds, page, size: VARIANT_PAGE_SIZE }, token);
+        stocks.push(...result.content);
+        if (page + 1 >= result.totalPages) {
+            return stocks;
+        }
+    }
+}
+
+/**
+ * Stock por sucursal de las variantes de un pedido, para decidir dónde se arma. Nunca sale de la
+ * caché: se pide al abrir y con reload, que devuelve el stock recién leído.
+ */
+export function useCompanyVariantStocks(variantIds: string[]) {
+    const hasSession = useAuthStore((state) => Boolean(state.token));
+    const ids = [...new Set(variantIds)].sort();
+    const result = useQuery({
+        queryKey: [...stockKeys.all, 'company-variants', ids] as const,
+        queryFn: () => fetchCompanyVariantStocks(ids),
+        enabled: hasSession && ids.length > 0,
+        staleTime: 0,
+        gcTime: 0,
+        refetchOnMount: 'always',
+    });
+
+    return {
+        stocks: result.data,
+        isLoading: result.isPending,
+        isFetching: result.isFetching,
+        error: errorText(result.error),
+        // Si falla tira el error: no se decide con un stock viejo.
+        reload: async (): Promise<Stock[]> => {
+            const fresh = await result.refetch();
+            if (fresh.isError || !fresh.data) {
+                throw fresh.error ?? new Error('No se pudo leer el stock.');
+            }
+            return fresh.data;
+        },
+    };
+}
+
 // --- Mutaciones ---
 
 /** Ajuste a una cantidad final: cambia el stock, el catálogo y el historial de movimientos. */

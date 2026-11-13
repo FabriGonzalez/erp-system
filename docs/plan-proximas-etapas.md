@@ -1818,6 +1818,16 @@ la de `MERCADO_PAGO` la volvería elegible. Con una sola sucursal en la tienda n
   tienda web"); `PaymentMethodPicker` con lista fija de 4; filtro Todos/Local/Web y marca "Web"
   en el listado; detalle con marca, modal "Asignar sucursal" y cancelar adaptado (sin elegir saldo
   a favor ni efectivo); servicio, hook y mensajes de los códigos nuevos.
+  **Decisiones (2026-11-13):** los `TO_ASSIGN` se ven en una sección "Web a asignar" de Envíos
+  (solo si hay; de todas las sucursales del usuario, porque la sucursal es provisoria). En
+  Operaciones, chips "Web" y "Sin pagar" en la misma fila. Recuadro "Web a asignar" en "Para
+  atender" de Reportes, solo si es mayor a 0. Modal de asignar: sucursales por prioridad (la
+  provisoria primero), qué le falta a cada una y de dónde traerlo (una consulta a
+  `/inventory/stocks?variantIds=`), con una "Recomendada" (la que arma todo o la que necesita menos
+  transferencias). Botón "Transferir y asignar": crea las transferencias (una por origen) y asigna,
+  desde el frontend; solo con `TRANSFERIR_STOCK` y orígenes asignados al usuario, si no la
+  sugerencia queda como texto. Antes de ejecutar vuelve a pedir el stock y, si la sugerencia
+  cambió, no hace nada y avisa; si algo falla en el medio, recalcula y dice qué se llegó a hacer.
 
 ### Validación (cada parte)
 

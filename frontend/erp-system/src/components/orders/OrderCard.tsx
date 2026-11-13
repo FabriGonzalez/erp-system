@@ -60,6 +60,7 @@ export function OrderCard({ order, onPress }: OrderCardProps) {
                     {DELIVERY_TYPE_LABELS[order.deliveryType]} · {detailOf(order)}
                 </Text>
                 <View style={styles.pills}>
+                    {order.channel === 'WEB' ? <StatusPill label="Web" tone="teal" /> : null}
                     <StatusPill label={ORDER_STATUS_LABELS[order.status]} tone={orderStatusTone(order.status)} />
                     {showPayment ? (
                         <StatusPill

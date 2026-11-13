@@ -37,7 +37,7 @@ export function OrderRow({ order, onPress, show = 'payment' }: OrderRowProps) {
             <View style={styles.texts}>
                 <Text style={styles.title} numberOfLines={1}>{order.customerName}</Text>
                 <Text style={styles.subtitle} numberOfLines={1}>
-                    #{order.orderNumber} · {formatTime(order.createdAt)} · {detailOf(order)}
+                    #{order.orderNumber}{order.channel === 'WEB' ? ' · Web' : ''} · {formatTime(order.createdAt)} · {detailOf(order)}
                 </Text>
             </View>
             <View style={styles.right}>

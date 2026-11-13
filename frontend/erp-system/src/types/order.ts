@@ -2,7 +2,14 @@ export type OrderStatus =
     | 'CONFIRMED'
     | 'TO_PREPARE'
     | 'SHIPPED'
-    | 'CANCELLED';
+    | 'CANCELLED'
+    // Pedido de la tienda web esperando el pago (reserva, todavía no es venta).
+    | 'PENDING_PAYMENT'
+    // Pedido web pagado que ninguna sucursal armaba sola: falta elegir la sucursal.
+    | 'TO_ASSIGN';
+
+// ERP: cargado en el local. WEB: comprado en la tienda.
+export type OrderChannel = 'ERP' | 'WEB';
 
 export type PaymentStatus = 'PENDING' | 'PARTIAL' | 'PAID';
 
@@ -71,6 +78,7 @@ export type OrderShippingAddress = {
 export type Order = {
     id: string;
     orderNumber: string;
+    channel: OrderChannel;
     customerId: string;
     customerName: string;
     salesType: SalesType;
@@ -115,14 +123,21 @@ export type OrderPromoRequest = {
     variants?: { productVariantId: number; quantity: number }[];
 };
 
-export type PaymentMethod = 'CASH' | 'TRANSFER' | 'DEBIT_CARD' | 'CREDIT_CARD';
+// MERCADO_PAGO lo registra solo la tienda: se muestra, pero no se puede elegir en el ERP.
+export type PaymentMethod = 'CASH' | 'TRANSFER' | 'DEBIT_CARD' | 'CREDIT_CARD' | 'MERCADO_PAGO';
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
     CASH: 'Efectivo',
     TRANSFER: 'Transferencia',
     DEBIT_CARD: 'Débito',
     CREDIT_CARD: 'Crédito',
+    MERCADO_PAGO: 'Pago en tienda web',
 };
+
+/** Los medios que se pueden elegir al cobrar en el ERP. */
+export type SelectablePaymentMethod = Exclude<PaymentMethod, 'MERCADO_PAGO'>;
+
+export const SELECTABLE_PAYMENT_METHODS: SelectablePaymentMethod[] = ['CASH', 'TRANSFER', 'DEBIT_CARD', 'CREDIT_CARD'];
 
 export type InitialPaymentRequest = {
     amount: number;
@@ -208,6 +223,7 @@ export type ShipmentResponse = {
 export type OrderResponse = {
     id: number | string;
     orderNumber: string;
+    channel: OrderChannel;
     branchId: number | string;
     branchName: string;
     customerId?: number | string | null;
@@ -243,7 +259,9 @@ export type OrderListParams = {
     size?: number;
     sort?: string;
     q?: string;
+    // Sin estado, el backend no trae los web sin pagar.
     status?: OrderStatus;
+    channel?: OrderChannel;
     branchId?: string;
     salesType?: SalesType;
     deliveryType?: DeliveryType;
@@ -256,6 +274,8 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
     TO_PREPARE: 'A preparar',
     SHIPPED: 'Enviado',
     CANCELLED: 'Cancelado',
+    PENDING_PAYMENT: 'Esperando pago',
+    TO_ASSIGN: 'A asignar',
 };
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {

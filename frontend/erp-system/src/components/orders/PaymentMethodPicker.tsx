@@ -4,16 +4,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { IconName } from '@/components/ui/icon-name';
 import { Colors } from '@/constants/colors';
 import { Radius, Spacing } from '@/constants/spacing';
-import { PAYMENT_METHOD_LABELS, PaymentMethod } from '@/types/order';
+import { PAYMENT_METHOD_LABELS, PaymentMethod, SELECTABLE_PAYMENT_METHODS, SelectablePaymentMethod } from '@/types/order';
 
-const METHOD_ICONS: Record<PaymentMethod, IconName> = {
+const METHOD_ICONS: Record<SelectablePaymentMethod, IconName> = {
     CASH: { ios: 'banknote', android: 'payments', web: 'payments' },
     TRANSFER: { ios: 'building.columns', android: 'account_balance', web: 'account_balance' },
     DEBIT_CARD: { ios: 'creditcard', android: 'credit_card', web: 'credit_card' },
     CREDIT_CARD: { ios: 'creditcard.fill', android: 'credit_score', web: 'credit_score' },
 };
-
-const METHODS = Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[];
 
 type PaymentMethodPickerProps = {
     value: PaymentMethod;
@@ -25,7 +23,7 @@ type PaymentMethodPickerProps = {
 export function PaymentMethodPicker({ value, onChange, disabled = false }: PaymentMethodPickerProps) {
     return (
         <View style={styles.grid} accessibilityRole="radiogroup">
-            {METHODS.map((method) => {
+            {SELECTABLE_PAYMENT_METHODS.map((method) => {
                 const selected = value === method;
                 return (
                     <Pressable

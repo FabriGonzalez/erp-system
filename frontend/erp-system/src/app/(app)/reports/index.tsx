@@ -181,6 +181,15 @@ export default function ReportsScreen() {
                             tone="warning"
                             onPress={() => setAttention('pending')}
                         />
+                        {/* Solo si hay: se asignan desde Envíos, que es de otro stack. */}
+                        {dashboard.pendingOrders.toAssign > 0 ? (
+                            <StatTile
+                                label="Web a asignar"
+                                value={String(dashboard.pendingOrders.toAssign)}
+                                icon={{ ios: 'globe', android: 'language', web: 'language' }}
+                                tone="danger"
+                            />
+                        ) : null}
                         <StatTile
                             label={debtors === 1 ? 'Cliente debe' : 'Clientes deben'}
                             value={String(debtors)}

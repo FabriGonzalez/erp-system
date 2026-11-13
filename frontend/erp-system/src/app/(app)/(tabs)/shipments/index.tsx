@@ -31,6 +31,13 @@ export default function ShipmentsScreen() {
         { enabled: canSeeOrders },
     );
     const pending = toPrepare.items.slice(0, PENDING_PREVIEW);
+    // Web pagados que esperan sucursal. Sin filtrar por la activa: su sucursal es provisoria.
+    const toAssign = useOrders({ status: 'TO_ASSIGN' }, { enabled: canSeeOrders });
+
+    function refresh() {
+        toPrepare.refresh();
+        toAssign.refresh();
+    }
 
     return (
         <Screen style={styles.screen}>
@@ -41,8 +48,8 @@ export default function ShipmentsScreen() {
                 showsVerticalScrollIndicator={false}
                 refreshControl={
                     <RefreshControl
-                        refreshing={toPrepare.isRefreshing}
-                        onRefresh={toPrepare.refresh}
+                        refreshing={toPrepare.isRefreshing || toAssign.isRefreshing}
+                        onRefresh={refresh}
                         tintColor={Colors.primary}
                     />
                 }
@@ -65,6 +72,22 @@ export default function ShipmentsScreen() {
                             tone="warning"
                             onPress={() => router.push('/shipments/to-prepare')}
                         />
+                    </View>
+                ) : null}
+
+                {toAssign.items.length > 0 ? (
+                    <View style={SharedStyles.pageSection}>
+                        <SectionHeader title={`Web a asignar · ${toAssign.totalElements}`} />
+                        <ListGroup>
+                            {toAssign.items.map((order) => (
+                                <OrderRow
+                                    key={order.id}
+                                    order={order}
+                                    show="status"
+                                    onPress={() => router.push({ pathname: '/shipments/[id]', params: { id: order.id } })}
+                                />
+                            ))}
+                        </ListGroup>
                     </View>
                 ) : null}
 

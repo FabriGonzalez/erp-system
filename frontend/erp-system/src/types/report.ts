@@ -34,7 +34,8 @@ export type DashboardResponse = {
         quantity: number;
         total: number;
     }[];
-    pendingOrders: { count: number; oldestCreatedAt: string | null };
+    // toAssign: pedidos web pagados que esperan que se elija la sucursal.
+    pendingOrders: { count: number; oldestCreatedAt: string | null; toAssign: number };
     lowStock: {
         threshold: number;
         count: number;
@@ -105,6 +106,7 @@ export type Dashboard = {
     };
     debt: { totalDebt: number; debtorCount: number };
     topProducts: TopProduct[];
-    pendingOrders: { count: number; oldestCreatedAt: string | null };
+    // toAssign: pedidos web pagados que esperan que se elija la sucursal.
+    pendingOrders: { count: number; oldestCreatedAt: string | null; toAssign: number };
     lowStock: { threshold: number; count: number; items: LowStockItem[] };
 };
