@@ -42,7 +42,8 @@ const ORDER_ERRORS = {
             'Mercado Pago no responde, así que el pedido no se canceló. Probá de nuevo en unos minutos.',
     },
     byStatus: {
-        404: 'Orden no encontrada.',
+        // Al crear o editar, el 404 puede venir del cliente, la dirección, un producto o la sucursal.
+        404: 'La orden o algo que usa (cliente, dirección, producto o sucursal) ya no existe. Recargá y probá de nuevo.',
     },
 };
 
