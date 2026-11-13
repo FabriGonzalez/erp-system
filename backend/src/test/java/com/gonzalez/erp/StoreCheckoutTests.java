@@ -55,6 +55,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.TimeZone;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -581,6 +583,27 @@ class StoreCheckoutTests {
     }
 
     @Test
+    void aBuyerRegisteredInTheStorePaysAndTheErpCanChargeThem() {
+        // El resto de los tests crea la ficha desde el ERP; este pasa por el registro real de la tienda.
+        Long variant = variant("Remera Registrada", Map.of(centro, 5));
+        Buyer buyer = registeredBuyer("Wanda", "1155550099");
+        Long orderId = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        approved("mp-1101", orderId, "1000");
+
+        assertThat(webhook("mp-1101").status()).isEqualTo(200);
+
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, orderId))
+                .isEqualTo("CONFIRMED");
+        assertThat(balance(buyer)).isEqualByComparingTo("0");
+
+        // Una venta del local a ese mismo cliente web queda en su cuenta corriente.
+        ok(call(adminA, "POST", "/orders", Map.of("branchId", centro, "customerId", buyer.customerId(),
+                "salesType", "WITH_PRODUCTS", "deliveryType", "LOCAL_PICKUP",
+                "items", List.of(Map.of("productVariantId", variant, "quantity", 1))), null));
+        assertThat(balance(buyer)).isEqualByComparingTo("1000");
+    }
+
+    @Test
     void aPaidShipmentGoesToPrepareAndOneWithoutReservationToAssign() {
         Long variant = variant("Remera Enviada", Map.of(centro, 5));
         Long spread = variant("Remera Repartida Pagada", Map.of(centro, 1, norte, 1));
@@ -1103,6 +1126,24 @@ class StoreCheckoutTests {
                 VALUES (?, ?, ?, ?, 'sin-uso', now(), now(), now())
                 """, accountId, companyA, customerId, email);
         return new Buyer(tokenService.generate(accountRepository.findById(accountId).orElseThrow()), customerId, email);
+    }
+
+    /** Comprador que se registra por la tienda, verifica el email e inicia sesión, sin pasar por el ERP. */
+    private Buyer registeredBuyer(String firstName, String phone) {
+        String email = UUID.randomUUID() + "@mail.test";
+        String password = "clave1234";
+        assertThat(call(null, "POST", "/store/auth/register", Map.of("firstName", firstName, "lastName", "Web",
+                "email", email, "password", password, "phone", phone), STORE_A).status()).isEqualTo(202);
+        Matcher link = Pattern.compile("/cuenta/verificar\\?token=([A-Za-z0-9_-]+)")
+                .matcher(awaitMail(email, "Confirmá tu email").body());
+        assertThat(link.find()).as("link in mail").isTrue();
+        assertThat(call(null, "POST", "/store/auth/verify-email", Map.of("token", link.group(1)), STORE_A).status())
+                .isEqualTo(204);
+        String token = ok(call(null, "POST", "/store/auth/login", Map.of("email", email, "password", password), STORE_A))
+                .get("token").asString();
+        Long customerId = jdbc.queryForObject(
+                "SELECT customer_id FROM store_accounts WHERE company_id = ? AND email = ?", Long.class, companyA, email);
+        return new Buyer(token, customerId, email);
     }
 
     private Long address(Buyer buyer, String street, String number, String postalCode) {
