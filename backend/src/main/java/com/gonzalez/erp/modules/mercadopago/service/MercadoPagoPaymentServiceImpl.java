@@ -46,6 +46,14 @@ public class MercadoPagoPaymentServiceImpl implements MercadoPagoPaymentService 
     }
 
     @Override
+    public void refundPayment(Long companyId, String mpPaymentId) {
+        // Con la conexión para reconectar el token puede seguir sirviendo: se intenta igual.
+        MercadoPagoConnection connection = connectionRepository.findByCompanyId(companyId)
+                .orElseThrow(MercadoPagoException::rejected);
+        checkoutClient.refundPayment(tokenCipher.decrypt(connection.getAccessTokenEncrypted()), mpPaymentId);
+    }
+
+    @Override
     public void expirePaymentLink(Long companyId, String preferenceId) {
         if (preferenceId == null) {
             return;

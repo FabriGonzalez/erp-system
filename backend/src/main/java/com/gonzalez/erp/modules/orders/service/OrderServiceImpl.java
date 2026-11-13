@@ -4,6 +4,7 @@ import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.common.util.BusinessDate;
 import com.gonzalez.erp.config.security.SecurityUtils;
+import com.gonzalez.erp.modules.branches.entity.Branch;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
 import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.companies.entity.Company;
@@ -47,6 +48,7 @@ import com.gonzalez.erp.modules.orders.exception.QuickSaleValidationException;
 import com.gonzalez.erp.modules.orders.mapper.OrderMapper;
 import com.gonzalez.erp.modules.orders.repository.OrderNumberCounterRepository;
 import com.gonzalez.erp.modules.orders.repository.OrderRepository;
+import com.gonzalez.erp.modules.mercadopago.service.MercadoPagoPaymentService;
 import com.gonzalez.erp.modules.payments.entity.PaymentMethod;
 import com.gonzalez.erp.modules.payments.service.OrderPaymentService;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
@@ -80,6 +82,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -109,9 +112,10 @@ public class OrderServiceImpl implements OrderService {
     private final ShipmentRepository shipmentRepository;
     private final PromotionRepository promotionRepository;
     private final ApplicationEventPublisher events;
+    private final MercadoPagoPaymentService mercadoPagoPaymentService;
 
     @Override
-    public PageResponse<OrderResponse> findAll(OrderStatus status, Long branchId, SalesType salesType,
+    public PageResponse<OrderResponse> findAll(OrderStatus status, OrderChannel channel, Long branchId, SalesType salesType,
                                                DeliveryType deliveryType, Long customerId,
                                                PaymentStatus paymentStatus, String query, Pageable pageable) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
@@ -126,7 +130,7 @@ public class OrderServiceImpl implements OrderService {
         boolean hasQuery = !trimmedQuery.isEmpty();
         String likePattern = hasQuery ? "%" + trimmedQuery + "%" : "%";
 
-        Page<Order> orders = orderRepository.search(companyId, accessibleBranchIds, status, salesType, deliveryType,
+        Page<Order> orders = orderRepository.search(companyId, accessibleBranchIds, status, channel, salesType, deliveryType,
                 branchId, customerId, hasQuery, likePattern,
                 paymentStatus == PaymentStatus.PAID,
                 paymentStatus == PaymentStatus.PENDING,
@@ -389,6 +393,10 @@ public class OrderServiceImpl implements OrderService {
             throw new InvalidOrderStatusTransitionException(
                     "Only TO_PREPARE orders can be edited. Current status: " + order.getStatus());
         }
+        // El comprador ya pagó ese total por Mercado Pago.
+        if (order.isWeb()) {
+            throw new InvalidOrderStatusTransitionException("Web orders cannot be edited");
+        }
 
         BigDecimal oldTotal = order.getTotal() != null ? order.getTotal() : BigDecimal.ZERO;
 
@@ -563,11 +571,60 @@ public class OrderServiceImpl implements OrderService {
                 .filter(o -> branchAccessService.isAccessible(o.getBranch()))
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
 
+        if (order.isWeb()) {
+            cancelPaidWebOrder(order, companyId, userId);
+            return toOrderResponse(order);
+        }
+
         RefundAction refundAction = (request != null && request.refundAction() != null)
                 ? request.refundAction()
                 : RefundAction.KEEP_AS_CREDIT;
 
         cancelLocked(order, refundAction, companyId, userId);
+        return toOrderResponse(order);
+    }
+
+    /**
+     * Pedido web pagado que cancela el local: la plata vuelve entera por Mercado Pago, sin elegir
+     * saldo a favor ni efectivo. La devolución va al final y dentro de la transacción: si Mercado
+     * Pago no la hace, la cancelación se deshace y el pedido queda como estaba.
+     */
+    private void cancelPaidWebOrder(Order order, Long companyId, Long userId) {
+        // Antes de cancelar: cancelLocked borra las asignaciones que llevan al pago.
+        List<String> mpPaymentIds = paymentAllocationRepository.findByOrderId(order.getId()).stream()
+                .map(allocation -> allocation.getPayment().getMpPaymentId())
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        cancelLocked(order, RefundAction.REFUND_MONEY, companyId, userId);
+
+        for (String mpPaymentId : mpPaymentIds) {
+            mercadoPagoPaymentService.refundPayment(companyId, mpPaymentId);
+        }
+    }
+
+    @Override
+    @Transactional
+    public OrderResponse assignBranch(Long id, Long branchId) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+        Long userId = SecurityUtils.getCurrentUserId();
+
+        Order order = orderRepository.findByIdAndCompanyIdForUpdate(id, companyId)
+                .filter(o -> branchAccessService.isAccessible(o.getBranch()))
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
+
+        if (order.getStatus() != OrderStatus.TO_ASSIGN) {
+            throw new InvalidOrderStatusTransitionException(
+                    "Only TO_ASSIGN orders can be assigned a branch. Current status: " + order.getStatus());
+        }
+        Branch branch = branchAccessService.requireAccessible(branchId);
+
+        // Si a esa sucursal le falta algo, 409: el local transfiere antes y vuelve a asignar.
+        reserveStock(order, branch.getId(), companyId, userId);
+        order.assignBranch(branch, Instant.now());
+        orderRepository.save(order);
+
         return toOrderResponse(order);
     }
 
@@ -615,7 +672,8 @@ public class OrderServiceImpl implements OrderService {
                     "Cannot cancel order in status: " + order.getStatus());
         }
 
-        if (order.requiresStockValidation()) {
+        // Un pedido web a asignar nunca descontó stock.
+        if (order.requiresStockValidation() && order.isStockReserved()) {
             releaseStock(order, companyId, userId);
         }
 

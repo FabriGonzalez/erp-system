@@ -34,6 +34,7 @@ public final class OrderMapper {
         return new OrderResponse(
                 order.getId(),
                 order.getOrderNumber(),
+                order.getChannel(),
                 order.getBranch().getId(),
                 order.getBranch().getName(),
                 customer != null ? customer.getId() : null,

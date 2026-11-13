@@ -162,8 +162,7 @@ public class Order extends BaseEntity {
         }
 
         // Un pedido web sin pagar se cancela desde la tienda (o al vencer); el ERP sigue usando canCancel().
-        if (status != OrderStatus.CONFIRMED && status != OrderStatus.TO_PREPARE
-                && status != OrderStatus.PENDING_PAYMENT) {
+        if (!canCancel() && status != OrderStatus.PENDING_PAYMENT) {
             throw new InvalidOrderException(
                     "Cannot cancel order in status: " + status);
         }
@@ -189,6 +188,24 @@ public class Order extends BaseEntity {
             this.status = OrderStatus.CONFIRMED;
             this.confirmedAt = now;
         }
+    }
+
+    /**
+     * Pedido web pagado que ninguna sucursal armaba sola: un empleado elige la que lo arma (el stock
+     * lo descuenta quien llama) y sigue como cualquier envío.
+     */
+    public void assignBranch(Branch branch, Instant now) {
+        if (status != OrderStatus.TO_ASSIGN) {
+            throw new InvalidOrderException("Only TO_ASSIGN orders can be assigned a branch. Current status: " + status);
+        }
+        this.branch = branch;
+        this.stockReserved = true;
+        this.status = OrderStatus.TO_PREPARE;
+        this.preparedAt = now;
+    }
+
+    public boolean isWeb() {
+        return channel == OrderChannel.WEB;
     }
 
     public void attachPaymentLink(String preferenceId, String url, Instant expiresAt) {
@@ -335,8 +352,9 @@ public class Order extends BaseEntity {
         return isToPrepare() && deliveryType == DeliveryType.SHIPPING;
     }
 
+    // TO_ASSIGN solo existe en pedidos web: ya pagado, se cancela devolviendo el pago.
     public boolean canCancel() {
-        return isConfirmed() || isToPrepare();
+        return isConfirmed() || isToPrepare() || status == OrderStatus.TO_ASSIGN;
     }
 
     public boolean requiresStockValidation() {

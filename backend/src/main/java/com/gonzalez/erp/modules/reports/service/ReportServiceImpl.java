@@ -6,6 +6,7 @@ import com.gonzalez.erp.modules.customers.dto.response.CustomerDebtSummaryRespon
 import com.gonzalez.erp.modules.customers.service.CustomerBalanceService;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
 import com.gonzalez.erp.modules.inventory.repository.StockRepository;
+import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 import com.gonzalez.erp.modules.orders.repository.OrderRepository;
 import com.gonzalez.erp.modules.payments.entity.PaymentMethod;
 import com.gonzalez.erp.modules.payments.repository.PaymentRepository;
@@ -85,7 +86,7 @@ public class ReportServiceImpl implements ReportService {
                     emptySales(), emptySales(), List.of(),
                     salesSeries(from, to, bucket, List.of()),
                     collections(List.of(), List.of()),
-                    debtSummary, List.of(), new PendingOrders(0, null),
+                    debtSummary, List.of(), new PendingOrders(0, null, 0),
                     new LowStock(lowStockThreshold, 0, List.of()));
         }
 
@@ -113,7 +114,8 @@ public class ReportServiceImpl implements ReportService {
         List<TopProduct> topProducts = topProducts(companyId, branchIds, from, to);
 
         Object[] pendingRow = orderRepository.summarizeOrdersToPrepare(companyId, branchIds).get(0);
-        PendingOrders pendingOrders = new PendingOrders(toLong(pendingRow[0]), (Instant) pendingRow[1]);
+        long toAssign = orderRepository.countByCompanyIdAndBranchIdInAndStatus(companyId, branchIds, OrderStatus.TO_ASSIGN);
+        PendingOrders pendingOrders = new PendingOrders(toLong(pendingRow[0]), (Instant) pendingRow[1], toAssign);
 
         Page<Stock> lowStockPage = stockRepository.findLowStock(
                 companyId, branchIds, lowStockThreshold, PageRequest.of(0, LOW_STOCK_ITEMS_LIMIT));

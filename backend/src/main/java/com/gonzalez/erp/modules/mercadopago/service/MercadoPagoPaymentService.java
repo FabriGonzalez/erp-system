@@ -20,5 +20,11 @@ public interface MercadoPagoPaymentService {
      */
     void expirePaymentLink(Long companyId, String preferenceId);
 
+    /**
+     * Devuelve entero un pago de la empresa. Falla con {@code MercadoPagoException}: rechazada si la
+     * empresa no tiene la cuenta conectada o Mercado Pago dijo que no, y no disponible si no respondió.
+     */
+    void refundPayment(Long companyId, String mpPaymentId);
+
     record PaymentLink(String preferenceId, String url) {}
 }

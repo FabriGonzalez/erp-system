@@ -7,6 +7,7 @@ import com.gonzalez.erp.modules.orders.dto.request.OrderUpdateRequest;
 import com.gonzalez.erp.modules.orders.dto.response.OrderResponse;
 import com.gonzalez.erp.modules.orders.entity.DeliveryType;
 import com.gonzalez.erp.modules.orders.entity.Order;
+import com.gonzalez.erp.modules.orders.entity.OrderChannel;
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 import com.gonzalez.erp.modules.orders.entity.PaymentStatus;
 import com.gonzalez.erp.modules.orders.entity.SalesType;
@@ -14,7 +15,7 @@ import org.springframework.data.domain.Pageable;
 
 public interface OrderService {
 
-    PageResponse<OrderResponse> findAll(OrderStatus status, Long branchId, SalesType salesType,
+    PageResponse<OrderResponse> findAll(OrderStatus status, OrderChannel channel, Long branchId, SalesType salesType,
                                         DeliveryType deliveryType, Long customerId,
                                         PaymentStatus paymentStatus, String query, Pageable pageable);
 
@@ -26,7 +27,17 @@ public interface OrderService {
 
     OrderResponse dispatch(Long id);
 
+    /**
+     * Cancela el pedido. Uno web ya pagado devuelve el pago entero por Mercado Pago (ignora la
+     * opción de saldo a favor o efectivo); si Mercado Pago no lo devuelve, no se cancela.
+     */
     OrderResponse cancel(Long id, OrderCancelRequest request);
+
+    /**
+     * Pedido web pagado que ninguna sucursal armaba sola: descuenta el stock en la sucursal
+     * elegida y pasa a preparar. 409 si no está a asignar o si a esa sucursal le falta stock.
+     */
+    OrderResponse assignBranch(Long id, Long branchId);
 
     /** Pedido de la tienda, pendiente de pago. No usa la sesión del empleado ni carga la cuenta del cliente. */
     Order createWebOrder(WebOrderCommand command);

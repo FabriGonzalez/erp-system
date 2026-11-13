@@ -818,6 +818,145 @@ class StoreCheckoutTests {
         assertThat(mailsTo(buyer.email()).stream().filter(m -> m.subject().startsWith("Se canceló"))).hasSize(1);
     }
 
+    // --- Pedidos web en el ERP (22D) ---
+
+    @Test
+    void theErpListsWebOrdersByChannelAndHidesTheUnpaidOnesUnlessAsked() {
+        Long variant = variant("Remera Listada", Map.of(centro, 5));
+        Buyer buyer = buyer("Lisandro", "1155550101");
+        Long unpaid = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        Long paid = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        approved("mp-20001", paid, "1000");
+        ok(webhook("mp-20001"));
+
+        String byCustomer = "/orders?customerId=" + buyer.customerId();
+        assertThat(orderIds(byCustomer)).containsExactly(paid);
+        assertThat(orderIds(byCustomer + "&channel=WEB")).containsExactly(paid);
+        assertThat(orderIds(byCustomer + "&channel=ERP")).isEmpty();
+        assertThat(orderIds(byCustomer + "&status=PENDING_PAYMENT")).containsExactly(unpaid);
+        assertThat(ok(call(adminA, "GET", "/orders/" + paid, null, null)).get("channel").asString()).isEqualTo("WEB");
+    }
+
+    @Test
+    void aWebOrderToAssignTakesTheStockOfTheChosenBranchOnlyIfItHasEverything() {
+        Long spread = variant("Remera A Asignar", Map.of(centro, 1, norte, 1));
+        Buyer buyer = buyer("Amparo", "1155550102");
+        Long address = address(buyer, "Corrientes", "300", "1043");
+        Long orderId = ok(checkout(buyer, shipping(address, cart(spread, 2)))).get("orderId").asLong();
+        approved("mp-20002", orderId, "2000");
+        ok(webhook("mp-20002"));
+        long toAssignBefore = dashboardToAssign();
+        assertThat(toAssignBefore).isGreaterThanOrEqualTo(1);
+
+        // A Centro le falta una: no descuenta nada y el pedido sigue a asignar.
+        assertThat(assign(orderId, centro).hasCode("INSUFFICIENT_STOCK")).isTrue();
+        assertThat(stock(spread, centro)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, orderId)).isEqualTo("TO_ASSIGN");
+
+        // El local transfiere (acá, directo en la base) y vuelve a asignar.
+        jdbc.update("UPDATE stocks SET quantity = 2 WHERE product_variant_id = ? AND branch_id = ?", spread, norte);
+        JsonNode assigned = ok(assign(orderId, norte));
+        assertThat(assigned.get("status").asString()).isEqualTo("TO_PREPARE");
+        assertThat(assigned.get("branchId").asLong()).isEqualTo(norte);
+        assertThat(stock(spread, norte)).isZero();
+        assertThat(stock(spread, centro)).isEqualTo(1);
+        assertThat(dashboardToAssign()).isEqualTo(toAssignBefore - 1);
+        assertThat(ok(myOrder(buyer, orderId)).get("status").asString()).isEqualTo("PREPARING");
+
+        assertThat(assign(orderId, norte).hasCode("INVALID_STATUS_TRANSITION")).isTrue();
+    }
+
+    @Test
+    void cancellingAPaidWebOrderFromTheErpRefundsItThroughMercadoPago() {
+        Long variant = variant("Remera Cancelada En Local", Map.of(centro, 5));
+        Buyer buyer = buyer("Bautista", "1155550103");
+        Long orderId = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        approved("mp-20003", orderId, "1000");
+        ok(webhook("mp-20003"));
+        assertThat(stock(variant, centro)).isEqualTo(4);
+
+        // Saldo a favor no aplica: la plata vuelve por donde entró.
+        JsonNode cancelled = ok(call(adminA, "POST", "/orders/" + orderId + "/cancel",
+                Map.of("refundAction", "KEEP_AS_CREDIT"), null));
+
+        assertThat(cancelled.get("status").asString()).isEqualTo("CANCELLED");
+        verify(checkoutClient).refundPayment("APP_USR-token-a", "mp-20003");
+        assertThat(stock(variant, centro)).isEqualTo(5);
+        assertThat(balance(buyer)).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void aWebOrderToAssignIsCancelledWithoutTouchingTheStock() {
+        Long spread = variant("Remera Repartida Cancelada", Map.of(centro, 1, norte, 1));
+        Buyer buyer = buyer("Candela", "1155550104");
+        Long address = address(buyer, "Florida", "100", "1005");
+        Long orderId = ok(checkout(buyer, shipping(address, cart(spread, 2)))).get("orderId").asLong();
+        approved("mp-20004", orderId, "2000");
+        ok(webhook("mp-20004"));
+
+        ok(call(adminA, "POST", "/orders/" + orderId + "/cancel", null, null));
+
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, orderId)).isEqualTo("CANCELLED");
+        verify(checkoutClient).refundPayment("APP_USR-token-a", "mp-20004");
+        assertThat(stock(spread, centro)).isEqualTo(1);
+        assertThat(stock(spread, norte)).isEqualTo(1);
+    }
+
+    @Test
+    void ifMercadoPagoDoesNotRefundTheWebOrderIsNotCancelled() {
+        Long variant = variant("Remera Sin Devolucion", Map.of(centro, 5));
+        Buyer buyer = buyer("Dante", "1155550105");
+        Long orderId = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        approved("mp-20005", orderId, "1000");
+        ok(webhook("mp-20005"));
+        doThrow(MercadoPagoException.rejected()).when(checkoutClient).refundPayment("APP_USR-token-a", "mp-20005");
+
+        Response response = call(adminA, "POST", "/orders/" + orderId + "/cancel", null, null);
+
+        assertThat(response.status()).isEqualTo(502);
+        assertThat(response.body()).contains("MERCADOPAGO_REJECTED");
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, orderId)).isEqualTo("CONFIRMED");
+        assertThat(stock(variant, centro)).isEqualTo(4);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payment_allocations WHERE order_id = ?", Long.class, orderId))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void theErpCannotEditOrCancelAnUnpaidWebOrder() {
+        Long variant = variant("Remera Solo Lectura", Map.of(centro, 5));
+        Buyer buyer = buyer("Emma", "1155550106");
+        Long address = address(buyer, "Lavalle", "500", "1047");
+        Long paid = ok(checkout(buyer, shipping(address, cart(variant, 1)))).get("orderId").asLong();
+        Long unpaid = ok(checkout(buyer, pickup(centro, cart(variant, 1)))).get("orderId").asLong();
+        approved("mp-20006", paid, "1000");
+        ok(webhook("mp-20006"));
+
+        Response edit = call(adminA, "PATCH", "/orders/" + paid, Map.of(
+                "items", List.of(Map.of("productVariantId", variant, "quantity", 2))), null);
+        assertThat(edit.hasCode("INVALID_STATUS_TRANSITION")).as(edit.toString()).isTrue();
+        assertThat(stock(variant, centro)).isEqualTo(3);
+
+        // Sin pagar lo cancela el comprador o el vencimiento, no el local.
+        assertThat(call(adminA, "POST", "/orders/" + unpaid + "/cancel", null, null).hasCode("INVALID_STATUS_TRANSITION"))
+                .isTrue();
+    }
+
+    private List<Long> orderIds(String path) {
+        List<Long> ids = new ArrayList<>();
+        ok(call(adminA, "GET", path, null, null)).get("content").forEach(order -> ids.add(order.get("id").asLong()));
+        return ids;
+    }
+
+    private Response assign(Long orderId, Long branchId) {
+        return call(adminA, "POST", "/orders/" + orderId + "/assign-branch", Map.of("branchId", branchId), null);
+    }
+
+    private long dashboardToAssign() {
+        Instant now = Instant.now();
+        return ok(call(adminA, "GET", "/reports/dashboard?from=" + now.minus(Duration.ofDays(1)) + "&to=" + now, null, null))
+                .get("pendingOrders").get("toAssign").asLong();
+    }
+
     private String orderNumber(Long orderId) {
         return jdbc.queryForObject("SELECT order_number FROM orders WHERE id = ?", String.class, orderId);
     }

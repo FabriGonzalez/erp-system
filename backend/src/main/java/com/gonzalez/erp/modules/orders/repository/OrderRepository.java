@@ -274,13 +274,19 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("branchIds") Collection<Long> branchIds
     );
 
+    /** Pedidos web pagados que esperan que un empleado elija la sucursal (foto actual). */
+    long countByCompanyIdAndBranchIdInAndStatus(Long companyId, Collection<Long> branchIds, OrderStatus status);
+
+    // Sin estado no trae los web sin pagar: son reservas, no ventas; se ven pidiendo ese estado.
     // Las ventas sin cliente se cobran al crearse, por eso cuentan siempre como pagadas.
     @Query(value = """
             SELECT o FROM Order o
             LEFT JOIN o.customer c
             WHERE o.company.id = :companyId
             AND o.branch.id IN :branchIds
-            AND (:status IS NULL OR o.status = :status)
+            AND ((:status IS NULL AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
+                 OR o.status = :status)
+            AND (:channel IS NULL OR o.channel = :channel)
             AND (:salesType IS NULL OR o.salesType = :salesType)
             AND (:deliveryType IS NULL OR o.deliveryType = :deliveryType)
             AND (:branchId IS NULL OR o.branch.id = :branchId)
@@ -304,7 +310,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             LEFT JOIN o.customer c
             WHERE o.company.id = :companyId
             AND o.branch.id IN :branchIds
-            AND (:status IS NULL OR o.status = :status)
+            AND ((:status IS NULL AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
+                 OR o.status = :status)
+            AND (:channel IS NULL OR o.channel = :channel)
             AND (:salesType IS NULL OR o.salesType = :salesType)
             AND (:deliveryType IS NULL OR o.deliveryType = :deliveryType)
             AND (:branchId IS NULL OR o.branch.id = :branchId)
@@ -327,6 +335,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("companyId") Long companyId,
             @Param("branchIds") Collection<Long> branchIds,
             @Param("status") OrderStatus status,
+            @Param("channel") OrderChannel channel,
             @Param("salesType") SalesType salesType,
             @Param("deliveryType") DeliveryType deliveryType,
             @Param("branchId") Long branchId,
