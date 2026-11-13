@@ -27,6 +27,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -131,6 +132,8 @@ class StoreAccountTests {
         assertThat(me.has("id")).isFalse();
 
         assertThat(customerNames(adminA, "WEB")).contains("Ana");
+        // Con cuenta corriente, como las del ERP: sin ella no se le puede cargar ni cobrar un pedido.
+        assertThat(accountBalance(STORE_A, "ana@mail.test")).isEqualByComparingTo("0");
     }
 
     @Test
@@ -156,6 +159,15 @@ class StoreAccountTests {
         assertThat(cleared.get("storeMailFrom").isNull()).isTrue();
         register(domain, "Raúl", "raul@mail.test", PASSWORD);
         assertThat(lastMailTo("raul@mail.test", 1).from()).isEqualTo("Remitente <no-reply@erp.local>");
+    }
+
+    /** Saldo de la cuenta corriente del cliente web de esa tienda con ese email (falla si no la tiene). */
+    private BigDecimal accountBalance(String store, String email) {
+        return jdbc.queryForObject("""
+                SELECT a.balance FROM customer_accounts a
+                JOIN store_accounts s ON s.customer_id = a.customer_id
+                WHERE s.company_id = ? AND s.email = ?
+                """, BigDecimal.class, companyIdByDomain(store), email);
     }
 
     private Long companyIdByDomain(String domain) {
@@ -626,6 +638,7 @@ class StoreAccountTests {
         // Ficha nueva: la del ERP con el mismo email sigue aparte y el registro pendiente quedó anulado.
         assertThat(customerNames(adminA, "ERP")).contains("Gala del Local");
         assertThat(customerNames(adminA, "WEB")).contains("Gala").doesNotContain("Intrusa");
+        assertThat(accountBalance(STORE_A, "gala@mail.test")).isEqualByComparingTo("0");
         assertThat(verify(STORE_A, pendingLink).hasCode("INVALID_LINK")).isTrue();
 
         // El id de Google manda: con otro email en Google sigue siendo la misma cuenta.

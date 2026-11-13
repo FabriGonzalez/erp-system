@@ -8,6 +8,7 @@ import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.customers.entity.Customer;
 import com.gonzalez.erp.modules.customers.entity.CustomerOrigin;
 import com.gonzalez.erp.modules.customers.repository.CustomerRepository;
+import com.gonzalez.erp.modules.customers.service.CustomerAccountService;
 import com.gonzalez.erp.modules.store.dto.StoreChangePasswordRequest;
 import com.gonzalez.erp.modules.store.dto.StoreLoginRequest;
 import com.gonzalez.erp.modules.store.dto.StoreMeResponse;
@@ -56,6 +57,7 @@ public class StoreAuthServiceImpl implements StoreAuthService {
     private final StorePendingRegistrationRepository pendingRepository;
     private final StoreAccountTokenRepository accountTokenRepository;
     private final CustomerRepository customerRepository;
+    private final CustomerAccountService customerAccountService;
     private final CompanyRepository companyRepository;
     private final PasswordEncoder passwordEncoder;
     private final StoreTokenService tokenService;
@@ -125,6 +127,8 @@ public class StoreAuthServiceImpl implements StoreAuthService {
                 .company(company)
                 .origin(CustomerOrigin.WEB)
                 .build());
+        // Como en el alta del ERP: sin cuenta corriente no se le puede cargar ni cobrar un pedido.
+        customerAccountService.createAccount(customer);
         accountRepository.save(StoreAccount.builder()
                 .company(company)
                 .customer(customer)
@@ -231,6 +235,7 @@ public class StoreAuthServiceImpl implements StoreAuthService {
                 .company(company)
                 .origin(CustomerOrigin.WEB)
                 .build());
+        customerAccountService.createAccount(customer);
         StoreAccount account = accountRepository.save(StoreAccount.builder()
                 .company(company)
                 .customer(customer)
