@@ -1,47 +1,44 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useMemo } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppInput } from '@/components/ui/AppInput';
 import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { HeaderButton } from '@/components/ui/HeaderButton';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useCustomerStore } from '@/stores/customer-store';
+import { useCustomerList } from '@/hooks/use-customer-queries';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
 import { Customer, CUSTOMER_ANONYMOUS } from '@/types/customer';
 import { getInitials } from '@/utils/format';
-
-type CustomerFlow = 'orders' | 'shipments';
+import { CUSTOMER_PICKER_ROUTES, OrderCreationFlow } from '@/utils/order-routes';
 
 type SelectCustomerScreenProps = {
-    flow: CustomerFlow;
+    flow: OrderCreationFlow;
 };
 
 export function SelectCustomerScreen({ flow }: SelectCustomerScreenProps) {
     const { allowAnonymous } = useLocalSearchParams<{ allowAnonymous?: string }>();
     const canSelectAnonymous = allowAnonymous !== 'false';
-    const { customers, searchQuery, setSearchQuery } = useCustomerStore();
+    const [searchQuery, setSearchQuery] = useState('');
+    // Propio de esta pantalla: no pisa la búsqueda del listado de clientes.
+    const {
+        customers,
+        isInitialLoading,
+        isLoadingMore,
+        error,
+        loadMore,
+        refresh,
+    } = useCustomerList({ query: searchQuery, status: 'active' });
     const setDraftCustomer = useOrderDraftStore((state) => state.setCustomer);
     const currentCustomer = useOrderDraftStore((state) => state.customer);
-    const newCustomerRoute = flow === 'shipments'
-        ? '/shipments/new-customers'
-        : '/orders/new-customer';
-
-    const filteredCustomers = useMemo(() => {
-        const query = searchQuery.trim().toLowerCase();
-        if (!query) return customers;
-
-        return customers.filter((customer) => {
-            const matchesName = customer.name.toLowerCase().includes(query);
-            const matchesEmail = customer.email?.toLowerCase().includes(query) ?? false;
-            const matchesPhone = customer.phone?.includes(query) ?? false;
-            return matchesName || matchesEmail || matchesPhone;
-        });
-    }, [customers, searchQuery]);
+    const newCustomerRoute = CUSTOMER_PICKER_ROUTES[flow].newCustomer;
 
     function handleSelectCustomer(customer: Customer) {
         setDraftCustomer(customer);
@@ -54,36 +51,33 @@ export function SelectCustomerScreen({ flow }: SelectCustomerScreenProps) {
 
     return (
         <Screen style={styles.screen}>
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={24} tintColor={Colors.text} />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>Seleccionar Cliente</Text>
-                <Pressable
-                    onPress={handleCreateNewCustomer}
-                    style={({ pressed }) => [styles.newBtn, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView name={{ ios: 'plus', android: 'add', web: 'add' }} size={18} tintColor={Colors.primary} />
-                    <Text style={styles.newBtnText}>Nuevo</Text>
-                </Pressable>
-            </View>
+            <PageHeader
+                onBack={() => router.back()}
+                title="Elegir cliente"
+                right={<HeaderButton label="Nuevo" accessibilityLabel="Nuevo cliente" onPress={handleCreateNewCustomer} />}
+            />
 
             <View style={styles.searchBox}>
                 <AppInput
-                    placeholder="Buscar cliente por nombre, email o teléfono..."
+                    placeholder="Buscar por nombre, teléfono, email o documento..."
                     value={searchQuery}
                     onChangeText={setSearchQuery}
+                    autoCapitalize="none"
+                    autoCorrect={false}
                 />
             </View>
 
             <FlatList
-                data={filteredCustomers}
+                data={customers}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContainer}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                onEndReached={loadMore}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={
+                    isLoadingMore ? <ActivityIndicator style={styles.footerLoader} color={Colors.primary} /> : null
+                }
                 ListHeaderComponent={
                     <View style={styles.headerComponent}>
                         {canSelectAnonymous && (
@@ -112,16 +106,27 @@ export function SelectCustomerScreen({ flow }: SelectCustomerScreenProps) {
                     </View>
                 }
                 ListEmptyComponent={
-                    <EmptyState
-                        title="No se encontraron clientes"
-                        description="Intenta con otro término o crea un nuevo cliente."
-                        actionLabel="+ Nuevo cliente"
-                        onAction={handleCreateNewCustomer}
-                    />
+                    isInitialLoading ? (
+                        <LoadingState label="Buscando clientes..." />
+                    ) : error ? (
+                        <EmptyState
+                            title="No se pudieron cargar los clientes"
+                            description={error}
+                            actionLabel="Reintentar"
+                            onAction={refresh}
+                        />
+                    ) : (
+                        <EmptyState
+                            title="No se encontraron clientes"
+                            description="Intenta con otro término o crea un nuevo cliente."
+                            actionLabel="+ Nuevo cliente"
+                            onAction={handleCreateNewCustomer}
+                        />
+                    )
                 }
                 renderItem={({ item }) => {
                     const isSelected = currentCustomer.id === item.id;
-                    const addressCount = item.addresses.length;
+                    const addressCount = item.addressCount;
 
                     return (
                         <Pressable
@@ -163,8 +168,6 @@ export function SelectCustomerScreen({ flow }: SelectCustomerScreenProps) {
 
 const styles = StyleSheet.create({
     screen: { padding: 0, backgroundColor: Colors.background },
-    newBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: Spacing.xs, paddingVertical: 4 },
-    newBtnText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
     searchBox: { padding: Spacing.lg, paddingBottom: Spacing.sm },
     listContainer: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl * 2 },
     headerComponent: { marginBottom: Spacing.md },
@@ -178,4 +181,5 @@ const styles = StyleSheet.create({
     cardTitle: { fontSize: 15, fontWeight: '600', color: Colors.text },
     cardSub: { fontSize: 13, color: Colors.textSecondary, marginTop: 1 },
     cardAddrBadge: { fontSize: 11, color: Colors.textSecondary, marginTop: 4 },
+    footerLoader: { paddingVertical: Spacing.md },
 });

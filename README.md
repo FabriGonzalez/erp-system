@@ -60,6 +60,12 @@ docker compose up -d
 
 Levanta PostgreSQL 17 en `localhost:5432` con la base `erp_db` (usuario y contraseña `postgres`). Hibernate crea y actualiza las tablas automáticamente (`ddl-auto: update`).
 
+`ddl-auto: update` agrega columnas pero nunca las borra. Si tu base es anterior al estado de empresa (`companies.status`), eliminá la columna vieja o fallará el alta de empresas:
+
+```sql
+ALTER TABLE companies DROP COLUMN IF EXISTS active;
+```
+
 ### 2. Backend
 
 Spring Boot **no lee archivos `.env`** por sí solo: tenés que definir las variables de entorno en tu shell o en la configuración de ejecución de tu IDE. Usá [backend/.env.example](backend/.env.example) como referencia.
@@ -67,7 +73,7 @@ Spring Boot **no lee archivos `.env`** por sí solo: tenés que definir las vari
 | Variable | Obligatoria | Descripción |
 | --- | --- | --- |
 | `JWT_SECRET` | Sí | Clave para firmar los tokens JWT. |
-| `JWT_EXPIRATION_MS` | No | Duración del token en ms (por defecto `86400000`, 24 h). |
+| `JWT_EXPIRATION_MS` | No | Duración del token en ms (por defecto `604800000`, 7 días). La app lo renueva una vez por día mientras se use, así que solo pide volver a entrar tras 7 días sin abrirla. |
 | `DB_USERNAME` / `DB_PASSWORD` | No | Credenciales de la base (por defecto `postgres` / `postgres`). |
 | `ERP_PLATFORM_ADMIN_PASSWORD` | Sí, en el primer arranque | Contraseña del usuario `platform_admin`; el arranque falla si ese usuario no existe y la variable está vacía. |
 | `ERP_PLATFORM_ADMIN_USERNAME` / `ERP_PLATFORM_ADMIN_EMAIL` | No | Por defecto `platform_admin` / `platform@erp.local`. |

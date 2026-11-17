@@ -1,5 +1,6 @@
 package com.gonzalez.erp.modules.users.controller;
 
+import com.gonzalez.erp.modules.users.dto.request.PasswordResetRequest;
 import com.gonzalez.erp.modules.users.dto.request.UserRequest;
 import com.gonzalez.erp.modules.users.dto.request.UserUpdateRequest;
 import com.gonzalez.erp.modules.users.dto.response.UserResponse;
@@ -88,5 +89,22 @@ public class UserController {
     })
     public ResponseEntity<UserResponse> activate(@PathVariable Long id) {
         return ResponseEntity.ok(userService.activate(id));
+    }
+
+    @PostMapping("/{id}/password-reset")
+    @Operation(summary = "Restablecer contraseña de un usuario",
+               description = "Asigna la contraseña que elige el administrador y cierra las sesiones "
+                       + "abiertas del usuario. No aplica al propio usuario.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Contraseña restablecida"),
+            @ApiResponse(responseCode = "400", description = "Contraseña inválida"),
+            @ApiResponse(responseCode = "403", description = "Intento de restablecer la propia contraseña"),
+            @ApiResponse(responseCode = "404", description = "Usuario no encontrado")
+    })
+    public ResponseEntity<Void> resetPassword(
+            @PathVariable Long id,
+            @Valid @RequestBody PasswordResetRequest request) {
+        userService.resetPassword(id, request.newPassword());
+        return ResponseEntity.noContent().build();
     }
 }

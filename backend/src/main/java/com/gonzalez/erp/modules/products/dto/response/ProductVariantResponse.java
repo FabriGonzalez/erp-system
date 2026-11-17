@@ -7,6 +7,7 @@ import java.util.List;
 public record ProductVariantResponse(
         Long id,
         String sku,
+        String barcode,
         BigDecimal price,
         boolean active,
         List<ProductAttributeValueResponse> attributes,

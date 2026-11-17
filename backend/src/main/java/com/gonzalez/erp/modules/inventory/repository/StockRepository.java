@@ -2,18 +2,49 @@ package com.gonzalez.erp.modules.inventory.repository;
 
 import com.gonzalez.erp.modules.inventory.entity.Stock;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 public interface StockRepository extends JpaRepository<Stock, Long> {
 
     Optional<Stock> findByProductVariantIdAndBranchId(Long productVariantId, Long branchId);
+
+    /** Stock bajo (cantidad <= umbral) de productos y variantes activos, de menor a mayor. */
+    @Query(value = """
+            SELECT s FROM Stock s
+            JOIN FETCH s.productVariant pv
+            JOIN FETCH pv.product p
+            JOIN FETCH s.branch b
+            WHERE s.company.id = :companyId
+            AND b.id IN :branchIds
+            AND s.quantity <= :threshold
+            AND pv.active = true AND p.active = true
+            ORDER BY s.quantity ASC, s.id ASC
+            """,
+            countQuery = """
+            SELECT COUNT(s) FROM Stock s
+            JOIN s.productVariant pv
+            JOIN pv.product p
+            WHERE s.company.id = :companyId
+            AND s.branch.id IN :branchIds
+            AND s.quantity <= :threshold
+            AND pv.active = true AND p.active = true
+            """)
+    Page<Stock> findLowStock(
+            @Param("companyId") Long companyId,
+            @Param("branchIds") Collection<Long> branchIds,
+            @Param("threshold") int threshold,
+            Pageable pageable
+    );
 
     boolean existsByProductVariantIdAndBranchId(Long productVariantId, Long branchId);
 
@@ -23,13 +54,73 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
 
     List<Stock> findByCompanyId(Long companyId);
 
-        @Query("SELECT s FROM Stock s " +
-            "JOIN FETCH s.productVariant pv " +
-            "JOIN FETCH pv.product " +
-            "JOIN FETCH s.branch " +
-            "JOIN FETCH s.company c " +
-            "WHERE c.id = :companyId")
-        List<Stock> findAllByCompanyId(@Param("companyId") Long companyId);
+    /** Stock de varias variantes en una consulta (respuestas de producto). Solo usa ids de variante y sucursal. */
+    @Query("""
+            SELECT s FROM Stock s
+            WHERE s.productVariant.id IN :variantIds
+            AND s.company.id = :companyId
+            ORDER BY s.branch.id ASC
+            """)
+    List<Stock> findByProductVariantIdInAndCompanyId(
+            @Param("variantIds") Collection<Long> variantIds,
+            @Param("companyId") Long companyId
+    );
+
+    /**
+     * Listado paginado del stock de la empresa. :search (producto, SKU o código de barras) llega
+     * en minúsculas, sin tildes y con los comodines (StockServiceImpl.normalizeSearch). Con
+     * filterVariants, solo las
+     * variantes de :variantIds (el stock de los ítems de un borrador). Con :hasAttributeFilter,
+     * solo las variantes con valores de :attributeValueIds de :attributeCount atributos distintos
+     * (AttributeValueFilters).
+     */
+    @Query(value = """
+            SELECT s FROM Stock s
+            JOIN FETCH s.productVariant pv
+            JOIN FETCH pv.product p
+            JOIN FETCH s.branch b
+            WHERE s.company.id = :companyId
+            AND (:branchId IS NULL OR b.id = :branchId)
+            AND (:filterVariants = false OR pv.id IN :variantIds)
+            AND (:hasSearch = false
+                 OR CAST(FUNCTION('translate', LOWER(p.name),
+                         'áàäâéèëêíìïîóòöôúùüûñç', 'aaaaeeeeiiiioooouuuunc') AS String) LIKE :search
+                 OR LOWER(pv.sku) LIKE :search
+                 OR LOWER(pv.barcode) LIKE :search)
+            AND (:hasAttributeFilter = false
+                 OR (SELECT COUNT(DISTINCT va.attributeValue.attribute.id) FROM ProductVariantAttribute va
+                     WHERE va.variant = pv
+                     AND va.attributeValue.id IN :attributeValueIds) = :attributeCount)
+            """,
+            countQuery = """
+            SELECT COUNT(s) FROM Stock s
+            JOIN s.productVariant pv
+            JOIN pv.product p
+            WHERE s.company.id = :companyId
+            AND (:branchId IS NULL OR s.branch.id = :branchId)
+            AND (:filterVariants = false OR pv.id IN :variantIds)
+            AND (:hasSearch = false
+                 OR CAST(FUNCTION('translate', LOWER(p.name),
+                         'áàäâéèëêíìïîóòöôúùüûñç', 'aaaaeeeeiiiioooouuuunc') AS String) LIKE :search
+                 OR LOWER(pv.sku) LIKE :search
+                 OR LOWER(pv.barcode) LIKE :search)
+            AND (:hasAttributeFilter = false
+                 OR (SELECT COUNT(DISTINCT va.attributeValue.attribute.id) FROM ProductVariantAttribute va
+                     WHERE va.variant = pv
+                     AND va.attributeValue.id IN :attributeValueIds) = :attributeCount)
+            """)
+    Page<Stock> search(
+            @Param("companyId") Long companyId,
+            @Param("branchId") Long branchId,
+            @Param("filterVariants") boolean filterVariants,
+            @Param("variantIds") Collection<Long> variantIds,
+            @Param("hasSearch") boolean hasSearch,
+            @Param("search") String search,
+            @Param("hasAttributeFilter") boolean hasAttributeFilter,
+            @Param("attributeValueIds") Collection<Long> attributeValueIds,
+            @Param("attributeCount") long attributeCount,
+            Pageable pageable
+    );
 
         @Query("SELECT s FROM Stock s " +
             "JOIN FETCH s.productVariant pv " +

@@ -17,6 +17,9 @@ public interface OrderPaymentService {
     /** Registra un pago del cliente y lo asigna íntegro a la orden. */
     void registerOrderPayment(Order order, BigDecimal amount, PaymentMethod method, Long userId, Long companyId);
 
+    /** Pago acreditado por Mercado Pago: sin empleado, con el id del pago para no registrarlo dos veces. */
+    void registerMercadoPagoPayment(Order order, BigDecimal amount, String mpPaymentId, Long companyId);
+
     /** Si el total de la orden bajó por debajo de lo asignado, libera el excedente como saldo a favor. */
     void trimAllocationsToTotal(Order order);
 }

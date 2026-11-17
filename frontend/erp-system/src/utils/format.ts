@@ -24,6 +24,18 @@ export function formatDateTime(iso: string): string {
     );
 }
 
+/** La fecha de hoy para un encabezado: "Lunes 27 de octubre". */
+export function formatToday(): string {
+    const text = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+    // "lunes, 27 de octubre" → "Lunes 27 de octubre"
+    return text.charAt(0).toUpperCase() + text.slice(1).replace(',', '');
+}
+
+/** Solo la hora local, p. ej. "15:30". */
+export function formatTime(iso: string): string {
+    return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+}
+
 export function formatCurrency(amount: number): string {
     return `$${amount.toLocaleString('es-AR')}`;
 }
@@ -33,6 +45,19 @@ export function formatDate(iso: string): string {
     return date.toLocaleDateString('es-AR', {
         day: 'numeric',
         month: 'long',
+        year: 'numeric',
+    });
+}
+
+/**
+ * Fecha sin hora del backend (AAAA-MM-DD). new Date() la tomaría como medianoche UTC y en
+ * Argentina mostraría el día anterior: se arma en hora local.
+ */
+export function formatDay(ymd: string): string {
+    const [year, month, day] = ymd.split('-').map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString('es-AR', {
+        day: 'numeric',
+        month: 'short',
         year: 'numeric',
     });
 }

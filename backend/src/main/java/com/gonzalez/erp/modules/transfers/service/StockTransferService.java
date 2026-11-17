@@ -1,14 +1,13 @@
 package com.gonzalez.erp.modules.transfers.service;
 
+import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.modules.transfers.dto.request.StockTransferRequest;
 import com.gonzalez.erp.modules.transfers.dto.response.StockTransferResponse;
-import com.gonzalez.erp.modules.transfers.entity.StockTransferStatus;
-
-import java.util.List;
+import org.springframework.data.domain.Pageable;
 
 public interface StockTransferService {
 
-    List<StockTransferResponse> findAll();
+    PageResponse<StockTransferResponse> findAll(Pageable pageable);
 
     StockTransferResponse findById(Long id);
 

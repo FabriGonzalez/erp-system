@@ -1,33 +1,89 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { useState } from 'react';
 import {
+    ActivityIndicator,
     Pressable,
     ScrollView,
     StyleSheet,
+    Switch,
     Text,
     View,
 } from 'react-native';
 
-import { Avatar } from '@/components/ui/Avatar';
+import { AddressSummary } from '@/components/customers/AddressSummary';
+import { ActionChip } from '@/components/ui/ActionChip';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { HeaderButton } from '@/components/ui/HeaderButton';
+import { IconBadge } from '@/components/ui/IconBadge';
+import { InfoRow } from '@/components/ui/InfoRow';
+import { ListGroup } from '@/components/ui/ListGroup';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { MenuListItem } from '@/components/ui/MenuListItem';
 import { NotFound } from '@/components/ui/NotFound';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
-import { useCustomerStore } from '@/stores/customer-store';
+import { Radius, Spacing } from '@/constants/spacing';
+import {
+    useCustomer,
+    useCustomerAddresses,
+    useSetAddressActive,
+    useSetCustomerActive,
+    useUpdateAddress,
+} from '@/hooks/use-customer-queries';
+import { useCustomerAccountSummaryQuery } from '@/hooks/use-customer-account-queries';
+import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
+import { CustomerAddress, documentTypeLabel } from '@/types/customer';
+import { addressToDraft, toAddressRequest } from '@/utils/address';
+import { confirmAction } from '@/utils/confirm';
+import { formatCurrency } from '@/utils/format';
+import { CUSTOMER_ACCOUNT_READ_PERMISSIONS, hasAnyPermission, hasPermission } from '@/utils/permissions';
 
 export default function CustomerDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
+    const customerId = id ?? '';
+    const user = useAuthStore((state) => state.user);
+    // Mismos permisos que exige el backend para cada acción.
+    const canManageCustomers = hasPermission(user, 'ADMINISTRAR_CLIENTES');
+    const canEditAddresses = canManageCustomers || hasPermission(user, 'CREAR_PEDIDOS');
+    const canViewAccount = hasAnyPermission(user, CUSTOMER_ACCOUNT_READ_PERMISSIONS);
 
-    const getCustomerById = useCustomerStore(
-        (state) => state.getCustomerById,
-    );
+    const { customer, error, notFound, isLoading, reload } = useCustomer(id);
+    const { summary, isLoading: summaryLoading } = useCustomerAccountSummaryQuery(id, canViewAccount);
+    const {
+        addresses,
+        error: addressesError,
+        isLoading: addressesLoading,
+        reload: reloadAddresses,
+    } = useCustomerAddresses(id);
 
-    const customers = useCustomerStore((state) => state.customers);
+    const setCustomerActive = useSetCustomerActive(customerId);
+    const updateAddress = useUpdateAddress(customerId);
+    const setAddressActive = useSetAddressActive(customerId);
 
-    const customer = id
-        ? customers.find((item) => item.id === id)
-        : undefined;
+    const [showInactive, setShowInactive] = useState(false);
+    const [actionError, setActionError] = useState<string | null>(null);
+    // Una acción de dirección a la vez: evita que dos cambios de principal se crucen.
+    const isAddressBusy = updateAddress.isPending || setAddressActive.isPending;
+
+    if (!customer && isLoading) {
+        return (
+            <Screen>
+                <LoadingState label="Cargando cliente..." />
+            </Screen>
+        );
+    }
+
+    if (!customer && error && !notFound) {
+        return (
+            <Screen>
+                <ErrorState message={error} onRetry={reload} />
+            </Screen>
+        );
+    }
 
     if (!customer) {
         return (
@@ -44,197 +100,292 @@ export default function CustomerDetailScreen() {
         );
     }
 
-    const initials = customer.name
-        .split(' ')
-        .map((name) => name[0])
-        .join('')
-        .slice(0, 2)
-        .toUpperCase();
+    // Las direcciones de una ficha web las administra el comprador; el backend responde 409.
+    const isWebCustomer = customer.origin === 'WEB';
+    const canChangeAddresses = canEditAddresses && !isWebCustomer;
+    const inactiveCount = addresses.filter((address) => !address.active).length;
+    const visibleAddresses = showInactive ? addresses : addresses.filter((address) => address.active);
+    const documentLabel = customer.documentNumber
+        ? `${documentTypeLabel(customer.documentType) ?? 'Doc.'} ${customer.documentNumber}`
+        : null;
+
+    async function runAction(action: () => Promise<unknown>) {
+        setActionError(null);
+        try {
+            await action();
+        } catch (actionFailure: unknown) {
+            setActionError(actionFailure instanceof Error ? actionFailure.message : 'No se pudo completar la acción.');
+        }
+    }
+
+    async function handleToggleCustomerActive() {
+        if (!customer || setCustomerActive.isPending) return;
+
+        const deactivating = customer.active;
+        const confirmed = await confirmAction(
+            deactivating
+                ? {
+                    title: 'Desactivar cliente',
+                    message: `${customer.name} no va a aparecer para nuevas ventas ni envíos. Sus pedidos y su cuenta corriente se conservan.`,
+                    confirmLabel: 'Desactivar',
+                    destructive: true,
+                }
+                : {
+                    title: 'Reactivar cliente',
+                    message: `${customer.name} va a volver a estar disponible para nuevas ventas y envíos.`,
+                    confirmLabel: 'Reactivar',
+                },
+        );
+        if (confirmed) {
+            await runAction(() => setCustomerActive.mutateAsync(!deactivating));
+        }
+    }
+
+    async function handleSetMain(address: CustomerAddress) {
+        if (isAddressBusy) return;
+        // El PATCH reemplaza todos los campos: se manda la dirección completa más mainAddress.
+        await runAction(() => updateAddress.mutateAsync({
+            addressId: address.id,
+            data: toAddressRequest(addressToDraft(address), true),
+        }));
+    }
+
+    async function handleToggleAddressActive(address: CustomerAddress) {
+        if (isAddressBusy) return;
+
+        if (address.active) {
+            const confirmed = await confirmAction({
+                title: 'Desactivar dirección',
+                message: address.isMain
+                    ? 'Es la dirección principal: la próxima dirección activa pasa a serlo.'
+                    : 'No se va a poder elegir para nuevos envíos.',
+                confirmLabel: 'Desactivar',
+                destructive: true,
+            });
+            if (!confirmed) return;
+        }
+
+        await runAction(() => setAddressActive.mutateAsync({ addressId: address.id, active: !address.active }));
+    }
+
+    const accountPill = summary
+        ? summary.debt > 0
+            ? <StatusPill label={`Debe ${formatCurrency(summary.debt)}`} tone="danger" />
+            : summary.credit > 0
+                ? <StatusPill label={`A favor ${formatCurrency(summary.credit)}`} tone="success" />
+                : <StatusPill label="Al día" tone="success" />
+        : summaryLoading
+            ? <ActivityIndicator size="small" color={Colors.primary} />
+            : undefined;
 
     return (
         <Screen style={styles.screen}>
-            <View style={[SharedStyles.header, styles.header]}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [
-                        SharedStyles.backButton,
-                        pressed && SharedStyles.pressed,
-                    ]}
-                >
-                    <SymbolView
-                        name={{
-                            ios: 'chevron.left',
-                            android: 'arrow_back',
-                            web: 'arrow_back',
-                        }}
-                        size={24}
-                        tintColor={Colors.text}
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow="Cliente"
+                title={customer.name}
+                right={canManageCustomers ? (
+                    <HeaderButton
+                        label="Editar"
+                        icon={{ ios: 'pencil', android: 'edit', web: 'edit' }}
+                        accessibilityLabel="Editar cliente"
+                        onPress={() =>
+                            router.push({
+                                pathname: '/customers/[id]/edit',
+                                params: { id: customer.id },
+                            })
+                        }
                     />
-                </Pressable>
-
-                <Text style={styles.headerTitle}>
-                    Detalle del cliente
-                </Text>
-
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+                ) : undefined}
+            />
 
             <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={SharedStyles.listContent}
+                contentContainerStyle={SharedStyles.pageContent}
             >
-                <View style={styles.customerCard}>
-                    <Avatar
-                        name={customer.name}
-                        initials={initials || 'C'}
-                        size={64}
-                        fontWeight="700"
-                        fontSize={22}
-                        style={styles.avatar}
-                    />
+                {actionError ? (
+                    <View style={styles.errorBox}>
+                        <Text style={styles.errorBoxText}>{actionError}</Text>
+                    </View>
+                ) : null}
 
-                    <Text style={styles.customerName}>
-                        {customer.name}
-                    </Text>
+                {isWebCustomer || !customer.active ? (
+                    <View style={styles.pills}>
+                        {isWebCustomer ? <StatusPill label="Tienda online" tone="teal" /> : null}
+                        {!customer.active ? <StatusPill label="Inactivo" tone="neutral" /> : null}
+                    </View>
+                ) : null}
 
-                    {customer.email ? (
-                        <View style={styles.contactRow}>
-                            <SymbolView
-                                name={{
-                                    ios: 'envelope',
-                                    android: 'email',
-                                    web: 'email',
-                                }}
-                                size={17}
-                                tintColor={Colors.textSecondary}
-                            />
-                            <Text style={styles.contactText}>
-                                {customer.email}
-                            </Text>
-                        </View>
-                    ) : null}
+                {documentLabel || customer.email || customer.phone || customer.observations ? (
+                    <View style={SharedStyles.pageSection}>
+                        <SectionHeader title="Contacto" />
+                        <ListGroup>
+                            {documentLabel ? <InfoRow label="Documento" value={documentLabel} /> : null}
+                            {customer.email ? <InfoRow label="Email" value={customer.email} /> : null}
+                            {customer.phone ? <InfoRow label="Teléfono" value={customer.phone} /> : null}
+                            {customer.observations ? (
+                                <Text style={styles.observations}>{customer.observations}</Text>
+                            ) : null}
+                        </ListGroup>
+                    </View>
+                ) : null}
 
-                    {customer.phone ? (
-                        <View style={styles.contactRow}>
-                            <SymbolView
-                                name={{
-                                    ios: 'phone',
-                                    android: 'phone',
-                                    web: 'phone',
-                                }}
-                                size={17}
-                                tintColor={Colors.textSecondary}
-                            />
-                            <Text style={styles.contactText}>
-                                {customer.phone}
-                            </Text>
-                        </View>
-                    ) : null}
-                </View>
-
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <View>
-                            <Text style={styles.sectionTitle}>
-                                Direcciones
-                            </Text>
-                            <Text style={styles.sectionSubtitle}>
-                                {customer.addresses.length === 0
-                                    ? 'No hay direcciones registradas'
-                                    : `${customer.addresses.length} ${customer.addresses.length === 1
-                                        ? 'dirección registrada'
-                                        : 'direcciones registradas'
-                                    }`}
-                            </Text>
-                        </View>
-
-                        <Pressable
-                            style={({ pressed }) => [
-                                styles.addButton,
-                                pressed && SharedStyles.pressed,
-                            ]}
+                {canViewAccount ? (
+                    <ListGroup>
+                        <MenuListItem
+                            title="Cuenta corriente"
+                            subtitle={summary && summary.pendingOrders > 0
+                                ? `${summary.pendingOrders} ${summary.pendingOrders === 1
+                                    ? 'pedido con saldo pendiente'
+                                    : 'pedidos con saldo pendiente'}`
+                                : 'Pendientes, pagos y movimientos'}
+                            iconName={{ ios: 'creditcard', android: 'account_balance_wallet', web: 'account_balance_wallet' }}
+                            tone="warning"
+                            badge={accountPill}
                             onPress={() =>
+                                router.push({
+                                    pathname: '/customers/[id]/debts',
+                                    params: { id: customer.id },
+                                })
+                            }
+                        />
+                    </ListGroup>
+                ) : null}
+
+                <View style={SharedStyles.pageSection}>
+                    <SectionHeader
+                        title={customer.addressCount === 0
+                            ? 'Direcciones'
+                            : `Direcciones (${customer.addressCount} ${customer.addressCount === 1 ? 'activa' : 'activas'})`}
+                        actionLabel={canChangeAddresses ? 'Agregar' : undefined}
+                        onAction={canChangeAddresses
+                            ? () =>
                                 router.push({
                                     pathname: '/customers/[id]/add-address',
                                     params: { id: customer.id },
                                 })
-                            }
-                        >
-                            <SymbolView
-                                name={{
-                                    ios: 'plus',
-                                    android: 'add',
-                                    web: 'add',
-                                }}
-                                size={17}
-                                tintColor={Colors.white}
-                            />
-                            <Text style={styles.addButtonText}>
-                                Agregar
-                            </Text>
-                        </Pressable>
-                    </View>
+                            : undefined}
+                    />
 
-                    {customer.addresses.length === 0 ? (
-                        <View style={styles.emptyAddresses}>
-                            <SymbolView
-                                name={{
-                                    ios: 'mappin.slash',
-                                    android: 'location_off',
-                                    web: 'location_off',
-                                }}
-                                size={24}
-                                tintColor={Colors.textSecondary}
+                    {inactiveCount > 0 ? (
+                        <View style={styles.toggleRow}>
+                            <Text style={styles.toggleLabel}>
+                                Mostrar inactivas ({inactiveCount})
+                            </Text>
+                            <Switch
+                                value={showInactive}
+                                onValueChange={setShowInactive}
+                                trackColor={{ true: Colors.primary, false: Colors.track }}
+                                thumbColor={Colors.white}
+                            />
+                        </View>
+                    ) : null}
+
+                    {addressesLoading && addresses.length === 0 ? (
+                        <ActivityIndicator color={Colors.primary} style={styles.addressesLoader} />
+                    ) : addressesError && addresses.length === 0 ? (
+                        <View style={[SharedStyles.card, styles.emptyAddresses]}>
+                            <Text style={styles.emptyDescription}>{addressesError}</Text>
+                            <Pressable onPress={reloadAddresses} style={styles.retryLink}>
+                                <Text style={styles.retryLinkText}>Reintentar</Text>
+                            </Pressable>
+                        </View>
+                    ) : visibleAddresses.length === 0 ? (
+                        <View style={[SharedStyles.card, styles.emptyAddresses]}>
+                            <IconBadge
+                                icon={{ ios: 'mappin.slash', android: 'location_off', web: 'location_off' }}
+                                tone="neutral"
                             />
                             <Text style={styles.emptyTitle}>
                                 Sin direcciones
                             </Text>
                             <Text style={styles.emptyDescription}>
-                                Agregá una dirección para poder realizar
-                                pedidos con envío a este cliente.
+                                {isWebCustomer
+                                    ? 'El cliente carga sus direcciones desde su cuenta en la tienda.'
+                                    : 'Agregá una dirección para poder realizar pedidos con envío a este cliente.'}
                             </Text>
                         </View>
                     ) : (
                         <View style={styles.addressList}>
-                            {customer.addresses.map((address) => (
+                            {visibleAddresses.map((address) => (
                                 <View
                                     key={address.id}
-                                    style={styles.addressCard}
+                                    style={[SharedStyles.card, styles.addressCard, !address.active && SharedStyles.listItemInactive]}
                                 >
-                                    <View style={styles.addressIcon}>
-                                        <SymbolView
-                                            name={{
-                                                ios: 'mappin',
-                                                android: 'location_on',
-                                                web: 'location_on',
-                                            }}
-                                            size={18}
-                                            tintColor={Colors.primary}
+                                    <View style={styles.addressRow}>
+                                        <IconBadge
+                                            icon={{ ios: 'mappin', android: 'location_on', web: 'location_on' }}
+                                            tone={address.isMain ? 'primary' : 'neutral'}
                                         />
+                                        <AddressSummary address={address} />
                                     </View>
 
-                                    <View style={styles.addressInfo}>
-                                        <Text style={styles.addressLabel}>
-                                            {address.label}
-                                        </Text>
-
-                                        <Text style={styles.addressStreet}>
-                                            {address.street} {address.number}
-                                        </Text>
-
-                                        <Text style={styles.addressCity}>
-                                            {address.city},{' '}
-                                            {address.province}
-                                            {address.zipCode
-                                                ? ` (${address.zipCode})`
-                                                : ''}
-                                        </Text>
-                                    </View>
+                                    {canChangeAddresses ? (
+                                        <View style={styles.addressActions}>
+                                            {address.active ? (
+                                                <ActionChip
+                                                    label="Editar"
+                                                    icon={{ ios: 'pencil', android: 'edit', web: 'edit' }}
+                                                    disabled={isAddressBusy}
+                                                    onPress={() =>
+                                                        router.push({
+                                                            pathname: '/customers/[id]/addresses/[addressId]/edit',
+                                                            params: { id: customer.id, addressId: address.id },
+                                                        })
+                                                    }
+                                                />
+                                            ) : null}
+                                            {address.active && !address.isMain ? (
+                                                <ActionChip
+                                                    label="Marcar principal"
+                                                    icon={{ ios: 'star', android: 'star', web: 'star' }}
+                                                    tone="neutral"
+                                                    disabled={isAddressBusy}
+                                                    onPress={() => handleSetMain(address)}
+                                                />
+                                            ) : null}
+                                            {canManageCustomers ? (
+                                                <ActionChip
+                                                    label={address.active ? 'Desactivar' : 'Reactivar'}
+                                                    icon={address.active
+                                                        ? { ios: 'pause.circle', android: 'block', web: 'block' }
+                                                        : { ios: 'play.circle', android: 'check_circle', web: 'check_circle' }}
+                                                    tone={address.active ? 'danger' : 'success'}
+                                                    disabled={isAddressBusy}
+                                                    onPress={() => handleToggleAddressActive(address)}
+                                                />
+                                            ) : null}
+                                        </View>
+                                    ) : null}
                                 </View>
                             ))}
                         </View>
                     )}
                 </View>
+
+                {canManageCustomers ? (
+                    <View style={SharedStyles.pageSection}>
+                        <SectionHeader title="Acciones" />
+                        <ListGroup>
+                            <MenuListItem
+                                title={customer.active ? 'Desactivar cliente' : 'Reactivar cliente'}
+                                subtitle={customer.active
+                                    ? 'No aparece para nuevas ventas; se conservan sus pedidos'
+                                    : 'Vuelve a estar disponible para vender'}
+                                iconName={customer.active
+                                    ? { ios: 'person.crop.circle.badge.xmark', android: 'person_off', web: 'person_off' }
+                                    : { ios: 'person.crop.circle.badge.checkmark', android: 'how_to_reg', web: 'how_to_reg' }}
+                                tone="success"
+                                danger={customer.active}
+                                showChevron={false}
+                                badge={setCustomerActive.isPending
+                                    ? <ActivityIndicator size="small" color={Colors.primary} />
+                                    : undefined}
+                                onPress={() => void handleToggleCustomerActive()}
+                            />
+                        </ListGroup>
+                    </View>
+                ) : null}
             </ScrollView>
         </Screen>
     );
@@ -244,89 +395,46 @@ const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    header: {
-        paddingHorizontal: Spacing.lg,
-    },
-    headerTitle: {
-        flex: 1,
-        marginLeft: Spacing.sm,
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    customerCard: {
-        alignItems: 'center',
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
+    errorBox: {
+        backgroundColor: Colors.errorLight,
         borderWidth: 1,
-        borderColor: Colors.border,
-        padding: Spacing.xl,
+        borderColor: Colors.errorBorder,
+        borderRadius: Radius.sm,
+        padding: Spacing.md,
     },
-    avatar: {
-        marginBottom: Spacing.md,
+    errorBoxText: {
+        color: Colors.error,
+        fontSize: 13,
     },
-    customerName: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: Colors.text,
-        textAlign: 'center',
-        marginBottom: Spacing.md,
-    },
-    contactRow: {
+    pills: {
         flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-        marginTop: Spacing.xs,
+        gap: Spacing.xs,
     },
-    contactText: {
-        fontSize: 14,
+    observations: {
+        paddingVertical: Spacing.md,
+        paddingHorizontal: Spacing.md + 2,
+        fontSize: 13,
+        lineHeight: 19,
         color: Colors.textSecondary,
+        fontStyle: 'italic',
     },
-    section: {
-        marginTop: Spacing.xl,
-    },
-    sectionHeader: {
+    toggleRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: Spacing.md,
     },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    sectionSubtitle: {
+    toggleLabel: {
         fontSize: 13,
         color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    addButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        backgroundColor: Colors.primary,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
-        borderRadius: 8,
-    },
-    addButtonText: {
-        color: Colors.white,
-        fontSize: 13,
-        fontWeight: '600',
     },
     emptyAddresses: {
         alignItems: 'center',
-        backgroundColor: Colors.surface,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: Colors.border,
         padding: Spacing.xl,
     },
     emptyTitle: {
         marginTop: Spacing.sm,
         fontSize: 15,
-        fontWeight: '600',
+        fontWeight: '700',
         color: Colors.text,
     },
     emptyDescription: {
@@ -340,39 +448,31 @@ const styles = StyleSheet.create({
         gap: Spacing.sm,
     },
     addressCard: {
+        padding: Spacing.md,
+        gap: Spacing.md,
+    },
+    addressRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colors.surface,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        padding: Spacing.md,
+        gap: Spacing.md,
     },
-    addressIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: Colors.primaryLight,
-        marginRight: Spacing.md,
+    addressActions: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.sm,
+        paddingTop: Spacing.md,
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
     },
-    addressInfo: {
-        flex: 1,
+    addressesLoader: {
+        paddingVertical: Spacing.lg,
     },
-    addressLabel: {
+    retryLink: {
+        marginTop: Spacing.sm,
+    },
+    retryLinkText: {
         fontSize: 14,
         fontWeight: '600',
-        color: Colors.text,
-        marginBottom: 3,
-    },
-    addressStreet: {
-        fontSize: 14,
-        color: Colors.text,
-    },
-    addressCity: {
-        fontSize: 13,
-        color: Colors.textSecondary,
-        marginTop: 2,
+        color: Colors.primary,
     },
 });

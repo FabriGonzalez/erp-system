@@ -9,15 +9,20 @@ import { StatusFilter, StockFilter } from '@/types/product';
 interface ProductsFilterChipsProps {
     stockFilter: StockFilter;
     statusFilter: StatusFilter;
+    /** Cantidad de valores de atributo elegidos. */
+    attributeValueCount: number;
     onStockChange: (value: StockFilter) => void;
     onStatusChange: (value: StatusFilter) => void;
+    onOpenAttributes: () => void;
 }
 
 export function ProductsFilterChips({
     stockFilter,
     statusFilter,
+    attributeValueCount,
     onStockChange,
     onStatusChange,
+    onOpenAttributes,
 }: ProductsFilterChipsProps) {
     return (
         <View style={styles.filterSection}>
@@ -63,6 +68,14 @@ export function ProductsFilterChips({
                         onPress={() => onStatusChange('INACTIVE')}
                     />
                 </View>
+
+                <View style={SharedStyles.filterDivider} />
+
+                <FilterChip
+                    label={attributeValueCount ? `Atributos · ${attributeValueCount}` : 'Atributos'}
+                    selected={attributeValueCount > 0}
+                    onPress={onOpenAttributes}
+                />
             </ScrollView>
         </View>
     );

@@ -1,39 +1,36 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { ProductForm } from '@/components/products/ProductForm';
+import { NotFound } from '@/components/ui/NotFound';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
+import { useCategories } from '@/hooks/use-category-queries';
+import { useCreateProduct } from '@/hooks/use-product-queries';
 import { useAuthStore } from '@/stores/auth-store';
-import { useCategoryStore } from '@/stores/category-store';
-import { useProductStore } from '@/stores/product-store';
-import { SharedStyles } from '@/styles/shared';
+import { showToast } from '@/stores/toast-store';
 import { ProductFormData } from '@/types/product';
+import { hasPermission } from '@/utils/permissions';
 
 export default function NewProductScreen() {
-    const { products, createProduct } = useProductStore();
-    const { categories, fetchCategories } = useCategoryStore();
+    // Cada variante nueva fija un precio: crear exige también ADMINISTRAR_PRECIOS.
+    const canAccess = useAuthStore((state) =>
+        hasPermission(state.user, 'ADMINISTRAR_PRODUCTOS') && hasPermission(state.user, 'ADMINISTRAR_PRECIOS'));
+    const createProduct = useCreateProduct();
+    const { categories } = useCategories();
     const user = useAuthStore((state) => state.user);
-    const token = useAuthStore((state) => state.token);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (token) {
-            fetchCategories(token).catch(() => {});
-        }
-    }, [fetchCategories, token]);
-
     async function handleSubmit(formData: ProductFormData) {
-        if (!token) return;
         setIsSubmitting(true);
         setErrorMessage(null);
         try {
-            await createProduct(toProductRequest(formData), token);
-            setSuccessMessage('¡Producto creado exitosamente!');
+            await createProduct.mutateAsync(toProductRequest(formData));
+            // El toast sigue visible después de volver al listado.
+            showToast({ type: 'success', message: 'Producto creado.' });
             router.back();
         } catch (error: unknown) {
             setErrorMessage(
@@ -52,6 +49,7 @@ export default function NewProductScreen() {
             variants: formData.variants.map((variant) => ({
                 sku: variant.sku,
                 price: Number(variant.price.replace(',', '.')),
+                barcode: variant.barcode || null,
                 attributeValueIds: variant.attributes.map((attribute) =>
                     Number(attribute.attributeValueId)
                 ),
@@ -65,40 +63,20 @@ export default function NewProductScreen() {
         };
     }
 
+    if (!canAccess) {
+        return (
+            <NotFound
+                headerTitle="Nuevo producto"
+                title="Sin permisos"
+                description={'Crear productos requiere los permisos "Administrar productos" y "Administrar precios".'}
+            />
+        );
+    }
+
     return (
         <Screen style={styles.container}>
-            {/* Header con botón Back */}
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                    disabled={isSubmitting}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>Nuevo Producto</Text>
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader onBack={isSubmitting ? undefined : () => router.back()} eyebrow="Productos" title="Nuevo producto" />
 
-            {/* Banner de Éxito */}
-            {successMessage && (
-                <View style={SharedStyles.successBanner}>
-                    <SymbolView
-                        name={{
-                            ios: 'checkmark.circle.fill',
-                            android: 'check_circle',
-                            web: 'check_circle',
-                        }}
-                        size={20}
-                        tintColor={Colors.success}
-                    />
-                    <Text style={SharedStyles.successText}>{successMessage}</Text>
-                </View>
-            )}
             {errorMessage && (
                 <View style={styles.errorBanner}>
                     <Text style={styles.errorText}>{errorMessage}</Text>
@@ -109,7 +87,6 @@ export default function NewProductScreen() {
             <ProductForm
                 categories={categories}
                 branches={user?.branches ?? []}
-                existingProducts={products}
                 onSubmit={handleSubmit}
                 onCancel={() => router.back()}
                 isSubmitting={isSubmitting}

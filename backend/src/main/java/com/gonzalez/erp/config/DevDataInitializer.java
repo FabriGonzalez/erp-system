@@ -28,7 +28,7 @@ public class DevDataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        if (userRepository.findByUsername(platformAdminUsername).isPresent()) {
+        if (userRepository.findByUsernameIgnoreCase(platformAdminUsername).isPresent()) {
             log.info("Platform admin '{}' already exists. Skipping.", platformAdminUsername);
             return;
         }

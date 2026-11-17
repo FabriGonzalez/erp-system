@@ -1,8 +1,10 @@
 package com.gonzalez.erp.modules.transfers.controller;
 
 import com.gonzalez.erp.common.dto.ErrorResponse;
+import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.modules.transfers.dto.request.StockTransferRequest;
 import com.gonzalez.erp.modules.transfers.dto.response.StockTransferResponse;
+import com.gonzalez.erp.modules.transfers.exception.InvalidStockTransferException;
 import com.gonzalez.erp.modules.transfers.service.StockTransferService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -12,12 +14,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/inventory/transfers")
@@ -28,13 +31,27 @@ import java.util.List;
 )
 public class StockTransferController {
 
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final StockTransferService stockTransferService;
 
     @PreAuthorize("hasAnyAuthority('TRANSFERIR_STOCK','CONSULTAR_STOCK')")
     @GetMapping
-        @Operation(summary = "Listar transferencias", description = "Obtiene todas las transferencias de stock.")
-        public ResponseEntity<List<StockTransferResponse>> findAll() {
-                return ResponseEntity.ok(stockTransferService.findAll());
+    @Operation(summary = "Listar transferencias", description = "Lista paginada de las transferencias de la empresa autenticada, de la más nueva a la más vieja. Incluye las anuladas.")
+    public ResponseEntity<PageResponse<StockTransferResponse>> findAll(
+            @Parameter(description = "Número de página, base 0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Tamaño de página (1 a " + MAX_PAGE_SIZE + ")")
+            @RequestParam(defaultValue = "20") int size) {
+        if (page < 0) {
+            throw new InvalidStockTransferException("page must be greater than or equal to 0");
+        }
+        if (size < 1 || size > MAX_PAGE_SIZE) {
+            throw new InvalidStockTransferException("size must be between 1 and " + MAX_PAGE_SIZE);
+        }
+        Pageable pageable = PageRequest.of(page, size,
+                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+        return ResponseEntity.ok(stockTransferService.findAll(pageable));
     }
 
     @PreAuthorize("hasAnyAuthority('TRANSFERIR_STOCK','CONSULTAR_STOCK')")

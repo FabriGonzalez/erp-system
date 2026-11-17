@@ -2,7 +2,6 @@ package com.gonzalez.erp.modules.products.dto.request;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
@@ -10,17 +9,24 @@ import java.math.BigDecimal;
 import java.util.List;
 
 public record ProductVariantRequest(
-        @NotBlank(message = "SKU is required")
+        // Vacío = lo genera el backend, único en la empresa (ProductServiceImpl.resolveSkus).
         @Size(max = 50, message = "SKU must not exceed 50 characters")
         String sku,
 
         @NotNull(message = "Variant price is required")
-        @DecimalMin(value = "0.0", message = "Variant price cannot be negative")
+        @DecimalMin(value = "0.0", inclusive = false, message = "Variant price must be greater than 0")
         BigDecimal price,
 
-        @NotNull(message = "At least one attribute value is required")
-        @Size(min = 1, message = "At least one attribute value is required")
+        // Opcional; único por empresa cuando está.
+        @Size(max = 64, message = "Barcode must not exceed 64 characters")
+        String barcode,
+
+        // Vacío = producto sin variantes (una sola variante sin atributos).
         List<Long> attributeValueIds,
 
         List<@Valid InitialStockRequest> initialStock
-) {}
+) {
+    public ProductVariantRequest {
+        attributeValueIds = attributeValueIds == null ? List.of() : attributeValueIds;
+    }
+}

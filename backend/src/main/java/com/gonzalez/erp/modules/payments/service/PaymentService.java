@@ -1,9 +1,9 @@
 package com.gonzalez.erp.modules.payments.service;
 
+import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.modules.payments.dto.request.PaymentRequest;
 import com.gonzalez.erp.modules.payments.dto.response.PaymentResponse;
-
-import java.util.List;
+import org.springframework.data.domain.Pageable;
 
 public interface PaymentService {
 
@@ -13,5 +13,6 @@ public interface PaymentService {
 
     PaymentResponse getPaymentById(Long id);
 
-    List<PaymentResponse> getPayments(Long customerId);
+    /** Pagos de la empresa (opcionalmente de un cliente), del más nuevo al más viejo. */
+    PageResponse<PaymentResponse> getPayments(Long customerId, Pageable pageable);
 }

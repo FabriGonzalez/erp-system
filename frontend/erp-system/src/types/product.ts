@@ -10,6 +10,8 @@ export type Category = {
 export type ProductVariantUpdateRequest = {
     sku: string;
     price: number;
+    // Opcional, único por empresa; null lo borra.
+    barcode?: string | null;
     attributeValueIds: number[];
     stock: ProductInitialStockRequest[];
 };
@@ -26,6 +28,9 @@ export type {
 export type ProductVariantAttribute = {
     attributeId: string;
     attributeValueId: string;
+    // Vienen en el producto del backend; las variantes que arma el formulario solo tienen ids.
+    attributeName?: string;
+    valueName?: string;
 };
 
 export type ProductUpdateRequest = {
@@ -43,6 +48,7 @@ export type ProductInitialStockRequest = {
 export type ProductVariantRequest = {
     sku: string;
     price: number;
+    barcode?: string | null;
     attributeValueIds: number[];
     initialStock?: ProductInitialStockRequest[];
 };
@@ -57,6 +63,7 @@ export type ProductRequest = {
 export type ProductVariantResponse = {
     id: number | string;
     sku: string;
+    barcode?: string | null;
     price: number;
     active: boolean;
     attributes: ProductAttributeValueResponse[];
@@ -80,6 +87,7 @@ export type ProductResponse = {
 export type ProductVariant = {
     id: string;
     sku: string;
+    barcode?: string;
     price: number;
     attributes: ProductVariantAttribute[];
     stockByBranch: Record<string, number>;
@@ -109,11 +117,29 @@ export type ProductFormData = {
         id?: string;
         sku: string;
         price: string;
+        // El código de barras no se muestra ni se edita por ahora, pero al editar se reenvía el
+        // que ya tenga la variante (p. ej. cargado desde Excel): el backend lo pisa con lo que llega.
+        barcode?: string;
         attributes: ProductVariantAttribute[];
         stockByBranch: Record<string, number>;
     }[];
 };
 
 export type StockFilter = 'ALL' | 'IN_STOCK' | 'OUT_OF_STOCK';
+
+/**
+ * Filtros del listado paginado de productos. stock se mide en branchId o, sin sucursal, en el
+ * total de la empresa; con attributeValueIds, solo sobre las variantes que coinciden.
+ */
+export type ProductListParams = {
+    q?: string;
+    categoryId?: string;
+    active?: boolean;
+    /** SELLABLE: con stock contando solo las variantes activas (catálogo de ventas). */
+    stock?: Exclude<StockFilter, 'ALL'> | 'SELLABLE';
+    branchId?: string;
+    /** Una misma variante tiene que tener, de cada atributo, alguno de estos valores. */
+    attributeValueIds?: string[];
+};
 
 export type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';

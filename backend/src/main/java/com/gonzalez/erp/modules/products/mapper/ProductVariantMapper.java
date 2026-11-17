@@ -40,6 +40,7 @@ public final class ProductVariantMapper {
         return new ProductVariantResponse(
                 variant.getId(),
                 variant.getSku(),
+                variant.getBarcode(),
                 variant.getPrice(),
                 variant.isActive(),
                 attributeValues,

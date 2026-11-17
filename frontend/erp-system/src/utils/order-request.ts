@@ -1,5 +1,13 @@
 import { CUSTOMER_ANONYMOUS, Customer } from '@/types/customer';
-import { OrderItem, OrderItemRequest, OrderRequest, PaymentMethod } from '@/types/order';
+import {
+    NEW_PROMO_LINE_PREFIX,
+    OrderItem,
+    OrderItemRequest,
+    OrderPromo,
+    OrderPromoRequest,
+    OrderRequest,
+    PaymentMethod,
+} from '@/types/order';
 
 type DraftPayment = {
     customer: Customer;
@@ -10,13 +18,13 @@ type DraftPayment = {
 
 /**
  * Opciones de pago del alta. Las ventas sin cliente se cobran completas en el
- * backend, así que no envían crédito ni pago.
+ * backend: no envían crédito ni pago, solo el medio.
  */
 export function toOrderPaymentOptions(
     draft: DraftPayment
-): Pick<OrderRequest, 'applyCredit' | 'initialPayment'> {
+): Pick<OrderRequest, 'applyCredit' | 'initialPayment' | 'paymentMethod'> {
     if (toBackendCustomerId(draft.customer) === undefined) {
-        return {};
+        return { paymentMethod: draft.paymentMethod };
     }
 
     const amount = Number.isFinite(draft.amountPaid) ? Math.max(0, draft.amountPaid) : 0;
@@ -27,15 +35,10 @@ export function toOrderPaymentOptions(
     };
 }
 
-// Los clientes todavía provienen de datos locales; solo los ids numéricos
-// corresponden a un cliente real del backend.
+// Todos los clientes vienen del backend; el consumidor final es el único que no
+// existe allí y el pedido se envía sin cliente.
 export function toBackendCustomerId(customer: Customer): number | undefined {
-    if (customer.id === CUSTOMER_ANONYMOUS.id) {
-        return undefined;
-    }
-
-    const id = Number(customer.id);
-    return Number.isInteger(id) && id > 0 ? id : undefined;
+    return customer.id === CUSTOMER_ANONYMOUS.id ? undefined : Number(customer.id);
 }
 
 export function toOrderItemRequests(items: OrderItem[]): OrderItemRequest[] {
@@ -43,4 +46,21 @@ export function toOrderItemRequests(items: OrderItem[]): OrderItemRequest[] {
         productVariantId: Number(item.variantId),
         quantity: item.quantity,
     }));
+}
+
+/**
+ * Las líneas nuevas mandan la promo y las variantes elegidas; las que el pedido ya tenía, solo
+ * su id y la cantidad (el backend conserva lo vendido).
+ */
+export function toOrderPromoRequests(promos: OrderPromo[]): OrderPromoRequest[] {
+    return promos.map((promo) => promo.id.startsWith(NEW_PROMO_LINE_PREFIX)
+        ? {
+            promotionId: Number(promo.promotionId),
+            quantity: promo.quantity,
+            variants: promo.components.map((component) => ({
+                productVariantId: Number(component.variantId),
+                quantity: component.quantity,
+            })),
+        }
+        : { id: Number(promo.id), quantity: promo.quantity });
 }

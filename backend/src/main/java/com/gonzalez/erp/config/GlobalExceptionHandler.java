@@ -2,94 +2,373 @@ package com.gonzalez.erp.config;
 
 import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.modules.auth.exception.InvalidPasswordChangeException;
+import com.gonzalez.erp.modules.auth.exception.TooManyLoginAttemptsException;
+import com.gonzalez.erp.modules.mercadopago.exception.MercadoPagoException;
+import com.gonzalez.erp.modules.store.dto.StoreCheckoutErrorResponse;
+import com.gonzalez.erp.modules.store.exception.StoreAuthException;
+import com.gonzalez.erp.modules.store.exception.StoreCheckoutException;
 import com.gonzalez.erp.modules.companies.exception.CompanyNameAlreadyExistsException;
+import com.gonzalez.erp.modules.companies.exception.CompanyNotActiveException;
+import com.gonzalez.erp.modules.companies.exception.CompanyTaxIdAlreadyExistsException;
+import com.gonzalez.erp.modules.companies.exception.InvalidCompanyStatusTransitionException;
+import com.gonzalez.erp.modules.companies.exception.StoreDomainAlreadyExistsException;
+import com.gonzalez.erp.modules.branches.exception.BranchAccessDeniedException;
+import com.gonzalez.erp.modules.branches.exception.BranchInactiveException;
 import com.gonzalez.erp.modules.branches.exception.BranchNameAlreadyExistsException;
 import com.gonzalez.erp.modules.categories.exception.CategoryNameAlreadyExistsException;
 import com.gonzalez.erp.modules.customers.exception.CustomerDocumentAlreadyExistsException;
+import com.gonzalez.erp.modules.customers.exception.CustomerManagedByStoreException;
+import com.gonzalez.erp.modules.customers.exception.InvalidCustomerAddressException;
 import com.gonzalez.erp.modules.customers.exception.InvalidCustomerDocumentException;
+import com.gonzalez.erp.modules.customers.exception.InvalidCustomerRequestException;
 import com.gonzalez.erp.modules.inventory.exception.InsufficientStockException;
 import com.gonzalez.erp.modules.inventory.exception.StockAlreadyExistsException;
+import com.gonzalez.erp.modules.inventory.exception.InvalidStockMovementQueryException;
+import com.gonzalez.erp.modules.inventory.exception.InvalidStockQueryException;
 import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
+import com.gonzalez.erp.modules.orders.exception.InactiveOrderCustomerException;
+import com.gonzalez.erp.modules.orders.exception.InactiveOrderVariantException;
 import com.gonzalez.erp.modules.orders.exception.InsufficientStockForEditException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderStatusTransitionException;
+import com.gonzalez.erp.modules.orders.exception.InvalidShippingAddressException;
 import com.gonzalez.erp.modules.orders.exception.QuickSaleValidationException;
 import com.gonzalez.erp.modules.payments.exception.InvalidPaymentException;
+import com.gonzalez.erp.modules.products.exception.AttributeNotInCategoryException;
+import com.gonzalez.erp.modules.products.exception.InvalidProductImageException;
+import com.gonzalez.erp.modules.products.exception.InvalidProductQueryException;
+import com.gonzalez.erp.modules.products.exception.InvalidProductVariantsException;
+import com.gonzalez.erp.modules.products.exception.PricePermissionRequiredException;
 import com.gonzalez.erp.modules.products.exception.ProductAttributeNameAlreadyExistsException;
+import com.gonzalez.erp.modules.products.exception.ProductImageRequiredException;
 import com.gonzalez.erp.modules.products.exception.ProductAttributeValueAlreadyExistsException;
 import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveException;
 import com.gonzalez.erp.modules.products.exception.ProductSkuAlreadyExistsException;
 import com.gonzalez.erp.modules.products.exception.ProductVariantSkuAlreadyExistsException;
+import com.gonzalez.erp.modules.reports.exception.InvalidReportRangeException;
+import com.gonzalez.erp.modules.products.exception.ProductVariantBarcodeAlreadyExistsException;
+import com.gonzalez.erp.modules.promotions.exception.InvalidPromotionException;
+import com.gonzalez.erp.modules.promotions.exception.InvalidPromotionQueryException;
+import com.gonzalez.erp.modules.promotions.exception.PromotionNotAvailableException;
 import com.gonzalez.erp.modules.roles.exception.RoleCodeAlreadyExistsException;
 import com.gonzalez.erp.modules.roles.exception.RoleNameAlreadyExistsException;
+import com.gonzalez.erp.modules.shipments.exception.InvalidShipmentException;
 import com.gonzalez.erp.modules.shipments.exception.OrderAlreadyHasShipmentException;
 import com.gonzalez.erp.modules.transfers.exception.InvalidStockTransferException;
 import com.gonzalez.erp.modules.users.exception.UserEmailAlreadyExistsException;
 import com.gonzalez.erp.modules.users.exception.UserUsernameAlreadyExistsException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.time.Instant;
 import java.util.List;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-        @ExceptionHandler(AccessDeniedException.class)
-        public ResponseEntity<ErrorResponse> handleAccessDenied(
-                        AccessDeniedException ex, HttpServletRequest request) {
-                return ResponseEntity
-                                .status(HttpStatus.FORBIDDEN)
-                                .body(ErrorResponse.of(
-                                                HttpStatus.FORBIDDEN.value(),
-                                                HttpStatus.FORBIDDEN.getReasonPhrase(),
-                                                ex.getMessage(),
-                                                request.getRequestURI()
-                                ));
-        }
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleResourceNotFound(
-            ResourceNotFoundException ex, HttpServletRequest request) {
+    // Más específico que AccessDeniedException: el frontend distingue "sucursal no accesible" de "sin permiso".
+    @ExceptionHandler(BranchAccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleBranchAccessDenied(
+            BranchAccessDeniedException ex, HttpServletRequest request) {
         return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
+                .status(HttpStatus.FORBIDDEN)
                 .body(ErrorResponse.of(
-                        HttpStatus.NOT_FOUND.value(),
-                        HttpStatus.NOT_FOUND.getReasonPhrase(),
+                        HttpStatus.FORBIDDEN.value(),
+                        HttpStatus.FORBIDDEN.getReasonPhrase(),
                         ex.getMessage(),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        "BRANCH_ACCESS_DENIED"
                 ));
     }
 
-    @ExceptionHandler({
-            CompanyNameAlreadyExistsException.class,
-            BranchNameAlreadyExistsException.class,
-            CategoryNameAlreadyExistsException.class,
-            RoleNameAlreadyExistsException.class,
-            RoleCodeAlreadyExistsException.class,
-            UserEmailAlreadyExistsException.class,
-            UserUsernameAlreadyExistsException.class,
-            ProductSkuAlreadyExistsException.class,
-            ProductVariantSkuAlreadyExistsException.class,
-            ProductAttributeNameAlreadyExistsException.class,
-            ProductAttributeValueAlreadyExistsException.class,
-            ProductCategoryNotActiveException.class,
-            CustomerDocumentAlreadyExistsException.class
-    })
-    public ResponseEntity<ErrorResponse> handleConflict(
-            RuntimeException ex, HttpServletRequest request) {
+    // El permiso depende de lo que cambia en el request, no del endpoint: el frontend lo explica aparte.
+    @ExceptionHandler(PricePermissionRequiredException.class)
+    public ResponseEntity<ErrorResponse> handlePricePermissionRequired(
+            PricePermissionRequiredException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of(
+                        HttpStatus.FORBIDDEN.value(),
+                        HttpStatus.FORBIDDEN.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "PRICE_PERMISSION_REQUIRED"
+                ));
+    }
+
+    @ExceptionHandler(InvalidProductImageException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidProductImage(
+            InvalidProductImageException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.UNPROCESSABLE_CONTENT)
+                .body(ErrorResponse.of(
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        ex.getCode()
+                ));
+    }
+
+    @ExceptionHandler(ProductImageRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleProductImageRequired(
+            ProductImageRequiredException ex, HttpServletRequest request) {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of(
                         HttpStatus.CONFLICT.value(),
                         HttpStatus.CONFLICT.getReasonPhrase(),
                         ex.getMessage(),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        "PRODUCT_IMAGE_REQUIRED"
+                ));
+    }
+
+    @ExceptionHandler(BranchInactiveException.class)
+    public ResponseEntity<ErrorResponse> handleBranchInactive(
+            BranchInactiveException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(
+                        HttpStatus.CONFLICT.value(),
+                        HttpStatus.CONFLICT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "BRANCH_INACTIVE"
+                ));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(
+            AccessDeniedException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of(
+                        HttpStatus.FORBIDDEN.value(),
+                        HttpStatus.FORBIDDEN.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "FORBIDDEN"
+                ));
+    }
+
+    // Sin este handler el catch-all de Exception devolvía 500 ante credenciales inválidas.
+    // El mensaje es siempre el mismo para no revelar si el usuario existe o está deshabilitado.
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthentication(
+            AuthenticationException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(ErrorResponse.of(
+                        HttpStatus.UNAUTHORIZED.value(),
+                        HttpStatus.UNAUTHORIZED.getReasonPhrase(),
+                        "Invalid credentials",
+                        request.getRequestURI(),
+                        "INVALID_CREDENTIALS"
+                ));
+    }
+
+    @ExceptionHandler(TooManyLoginAttemptsException.class)
+    public ResponseEntity<ErrorResponse> handleTooManyLoginAttempts(
+            TooManyLoginAttemptsException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .body(ErrorResponse.of(
+                        HttpStatus.TOO_MANY_REQUESTS.value(),
+                        HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "TOO_MANY_LOGIN_ATTEMPTS"
+                ));
+    }
+
+    @ExceptionHandler(StoreAuthException.class)
+    public ResponseEntity<ErrorResponse> handleStoreAuth(StoreAuthException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(ex.getStatus())
+                .body(ErrorResponse.of(
+                        ex.getStatus().value(),
+                        ex.getStatus().getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        ex.getCode()
+                ));
+    }
+
+    @ExceptionHandler(MercadoPagoException.class)
+    public ResponseEntity<ErrorResponse> handleMercadoPago(MercadoPagoException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(ex.getStatus())
+                .body(ErrorResponse.of(
+                        ex.getStatus().value(),
+                        ex.getStatus().getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        ex.getCode()
+                ));
+    }
+
+    @ExceptionHandler(StoreCheckoutException.class)
+    public ResponseEntity<StoreCheckoutErrorResponse> handleStoreCheckout(StoreCheckoutException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(ex.getStatus())
+                .body(new StoreCheckoutErrorResponse(
+                        Instant.now(),
+                        ex.getStatus().value(),
+                        ex.getStatus().getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        ex.getCode(),
+                        ex.getQuote()
+                ));
+    }
+
+    @ExceptionHandler(CompanyNotActiveException.class)
+    public ResponseEntity<ErrorResponse> handleCompanyNotActive(
+            CompanyNotActiveException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of(
+                        HttpStatus.FORBIDDEN.value(),
+                        HttpStatus.FORBIDDEN.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        ex.getCode()
+                ));
+    }
+
+    @ExceptionHandler(InvalidPasswordChangeException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidPasswordChange(
+            InvalidPasswordChangeException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        ex.getCode()
+                ));
+    }
+
+    @ExceptionHandler(InvalidCompanyStatusTransitionException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCompanyStatusTransition(
+            InvalidCompanyStatusTransitionException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(
+                        HttpStatus.CONFLICT.value(),
+                        HttpStatus.CONFLICT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "INVALID_COMPANY_STATUS_TRANSITION"
+                ));
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleResourceNotFound(
+            ResourceNotFoundException ex, HttpServletRequest request) {
+        logNotFound(request, ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(
+                        HttpStatus.NOT_FOUND.value(),
+                        HttpStatus.NOT_FOUND.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "NOT_FOUND"
+                ));
+    }
+
+    /** Duplicados y categoría inactiva, con code para que el frontend diga qué pasó. */
+    @ExceptionHandler({
+            CompanyNameAlreadyExistsException.class,
+            CompanyTaxIdAlreadyExistsException.class,
+            StoreDomainAlreadyExistsException.class,
+            BranchNameAlreadyExistsException.class,
+            CategoryNameAlreadyExistsException.class,
+            ProductSkuAlreadyExistsException.class,
+            ProductVariantSkuAlreadyExistsException.class,
+            ProductVariantBarcodeAlreadyExistsException.class,
+            ProductAttributeNameAlreadyExistsException.class,
+            ProductAttributeValueAlreadyExistsException.class,
+            ProductCategoryNotActiveException.class,
+            CustomerDocumentAlreadyExistsException.class,
+            CustomerManagedByStoreException.class
+    })
+    public ResponseEntity<ErrorResponse> handleConflict(
+            RuntimeException ex, HttpServletRequest request) {
+        String code = switch (ex) {
+            case CompanyNameAlreadyExistsException e -> "COMPANY_NAME_ALREADY_EXISTS";
+            case CompanyTaxIdAlreadyExistsException e -> "COMPANY_TAX_ID_ALREADY_EXISTS";
+            case StoreDomainAlreadyExistsException e -> "STORE_DOMAIN_ALREADY_EXISTS";
+            case BranchNameAlreadyExistsException e -> "BRANCH_NAME_ALREADY_EXISTS";
+            case CategoryNameAlreadyExistsException e -> "CATEGORY_NAME_ALREADY_EXISTS";
+            case ProductSkuAlreadyExistsException e -> "PRODUCT_SKU_ALREADY_EXISTS";
+            case ProductVariantSkuAlreadyExistsException e -> "VARIANT_SKU_ALREADY_EXISTS";
+            case ProductVariantBarcodeAlreadyExistsException e -> "VARIANT_BARCODE_ALREADY_EXISTS";
+            case ProductAttributeNameAlreadyExistsException e -> "ATTRIBUTE_NAME_ALREADY_EXISTS";
+            case ProductAttributeValueAlreadyExistsException e -> "ATTRIBUTE_VALUE_ALREADY_EXISTS";
+            case ProductCategoryNotActiveException e -> "CATEGORY_INACTIVE";
+            case CustomerManagedByStoreException e -> "CUSTOMER_MANAGED_BY_STORE";
+            default -> "CUSTOMER_DOCUMENT_ALREADY_EXISTS";
+        };
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(
+                        HttpStatus.CONFLICT.value(),
+                        HttpStatus.CONFLICT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        code
+                ));
+    }
+
+    /** Duplicados de usuarios y roles, con code para que el frontend diga qué campo se repite. */
+    @ExceptionHandler({
+            UserUsernameAlreadyExistsException.class,
+            UserEmailAlreadyExistsException.class,
+            RoleNameAlreadyExistsException.class,
+            RoleCodeAlreadyExistsException.class
+    })
+    public ResponseEntity<ErrorResponse> handleUserOrRoleConflict(
+            RuntimeException ex, HttpServletRequest request) {
+        String code = switch (ex) {
+            case UserUsernameAlreadyExistsException e -> "USERNAME_ALREADY_EXISTS";
+            case UserEmailAlreadyExistsException e -> "EMAIL_ALREADY_EXISTS";
+            case RoleNameAlreadyExistsException e -> "ROLE_NAME_ALREADY_EXISTS";
+            default -> "ROLE_CODE_ALREADY_EXISTS";
+        };
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(
+                        HttpStatus.CONFLICT.value(),
+                        HttpStatus.CONFLICT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        code
                 ));
     }
 
@@ -102,7 +381,28 @@ public class GlobalExceptionHandler {
                         HttpStatus.CONFLICT.value(),
                         HttpStatus.CONFLICT.getReasonPhrase(),
                         ex.getMessage(),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        "ORDER_ALREADY_HAS_SHIPMENT"
+                ));
+    }
+
+    @ExceptionHandler({
+            InvalidCustomerAddressException.class,
+            InvalidCustomerRequestException.class
+    })
+    public ResponseEntity<ErrorResponse> handleInvalidCustomerRequest(
+            RuntimeException ex, HttpServletRequest request) {
+        String code = ex instanceof InvalidCustomerAddressException
+                ? "INVALID_CUSTOMER_ADDRESS"
+                : "INVALID_CUSTOMER_QUERY";
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        code
                 ));
     }
 
@@ -115,20 +415,43 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_REQUEST.value(),
                         HttpStatus.BAD_REQUEST.getReasonPhrase(),
                         ex.getMessage(),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        "INVALID_CUSTOMER_DOCUMENT"
+                ));
+    }
+
+    @ExceptionHandler({
+            InvalidProductVariantsException.class,
+            AttributeNotInCategoryException.class
+    })
+    public ResponseEntity<ErrorResponse> handleInvalidProductVariants(
+            RuntimeException ex, HttpServletRequest request) {
+        String code = ex instanceof AttributeNotInCategoryException
+                ? "ATTRIBUTE_NOT_IN_CATEGORY"
+                : "INVALID_PRODUCT_VARIANTS";
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        code
                 ));
     }
 
     @ExceptionHandler(StockNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleStockNotFound(
             StockNotFoundException ex, HttpServletRequest request) {
+        logNotFound(request, ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of(
                         HttpStatus.NOT_FOUND.value(),
                         HttpStatus.NOT_FOUND.getReasonPhrase(),
                         ex.getMessage(),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        "STOCK_NOT_FOUND"
                 ));
     }
 
@@ -141,7 +464,8 @@ public class GlobalExceptionHandler {
                         HttpStatus.CONFLICT.value(),
                         HttpStatus.CONFLICT.getReasonPhrase(),
                         ex.getMessage(),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        "STOCK_ALREADY_EXISTS"
                 ));
     }
 
@@ -154,7 +478,76 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_REQUEST.value(),
                         HttpStatus.BAD_REQUEST.getReasonPhrase(),
                         ex.getMessage(),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        "INVALID_STOCK_TRANSFER"
+                ));
+    }
+
+    @ExceptionHandler(InvalidPromotionException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidPromotion(
+            InvalidPromotionException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "INVALID_PROMOTION"
+                ));
+    }
+
+    // La promo existe pero hoy no se puede vender (no vigente o con una variante inactiva).
+    @ExceptionHandler(PromotionNotAvailableException.class)
+    public ResponseEntity<ErrorResponse> handlePromotionNotAvailable(
+            PromotionNotAvailableException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(
+                        HttpStatus.CONFLICT.value(),
+                        HttpStatus.CONFLICT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "PROMOTION_NOT_AVAILABLE"
+                ));
+    }
+
+    @ExceptionHandler(InvalidReportRangeException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidReportRange(
+            InvalidReportRangeException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "INVALID_REPORT_RANGE"
+                ));
+    }
+
+    @ExceptionHandler({
+            InvalidStockMovementQueryException.class,
+            InvalidStockQueryException.class,
+            InvalidProductQueryException.class,
+            InvalidPromotionQueryException.class
+    })
+    public ResponseEntity<ErrorResponse> handleInvalidListQuery(
+            RuntimeException ex, HttpServletRequest request) {
+        String code = switch (ex) {
+            case InvalidStockQueryException e -> "INVALID_STOCK_QUERY";
+            case InvalidProductQueryException e -> "INVALID_PRODUCT_QUERY";
+            case InvalidPromotionQueryException e -> "INVALID_PROMOTION_QUERY";
+            default -> "INVALID_STOCK_MOVEMENT_QUERY";
+        };
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        code
                 ));
     }
 
@@ -182,11 +575,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             InvalidOrderException.class,
             QuickSaleValidationException.class,
-            InvalidPaymentException.class
+            InvalidPaymentException.class,
+            InactiveOrderCustomerException.class,
+            InactiveOrderVariantException.class,
+            InvalidShippingAddressException.class,
+            InvalidShipmentException.class
     })
     public ResponseEntity<ErrorResponse> handleInvalidOrder(
             RuntimeException ex, HttpServletRequest request) {
-        String code = ex instanceof QuickSaleValidationException ? "QUICK_SALE_INVALID" : "INVALID_ORDER";
+        String code = ex instanceof QuickSaleValidationException ? "QUICK_SALE_INVALID"
+                : ex instanceof InactiveOrderCustomerException ? "CUSTOMER_INACTIVE"
+                : ex instanceof InactiveOrderVariantException ? "VARIANT_INACTIVE"
+                : ex instanceof InvalidShippingAddressException ? "INVALID_SHIPPING_ADDRESS"
+                : ex instanceof InvalidShipmentException ? "INVALID_SHIPMENT"
+                : ex instanceof InvalidPaymentException ? "INVALID_PAYMENT"
+                : "INVALID_ORDER";
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of(
@@ -195,6 +598,22 @@ public class GlobalExceptionHandler {
                         ex.getMessage(),
                         request.getRequestURI(),
                         code
+                ));
+    }
+
+    // JSON mal formado o con tipos incompatibles: antes caía en el catch-all como 500.
+    // No se devuelve el detalle de Jackson para no exponer tipos internos.
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableBody(
+            HttpMessageNotReadableException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        "Malformed request body",
+                        request.getRequestURI(),
+                        "MALFORMED_REQUEST"
                 ));
     }
 
@@ -212,7 +631,8 @@ public class GlobalExceptionHandler {
                         HttpStatus.BAD_REQUEST.value(),
                         HttpStatus.BAD_REQUEST.getReasonPhrase(),
                         String.join("; ", errors),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        "VALIDATION_ERROR"
                 ));
     }
 
@@ -225,20 +645,109 @@ public class GlobalExceptionHandler {
                         HttpStatus.CONFLICT.value(),
                         HttpStatus.CONFLICT.getReasonPhrase(),
                         "Resource already exists or violates a data constraint",
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        "DATA_INTEGRITY_VIOLATION"
                 ));
     }
 
+    // Errores de Spring MVC: antes caían en el catch-all como 500. Como con el JSON mal formado,
+    // no se devuelve el detalle del framework.
+
+    /** ?type=FOO o un id no numérico en la ruta (p. ej. /movements/stock/1 contra /{id}). */
+    @ExceptionHandler({
+            MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class,
+            MissingServletRequestPartException.class
+    })
+    public ResponseEntity<ErrorResponse> handleInvalidParameter(
+            Exception ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                        "Invalid or missing request parameter",
+                        request.getRequestURI(),
+                        "INVALID_PARAMETER"
+                ));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(
+            HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(ErrorResponse.of(
+                        HttpStatus.METHOD_NOT_ALLOWED.value(),
+                        HttpStatus.METHOD_NOT_ALLOWED.getReasonPhrase(),
+                        "HTTP method not supported for this endpoint",
+                        request.getRequestURI(),
+                        "METHOD_NOT_ALLOWED"
+                ));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(
+            HttpMediaTypeNotSupportedException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(ErrorResponse.of(
+                        HttpStatus.UNSUPPORTED_MEDIA_TYPE.value(),
+                        HttpStatus.UNSUPPORTED_MEDIA_TYPE.getReasonPhrase(),
+                        "Unsupported content type",
+                        request.getRequestURI(),
+                        "UNSUPPORTED_MEDIA_TYPE"
+                ));
+    }
+
+    /** Archivo más grande que spring.servlet.multipart.max-file-size (importación). */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSize(
+            MaxUploadSizeExceededException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.CONTENT_TOO_LARGE)
+                .body(ErrorResponse.of(
+                        HttpStatus.CONTENT_TOO_LARGE.value(),
+                        HttpStatus.CONTENT_TOO_LARGE.getReasonPhrase(),
+                        "Uploaded file is too large",
+                        request.getRequestURI(),
+                        "FILE_TOO_LARGE"
+                ));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResource(
+            NoResourceFoundException ex, HttpServletRequest request) {
+        logNotFound(request, "Endpoint not found");
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(
+                        HttpStatus.NOT_FOUND.value(),
+                        HttpStatus.NOT_FOUND.getReasonPhrase(),
+                        "Endpoint not found",
+                        request.getRequestURI(),
+                        "NOT_FOUND"
+                ));
+    }
+
+    /** Sin stack trace: alcanza con saber qué recurso faltó y en qué request. */
+    private void logNotFound(HttpServletRequest request, String message) {
+        log.warn("404 on {} {}: {}", request.getMethod(), request.getRequestURI(), message);
+    }
+
+    /** Lo inesperado se loguea completo y no se le muestra el detalle interno al cliente. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(
             Exception ex, HttpServletRequest request) {
+        log.error("Unhandled exception on {} {}", request.getMethod(), request.getRequestURI(), ex);
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of(
                         HttpStatus.INTERNAL_SERVER_ERROR.value(),
                         HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(),
-                        ex.getMessage(),
-                        request.getRequestURI()
+                        "Internal server error",
+                        request.getRequestURI(),
+                        "INTERNAL_ERROR"
                 ));
     }
 }

@@ -1,9 +1,14 @@
 package com.gonzalez.erp.modules.products.controller;
 
 import com.gonzalez.erp.common.dto.ErrorResponse;
+import com.gonzalez.erp.common.dto.PageResponse;
+import com.gonzalez.erp.modules.products.dto.request.ProductPublicationRequest;
 import com.gonzalez.erp.modules.products.dto.request.ProductRequest;
+import com.gonzalez.erp.modules.products.dto.request.ProductSearchCriteria;
+import com.gonzalez.erp.modules.products.dto.request.ProductStockFilter;
 import com.gonzalez.erp.modules.products.dto.request.ProductUpdateRequest;
 import com.gonzalez.erp.modules.products.dto.response.ProductResponse;
+import com.gonzalez.erp.modules.products.exception.InvalidProductQueryException;
 import com.gonzalez.erp.modules.products.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -13,6 +18,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -26,14 +34,61 @@ import java.util.List;
 @Tag(name = "Products", description = "Operaciones CRUD para gestión de productos")
 public class ProductController {
 
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final ProductService productService;
 
     @GetMapping
-    @Operation(summary = "Listar productos", description = "Obtiene todos los productos. Opcionalmente filtrar por estado activo/inactivo.")
-    public ResponseEntity<List<ProductResponse>> findAll(
-            @Parameter(description = "Filtrar por estado: true (activos) o false (inactivos). Si no se envía, retorna todos.")
-            @RequestParam(required = false) Boolean active) {
-        return ResponseEntity.ok(productService.findAll(active));
+    @Operation(summary = "Listar productos",
+               description = "Paginado. q busca por nombre o SKU de alguna variante, sin distinguir mayúsculas ni tildes. "
+                       + "stock filtra por la suma de las variantes en branchId o, sin branchId, en toda la empresa; "
+                       + "con attributeValueIds, solo de las variantes que coinciden. "
+                       + "SELLABLE es IN_STOCK contando solo las variantes activas. "
+                       + "sort: name o createdAt, con ,asc o ,desc. Cada variante trae su stock por sucursal.")
+    @ApiResponse(responseCode = "400", description = "Parámetros de paginación u orden inválidos",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<PageResponse<ProductResponse>> findAll(
+            @Parameter(description = "true (activos) o false (inactivos). Si no se envía, todos.")
+            @RequestParam(required = false) Boolean active,
+            @Parameter(description = "ID de la categoría")
+            @RequestParam(required = false) Long categoryId,
+            @Parameter(description = "Texto a buscar en el nombre o el SKU")
+            @RequestParam(required = false) String q,
+            @Parameter(description = "IN_STOCK, OUT_OF_STOCK o SELLABLE")
+            @RequestParam(required = false) ProductStockFilter stock,
+            @Parameter(description = "Sucursal en la que se mide el filtro de stock")
+            @RequestParam(required = false) Long branchId,
+            @Parameter(description = "IDs de valores de atributo separados por coma. Una misma variante tiene que "
+                    + "tener, de cada atributo, alguno de los valores pedidos de ese atributo")
+            @RequestParam(required = false) List<Long> attributeValueIds,
+            @Parameter(description = "Número de página, base 0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Tamaño de página (1 a " + MAX_PAGE_SIZE + ")")
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "name,asc") String sort) {
+        if (page < 0 || size < 1 || size > MAX_PAGE_SIZE) {
+            throw new InvalidProductQueryException(
+                    "page must be >= 0 and size between 1 and " + MAX_PAGE_SIZE);
+        }
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        ProductSearchCriteria criteria = new ProductSearchCriteria(active, categoryId, q, stock, branchId, attributeValueIds);
+        return ResponseEntity.ok(productService.findAll(criteria, pageable));
+    }
+
+    private Sort parseSort(String sort) {
+        String[] parts = sort.split(",");
+        String field = parts[0].trim();
+        String direction = parts.length == 2 ? parts[1].trim().toLowerCase() : "asc";
+        if (parts.length > 2 || (!direction.equals("asc") && !direction.equals("desc"))) {
+            throw new InvalidProductQueryException("sort must be <field>[,asc|desc]");
+        }
+        Sort.Direction dir = direction.equals("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
+        // El id desempata para que la paginación sea estable.
+        return switch (field) {
+            case "name" -> Sort.by(dir, "name").and(Sort.by(dir, "id"));
+            case "createdAt" -> Sort.by(dir, "createdAt").and(Sort.by(dir, "id"));
+            default -> throw new InvalidProductQueryException("sort field must be one of: name, createdAt");
+        };
     }
 
     @GetMapping("/{id}")
@@ -94,5 +149,24 @@ public class ProductController {
             @Parameter(description = "ID del producto a activar")
             @PathVariable Long id) {
         return ResponseEntity.ok(productService.activate(id));
+    }
+
+    // Endpoint propio y no un campo de la edición: la edición reemplaza el producto entero y el
+    // panel de la tienda podría pisar precios o variantes cambiados en el ERP mientras tanto.
+    @PreAuthorize("hasAuthority('ADMINISTRAR_TIENDA')")
+    @PatchMapping("/{id}/publication")
+    @Operation(summary = "Publicar o despublicar en la tienda",
+            description = "Publicar exige al menos una foto, propia o de alguna variante. Despublicar siempre se puede. "
+                    + "Un producto inactivo puede quedar publicado: la tienda lo muestra recién cuando se reactiva.")
+    @ApiResponse(responseCode = "200", description = "Publicación actualizada")
+    @ApiResponse(responseCode = "404", description = "Producto no encontrado",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "409", description = "El producto no tiene fotos (PRODUCT_IMAGE_REQUIRED)",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<ProductResponse> updatePublication(
+            @Parameter(description = "ID del producto")
+            @PathVariable Long id,
+            @Valid @RequestBody ProductPublicationRequest request) {
+        return ResponseEntity.ok(productService.updatePublication(id, request.publishedOnline()));
     }
 }

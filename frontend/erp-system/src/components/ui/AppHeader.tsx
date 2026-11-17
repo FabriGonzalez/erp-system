@@ -4,17 +4,15 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from '@/components/ui/Avatar';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
 import { SharedStyles } from '@/styles/shared';
 import { getInitials } from '@/utils/format';
 
 export function AppHeader() {
     const user = useAuthStore((state) => state.user);
 
-    const activeBranch = useBranchStore(
-        (state) => state.activeBranch
-    );
+    const activeBranch = useActiveBranch();
 
     return (
         <View style={styles.container}>
@@ -77,4 +75,4 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 2,
     },
-});
+});

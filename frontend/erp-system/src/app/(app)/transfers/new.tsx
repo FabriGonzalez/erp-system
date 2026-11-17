@@ -1,0 +1,359 @@
+import { router } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import { CartSummaryBar } from '@/components/products/CartSummaryBar';
+import { VariantCatalog } from '@/components/products/VariantCatalog';
+import { AppButton } from '@/components/ui/AppButton';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { FilterChip } from '@/components/ui/FilterChip';
+import { FormField } from '@/components/ui/FormField';
+import { FormFooter } from '@/components/ui/FormFooter';
+import { FormSection } from '@/components/ui/FormSection';
+import { ModalScreen } from '@/components/ui/ModalScreen';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Screen } from '@/components/ui/Screen';
+import { Colors } from '@/constants/colors';
+import { Radius, Spacing } from '@/constants/spacing';
+import { useActiveBranch, useBranches } from '@/hooks/use-branch-queries';
+import { useVariantStock } from '@/hooks/use-stock-queries';
+import { useCreateTransfer } from '@/hooks/use-transfer-queries';
+import { SharedStyles } from '@/styles/shared';
+import { Product } from '@/types/product';
+
+type DraftItem = {
+    productId: string;
+    productName: string;
+    variantId: string;
+    sku: string;
+    // "Color: Rojo · Talle: M", tomado del producto al agregarlo (vienen los nombres).
+    attributesLabel: string;
+    quantity: number;
+};
+
+type Draft = {
+    originId: string;
+    destinationId: string | null;
+    items: DraftItem[];
+};
+
+function emptyDraft(originId: string): Draft {
+    return { originId, destinationId: null, items: [] };
+}
+
+export default function NewTransferScreen() {
+    const origin = useActiveBranch();
+    // El destino puede ser cualquier sucursal activa de la empresa, asignada o no.
+    const { branches: allBranches } = useBranches();
+    const createTransfer = useCreateTransfer();
+
+    const originId = origin?.id ?? '';
+    const [draft, setDraft] = useState<Draft>(() => emptyDraft(originId));
+    const [isCatalogVisible, setCatalogVisible] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+
+    // Lo elegido vale para una sucursal de origen: si cambia la activa, se empieza de nuevo.
+    const currentDraft = draft.originId === originId ? draft : emptyDraft(originId);
+    const { destinationId, items } = currentDraft;
+
+    function updateDraft(change: (current: Draft) => Draft) {
+        setDraft((previous) => change(previous.originId === originId ? previous : emptyDraft(originId)));
+    }
+
+    function setItems(change: (current: DraftItem[]) => DraftItem[]) {
+        updateDraft((current) => ({ ...current, items: change(current.items) }));
+    }
+
+    const destinations = useMemo(
+        () => allBranches.filter((branch) => branch.active !== false && branch.id !== originId),
+        [allBranches, originId],
+    );
+
+    // Stock en origen de lo elegido, al día (se vuelve a pedir al abrir y tras cada operación),
+    // sin depender de qué páginas del catálogo se cargaron.
+    const { stockOf } = useVariantStock(originId, items.map((item) => item.variantId));
+
+    // Solo se marca cuando se sabe: mientras llega el stock de una variante nueva no se avisa.
+    const exceedsStock = (item: DraftItem) => {
+        const stock = stockOf(item.variantId);
+        return stock !== undefined && item.quantity > stock;
+    };
+    const hasStockProblems = items.some(exceedsStock);
+    const totalUnits = items.reduce((sum, item) => sum + item.quantity, 0);
+    // Qué se eligió, para la barra del catálogo; el SKU distingue variantes del mismo producto.
+    const selectionSummary = items
+        .map((item) => {
+            const repeated = items.some((other) => other !== item && other.productId === item.productId);
+            return `${item.productName}${repeated ? ` (${item.sku})` : ''} ×${item.quantity}`;
+        })
+        .join(' · ');
+    const canSubmit = Boolean(destinationId) && items.length > 0 && !hasStockProblems && !createTransfer.isPending;
+
+    // Bajar siempre se puede (aunque el stock haya bajado o no haya llegado); subir, hasta el
+    // stock. Solo llegar a 0 saca el ítem.
+    function setQuantity(variantId: string, quantity: number, stock: number) {
+        setItems((current) => {
+            const item = current.find((candidate) => candidate.variantId === variantId);
+            if (!item) return current;
+            const target = quantity <= item.quantity
+                ? quantity
+                : Math.min(quantity, Math.max(stock, item.quantity));
+            if (target <= 0) return current.filter((candidate) => candidate.variantId !== variantId);
+            return current.map((candidate) => candidate.variantId === variantId ? { ...candidate, quantity: target } : candidate);
+        });
+    }
+
+    function addItem(product: Product, stock: number, variantId: string) {
+        setItems((current) => {
+            const existing = current.find((item) => item.variantId === variantId);
+            if (existing) {
+                return current.map((item) =>
+                    item.variantId === variantId ? { ...item, quantity: Math.min(item.quantity + 1, stock) } : item,
+                );
+            }
+
+            const variant = product.variants.find((candidate) => candidate.id === variantId);
+            if (!variant || stock <= 0) return current;
+            return [...current, {
+                productId: product.id,
+                productName: product.name,
+                variantId,
+                sku: variant.sku,
+                attributesLabel: variant.attributes
+                    .map(({ attributeName, valueName }) =>
+                        attributeName && valueName ? `${attributeName}: ${valueName}` : null)
+                    .filter(Boolean)
+                    .join(' · '),
+                quantity: 1,
+            }];
+        });
+    }
+
+    async function handleSubmit() {
+        if (!origin || !destinationId || !canSubmit) return;
+
+        setSubmitError(null);
+        try {
+            const transfer = await createTransfer.mutateAsync({
+                originBranchId: origin.id,
+                destinationBranchId: destinationId,
+                items: items.map((item) => ({ variantId: item.variantId, quantity: item.quantity })),
+            });
+            router.replace({ pathname: '/transfers/[id]', params: { id: transfer.id } });
+        } catch (error) {
+            setSubmitError(error instanceof Error ? error.message : 'No se pudo crear la transferencia.');
+        }
+    }
+
+    const header = (
+        <PageHeader onBack={() => router.back()} eyebrow="Transferencias" title="Nueva transferencia" />
+    );
+
+    if (!origin) {
+        return (
+            <Screen style={styles.screen}>
+                {header}
+                <EmptyState
+                    title="Sin sucursal activa"
+                    description="La transferencia sale de la sucursal activa. Elegila en Más → Sucursal activa."
+                />
+            </Screen>
+        );
+    }
+
+    return (
+        <Screen style={styles.screen}>
+            {header}
+
+            <ScrollView contentContainerStyle={SharedStyles.pageContent} showsVerticalScrollIndicator={false}>
+                <FormSection title="Recorrido">
+                    <FormField label="Origen" hint="Es la sucursal activa.">
+                        <Text style={styles.originName}>{origin.name}</Text>
+                    </FormField>
+
+                    <FormField label="Destino">
+                        {destinations.length === 0 ? (
+                            <Text style={styles.hint}>No hay otras sucursales activas.</Text>
+                        ) : (
+                            <View style={styles.chips}>
+                                {destinations.map((branch) => (
+                                    <FilterChip
+                                        key={branch.id}
+                                        label={branch.name}
+                                        selected={destinationId === branch.id}
+                                        onPress={() => updateDraft((current) => ({ ...current, destinationId: branch.id }))}
+                                    />
+                                ))}
+                            </View>
+                        )}
+                    </FormField>
+                </FormSection>
+
+                <FormSection title="Productos" actionLabel="Agregar" onAction={() => setCatalogVisible(true)}>
+
+                    {items.length === 0 ? (
+                        <Text style={styles.hint}>Agregá los productos que salen de {origin.name}.</Text>
+                    ) : (
+                        items.map((item) => {
+                            const knownStock = stockOf(item.variantId);
+                            // Hasta que llega, no se puede subir la cantidad.
+                            const stock = knownStock ?? item.quantity;
+                            const overStock = exceedsStock(item);
+                            return (
+                                <View key={item.variantId} style={styles.itemRow}>
+                                    <View style={styles.itemInfo}>
+                                        <Text style={styles.itemName}>{item.productName}</Text>
+                                        <Text style={[styles.hint, overStock && styles.errorInline]}>
+                                            {[knownStock === undefined ? 'Stock en origen: …' : `Stock en origen: ${knownStock}`, item.attributesLabel]
+                                                .filter(Boolean)
+                                                .join(' · ')}
+                                        </Text>
+                                    </View>
+                                    <View style={styles.qtyControls}>
+                                        <Pressable
+                                            style={styles.qtyButton}
+                                            onPress={() => setQuantity(item.variantId, item.quantity - 1, stock)}
+                                        >
+                                            <SymbolView
+                                                name={{ ios: 'minus', android: 'remove', web: 'remove' }}
+                                                size={16}
+                                                tintColor={Colors.text}
+                                            />
+                                        </Pressable>
+                                        <Text style={styles.qtyText}>{item.quantity}</Text>
+                                        <Pressable
+                                            style={[styles.qtyButton, item.quantity >= stock && styles.qtyButtonDisabled]}
+                                            disabled={item.quantity >= stock}
+                                            onPress={() => setQuantity(item.variantId, item.quantity + 1, stock)}
+                                        >
+                                            <SymbolView
+                                                name={{ ios: 'plus', android: 'add', web: 'add' }}
+                                                size={16}
+                                                tintColor={item.quantity >= stock ? Colors.textSecondary : Colors.text}
+                                            />
+                                        </Pressable>
+                                    </View>
+                                </View>
+                            );
+                        })
+                    )}
+
+                    {hasStockProblems && (
+                        <Text style={styles.errorText}>
+                            El stock en origen cambió: bajá las cantidades marcadas para poder transferir.
+                        </Text>
+                    )}
+                </FormSection>
+
+                {submitError && <Text style={styles.errorText}>{submitError}</Text>}
+            </ScrollView>
+
+            <FormFooter>
+                <AppButton
+                    title={createTransfer.isPending
+                        ? 'Transfiriendo...'
+                        : `Transferir${totalUnits > 0 ? ` ${totalUnits} ${totalUnits === 1 ? 'unidad' : 'unidades'}` : ''}`}
+                    onPress={() => void handleSubmit()}
+                    disabled={!canSubmit}
+                />
+            </FormFooter>
+
+            <ModalScreen
+                visible={isCatalogVisible}
+                title="Productos"
+                eyebrow={`Stock de ${origin.name}`}
+                onClose={() => setCatalogVisible(false)}
+            >
+                <VariantCatalog
+                    branchId={originId}
+                    getSelectedQuantity={(_productId, variantId) =>
+                        items.find((item) => item.variantId === variantId)?.quantity ?? 0
+                    }
+                    onAddItem={addItem}
+                    onUpdateItemQuantity={(_productId, variantId, quantity, stock) =>
+                        setQuantity(variantId, quantity, stock)
+                    }
+                    showPrice={false}
+                    selectedLabel="a transferir"
+                    noBranchDescription="Seleccioná una sucursal activa."
+                />
+
+                <CartSummaryBar
+                    itemsCount={totalUnits}
+                    detail={selectionSummary}
+                    actionLabel="Listo"
+                    onPress={() => setCatalogVisible(false)}
+                />
+            </ModalScreen>
+        </Screen>
+    );
+}
+
+const styles = StyleSheet.create({
+    screen: {
+        padding: 0,
+    },
+    originName: {
+        fontSize: 17,
+        fontWeight: '700',
+        color: Colors.text,
+    },
+    hint: {
+        fontSize: 13,
+        color: Colors.textSecondary,
+    },
+    chips: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.xs,
+    },
+    itemRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: Colors.muted,
+        paddingTop: Spacing.md,
+    },
+    itemInfo: {
+        flex: 1,
+        gap: 2,
+    },
+    itemName: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: Colors.text,
+    },
+    qtyControls: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+    },
+    qtyButton: {
+        width: 32,
+        height: 32,
+        borderRadius: Radius.sm,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    qtyButtonDisabled: {
+        opacity: 0.4,
+    },
+    qtyText: {
+        minWidth: 24,
+        textAlign: 'center',
+        fontSize: 15,
+        fontWeight: '700',
+        color: Colors.text,
+    },
+    errorInline: {
+        color: Colors.error,
+    },
+    errorText: {
+        color: Colors.error,
+        fontSize: 13,
+    },
+});

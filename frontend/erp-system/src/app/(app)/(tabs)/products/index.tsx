@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import { useEffect, useMemo } from 'react';
+import { useState } from 'react';
 import {
+    ActivityIndicator,
     FlatList,
     Pressable,
     RefreshControl,
@@ -10,92 +10,88 @@ import {
     View,
 } from 'react-native';
 
+import { AttributeFilterModal } from '@/components/products/AttributeFilterModal';
 import { CategoryPills } from '@/components/products/CategoryPills';
 import { ProductCard } from '@/components/products/ProductCard';
 import { ProductsFilterChips } from '@/components/products/ProductsFilterChips';
 import { ProductsSearchBar } from '@/components/products/ProductsSearchBar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { HeaderButton } from '@/components/ui/HeaderButton';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { StatTile } from '@/components/ui/StatTile';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { SharedStyles } from '@/styles/shared';
-
+import { useActiveBranch } from '@/hooks/use-branch-queries';
+import { useCategories } from '@/hooks/use-category-queries';
+import { useProducts } from '@/hooks/use-product-queries';
+import { useDashboard } from '@/hooks/use-report-queries';
 import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
-import { useCategoryStore } from '@/stores/category-store';
-import { useProductStore } from '@/stores/product-store';
+import { SharedStyles } from '@/styles/shared';
+import { StatusFilter, StockFilter } from '@/types/product';
+import { AttributeFilter, attributeFilterValueIds, variantMatchesFilter } from '@/utils/attribute-filter';
+import { hasPermission } from '@/utils/permissions';
+import { productStock } from '@/utils/product-stock';
 
 export default function ProductsScreen() {
     const user = useAuthStore((state) => state.user);
-    const token = useAuthStore((state) => state.token);
-    const activeBranch = useBranchStore((state) => state.activeBranch);
-    const { categories, fetchCategories } = useCategoryStore();
+    const activeBranch = useActiveBranch();
+    const { categories } = useCategories();
 
+    // Filtros propios de esta pantalla: los selectores de productos tienen su propia búsqueda.
+    const [searchQuery, setSearchQuery] = useState('');
+    const [stockFilter, setStockFilter] = useState<StockFilter>('ALL');
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+    const [selectedCategoryId, setSelectedCategory] = useState<string | null>(null);
+    const [attributeFilter, setAttributeFilter] = useState<AttributeFilter>({});
+    const [isAttributeFilterOpen, setAttributeFilterOpen] = useState(false);
+    const attributeValueIds = attributeFilterValueIds(attributeFilter);
+    const hasAttributeFilter = attributeValueIds.length > 0;
+
+    // Sin sucursal activa, el stock (y su filtro) es el total de todas las sucursales.
+    const branchId = activeBranch?.id;
     const {
-        products,
-        searchQuery,
-        stockFilter,
-        statusFilter,
-        selectedCategoryId,
-        isLoading,
-        isError,
-        errorMessage,
-        setSearchQuery,
-        setStockFilter,
-        setStatusFilter,
-        setSelectedCategory,
-        resetFilters,
-        fetchProducts,
-    } = useProductStore();
+        items: products,
+        totalElements,
+        isInitialLoading,
+        isRefreshing,
+        isLoadingMore,
+        error,
+        loadMore,
+        refresh,
+    } = useProducts({
+        q: searchQuery,
+        categoryId: selectedCategoryId ?? undefined,
+        active: statusFilter === 'ALL' ? undefined : statusFilter === 'ACTIVE',
+        stock: stockFilter === 'ALL' ? undefined : stockFilter,
+        branchId,
+        attributeValueIds: hasAttributeFilter ? attributeValueIds : undefined,
+    });
 
-    useEffect(() => {
-        if (token) {
-            fetchProducts(token).catch(() => {});
-            fetchCategories(token).catch(() => {});
-        }
-    }, [fetchCategories, fetchProducts, token]);
+    // Los mismos filtros que deja "Sin stock" al tocarlo: comparten la caché.
+    const outOfStock = useProducts({ stock: 'OUT_OF_STOCK', branchId });
+    // El stock bajo sale de Reportes: sin VER_REPORTES no se pide ni se muestra.
+    const lowStock = useDashboard('today', activeBranch?.id ?? null).dashboard?.lowStock;
 
-    function handleRefresh() {
-        if (token) {
-            fetchProducts(token).catch(() => {});
-        }
+    function showOutOfStock() {
+        resetFilters();
+        setStockFilter('OUT_OF_STOCK');
     }
 
-    const canCreate =
-        user?.role === 'Administrador' ||
-        Boolean(user?.permissions?.includes('PRODUCTS_CREATE'));
+    function resetFilters() {
+        setSearchQuery('');
+        setStockFilter('ALL');
+        setStatusFilter('ALL');
+        setSelectedCategory(null);
+        setAttributeFilter({});
+    }
 
-    const canEdit =
-        user?.role === 'Administrador' ||
-        Boolean(user?.permissions?.includes('PRODUCTS_UPDATE'));
-
-    const filteredProducts = useMemo(() => {
-        const branchId = activeBranch?.id ?? '1';
-
-        return products.filter((product) => {
-            if (searchQuery.trim()) {
-                const query = searchQuery.toLowerCase().trim();
-                const matchesName = product.name.toLowerCase().includes(query);
-                const matchesSku = product.variants.some((variant) => variant.sku.toLowerCase().includes(query));
-                if (!matchesName && !matchesSku) return false;
-            }
-
-            if (selectedCategoryId && product.categoryId !== selectedCategoryId) {
-                return false;
-            }
-
-            if (statusFilter === 'ACTIVE' && !product.active) return false;
-            if (statusFilter === 'INACTIVE' && product.active) return false;
-
-            const currentStock = product.variants.reduce((sum, variant) => sum + (variant.stockByBranch[branchId] ?? 0), 0);
-            if (stockFilter === 'IN_STOCK' && currentStock <= 0) return false;
-            if (stockFilter === 'OUT_OF_STOCK' && currentStock > 0) return false;
-
-            return true;
-        });
-    }, [products, searchQuery, selectedCategoryId, statusFilter, stockFilter, activeBranch]);
+    // Editar y activar/desactivar piden ADMINISTRAR_PRODUCTOS; crear, también
+    // ADMINISTRAR_PRECIOS (cada variante nueva fija un precio).
+    const canEdit = hasPermission(user, 'ADMINISTRAR_PRODUCTOS');
+    const canCreate = canEdit && hasPermission(user, 'ADMINISTRAR_PRECIOS');
 
     function handleCreateProduct() {
         router.push('/products/new' as any);
@@ -109,42 +105,35 @@ export default function ProductsScreen() {
         Boolean(searchQuery) ||
         stockFilter !== 'ALL' ||
         statusFilter !== 'ALL' ||
-        selectedCategoryId !== null;
+        selectedCategoryId !== null ||
+        hasAttributeFilter;
 
     return (
         <Screen style={styles.screen}>
-            <View style={SharedStyles.topBar}>
-                <View>
-                    <Text style={SharedStyles.screenTitle}>Productos</Text>
-                    <Text style={SharedStyles.screenSubtitle}>
-                        {activeBranch ? `Stock: ${activeBranch.name}` : 'Catálogo general'}
-                    </Text>
-                </View>
+            <PageHeader
+                eyebrow={activeBranch ? `Stock de ${activeBranch.name}` : 'Stock de todas las sucursales'}
+                title="Productos"
+                right={canCreate ? (
+                    <HeaderButton label="Nuevo" accessibilityLabel="Crear producto" onPress={handleCreateProduct} />
+                ) : undefined}
+            />
 
-                {canCreate && (
-                    <Pressable
-                        onPress={handleCreateProduct}
-                        accessibilityRole="button"
-                        accessibilityLabel="Crear producto"
-                        hitSlop={6}
-                        style={({ pressed }) => [
-                            SharedStyles.addButton,
-                            pressed && SharedStyles.pressed,
-                        ]}
-                    >
-                        <View style={SharedStyles.addIconContainer}>
-                            <SymbolView name={{
-                                ios: 'plus',
-                                android: 'add',
-                                web: 'add',
-                            }}
-                                size={24}
-                                tintColor={Colors.white}
-                            />
-                        </View>
-                        <Text style={SharedStyles.addButtonText}>Crear producto</Text>
-                    </Pressable>
-                )}
+            <View style={[SharedStyles.statRow, styles.stats]}>
+                <StatTile
+                    label="Sin stock"
+                    value={outOfStock.isInitialLoading ? '…' : String(outOfStock.totalElements)}
+                    icon={{ ios: 'xmark.bin', android: 'remove_shopping_cart', web: 'remove_shopping_cart' }}
+                    tone="danger"
+                    onPress={showOutOfStock}
+                />
+                {lowStock ? (
+                    <StatTile
+                        label="Stock bajo"
+                        value={String(lowStock.count)}
+                        icon={{ ios: 'exclamationmark.triangle', android: 'warning', web: 'warning' }}
+                        tone="warning"
+                    />
+                ) : null}
             </View>
 
             <ProductsSearchBar
@@ -155,9 +144,23 @@ export default function ProductsScreen() {
             <ProductsFilterChips
                 stockFilter={stockFilter}
                 statusFilter={statusFilter}
+                attributeValueCount={attributeValueIds.length}
                 onStockChange={setStockFilter}
                 onStatusChange={setStatusFilter}
+                onOpenAttributes={() => setAttributeFilterOpen(true)}
             />
+
+            {isAttributeFilterOpen ? (
+                <AttributeFilterModal
+                    value={attributeFilter}
+                    onApply={(filter) => {
+                        setAttributeFilter(filter);
+                        setAttributeFilterOpen(false);
+                    }}
+                    onClose={() => setAttributeFilterOpen(false)}
+                    categoryId={selectedCategoryId}
+                />
+            ) : null}
 
             <CategoryPills
                 categories={categories}
@@ -167,8 +170,8 @@ export default function ProductsScreen() {
 
             <View style={styles.resultsBar}>
                 <Text style={styles.resultsCount}>
-                    {filteredProducts.length}{' '}
-                    {filteredProducts.length === 1 ? 'producto' : 'productos'} encontrados
+                    {totalElements}{' '}
+                    {totalElements === 1 ? 'producto' : 'productos'} encontrados
                 </Text>
                 {hasActiveFilters && (
                     <Pressable onPress={resetFilters} style={styles.resetFiltersButton}>
@@ -177,30 +180,29 @@ export default function ProductsScreen() {
                 )}
             </View>
 
-            {isLoading && (
+            {isInitialLoading ? (
                 <LoadingState label="Cargando productos..." />
-            )}
-
-            {!isLoading && isError && (
+            ) : error && products.length === 0 ? (
                 <ErrorState
-                    message={errorMessage}
-                    onRetry={handleRefresh}
+                    message={error}
+                    onRetry={refresh}
                 />
-            )}
-
-            {!isLoading && !isError && (
+            ) : (
                 <FlatList
-                    data={filteredProducts}
+                    data={products}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContainer}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
                         <RefreshControl
-                            refreshing={isLoading}
-                            onRefresh={handleRefresh}
+                            refreshing={isRefreshing}
+                            onRefresh={refresh}
                             tintColor={Colors.primary}
                         />
                     }
+                    onEndReached={loadMore}
+                    onEndReachedThreshold={0.4}
+                    ListFooterComponent={isLoadingMore ? <ActivityIndicator color={Colors.primary} /> : null}
                     ListEmptyComponent={
                         <EmptyState
                             title={
@@ -230,19 +232,17 @@ export default function ProductsScreen() {
                             }
                         />
                     }
-                    renderItem={({ item }) => {
-                        const branchId = activeBranch?.id ?? '1';
-                        const currentStock = item.variants.reduce((sum, variant) => sum + (variant.stockByBranch[branchId] ?? 0), 0);
-
-                        return (
-                            <ProductCard
-                                product={item}
-                                stock={currentStock}
-                                canEdit={canEdit}
-                                onPress={() => handleEditProduct(item.id)}
-                            />
-                        );
-                    }}
+                    renderItem={({ item }) => (
+                        <ProductCard
+                            product={item}
+                            stock={productStock(item, branchId, hasAttributeFilter ? attributeFilter : undefined)}
+                            matchingVariants={hasAttributeFilter
+                                ? item.variants.filter((variant) => variantMatchesFilter(variant, attributeFilter)).length
+                                : undefined}
+                            canEdit={canEdit}
+                            onPress={() => handleEditProduct(item.id)}
+                        />
+                    )}
                 />
             )}
         </Screen>
@@ -252,6 +252,11 @@ export default function ProductsScreen() {
 const styles = StyleSheet.create({
     screen: {
         padding: 0,
+    },
+
+    stats: {
+        paddingHorizontal: Spacing.lg,
+        paddingVertical: Spacing.xs,
     },
 
     resultsBar: {

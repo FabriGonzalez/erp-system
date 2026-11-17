@@ -1,10 +1,15 @@
-import { CustomerAddress } from './customer';
-
 export type OrderStatus =
     | 'CONFIRMED'
     | 'TO_PREPARE'
     | 'SHIPPED'
-    | 'CANCELLED';
+    | 'CANCELLED'
+    // Pedido de la tienda web esperando el pago (reserva, todavía no es venta).
+    | 'PENDING_PAYMENT'
+    // Pedido web pagado que ninguna sucursal armaba sola: falta elegir la sucursal.
+    | 'TO_ASSIGN';
+
+// ERP: cargado en el local. WEB: comprado en la tienda.
+export type OrderChannel = 'ERP' | 'WEB';
 
 export type PaymentStatus = 'PENDING' | 'PARTIAL' | 'PAID';
 
@@ -25,20 +30,76 @@ export type OrderItem = {
     subtotal: number;
 };
 
+export const NEW_PROMO_LINE_PREFIX = 'new-';
+
+/** Variante elegida en una línea de promo; quantity = unidades por cada promo de la línea. */
+export type OrderPromoComponent = {
+    productId: string;
+    productName: string;
+    variantId: string;
+    sku: string;
+    // "Rojo · M"; vacío si el producto no tiene variantes.
+    variantName: string;
+    quantity: number;
+};
+
+/**
+ * Una línea de promo: una combinación de variantes elegidas, vendida quantity veces; la misma
+ * promo puede ir en varias líneas. Nombre, precio y variantes quedan como se vendió: no cambian
+ * aunque después se edite, venza o se desactive la promo. En el borrador, las líneas nuevas
+ * tienen un id que empieza con NEW_PROMO_LINE_PREFIX.
+ */
+export type OrderPromo = {
+    id: string;
+    promotionId: string;
+    name: string;
+    unitPrice: number;
+    quantity: number;
+    subtotal: number;
+    components: OrderPromoComponent[];
+};
+
+/**
+ * Dirección de entrega copiada al crear el envío: no cambia si después editan la
+ * dirección del cliente. No es una CustomerAddress (no tiene id, principal ni activa).
+ */
+export type OrderShippingAddress = {
+    street: string;
+    number?: string;
+    apartment?: string;
+    floor?: string;
+    city: string;
+    state?: string;
+    postalCode?: string;
+    country: string;
+    reference?: string;
+};
+
 export type Order = {
     id: string;
     orderNumber: string;
+    channel: OrderChannel;
     customerId: string;
     customerName: string;
     salesType: SalesType;
     quickSaleAmount?: number;
     deliveryType: DeliveryType;
-    address?: CustomerAddress;
+    // Sin dirección en retiros y en envíos creados antes de que se guardara.
+    shippingAddress?: OrderShippingAddress;
     branchId: string;
     branchName: string;
     items: OrderItem[];
+    promos: OrderPromo[];
+    // subtotal - discount = total, lo que se cobra. La venta rápida no lleva descuento.
+    subtotal: number;
+    discount: number;
     total: number;
+    // Los tres los calcula el backend con los pagos asignados; sin cliente se cobra en el acto.
     amountPaid: number;
+    paymentStatus: PaymentStatus;
+    balance: number;
+    // Medio de una venta sin cliente; con cliente el medio está en sus pagos.
+    paymentMethod?: PaymentMethod;
     status: OrderStatus;
     createdAt: string;
     updatedAt: string;
@@ -51,14 +112,32 @@ export type OrderItemRequest = {
     quantity: number;
 };
 
-export type PaymentMethod = 'CASH' | 'TRANSFER' | 'DEBIT_CARD' | 'CREDIT_CARD';
+/**
+ * Una línea de promo. Nueva: promotionId y las variantes elegidas (por cada producto, sus
+ * unidades por promo). Al editar, una línea existente va solo con id y quantity.
+ */
+export type OrderPromoRequest = {
+    id?: number;
+    promotionId?: number;
+    quantity: number;
+    variants?: { productVariantId: number; quantity: number }[];
+};
+
+// MERCADO_PAGO lo registra solo la tienda: se muestra, pero no se puede elegir en el ERP.
+export type PaymentMethod = 'CASH' | 'TRANSFER' | 'DEBIT_CARD' | 'CREDIT_CARD' | 'MERCADO_PAGO';
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
     CASH: 'Efectivo',
     TRANSFER: 'Transferencia',
     DEBIT_CARD: 'Débito',
     CREDIT_CARD: 'Crédito',
+    MERCADO_PAGO: 'Pago en tienda web',
 };
+
+/** Los medios que se pueden elegir al cobrar en el ERP. */
+export type SelectablePaymentMethod = Exclude<PaymentMethod, 'MERCADO_PAGO'>;
+
+export const SELECTABLE_PAYMENT_METHODS: SelectablePaymentMethod[] = ['CASH', 'TRANSFER', 'DEBIT_CARD', 'CREDIT_CARD'];
 
 export type InitialPaymentRequest = {
     amount: number;
@@ -71,16 +150,30 @@ export type OrderRequest = {
     salesType: SalesType;
     quickSaleAmount?: number;
     deliveryType: DeliveryType;
+    // Obligatoria con SHIPPING y prohibida con LOCAL_PICKUP: dirección del cliente del pedido.
+    shippingAddressId?: number;
     items?: OrderItemRequest[];
+    // En pesos, sobre el pedido entero y menor que el subtotal. Solo con productos.
+    discount?: number;
+    // Promos vigentes, sin repetir. Con productos lleva al menos un ítem o una promo.
+    promos?: OrderPromoRequest[];
     // Solo con cliente: aplica su saldo a favor a esta orden.
     applyCredit?: boolean;
     // Solo con cliente: pago cobrado ahora, asignado a esta orden.
     initialPayment?: InitialPaymentRequest;
+    // Solo sin cliente (obligatorio): con qué pagó; la venta se cobra completa al crearse.
+    paymentMethod?: PaymentMethod;
 };
 
 export type OrderUpdateRequest = {
     quickSaleAmount?: number;
     items?: OrderItemRequest[];
+    // Reemplaza el descuento; sin el campo queda el actual.
+    discount?: number;
+    // Reemplaza las promos: las que ya tenía conservan precio y componentes.
+    promos?: OrderPromoRequest[];
+    // Solo envíos: cambia la dirección de entrega. Sin el campo queda la actual.
+    shippingAddressId?: number;
 };
 
 export type OrderCancelRequest = {
@@ -97,9 +190,40 @@ export type OrderItemResponse = {
     unitPrice: number | string;
 };
 
+export type OrderPromoResponse = {
+    id: number | string;
+    promotionId: number | string;
+    name: string;
+    unitPrice: number | string;
+    quantity: number;
+    components?: {
+        productId: number | string;
+        productName: string;
+        productVariantId: number | string;
+        productVariantSku: string;
+        variantName?: string | null;
+        quantity: number;
+    }[] | null;
+};
+
+export type ShipmentResponse = {
+    id: number | string;
+    orderId: number | string;
+    street: string;
+    number?: string | null;
+    apartment?: string | null;
+    floor?: string | null;
+    city: string;
+    state?: string | null;
+    postalCode?: string | null;
+    country: string;
+    reference?: string | null;
+};
+
 export type OrderResponse = {
     id: number | string;
     orderNumber: string;
+    channel: OrderChannel;
     branchId: number | string;
     branchName: string;
     customerId?: number | string | null;
@@ -107,14 +231,19 @@ export type OrderResponse = {
     salesType: SalesType;
     quickSaleAmount?: number | string | null;
     deliveryType: DeliveryType;
+    shipment?: ShipmentResponse | null;
     status: OrderStatus;
+    subtotal?: number | string | null;
+    discount?: number | string | null;
     total: number | string;
     amountPaid?: number | string | null;
-    paymentStatus?: PaymentStatus;
+    paymentStatus: PaymentStatus;
     balance?: number | string | null;
+    paymentMethod?: PaymentMethod | null;
     createdAt: string;
     updatedAt: string;
     items?: OrderItemResponse[] | null;
+    promos?: OrderPromoResponse[] | null;
 };
 
 export type PageResponse<T> = {
@@ -130,7 +259,9 @@ export type OrderListParams = {
     size?: number;
     sort?: string;
     q?: string;
+    // Sin estado, el backend no trae los web sin pagar.
     status?: OrderStatus;
+    channel?: OrderChannel;
     branchId?: string;
     salesType?: SalesType;
     deliveryType?: DeliveryType;
@@ -138,15 +269,13 @@ export type OrderListParams = {
     paymentStatus?: PaymentStatus;
 };
 
-export type OrderStatusFilter = OrderStatus | 'ALL';
-
-export type OrderDeliveryFilter = DeliveryType | 'ALL';
-
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
     CONFIRMED: 'Confirmado',
     TO_PREPARE: 'A preparar',
     SHIPPED: 'Enviado',
     CANCELLED: 'Cancelado',
+    PENDING_PAYMENT: 'Esperando pago',
+    TO_ASSIGN: 'A asignar',
 };
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
@@ -154,16 +283,6 @@ export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
     PARTIAL: 'Pago parcial',
     PAID: 'Pagado',
 };
-
-export function getPaymentStatus(order: Pick<Order, 'total' | 'amountPaid'>): PaymentStatus {
-    if (order.amountPaid <= 0) return 'PENDING';
-    if (order.amountPaid >= order.total) return 'PAID';
-    return 'PARTIAL';
-}
-
-export function getBalanceDue(order: Pick<Order, 'total' | 'amountPaid'>): number {
-    return Math.max(0, order.total - order.amountPaid);
-}
 
 export const DELIVERY_TYPE_LABELS: Record<DeliveryType, string> = {
     LOCAL_PICKUP: 'Retiro',

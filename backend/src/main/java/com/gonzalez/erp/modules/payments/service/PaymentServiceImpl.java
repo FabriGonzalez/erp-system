@@ -1,9 +1,10 @@
 package com.gonzalez.erp.modules.payments.service;
 
+import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.branches.entity.Branch;
-import com.gonzalez.erp.modules.branches.repository.BranchRepository;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.customers.entity.Customer;
 import com.gonzalez.erp.modules.customers.entity.TransactionType;
 import com.gonzalez.erp.modules.customers.repository.CustomerRepository;
@@ -14,22 +15,24 @@ import com.gonzalez.erp.modules.payments.dto.request.PaymentRequest;
 import com.gonzalez.erp.modules.payments.dto.response.PaymentResponse;
 import com.gonzalez.erp.modules.payments.entity.Payment;
 import com.gonzalez.erp.modules.payments.entity.PaymentAllocation;
+import com.gonzalez.erp.modules.payments.entity.PaymentMethod;
 import com.gonzalez.erp.modules.payments.entity.PaymentStatus;
 import com.gonzalez.erp.modules.payments.exception.InvalidPaymentException;
 import com.gonzalez.erp.modules.payments.mapper.PaymentMapper;
 import com.gonzalez.erp.modules.payments.repository.PaymentAllocationRepository;
 import com.gonzalez.erp.modules.payments.repository.PaymentRepository;
 import com.gonzalez.erp.modules.users.entity.User;
-import com.gonzalez.erp.modules.users.repository.UserBranchRepository;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -40,8 +43,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentAllocationRepository paymentAllocationRepository;
     private final OrderRepository orderRepository;
     private final CustomerRepository customerRepository;
-    private final BranchRepository branchRepository;
-    private final UserBranchRepository userBranchRepository;
+    private final BranchAccessService branchAccessService;
     private final UserRepository userRepository;
     private final CustomerAccountService customerAccountService;
 
@@ -59,20 +61,22 @@ public class PaymentServiceImpl implements PaymentService {
             throw new InvalidPaymentException("Payment amount must be greater than zero");
         }
 
-        Branch branch = branchRepository.findByIdAndCompanyId(request.branchId(), companyId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Branch not found with id: " + request.branchId() + " in current company"));
-
-        if (!userBranchRepository.existsByUserIdAndBranchId(userId, request.branchId())) {
-            throw new AccessDeniedException(
-                    "User is not assigned to branch: " + request.branchId());
+        if (request.method() == PaymentMethod.MERCADO_PAGO) {
+            throw new InvalidPaymentException("MERCADO_PAGO payments are registered only by the store");
         }
+
+        Branch branch = branchAccessService.requireAccessible(request.branchId());
 
         Customer customer = customerRepository.findByIdAndCompanyId(request.customerId(), companyId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Customer not found with id: " + request.customerId() + " in current company"));
 
         User currentUser = userRepository.getReferenceById(userId);
+
+        // Primero las órdenes y después la cuenta, el mismo orden que editar o cancelar una
+        // orden: al revés, un pago y una edición simultáneos del mismo cliente se bloquean
+        // mutuamente.
+        List<Order> candidateOrders = orderRepository.findCandidateOrdersForUpdate(customer.getId(), companyId);
 
         Payment payment = Payment.builder()
                 .company(customer.getCompany())
@@ -95,7 +99,6 @@ public class PaymentServiceImpl implements PaymentService {
                 "Pago recibido #" + payment.getId()
         );
 
-        List<Order> candidateOrders = orderRepository.findCandidateOrdersForUpdate(customer.getId(), companyId);
         BigDecimal remainingPayment = request.amount();
 
         for (Order order : candidateOrders) {
@@ -134,15 +137,18 @@ public class PaymentServiceImpl implements PaymentService {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
         Long userId = SecurityUtils.getCurrentUserId();
 
+        // La cuenta se bloquea antes que el pago, como al aplicar saldo a favor en una orden
+        // nueva (cuenta y después pagos); al revés pueden bloquearse mutuamente.
+        Long customerId = paymentRepository.findCustomerIdByIdAndCompanyId(id, companyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + id));
+        customerAccountService.getAccountByCustomerIdForUpdate(customerId, companyId);
+
         Payment payment = paymentRepository.findByIdAndCompanyIdForUpdate(id, companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + id));
 
         User currentUser = userRepository.getReferenceById(userId);
 
-        if (!userBranchRepository.existsByUserIdAndBranchId(userId, payment.getBranch().getId())) {
-            throw new AccessDeniedException(
-                    "User is not assigned to branch: " + payment.getBranch().getId());
-        }
+        branchAccessService.requireAccessible(payment.getBranch());
 
         if (payment.getStatus() == PaymentStatus.CANCELLED) {
             throw new InvalidPaymentException("Payment is already cancelled");
@@ -175,16 +181,17 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    public List<PaymentResponse> getPayments(Long customerId) {
+    public PageResponse<PaymentResponse> getPayments(Long customerId, Pageable pageable) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
-        List<Payment> payments;
-        if (customerId != null) {
-            payments = paymentRepository.findByCustomerIdAndCompanyId(customerId, companyId);
-        } else {
-            payments = paymentRepository.findByCompanyId(companyId);
-        }
-        return payments.stream()
-                .map(PaymentMapper::toResponse)
-                .toList();
+        Page<Payment> payments = paymentRepository.search(companyId, customerId, pageable);
+
+        List<Long> paymentIds = payments.getContent().stream().map(Payment::getId).toList();
+        Map<Long, List<PaymentAllocation>> allocationsByPayment = paymentIds.isEmpty()
+                ? Map.of()
+                : paymentAllocationRepository.findByPaymentIdInWithOrder(paymentIds).stream()
+                        .collect(Collectors.groupingBy(allocation -> allocation.getPayment().getId()));
+
+        return PageResponse.of(payments, payment -> PaymentMapper.toResponse(
+                payment, allocationsByPayment.getOrDefault(payment.getId(), List.of())));
     }
 }

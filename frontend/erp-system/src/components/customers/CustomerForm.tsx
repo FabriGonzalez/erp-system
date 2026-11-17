@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
 import {
-    ActivityIndicator,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -10,74 +9,90 @@ import {
     View,
 } from 'react-native';
 
+import { AddressFields } from '@/components/customers/AddressFields';
+import { AddressSummary } from '@/components/customers/AddressSummary';
+import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
+import { FilterChip } from '@/components/ui/FilterChip';
+import { FormField } from '@/components/ui/FormField';
+import { FormFooter } from '@/components/ui/FormFooter';
+import { FormSection } from '@/components/ui/FormSection';
+import { IconBadge } from '@/components/ui/IconBadge';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
-import { useCustomerStore } from '@/stores/customer-store';
+import { Radius, Spacing } from '@/constants/spacing';
+import { useCreateCustomer, useUpdateCustomer } from '@/hooks/use-customer-queries';
 import { SharedStyles } from '@/styles/shared';
-import { Customer, CustomerAddress } from '@/types/customer';
+import { Customer, CustomerRequest, DOCUMENT_TYPES } from '@/types/customer';
+import {
+    AddressDraft,
+    EMPTY_ADDRESS_DRAFT,
+    draftToDisplayAddress,
+    toAddressRequest,
+    validateAddressDraft,
+} from '@/utils/address';
 
 type CustomerFormProps = {
+    // Si se pasa, el formulario edita ese cliente; si no, da de alta uno nuevo.
+    customer?: Customer;
     onCustomerCreated?: (customer: Customer) => void;
 };
 
+// Validación liviana: el backend valida el formato completo.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Para estos tipos se guardan solo los dígitos: "20-12345678-3" y "20123456783" son
+// el mismo documento y así el backend detecta el duplicado.
+const NUMERIC_DOCUMENTS: Record<string, { min: number; max: number }> = {
+    DNI: { min: 7, max: 8 },
+    CUIT: { min: 11, max: 11 },
+    CUIL: { min: 11, max: 11 },
+};
+
+function normalizeDocumentNumber(type: string, value: string): string {
+    return NUMERIC_DOCUMENTS[type] ? value.replace(/\D/g, '') : value.trim();
+}
+
 export function CustomerForm({
+    customer,
     onCustomerCreated,
 }: CustomerFormProps) {
-    const addCustomer = useCustomerStore((state) => state.addCustomer);
+    const isEdit = Boolean(customer);
+    // En una ficha web el backend rechaza cambios en nombre, apellido, email y teléfono.
+    const isWebCustomer = customer?.origin === 'WEB';
+    const createCustomer = useCreateCustomer();
+    const updateCustomer = useUpdateCustomer(customer?.id ?? '');
 
-    const [name, setName] = useState('');
-    const [email, setEmail] = useState('');
-    const [phone, setPhone] = useState('');
+    const [firstName, setFirstName] = useState(customer?.firstName ?? '');
+    const [lastName, setLastName] = useState(customer?.lastName ?? '');
+    const [email, setEmail] = useState(customer?.email ?? '');
+    const [phone, setPhone] = useState(customer?.phone ?? '');
+    const [documentType, setDocumentType] = useState(customer?.documentType ?? '');
+    const [documentNumber, setDocumentNumber] = useState(customer?.documentNumber ?? '');
+    const [observations, setObservations] = useState(customer?.observations ?? '');
 
-    const [addresses, setAddresses] = useState<
-        Omit<CustomerAddress, 'id'>[]
-    >([]);
-
+    const [addresses, setAddresses] = useState<AddressDraft[]>([]);
     const [showAddressForm, setShowAddressForm] = useState(false);
-    const [addrLabel, setAddrLabel] = useState('');
-    const [addrStreet, setAddrStreet] = useState('');
-    const [addrNumber, setAddrNumber] = useState('');
-    const [addrCity, setAddrCity] = useState('');
-    const [addrProvince, setAddrProvince] = useState('');
-    const [addrZipCode, setAddrZipCode] = useState('');
+    const [addressDraft, setAddressDraft] = useState<AddressDraft>(EMPTY_ADDRESS_DRAFT);
+    const [addrError, setAddrError] = useState('');
 
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [addrError, setAddrError] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+    const isSubmitting = createCustomer.isPending || updateCustomer.isPending;
+    const buyerFieldsEditable = !isSubmitting && !isWebCustomer;
+    const buyerFieldStyle = isWebCustomer ? styles.readOnlyInput : undefined;
 
     function handleAddAddress() {
-        if (
-            !addrStreet.trim() ||
-            !addrNumber.trim() ||
-            !addrCity.trim() ||
-            !addrProvince.trim()
-        ) {
-            setAddrError(
-                'Completa al menos Calle, Número, Ciudad y Provincia.',
-            );
+        const validationError = validateAddressDraft(addressDraft);
+        if (validationError) {
+            setAddrError(validationError);
             return;
         }
 
-        setAddresses((currentAddresses) => [
-            ...currentAddresses,
-            {
-                label: addrLabel.trim() || 'Principal',
-                street: addrStreet.trim(),
-                number: addrNumber.trim(),
-                city: addrCity.trim(),
-                province: addrProvince.trim(),
-                zipCode: addrZipCode.trim(),
-            },
-        ]);
-
-        setAddrLabel('');
-        setAddrStreet('');
-        setAddrNumber('');
-        setAddrCity('');
-        setAddrProvince('');
-        setAddrZipCode('');
+        setAddresses((currentAddresses) => [...currentAddresses, addressDraft]);
+        setAddressDraft(EMPTY_ADDRESS_DRAFT);
         setAddrError('');
         setShowAddressForm(false);
     }
@@ -93,8 +108,27 @@ export function CustomerForm({
     function validate(): boolean {
         const newErrors: Record<string, string> = {};
 
-        if (!name.trim()) {
-            newErrors.name = 'El nombre del cliente es obligatorio.';
+        if (!firstName.trim() && !lastName.trim()) {
+            newErrors.name = 'Ingresá el nombre o el apellido del cliente.';
+        }
+        // El email de una ficha web no se puede corregir acá: no debe trabar el guardado.
+        if (!isWebCustomer && email.trim() && !EMAIL_PATTERN.test(email.trim())) {
+            newErrors.email = 'El email no es válido.';
+        }
+
+        // El backend exige tipo y número juntos.
+        const normalizedDocument = normalizeDocumentNumber(documentType, documentNumber);
+        if (documentType && !normalizedDocument) {
+            newErrors.document = 'Ingresá el número de documento.';
+        } else if (!documentType && documentNumber.trim()) {
+            newErrors.document = 'Elegí el tipo de documento.';
+        } else if (NUMERIC_DOCUMENTS[documentType]) {
+            const { min, max } = NUMERIC_DOCUMENTS[documentType];
+            if (normalizedDocument.length < min || normalizedDocument.length > max) {
+                newErrors.document = min === max
+                    ? `El ${documentType} debe tener ${min} dígitos.`
+                    : `El ${documentType} debe tener entre ${min} y ${max} dígitos.`;
+            }
         }
 
         setErrors(newErrors);
@@ -102,31 +136,42 @@ export function CustomerForm({
         return Object.keys(newErrors).length === 0;
     }
 
-    function handleSubmit() {
-        if (!validate()) {
+    async function handleSubmit() {
+        if (isSubmitting || !validate()) {
             return;
         }
 
-        setIsSubmitting(true);
+        setSubmitError(null);
+
+        // El PATCH reemplaza todos los campos: se manda siempre el objeto completo.
+        const data: CustomerRequest = {
+            firstName: firstName.trim() || null,
+            lastName: lastName.trim() || null,
+            email: email.trim() || null,
+            phone: phone.trim() || null,
+            documentType: documentType || null,
+            documentNumber: documentType ? normalizeDocumentNumber(documentType, documentNumber) : null,
+            observations: observations.trim() || null,
+        };
 
         try {
-            const newCustomer = addCustomer({
-                name: name.trim(),
-                email: email.trim() || undefined,
-                phone: phone.trim() || undefined,
-                addresses: addresses.map((address) => ({
-                    ...address,
-                    id: `addr-${Date.now()}-${Math.random()}`,
-                })),
-            });
-
-            onCustomerCreated?.(newCustomer);
-
+            if (customer) {
+                await updateCustomer.mutateAsync(data);
+            } else {
+                // Cliente y direcciones en una sola request: si algo falla, no queda nada a medias.
+                const newCustomer = await createCustomer.mutateAsync({
+                    ...data,
+                    addresses: addresses.map((address) => toAddressRequest(address)),
+                });
+                onCustomerCreated?.(newCustomer);
+            }
             router.back();
-        } catch (error) {
-            console.error('Error al crear cliente:', error);
-        } finally {
-            setIsSubmitting(false);
+        } catch (error: unknown) {
+            setSubmitError(
+                error instanceof Error
+                    ? error.message
+                    : isEdit ? 'No se pudo guardar el cliente.' : 'No se pudo crear el cliente.'
+            );
         }
     }
 
@@ -138,329 +183,265 @@ export function CustomerForm({
         router.back();
     }
 
+    function clearError(field: string) {
+        if (errors[field]) {
+            setErrors((currentErrors) => ({ ...currentErrors, [field]: '' }));
+        }
+    }
+
     return (
         <Screen style={styles.screen}>
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={handleCancel}
-                    style={({ pressed }) => [
-                        SharedStyles.backButton,
-                        pressed && SharedStyles.pressed,
-                    ]}
-                    disabled={isSubmitting}
-                >
-                    <SymbolView
-                        name={{
-                            ios: 'chevron.left',
-                            android: 'arrow_back',
-                            web: 'arrow_back',
-                        }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-
-                <Text style={SharedStyles.headerTitle}>Nuevo Cliente</Text>
-
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader
+                onBack={isSubmitting ? undefined : handleCancel}
+                eyebrow="Clientes"
+                title={isEdit ? 'Editar cliente' : 'Nuevo cliente'}
+            />
 
             <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.scrollContainer}
+                contentContainerStyle={SharedStyles.pageContent}
                 keyboardShouldPersistTaps="handled"
             >
-                <View style={styles.formGroup}>
-                    <Text style={SharedStyles.sectionTitle}>
-                        Nombre completo{' '}
-                        <Text style={styles.required}>*</Text>
-                    </Text>
+                <FormSection title="Datos">
+                    <View style={styles.nameBlock}>
+                        <View style={styles.row}>
+                            <FormField label="Nombre" style={styles.flex1}>
+                                <AppInput
+                                    placeholder="Ej. María"
+                                    value={firstName}
+                                    onChangeText={(text) => {
+                                        setFirstName(text);
+                                        clearError('name');
+                                    }}
+                                    autoCapitalize="words"
+                                    maxLength={100}
+                                    editable={buyerFieldsEditable}
+                                    style={buyerFieldStyle}
+                                />
+                            </FormField>
 
-                    <AppInput
-                        placeholder="Ej. María González"
-                        value={name}
-                        onChangeText={(text) => {
-                            setName(text);
+                            <FormField label="Apellido" style={styles.flex1}>
+                                <AppInput
+                                    placeholder="Ej. González"
+                                    value={lastName}
+                                    onChangeText={(text) => {
+                                        setLastName(text);
+                                        clearError('name');
+                                    }}
+                                    autoCapitalize="words"
+                                    maxLength={100}
+                                    editable={buyerFieldsEditable}
+                                    style={buyerFieldStyle}
+                                />
+                            </FormField>
+                        </View>
 
-                            if (errors.name) {
-                                setErrors((currentErrors) => ({
-                                    ...currentErrors,
-                                    name: '',
-                                }));
-                            }
-                        }}
-                    />
-
-                    {errors.name ? (
-                        <Text style={styles.errorText}>
-                            {errors.name}
+                        <Text style={errors.name ? styles.errorText : styles.hint}>
+                            {errors.name || (isWebCustomer
+                                ? 'Nombre, apellido, email y teléfono los administra el cliente desde su cuenta en la tienda.'
+                                : 'Completá al menos uno de los dos.')}
                         </Text>
-                    ) : null}
-                </View>
+                    </View>
 
-                <View style={styles.formGroup}>
-                    <Text style={SharedStyles.sectionTitle}>Email</Text>
+                    <FormField label="Email" error={errors.email}>
+                        <AppInput
+                            placeholder="maria@email.com"
+                            value={email}
+                            onChangeText={(text) => {
+                                setEmail(text);
+                                clearError('email');
+                            }}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            maxLength={100}
+                            editable={buyerFieldsEditable}
+                            style={buyerFieldStyle}
+                        />
+                    </FormField>
 
-                    <AppInput
-                        placeholder="maria@email.com"
-                        value={email}
-                        onChangeText={setEmail}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                    />
-                </View>
+                    <FormField label="Teléfono">
+                        <AppInput
+                            placeholder="11 1234-5678"
+                            value={phone}
+                            onChangeText={setPhone}
+                            keyboardType="phone-pad"
+                            maxLength={30}
+                            editable={buyerFieldsEditable}
+                            style={buyerFieldStyle}
+                        />
+                    </FormField>
 
-                <View style={styles.formGroup}>
-                    <Text style={SharedStyles.sectionTitle}>Teléfono</Text>
+                    <FormField label="Documento" error={errors.document}>
+                        <View style={styles.chips}>
+                            {DOCUMENT_TYPES.map((type) => (
+                                <FilterChip
+                                    key={type.value}
+                                    label={type.label}
+                                    selected={documentType === type.value}
+                                    onPress={() => {
+                                        if (isSubmitting) return;
+                                        // Tocar el seleccionado lo quita (cliente sin documento).
+                                        setDocumentType((current) => (current === type.value ? '' : type.value));
+                                        clearError('document');
+                                    }}
+                                />
+                            ))}
+                        </View>
 
-                    <AppInput
-                        placeholder="11 1234-5678"
-                        value={phone}
-                        onChangeText={setPhone}
-                        keyboardType="phone-pad"
-                    />
-                </View>
+                        {documentType ? (
+                            <AppInput
+                                placeholder={NUMERIC_DOCUMENTS[documentType] ? 'Solo números' : 'Número de documento'}
+                                value={documentNumber}
+                                onChangeText={(text) => {
+                                    setDocumentNumber(text);
+                                    clearError('document');
+                                }}
+                                keyboardType={NUMERIC_DOCUMENTS[documentType] ? 'number-pad' : 'default'}
+                                autoCapitalize="characters"
+                                maxLength={50}
+                                editable={!isSubmitting}
+                            />
+                        ) : null}
+                    </FormField>
 
-                <View style={styles.sectionHeader}>
-                    <Text style={SharedStyles.cardTitle}>
-                        Direcciones ({addresses.length})
-                    </Text>
-                </View>
+                    <FormField label="Observaciones">
+                        <AppInput
+                            placeholder="Notas internas sobre el cliente"
+                            value={observations}
+                            onChangeText={setObservations}
+                            multiline
+                            maxLength={1000}
+                            textAlignVertical="top"
+                            style={styles.observationsInput}
+                            editable={!isSubmitting}
+                        />
+                    </FormField>
+                </FormSection>
 
-                {addresses.map((address, index) => (
-                    <View
-                        key={`${address.street}-${address.number}-${index}`}
-                        style={styles.addressCard}
-                    >
-                        <View style={styles.addressCardHeader}>
-                            <View style={styles.labelBadge}>
-                                <Text style={styles.labelBadgeText}>
-                                    {address.label}
-                                </Text>
+                {/* En la edición las direcciones se gestionan desde el detalle del cliente. */}
+                {!isEdit ? (
+                    <View style={SharedStyles.pageSection}>
+                        <SectionHeader title={`Direcciones (${addresses.length})`} />
+                        {addresses.length > 1 ? (
+                            <Text style={styles.hint}>La primera queda como principal.</Text>
+                        ) : null}
+
+                        {addresses.map((address, index) => (
+                            <View
+                                key={index}
+                                style={[SharedStyles.card, SharedStyles.listItem]}
+                            >
+                                <IconBadge
+                                    icon={{ ios: 'mappin', android: 'location_on', web: 'location_on' }}
+                                    tone={index === 0 ? 'primary' : 'neutral'}
+                                />
+                                <AddressSummary
+                                    address={{ ...draftToDisplayAddress(address), isMain: index === 0 }}
+                                />
+
+                                <Pressable
+                                    onPress={() => handleRemoveAddress(index)}
+                                    disabled={isSubmitting}
+                                    hitSlop={8}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Quitar dirección"
+                                >
+                                    <SymbolView
+                                        name={{
+                                            ios: 'trash',
+                                            android: 'delete',
+                                            web: 'delete',
+                                        }}
+                                        size={18}
+                                        tintColor={Colors.error}
+                                    />
+                                </Pressable>
                             </View>
+                        ))}
 
+                        {showAddressForm ? (
+                            <View style={[SharedStyles.card, styles.addressFormBox]}>
+                                <Text style={styles.addressFormTitle}>
+                                    Nueva dirección
+                                </Text>
+
+                                <AddressFields
+                                    value={addressDraft}
+                                    onChange={(next) => {
+                                        setAddressDraft(next);
+                                        setAddrError('');
+                                    }}
+                                />
+
+                                {addrError ? (
+                                    <Text style={styles.errorText}>
+                                        {addrError}
+                                    </Text>
+                                ) : null}
+
+                                <View style={styles.addressFormActions}>
+                                    <AppButton
+                                        title="Cancelar"
+                                        variant="secondary"
+                                        style={styles.flex1}
+                                        onPress={() => {
+                                            setShowAddressForm(false);
+                                            setAddressDraft(EMPTY_ADDRESS_DRAFT);
+                                            setAddrError('');
+                                        }}
+                                    />
+                                    <AppButton
+                                        title="Agregar"
+                                        style={styles.flex1}
+                                        onPress={handleAddAddress}
+                                    />
+                                </View>
+                            </View>
+                        ) : (
                             <Pressable
-                                onPress={() =>
-                                    handleRemoveAddress(index)
-                                }
+                                style={({ pressed }) => [styles.addAddressButton, pressed && SharedStyles.pressed]}
+                                onPress={() => setShowAddressForm(true)}
+                                disabled={isSubmitting}
+                                accessibilityRole="button"
                             >
                                 <SymbolView
                                     name={{
-                                        ios: 'trash',
-                                        android: 'delete',
-                                        web: 'delete',
+                                        ios: 'plus.circle',
+                                        android: 'add_circle',
+                                        web: 'add_circle',
                                     }}
-                                    size={18}
-                                    tintColor={Colors.error}
+                                    size={20}
+                                    tintColor={Colors.primary}
                                 />
-                            </Pressable>
-                        </View>
 
-                        <Text style={styles.addressText}>
-                            {address.street} {address.number}
-                        </Text>
-
-                        <Text style={styles.addressSubtext}>
-                            {address.city}, {address.province}
-                            {address.zipCode
-                                ? ` (${address.zipCode})`
-                                : ''}
-                        </Text>
-                    </View>
-                ))}
-
-                {showAddressForm ? (
-                    <View style={styles.addressFormBox}>
-                        <Text style={styles.addressFormTitle}>
-                            Nueva dirección
-                        </Text>
-
-                        <View style={styles.formGroup}>
-                            <Text style={styles.subLabel}>
-                                Etiqueta (ej. Casa, Oficina)
-                            </Text>
-
-                            <AppInput
-                                placeholder="Casa"
-                                value={addrLabel}
-                                onChangeText={setAddrLabel}
-                            />
-                        </View>
-
-                        <View style={styles.row}>
-                            <View
-                                style={[
-                                    styles.formGroup,
-                                    styles.flex2,
-                                ]}
-                            >
-                                <Text style={styles.subLabel}>
-                                    Calle *
-                                </Text>
-
-                                <AppInput
-                                    placeholder="Av. Corrientes"
-                                    value={addrStreet}
-                                    onChangeText={setAddrStreet}
-                                />
-                            </View>
-
-                            <View
-                                style={[
-                                    styles.formGroup,
-                                    styles.flex1,
-                                ]}
-                            >
-                                <Text style={styles.subLabel}>
-                                    Número *
-                                </Text>
-
-                                <AppInput
-                                    placeholder="1234"
-                                    value={addrNumber}
-                                    onChangeText={setAddrNumber}
-                                    keyboardType="number-pad"
-                                />
-                            </View>
-                        </View>
-
-                        <View style={styles.row}>
-                            <View
-                                style={[
-                                    styles.formGroup,
-                                    styles.flex1,
-                                ]}
-                            >
-                                <Text style={styles.subLabel}>
-                                    Ciudad *
-                                </Text>
-
-                                <AppInput
-                                    placeholder="CABA"
-                                    value={addrCity}
-                                    onChangeText={setAddrCity}
-                                />
-                            </View>
-
-                            <View
-                                style={[
-                                    styles.formGroup,
-                                    styles.flex1,
-                                ]}
-                            >
-                                <Text style={styles.subLabel}>
-                                    Provincia *
-                                </Text>
-
-                                <AppInput
-                                    placeholder="Buenos Aires"
-                                    value={addrProvince}
-                                    onChangeText={setAddrProvince}
-                                />
-                            </View>
-                        </View>
-
-                        <View style={styles.formGroup}>
-                            <Text style={styles.subLabel}>
-                                Código Postal
-                            </Text>
-
-                            <AppInput
-                                placeholder="C1042"
-                                value={addrZipCode}
-                                onChangeText={setAddrZipCode}
-                            />
-                        </View>
-
-                        {addrError ? (
-                            <Text style={styles.errorText}>
-                                {addrError}
-                            </Text>
-                        ) : null}
-
-                        <View style={styles.addressFormActions}>
-                            <Pressable
-                                style={styles.addAddrConfirmButton}
-                                onPress={handleAddAddress}
-                            >
-                                <Text style={styles.addAddrConfirmText}>
-                                    Guardar Dirección
+                                <Text style={styles.addAddressButtonText}>
+                                    Agregar dirección
                                 </Text>
                             </Pressable>
-
-                            <Pressable
-                                style={styles.cancelAddrButton}
-                                onPress={() => {
-                                    setShowAddressForm(false);
-                                    setAddrError('');
-                                }}
-                            >
-                                <Text style={styles.cancelAddrText}>
-                                    Cancelar
-                                </Text>
-                            </Pressable>
-                        </View>
-                    </View>
-                ) : (
-                    <Pressable
-                        style={styles.addAddressButton}
-                        onPress={() => setShowAddressForm(true)}
-                    >
-                        <SymbolView
-                            name={{
-                                ios: 'plus.circle',
-                                android: 'add_circle',
-                                web: 'add_circle',
-                            }}
-                            size={20}
-                            tintColor={Colors.primary}
-                        />
-
-                        <Text style={styles.addAddressButtonText}>
-                            Agregar dirección
-                        </Text>
-                    </Pressable>
-                )}
-
-                <View style={styles.actionsContainer}>
-                    <Pressable
-                        style={[
-                            SharedStyles.buttonSubmit,
-                            isSubmitting &&
-                            styles.submitButtonDisabled,
-                        ]}
-                        onPress={handleSubmit}
-                        disabled={isSubmitting}
-                    >
-                        {isSubmitting ? (
-                            <View style={styles.submittingContent}>
-                                <ActivityIndicator
-                                    size="small"
-                                    color={Colors.white}
-                                />
-
-                                <Text style={SharedStyles.buttonSubmitText}>
-                                    Guardando...
-                                </Text>
-                            </View>
-                        ) : (
-                            <Text style={SharedStyles.buttonSubmitText}>
-                                Guardar cliente
-                            </Text>
                         )}
-                    </Pressable>
+                    </View>
+                ) : null}
 
-                    <Pressable
-                        style={SharedStyles.buttonCancel}
-                        onPress={handleCancel}
-                        disabled={isSubmitting}
-                    >
-                        <Text style={SharedStyles.buttonCancelText}>
-                            Cancelar
-                        </Text>
-                    </Pressable>
-                </View>
+                {submitError ? (
+                    <View style={styles.submitErrorBox}>
+                        <Text style={styles.submitErrorText}>{submitError}</Text>
+                    </View>
+                ) : null}
             </ScrollView>
+
+            <FormFooter>
+                <AppButton
+                    title="Cancelar"
+                    variant="secondary"
+                    onPress={handleCancel}
+                    disabled={isSubmitting}
+                />
+                <AppButton
+                    title={isSubmitting ? 'Guardando...' : isEdit ? 'Guardar cambios' : 'Guardar cliente'}
+                    onPress={handleSubmit}
+                    disabled={isSubmitting}
+                />
+            </FormFooter>
         </Screen>
     );
 }
@@ -469,98 +450,8 @@ const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    scrollContainer: {
-        padding: Spacing.lg,
-        paddingBottom: Spacing.xxl * 2,
-    },
-    formGroup: {
-        marginBottom: Spacing.lg,
-    },
-    subLabel: {
-        fontSize: 13,
-        fontWeight: '500',
-        color: Colors.textSecondary,
-        marginBottom: 4,
-    },
-    required: {
-        color: Colors.error,
-    },
-    errorText: {
-        fontSize: 12,
-        color: Colors.error,
-        marginTop: 4,
-        fontWeight: '500',
-    },
-    sectionHeader: {
-        marginTop: Spacing.md,
-        marginBottom: Spacing.sm,
-    },
-    addressCard: {
-        backgroundColor: Colors.surface,
-        borderRadius: 10,
-        padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        marginBottom: Spacing.sm,
-    },
-    addressCardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 4,
-    },
-    labelBadge: {
-        backgroundColor: Colors.muted,
-        paddingHorizontal: Spacing.xs + 2,
-        paddingVertical: 2,
-        borderRadius: 4,
-    },
-    labelBadgeText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: Colors.textSecondary,
-    },
-    addressText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.text,
-    },
-    addressSubtext: {
-        fontSize: 13,
-        color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    addAddressButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: Colors.surface,
-        borderRadius: 10,
-        paddingVertical: Spacing.md,
-        borderWidth: 1,
-        borderStyle: 'dashed',
-        borderColor: Colors.primary,
-        gap: Spacing.xs,
-        marginBottom: Spacing.xl,
-    },
-    addAddressButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: Colors.primary,
-    },
-    addressFormBox: {
-        backgroundColor: Colors.surface,
-        borderRadius: 12,
-        padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        marginBottom: Spacing.xl,
-    },
-    addressFormTitle: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: Colors.text,
-        marginBottom: Spacing.md,
+    nameBlock: {
+        gap: Spacing.xs + 2,
     },
     row: {
         flexDirection: 'row',
@@ -569,49 +460,65 @@ const styles = StyleSheet.create({
     flex1: {
         flex: 1,
     },
-    flex2: {
-        flex: 2,
+    chips: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.xs,
+    },
+    readOnlyInput: {
+        backgroundColor: Colors.muted,
+        color: Colors.textSecondary,
+    },
+    observationsInput: {
+        height: 96,
+        paddingTop: Spacing.sm,
+    },
+    hint: {
+        fontSize: 12,
+        color: Colors.textSecondary,
+    },
+    errorText: {
+        fontSize: 12,
+        color: Colors.error,
+    },
+    addAddressButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.surface,
+        borderRadius: Radius.lg,
+        paddingVertical: Spacing.md,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        borderColor: Colors.primary,
+        gap: Spacing.xs,
+    },
+    addAddressButtonText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: Colors.primary,
+    },
+    addressFormBox: {
+        gap: Spacing.md,
+    },
+    addressFormTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: Colors.text,
     },
     addressFormActions: {
         flexDirection: 'row',
-        gap: Spacing.md,
-        marginTop: Spacing.xs,
-    },
-    addAddrConfirmButton: {
-        flex: 1,
-        backgroundColor: Colors.primary,
-        height: 40,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    addAddrConfirmText: {
-        color: Colors.white,
-        fontWeight: '600',
-        fontSize: 13,
-    },
-    cancelAddrButton: {
-        height: 40,
-        paddingHorizontal: Spacing.md,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    cancelAddrText: {
-        color: Colors.textSecondary,
-        fontWeight: '500',
-        fontSize: 13,
-    },
-    actionsContainer: {
         gap: Spacing.sm,
-        marginTop: Spacing.md,
     },
-    submitButtonDisabled: {
-        opacity: 0.7,
+    submitErrorBox: {
+        backgroundColor: Colors.errorLight,
+        borderWidth: 1,
+        borderColor: Colors.errorBorder,
+        borderRadius: Radius.sm,
+        padding: Spacing.md,
     },
-    submittingContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
+    submitErrorText: {
+        color: Colors.error,
+        fontSize: 13,
     },
 });

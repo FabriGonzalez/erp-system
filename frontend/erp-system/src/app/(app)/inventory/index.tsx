@@ -1,6 +1,5 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
@@ -11,184 +10,156 @@ import {
     View,
 } from 'react-native';
 
-import { StockAdjustModal } from '@/components/inventory/StockAdjustModal';
+import { AttributeFilterModal } from '@/components/products/AttributeFilterModal';
 import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { FilterChip } from '@/components/ui/FilterChip';
+import { IconBadge } from '@/components/ui/IconBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
+import { useBranchStocks } from '@/hooks/use-stock-queries';
 import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
-import { useProductStore } from '@/stores/product-store';
-import { useStockStore } from '@/stores/stock-store';
 import { SharedStyles } from '@/styles/shared';
 import { Stock } from '@/types/stock';
+import { AttributeFilter, attributeFilterValueIds } from '@/utils/attribute-filter';
+import { STOCK_MOVEMENT_READ_PERMISSIONS, hasAnyPermission } from '@/utils/permissions';
+import { stockPill } from '@/utils/status';
 
 export default function InventoryScreen() {
-    const token = useAuthStore((state) => state.token);
-    const {
-        availableBranches,
-        fetchUserBranches,
-        hasFetchedUserBranches,
-    } = useBranchStore();
-    const { products, fetchProducts } = useProductStore();
-    const { stocks, isLoading, error, fetchStocks, fetchStocksByBranch } = useStockStore();
     const user = useAuthStore((state) => state.user);
-    const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
+    const activeBranch = useActiveBranch();
+    // Se entra con cualquier permiso de lectura de stock; el detalle (historial y ajuste)
+    // pide los permisos de movimientos, que incluyen AJUSTAR_STOCK.
+    const canOpenDetail = hasAnyPermission(user, STOCK_MOVEMENT_READ_PERMISSIONS);
     const [query, setQuery] = useState('');
-    const [editingStock, setEditingStock] = useState<Stock | null>(null);
-
-    useEffect(() => {
-        if (!token) return;
-        void fetchStocks(token);
-        void fetchProducts(token);
-        if (user && !hasFetchedUserBranches) {
-            void fetchUserBranches(user.id, token);
-        }
-    }, [
-        fetchProducts,
-        fetchStocks,
-        fetchUserBranches,
-        hasFetchedUserBranches,
-        token,
-        user,
-    ]);
-
-    async function selectBranch(branchId: string | null) {
-        setSelectedBranchId(branchId);
-        if (!token) return;
-        if (branchId) {
-            await fetchStocksByBranch(branchId, token).catch(() => {});
-        } else {
-            await fetchStocks(token).catch(() => {});
-        }
-    }
-
-    const filteredStocks = useMemo(() => {
-        const normalized = query.trim().toLowerCase();
-        if (!normalized) return stocks;
-        return stocks.filter((stock) =>
-            stock.productName.toLowerCase().includes(normalized)
-            || stock.productVariantSku.toLowerCase().includes(normalized)
-            || stock.branchName.toLowerCase().includes(normalized)
-        );
-    }, [query, stocks]);
+    const [attributeFilter, setAttributeFilter] = useState<AttributeFilter>({});
+    const [isAttributeFilterOpen, setAttributeFilterOpen] = useState(false);
+    const attributeValueIds = attributeFilterValueIds(attributeFilter);
+    // Cada sucursal y búsqueda tiene su caché: una respuesta de la sucursal anterior no se mezcla.
+    const {
+        items: stocks,
+        isInitialLoading,
+        isRefreshing,
+        isLoadingMore,
+        error,
+        loadMore,
+        refresh,
+    } = useBranchStocks({ branchId: activeBranch?.id, q: query, attributeValueIds });
 
     function renderItem({ item }: { item: Stock }) {
+        const pill = stockPill(item.quantity);
         return (
             <Pressable
-                style={({ pressed }) => [styles.card, pressed && SharedStyles.pressed]}
-                onPress={() => setEditingStock(item)}
+                style={({ pressed }) => [
+                    SharedStyles.card,
+                    SharedStyles.listItem,
+                    canOpenDetail && pressed && SharedStyles.listItemPressed,
+                ]}
+                onPress={() => router.push({ pathname: '/inventory/[stockId]', params: { stockId: item.id } })}
+                disabled={!canOpenDetail}
+                accessibilityRole={canOpenDetail ? 'button' : undefined}
             >
-                <View style={styles.cardMain}>
-                    <Text style={styles.productName}>{item.productName}</Text>
-                    <Text style={styles.detail}>SKU: {item.productVariantSku}</Text>
-                    <Text style={styles.detail}>Sucursal: {item.branchName}</Text>
+                <IconBadge
+                    icon={{ ios: 'shippingbox', android: 'inventory_2', web: 'inventory_2' }}
+                    tone="teal"
+                    size={44}
+                />
+                <View style={SharedStyles.listItemTexts}>
+                    <Text style={SharedStyles.listItemTitle} numberOfLines={2}>{item.productName}</Text>
+                    <Text style={SharedStyles.listItemMeta} numberOfLines={1}>SKU {item.productVariantSku}</Text>
                 </View>
-                <View style={styles.quantityContainer}>
-                    <Text style={styles.quantity}>{item.quantity}</Text>
-                    <Text style={styles.quantityLabel}>unidades</Text>
-                </View>
+                <StatusPill label={pill.label} tone={pill.tone} />
             </Pressable>
         );
     }
 
-    if (isLoading && stocks.length === 0) return <LoadingState label="Cargando stock..." />;
-
-    return (
-        <Screen style={styles.container}>
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>Inventario</Text>
-                {isLoading ? <ActivityIndicator color={Colors.primary} /> : null}
-            </View>
-
-            <View style={styles.toolbar}>
-                <AppInput value={query} onChangeText={setQuery} placeholder="Buscar producto, SKU o sucursal" />
-                <FlatList
-                    horizontal
-                    data={[{ id: null, name: 'Todas' }, ...availableBranches]}
-                    keyExtractor={(item) => item.id ?? 'all'}
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.branchFilters}
-                    renderItem={({ item }) => (
-                        <Pressable
-                            onPress={() => void selectBranch(item.id)}
-                            style={[styles.filter, selectedBranchId === item.id && styles.selectedFilter]}
-                        >
-                            <Text style={[styles.filterText, selectedBranchId === item.id && styles.selectedFilterText]}>
-                                {item.name}
-                            </Text>
-                        </Pressable>
-                    )}
+    function renderBody() {
+        if (!activeBranch) {
+            return (
+                <EmptyState
+                    title="Sin sucursal activa"
+                    description="El inventario muestra el stock de la sucursal activa. Elegila en Más → Sucursal activa."
                 />
-            </View>
-
-            {error ? (
+            );
+        }
+        if (isInitialLoading) return <LoadingState label="Cargando stock..." />;
+        if (error && stocks.length === 0) {
+            return (
                 <EmptyState
                     title="No se pudo cargar el inventario"
                     description={error}
                     actionLabel="Reintentar"
-                    onAction={() => token && void selectBranch(selectedBranchId)}
+                    onAction={refresh}
                 />
-            ) : (
-                <FlatList
-                    data={filteredStocks}
-                    keyExtractor={(item) => item.id}
-                    renderItem={renderItem}
-                    contentContainerStyle={styles.list}
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={isLoading}
-                            onRefresh={() => token && void selectBranch(selectedBranchId)}
-                            tintColor={Colors.primary}
-                        />
-                    }
-                    ListEmptyComponent={
-                        <EmptyState
-                            title="Sin stock registrado"
-                            description="No hay registros de stock para los filtros seleccionados."
-                        />
-                    }
-                />
-            )}
-
-            <StockAdjustModal
-                visible={Boolean(editingStock)}
-                stock={editingStock}
-                branches={availableBranches}
-                products={products}
-                token={token}
-                onClose={() => setEditingStock(null)}
+            );
+        }
+        return (
+            <FlatList
+                data={stocks}
+                keyExtractor={(item) => item.id}
+                renderItem={renderItem}
+                contentContainerStyle={SharedStyles.pageList}
+                refreshControl={
+                    <RefreshControl refreshing={isRefreshing} onRefresh={refresh} tintColor={Colors.primary} />
+                }
+                onEndReached={loadMore}
+                onEndReachedThreshold={0.4}
+                ListFooterComponent={isLoadingMore ? <ActivityIndicator color={Colors.primary} /> : null}
+                ListEmptyComponent={
+                    <EmptyState
+                        title="Sin stock registrado"
+                        description={query.trim() || attributeValueIds.length
+                            ? 'Ningún producto coincide con la búsqueda o los filtros.'
+                            : `${activeBranch.name} no tiene registros de stock.`}
+                    />
+                }
             />
+        );
+    }
+
+    return (
+        <Screen style={styles.container}>
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow={activeBranch ? activeBranch.name : undefined}
+                title="Inventario"
+            />
+
+            {activeBranch ? (
+                <View style={SharedStyles.pageToolbar}>
+                    <AppInput value={query} onChangeText={setQuery} placeholder="Buscar producto o SKU" />
+                    <View style={styles.filters}>
+                        <FilterChip
+                            label={attributeValueIds.length ? `Atributos · ${attributeValueIds.length}` : 'Atributos'}
+                            selected={attributeValueIds.length > 0}
+                            onPress={() => setAttributeFilterOpen(true)}
+                        />
+                    </View>
+                </View>
+            ) : null}
+
+            {isAttributeFilterOpen ? (
+                <AttributeFilterModal
+                    value={attributeFilter}
+                    onApply={(filter) => {
+                        setAttributeFilter(filter);
+                        setAttributeFilterOpen(false);
+                    }}
+                    onClose={() => setAttributeFilterOpen(false)}
+                />
+            ) : null}
+
+            {renderBody()}
         </Screen>
     );
 }
 
 const styles = StyleSheet.create({
     container: { padding: 0 },
-    toolbar: { padding: Spacing.lg, gap: Spacing.sm, backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border },
-    branchFilters: { gap: Spacing.sm },
-    filter: { borderWidth: 1, borderColor: Colors.border, borderRadius: 16, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs },
-    selectedFilter: { backgroundColor: Colors.primaryLight, borderColor: Colors.primary },
-    filterText: { color: Colors.textSecondary, fontSize: 13 },
-    selectedFilterText: { color: Colors.primary, fontWeight: '600' },
-    list: { padding: Spacing.lg, gap: Spacing.sm, flexGrow: 1 },
-    card: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: Spacing.lg },
-    cardMain: { flex: 1 },
-    productName: { color: Colors.text, fontSize: 16, fontWeight: '700' },
-    detail: { color: Colors.textSecondary, fontSize: 13, marginTop: 3 },
-    quantityContainer: { alignItems: 'flex-end', marginLeft: Spacing.md },
-    quantity: { color: Colors.primary, fontSize: 24, fontWeight: '700' },
-    quantityLabel: { color: Colors.textSecondary, fontSize: 11 },
+    filters: { flexDirection: 'row', marginTop: Spacing.sm },
 });

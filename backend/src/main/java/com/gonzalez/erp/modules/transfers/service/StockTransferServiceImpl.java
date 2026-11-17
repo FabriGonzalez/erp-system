@@ -1,9 +1,11 @@
 package com.gonzalez.erp.modules.transfers.service;
 
+import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.CustomUserDetails;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
@@ -13,6 +15,7 @@ import com.gonzalez.erp.modules.inventory.exception.InsufficientStockException;
 import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
 import com.gonzalez.erp.modules.inventory.repository.StockMovementRepository;
 import com.gonzalez.erp.modules.inventory.repository.StockRepository;
+import com.gonzalez.erp.modules.inventory.service.StockMovementRecorder;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
 import com.gonzalez.erp.modules.transfers.dto.request.StockTransferItemRequest;
@@ -23,9 +26,12 @@ import com.gonzalez.erp.modules.transfers.entity.StockTransferItem;
 import com.gonzalez.erp.modules.transfers.entity.StockTransferStatus;
 import com.gonzalez.erp.modules.transfers.exception.InvalidStockTransferException;
 import com.gonzalez.erp.modules.transfers.mapper.StockTransferMapper;
+import com.gonzalez.erp.modules.transfers.repository.StockTransferItemRepository;
 import com.gonzalez.erp.modules.transfers.repository.StockTransferRepository;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +43,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.time.Instant;
 
 @Service
@@ -47,22 +54,34 @@ public class StockTransferServiceImpl implements StockTransferService {
     private static final String REFERENCE_TYPE = "STOCK_TRANSFER";
 
     private final StockTransferRepository stockTransferRepository;
+    private final StockTransferItemRepository stockTransferItemRepository;
     private final StockRepository stockRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final StockMovementRecorder stockMovementRecorder;
     private final BranchRepository branchRepository;
+    private final BranchAccessService branchAccessService;
     private final ProductVariantRepository productVariantRepository;
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
 
     @Override
-    public List<StockTransferResponse> findAll() {
+    public PageResponse<StockTransferResponse> findAll(Pageable pageable) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
+        List<Long> branchIds = branchAccessService.accessibleBranchIds();
+        if (branchIds.isEmpty()) {
+            return new PageResponse<>(List.of(), pageable.getPageNumber(), pageable.getPageSize(), 0, 0);
+        }
+        Page<StockTransfer> transfers = stockTransferRepository.findAllByCompanyIdAndBranchIds(
+                companyId, branchIds, pageable);
 
-        List<StockTransfer> transfers = stockTransferRepository.findAllByCompanyId(companyId);
+        List<Long> transferIds = transfers.getContent().stream().map(StockTransfer::getId).toList();
+        Map<Long, List<StockTransferItem>> itemsByTransfer = transferIds.isEmpty()
+                ? Map.of()
+                : stockTransferItemRepository.findByTransferIdInWithVariant(transferIds).stream()
+                        .collect(Collectors.groupingBy(item -> item.getTransfer().getId()));
 
-        return transfers.stream()
-                .map(StockTransferMapper::toResponse)
-                .toList();
+        return PageResponse.of(transfers, transfer -> StockTransferMapper.toResponse(
+                transfer, itemsByTransfer.getOrDefault(transfer.getId(), List.of())));
     }
 
     @Override
@@ -90,14 +109,9 @@ public class StockTransferServiceImpl implements StockTransferService {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
         Company company = companyRepository.getReferenceById(companyId);
 
-        var originBranch = branchRepository.findByIdAndCompanyId(
-                request.originBranchId(), companyId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Origin branch not found with id: " + request.originBranchId()));
-        var destinationBranch = branchRepository.findByIdAndCompanyId(
-                request.destinationBranchId(), companyId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Destination branch not found with id: " + request.destinationBranchId()));
+        // Se envía desde una sucursal propia hacia cualquier sucursal activa de la empresa.
+        var originBranch = branchAccessService.requireAccessible(request.originBranchId());
+        var destinationBranch = branchAccessService.requireActive(request.destinationBranchId());
 
         StockTransfer transfer = StockTransfer.builder()
             .originBranch(originBranch)
@@ -171,27 +185,11 @@ public class StockTransferServiceImpl implements StockTransferService {
             stockRepository.save(originStock);
             stockRepository.save(destinationStock);
 
-            stockMovementRepository.save(StockMovement.builder()
-                .stock(originStock)
-                .type(StockMovementType.TRANSFER_IN)
-                .quantity(item.getQuantity())
-                .previousQuantity(originPrevious)
-                .newQuantity(originStock.getQuantity())
-                .reason(null)
-                .referenceId(transfer.getId())
-                .referenceType(REFERENCE_TYPE)
-                .build());
-
-            stockMovementRepository.save(StockMovement.builder()
-                .stock(destinationStock)
-                .type(StockMovementType.TRANSFER_OUT)
-                .quantity(-item.getQuantity())
-                .previousQuantity(destinationPrevious)
-                .newQuantity(destinationStock.getQuantity())
-                .reason(null)
-                .referenceId(transfer.getId())
-                .referenceType(REFERENCE_TYPE)
-                .build());
+            // La anulación registra el inverso: el origen recibe y el destino entrega.
+            saveMovement(originStock, StockMovementType.TRANSFER_IN,
+                    item.getQuantity(), originPrevious, transfer);
+            saveMovement(destinationStock, StockMovementType.TRANSFER_OUT,
+                    -item.getQuantity(), destinationPrevious, transfer);
         }
 
         transfer.cancel();
@@ -244,7 +242,10 @@ public class StockTransferServiceImpl implements StockTransferService {
     private StockTransfer findTransferOrThrow(Long id) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
+        // Mismo criterio que el listado. La anulación no pasa por acá: solo pide TRANSFERIR_STOCK.
         return stockTransferRepository.findByIdAndCompanyId(id, companyId)
+                .filter(transfer -> branchAccessService.isAccessible(transfer.getOriginBranch())
+                        || branchAccessService.isAccessible(transfer.getDestinationBranch()))
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Stock transfer not found with id: " + id));
     }
@@ -355,17 +356,9 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     private void saveMovement(Stock stock, StockMovementType type, int quantity, int previousQuantity, StockTransfer transfer) {
-        stockMovementRepository.save(StockMovement.builder()
-            .stock(stock)
-            .type(type)
-            .quantity(quantity)
-            .previousQuantity(previousQuantity)
-            .newQuantity(stock.getQuantity())
-            .reason(null)
-            .referenceId(transfer.getId())
-            .referenceType(REFERENCE_TYPE)
-            .build());
-        }
+        stockMovementRecorder.record(stock, type, quantity, previousQuantity, null,
+                REFERENCE_TYPE, transfer.getId());
+    }
 
     private Stock lockStock(StockKey key, Long companyId) {
         return stockRepository.findByProductVariantIdAndBranchIdForUpdate(

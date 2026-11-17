@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useBranchStore } from '@/stores/branch-store';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
 import { SharedStyles } from '@/styles/shared';
 
 type BranchSelectorProps = {
@@ -11,9 +11,7 @@ type BranchSelectorProps = {
 };
 
 export function BranchSelector({ onPress }: BranchSelectorProps) {
-    const activeBranch = useBranchStore(
-        (state) => state.activeBranch
-    );
+    const activeBranch = useActiveBranch();
 
     function handlePress() {
         if (onPress) {

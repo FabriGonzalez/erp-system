@@ -1,72 +1,46 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { ProductForm } from '@/components/products/ProductForm';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { NotFound } from '@/components/ui/NotFound';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
+import { useCategories } from '@/hooks/use-category-queries';
+import { useProduct, useSetProductActive, useUpdateProduct } from '@/hooks/use-product-queries';
 import { useAuthStore } from '@/stores/auth-store';
-import { useCategoryStore } from '@/stores/category-store';
-import { useProductStore } from '@/stores/product-store';
-import { SharedStyles } from '@/styles/shared';
+import { showToast } from '@/stores/toast-store';
 import { ProductFormData } from '@/types/product';
+import { hasPermission } from '@/utils/permissions';
 
 export default function EditProductScreen() {
+    const canAccess = useAuthStore((state) => hasPermission(state.user, 'ADMINISTRAR_PRODUCTOS'));
     const { id } = useLocalSearchParams<{ id: string }>();
-    const {
-        products,
-        errorMessage,
-        isError,
-        isLoading,
-        fetchProductById,
-        updateProductFromApi,
-    } = useProductStore();
-    const { categories, fetchCategories } = useCategoryStore();
+    // fresh: la edición manda cantidades finales de stock, así que el formulario tiene que
+    // partir del stock actual y no de la copia en caché (podría pisar una venta reciente).
+    const { product, isLoading, loadError } = useProduct(id, { fresh: true });
+    const updateProduct = useUpdateProduct();
+    const setProductActive = useSetProductActive();
+    const { categories } = useCategories();
     const user = useAuthStore((state) => state.user);
-    const token = useAuthStore((state) => state.token);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [submissionError, setSubmissionError] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (token) {
-            fetchCategories(token).catch(() => {});
-            if (!products.some((item) => item.id === id)) {
-                fetchProductById(id, token).catch(() => {});
-            }
-        }
-    }, [fetchCategories, fetchProductById, id, products, token]);
-
-    const product = products.find((p) => p.id === id);
-
-    if (isLoading && !product) {
+    if (isLoading) {
         return <LoadingState />;
     }
 
     if (!product) {
         return (
             <Screen style={styles.container}>
-                <View style={SharedStyles.header}>
-                    <Pressable
-                        onPress={() => router.back()}
-                        style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                    >
-                        <SymbolView
-                            name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                            size={24}
-                            tintColor={Colors.text}
-                        />
-                    </Pressable>
-                    <Text style={SharedStyles.headerTitle}>Producto</Text>
-                    <View style={SharedStyles.headerSpacer} />
-                </View>
+                <PageHeader onBack={() => router.back()} title="Producto" />
                 <EmptyState
                     title="Producto no encontrado"
-                    description="El producto que intentas editar no existe o fue removido."
+                    description={loadError ?? 'El producto que intentas editar no existe o fue removido.'}
                     actionLabel="Volver a productos"
                     onAction={() => router.back()}
                 />
@@ -76,7 +50,6 @@ export default function EditProductScreen() {
 
     async function handleSubmit(formData: ProductFormData) {
         if (!product) return;
-        if (!token) return;
         setIsSubmitting(true);
         setSubmissionError(null);
         try {
@@ -87,6 +60,7 @@ export default function EditProductScreen() {
                 variants: formData.variants.map((variant) => ({
                     sku: variant.sku,
                     price: Number(variant.price.replace(',', '.')),
+                    barcode: variant.barcode || null,
                     attributeValueIds: variant.attributes.map((attribute) =>
                         Number(attribute.attributeValueId)
                     ),
@@ -99,9 +73,14 @@ export default function EditProductScreen() {
                 })),
             };
 
-            await updateProductFromApi(product.id, productRequest, token);
+            await updateProduct.mutateAsync({ id: product.id, data: productRequest });
+            // El PATCH del producto no lleva el estado: activar y desactivar tienen sus endpoints.
+            if (formData.active !== undefined && formData.active !== product.active) {
+                await setProductActive.mutateAsync({ id: product.id, active: formData.active });
+            }
 
-            setSuccessMessage('¡Cambios guardados con éxito!');
+            // El toast sigue visible después de volver al detalle.
+            showToast({ type: 'success', message: 'Cambios guardados.' });
             router.back();
         } catch (error: unknown) {
             setSubmissionError(
@@ -112,43 +91,23 @@ export default function EditProductScreen() {
         }
     }
 
+    if (!canAccess) {
+        return (
+            <NotFound
+                headerTitle="Editar producto"
+                title="Sin permisos"
+                description="Tu usuario no tiene permiso para editar productos."
+            />
+        );
+    }
+
     return (
         <Screen style={styles.container}>
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                    disabled={isSubmitting}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>Editar Producto</Text>
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader onBack={isSubmitting ? undefined : () => router.back()} eyebrow={product.name} title="Editar producto" />
 
-            {successMessage && (
-                <View style={SharedStyles.successBanner}>
-                    <SymbolView
-                        name={{
-                            ios: 'checkmark.circle.fill',
-                            android: 'check_circle',
-                            web: 'check_circle',
-                        }}
-                        size={20}
-                        tintColor={Colors.success}
-                    />
-                    <Text style={SharedStyles.successText}>{successMessage}</Text>
-                </View>
-            )}
-            {(submissionError || (isError && errorMessage)) && (
+            {submissionError && (
                 <View style={styles.errorBanner}>
-                    <Text style={styles.errorText}>
-                        {submissionError || errorMessage}
-                    </Text>
+                    <Text style={styles.errorText}>{submissionError}</Text>
                 </View>
             )}
 
@@ -162,18 +121,18 @@ export default function EditProductScreen() {
                         id: variant.id,
                         sku: variant.sku,
                         price: variant.price.toString(),
+                        barcode: variant.barcode ?? '',
                         attributes: variant.attributes,
                         stockByBranch: variant.stockByBranch,
                     })),
                 }}
                 categories={categories}
                 branches={user?.branches ?? []}
-                existingProducts={products}
-                currentProductId={product.id}
                 onSubmit={handleSubmit}
                 onCancel={() => router.back()}
                 isSubmitting={isSubmitting}
                 submitLabel="Guardar Cambios"
+                showActiveToggle
             />
         </Screen>
     );

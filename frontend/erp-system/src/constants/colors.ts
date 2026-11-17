@@ -3,6 +3,8 @@ export const Colors = {
     primaryDark: '#1D4ED8',
 
     primaryLight: '#EFF6FF',
+    // Texto secundario sobre fondo primary (la tarjeta del total).
+    onPrimarySoft: '#DBEAFE',
 
     background: '#F8FAFC',
     surface: '#FFFFFF',
@@ -11,6 +13,9 @@ export const Colors = {
 
     text: '#0F172A',
     textSecondary: '#64748B',
+    // Chevrones y detalles decorativos: no alcanza contraste para texto.
+    textTertiary: '#94A3B8',
+    slate: '#334155',
 
     border: '#E2E8F0',
     track: '#CBD5E1',
@@ -35,4 +40,12 @@ export const Colors = {
     errorSoft: '#FEE2E2',
     errorInput: '#FFF5F5',
     errorDark: '#991B1B',
+
+    // Más tonos para íconos de color (ver constants/tones.ts).
+    teal: '#0F766E',
+    tealLight: '#CCFBF1',
+    violet: '#6D28D9',
+    violetLight: '#EDE9FE',
+    rose: '#BE123C',
+    roseLight: '#FFE4E6',
 };

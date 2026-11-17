@@ -90,4 +90,26 @@ public class CategoryController {
             @PathVariable Long id) {
         return ResponseEntity.ok(categoryService.activate(id));
     }
+
+    @PreAuthorize("hasAuthority('ADMINISTRAR_CATEGORIAS')")
+    @PostMapping("/{id}/attributes/{attributeId}")
+    @Operation(summary = "Asignar atributo a categoría", description = "Permite que las variantes de los productos de la categoría usen el atributo. Si ya lo tenía, no cambia nada.")
+    @ApiResponse(responseCode = "204", description = "Atributo asignado")
+    @ApiResponse(responseCode = "404", description = "Categoría o atributo no encontrados",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<Void> addAttribute(@PathVariable Long id, @PathVariable Long attributeId) {
+        categoryService.addAttributes(id, List.of(attributeId));
+        return ResponseEntity.noContent().build();
+    }
+
+    @PreAuthorize("hasAuthority('ADMINISTRAR_CATEGORIAS')")
+    @DeleteMapping("/{id}/attributes/{attributeId}")
+    @Operation(summary = "Quitar atributo de categoría", description = "Si la categoría no lo tenía, no cambia nada.")
+    @ApiResponse(responseCode = "204", description = "Atributo quitado")
+    @ApiResponse(responseCode = "404", description = "Categoría no encontrada",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<Void> removeAttribute(@PathVariable Long id, @PathVariable Long attributeId) {
+        categoryService.removeAttribute(id, attributeId);
+        return ResponseEntity.noContent().build();
+    }
 }

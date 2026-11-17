@@ -1,7 +1,6 @@
 import { Category, CategoryRequest } from '@/types/category';
-import { apiFetch } from '@/services/api-client';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { parseResponse } from '@/services/api-error';
 
 type BackendCategoryResponse = {
     id: number | string;
@@ -9,6 +8,7 @@ type BackendCategoryResponse = {
     description?: string | null;
     companyId?: number | string | null;
     active: boolean;
+    attributeIds?: (number | string)[] | null;
     createdAt?: string | null;
     updatedAt?: string | null;
 };
@@ -20,47 +20,24 @@ function normalizeCategory(data: BackendCategoryResponse): Category {
         description: data.description ?? null,
         companyId: data.companyId != null ? String(data.companyId) : null,
         active: data.active,
+        attributeIds: (data.attributeIds ?? []).map(String),
         createdAt: data.createdAt ?? null,
         updatedAt: data.updatedAt ?? null,
     };
 }
 
-async function handleResponse<T>(
-    response: Response,
-    defaultErrorMessage: string
-): Promise<T> {
-    if (!response.ok) {
-        let errorMessage = '';
+const CATEGORY_ERRORS = {
+    byCode: {
+        CATEGORY_NAME_ALREADY_EXISTS: 'Ya existe una categoría con ese nombre.',
+    },
+    byStatus: {
+        404: 'Categoría o atributo no encontrados.',
+        409: 'Ya existe una categoría con ese nombre.',
+    },
+};
 
-        try {
-            const errorPayload = await response.json();
-            errorMessage = errorPayload?.message ?? '';
-        } catch {
-            // El backend puede no devolver JSON.
-        }
-
-        if (response.status === 404) {
-            throw new Error(errorMessage || 'Categoría no encontrada.');
-        }
-
-        if (response.status === 409) {
-            throw new Error(errorMessage || 'Ya existe una categoría con ese nombre.');
-        }
-
-        if (response.status >= 500) {
-            throw new Error(
-                errorMessage || 'Error del servidor. Intentá de nuevo más tarde.'
-            );
-        }
-
-        throw new Error(errorMessage || defaultErrorMessage);
-    }
-
-    if (response.status === 204) {
-        return undefined as unknown as T;
-    }
-
-    return response.json();
+function handleResponse<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...CATEGORY_ERRORS, fallback });
 }
 
 function authHeaders(token: string): HeadersInit {
@@ -89,27 +66,6 @@ export async function getAllCategories(token: string): Promise<Category[]> {
 }
 
 /**
- * Obtiene el detalle de una categoría por su ID.
- * Endpoint: GET /api/v1/categories/{id}
- */
-export async function getCategoryById(
-    id: string,
-    token: string
-): Promise<Category> {
-    const response = await apiFetch(`${API_BASE_URL}/api/v1/categories/${id}`, {
-        method: 'GET',
-        headers: authHeaders(token),
-    });
-
-    const raw = await handleResponse<BackendCategoryResponse>(
-        response,
-        'No se pudo obtener la categoría.'
-    );
-
-    return normalizeCategory(raw);
-}
-
-/**
  * Crea una nueva categoría para la empresa.
  * Endpoint: POST /api/v1/categories
  */
@@ -123,6 +79,7 @@ export async function createCategory(
         body: JSON.stringify({
             name: data.name.trim(),
             description: data.description?.trim() || null,
+            attributeIds: data.attributeIds.map(Number),
         }),
     });
 
@@ -149,6 +106,7 @@ export async function updateCategory(
         body: JSON.stringify({
             name: data.name.trim(),
             description: data.description?.trim() || null,
+            attributeIds: data.attributeIds.map(Number),
         }),
     });
 
@@ -206,4 +164,28 @@ export async function deactivateCategory(
     );
 
     return normalizeCategory(raw);
+}
+
+/**
+ * Permite (o deja de permitir) un atributo en las variantes de los productos de la categoría.
+ * Endpoint: POST | DELETE /api/v1/categories/{id}/attributes/{attributeId} → 204 sin body.
+ */
+export async function setCategoryAttribute(
+    categoryId: string,
+    attributeId: string,
+    assigned: boolean,
+    token: string
+): Promise<void> {
+    const response = await apiFetch(
+        `${API_BASE_URL}/api/v1/categories/${categoryId}/attributes/${attributeId}`,
+        {
+            method: assigned ? 'POST' : 'DELETE',
+            headers: authHeaders(token),
+        }
+    );
+
+    await handleResponse<void>(
+        response,
+        assigned ? 'No se pudo asignar la categoría.' : 'No se pudo quitar la categoría.'
+    );
 }

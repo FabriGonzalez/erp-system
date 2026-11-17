@@ -1,6 +1,7 @@
 package com.gonzalez.erp.modules.users.service;
 
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.config.security.LoginAttemptService;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +33,7 @@ public class UserServiceImpl implements UserService {
     private final RoleRepository roleRepository;
     private final CompanyRepository companyRepository;
     private final PasswordEncoder passwordEncoder;
+    private final LoginAttemptService loginAttemptService;
 
     @Override
     public List<UserResponse> findAll(Boolean active) {
@@ -51,10 +54,11 @@ public class UserServiceImpl implements UserService {
     public UserResponse create(UserRequest request) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
-        if (userRepository.existsByEmailAndCompanyId(request.email(), companyId)) {
+        // Usuario y email son únicos en toda la plataforma (el login es por usuario), no por empresa.
+        if (userRepository.existsByEmailIgnoreCase(request.email())) {
             throw new UserEmailAlreadyExistsException(request.email());
         }
-        if (userRepository.existsByUsernameAndCompanyId(request.username(), companyId)) {
+        if (userRepository.existsByUsernameIgnoreCase(request.username())) {
             throw new UserUsernameAlreadyExistsException(request.username());
         }
         Role role = findAssignableRoleOrThrow(request.roleId(), companyId);
@@ -68,6 +72,7 @@ public class UserServiceImpl implements UserService {
                 .lastName(request.lastName())
                 .role(role)
                 .company(company)
+                .passwordManagedByAdmin(true)
                 .build();
         return UserMapper.toResponse(userRepository.save(user));
     }
@@ -78,12 +83,18 @@ public class UserServiceImpl implements UserService {
         User user = findUserOrThrow(id);
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
-        if (!user.getEmail().equals(request.email())
-                && userRepository.existsByEmailAndCompanyIdAndIdNot(request.email(), companyId, id)) {
+        // Cambiarse el rol a uno mismo puede dejar a la empresa sin quien administre usuarios.
+        Long currentRoleId = user.getRole() != null ? user.getRole().getId() : null;
+        if (user.getId().equals(SecurityUtils.getCurrentUserId())
+                && !Objects.equals(currentRoleId, request.roleId())) {
+            throw new AccessDeniedException("You cannot change your own role");
+        }
+        if (!user.getEmail().equalsIgnoreCase(request.email())
+                && userRepository.existsByEmailIgnoreCaseAndIdNot(request.email(), id)) {
             throw new UserEmailAlreadyExistsException(request.email());
         }
-        if (!user.getUsername().equals(request.username())
-                && userRepository.existsByUsernameAndCompanyIdAndIdNot(request.username(), companyId, id)) {
+        if (!user.getUsername().equalsIgnoreCase(request.username())
+                && userRepository.existsByUsernameIgnoreCaseAndIdNot(request.username(), id)) {
             throw new UserUsernameAlreadyExistsException(request.username());
         }
         Role role = findAssignableRoleOrThrow(request.roleId(), companyId);
@@ -109,6 +120,22 @@ public class UserServiceImpl implements UserService {
         User user = findUserOrThrow(id);
         user.activate();
         return UserMapper.toResponse(user);
+    }
+
+    @Override
+    @Transactional
+    public void resetPassword(Long id, String newPassword) {
+        User user = findUserOrThrow(id);
+        // La propia se cambia con /auth/change-password, que exige la contraseña actual:
+        // así una sesión robada de un admin no alcanza para quedarse con la cuenta.
+        if (user.getId().equals(SecurityUtils.getCurrentUserId())) {
+            throw new AccessDeniedException("Use change-password to change your own password");
+        }
+
+        // Cierra las sesiones abiertas del usuario.
+        user.updatePassword(passwordEncoder.encode(newPassword));
+        // Si el usuario estaba bloqueado por intentos fallidos, el reset lo habilita.
+        loginAttemptService.recordSuccess(user.getUsername());
     }
 
     private Role findAssignableRoleOrThrow(Long roleId, Long companyId) {

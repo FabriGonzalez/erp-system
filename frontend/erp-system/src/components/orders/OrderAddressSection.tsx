@@ -1,14 +1,18 @@
 import { SymbolView } from 'expo-symbols';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AddressSummary } from '@/components/customers/AddressSummary';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
 import { SharedStyles } from '@/styles/shared';
 import { Customer, CustomerAddress } from '@/types/customer';
+import { OrderShippingAddress } from '@/types/order';
 
 type OrderAddressSectionProps = {
     customer: Customer;
     selectedAddress?: CustomerAddress;
+    // La dirección elegida se desactivó o se eliminó después de seleccionarla.
+    isSelectedAddressUnavailable?: boolean;
     onSelectAddress: () => void;
     onAddCustomerAddress: () => void;
 };
@@ -16,10 +20,13 @@ type OrderAddressSectionProps = {
 export function OrderAddressSection({
     customer,
     selectedAddress,
+    isSelectedAddressUnavailable = false,
     onSelectAddress,
     onAddCustomerAddress,
 }: OrderAddressSectionProps) {
-    const hasAddresses = customer.addresses.length > 0;
+    const hasAddresses = customer.addressCount > 0;
+    // Las direcciones de un cliente web las administra él desde la tienda.
+    const canAddAddress = customer.origin !== 'WEB';
 
     return (
         <View style={styles.container}>
@@ -43,49 +50,50 @@ export function OrderAddressSection({
                     </View>
 
                     <Text style={styles.warningDescription}>
-                        Este cliente no tiene direcciones cargadas. Agregá una
-                        dirección antes de continuar con un envío.
+                        {canAddAddress
+                            ? 'Este cliente no tiene direcciones cargadas. Agregá una dirección antes de continuar con un envío.'
+                            : 'El cliente carga sus direcciones desde su cuenta en la tienda.'}
                     </Text>
 
-                    <Pressable
-                        style={({ pressed }) => [
-                            styles.addAddressBtn,
-                            pressed && SharedStyles.pressed,
-                        ]}
-                        onPress={onAddCustomerAddress}
-                    >
-                        <SymbolView
-                            name={{
-                                ios: 'plus.circle.fill',
-                                android: 'add_circle',
-                                web: 'add_circle',
-                            }}
-                            size={18}
-                            tintColor={Colors.primary}
-                        />
-                        <Text style={styles.addAddressBtnText}>
-                            Agregar dirección al cliente
-                        </Text>
-                    </Pressable>
+                    {canAddAddress ? (
+                        <Pressable
+                            style={({ pressed }) => [
+                                styles.addAddressBtn,
+                                pressed && SharedStyles.pressed,
+                            ]}
+                            onPress={onAddCustomerAddress}
+                        >
+                            <SymbolView
+                                name={{
+                                    ios: 'plus.circle.fill',
+                                    android: 'add_circle',
+                                    web: 'add_circle',
+                                }}
+                                size={18}
+                                tintColor={Colors.primary}
+                            />
+                            <Text style={styles.addAddressBtnText}>
+                                Agregar dirección al cliente
+                            </Text>
+                        </Pressable>
+                    ) : null}
                 </View>
             ) : selectedAddress ? (
                 <View style={styles.addressCard}>
                     <View style={styles.addressHeader}>
-                        <View style={styles.labelBadge}>
-                            <Text style={styles.labelBadgeText}>
-                                {selectedAddress.label}
-                            </Text>
-                        </View>
+                        <AddressSummary address={selectedAddress} />
 
                         <View style={styles.addressActions}>
-                            <Pressable
-                                onPress={onAddCustomerAddress}
-                                style={styles.linkBtn}
-                            >
-                                <Text style={styles.linkBtnText}>
-                                    Agregar dirección
-                                </Text>
-                            </Pressable>
+                            {canAddAddress ? (
+                                <Pressable
+                                    onPress={onAddCustomerAddress}
+                                    style={styles.linkBtn}
+                                >
+                                    <Text style={styles.linkBtnText}>
+                                        Agregar dirección
+                                    </Text>
+                                </Pressable>
+                            ) : null}
 
                             <Pressable
                                 onPress={onSelectAddress}
@@ -97,20 +105,15 @@ export function OrderAddressSection({
                             </Pressable>
                         </View>
                     </View>
-
-                    <Text style={styles.streetText}>
-                        {selectedAddress.street} {selectedAddress.number}
-                    </Text>
-
-                    <Text style={styles.cityText}>
-                        {selectedAddress.city}, {selectedAddress.province}{' '}
-                        {selectedAddress.zipCode
-                            ? `(${selectedAddress.zipCode})`
-                            : ''}
-                    </Text>
                 </View>
             ) : (
                 <View style={styles.selectGroup}>
+                    {isSelectedAddressUnavailable ? (
+                        <Text style={styles.unavailableText}>
+                            La dirección elegida ya no está disponible. Seleccioná otra.
+                        </Text>
+                    ) : null}
+
                     <Pressable
                         style={({ pressed }) => [
                             styles.selectPromptCard,
@@ -143,25 +146,113 @@ export function OrderAddressSection({
                         />
                     </Pressable>
 
+                    {canAddAddress ? (
+                        <Pressable
+                            style={({ pressed }) => [
+                                styles.addAddressBtn,
+                                pressed && SharedStyles.pressed,
+                            ]}
+                            onPress={onAddCustomerAddress}
+                        >
+                            <SymbolView
+                                name={{
+                                    ios: 'plus.circle.fill',
+                                    android: 'add_circle',
+                                    web: 'add_circle',
+                                }}
+                                size={18}
+                                tintColor={Colors.primary}
+                            />
+                            <Text style={styles.addAddressBtnText}>
+                                Agregar nueva dirección
+                            </Text>
+                        </Pressable>
+                    ) : null}
+                </View>
+            )}
+        </View>
+    );
+}
+
+type OrderEditAddressSectionProps = {
+    // La que el envío tiene guardada; falta en los envíos creados antes de guardarla.
+    currentAddress?: OrderShippingAddress;
+    // La dirección del cliente elegida para reemplazarla, si se eligió una.
+    selectedAddress?: CustomerAddress;
+    isSelectedAddressUnavailable?: boolean;
+    onSelectAddress: () => void;
+};
+
+/** Al editar un envío: muestra la dirección guardada y permite cambiarla. */
+export function OrderEditAddressSection({
+    currentAddress,
+    selectedAddress,
+    isSelectedAddressUnavailable = false,
+    onSelectAddress,
+}: OrderEditAddressSectionProps) {
+    const shownAddress = selectedAddress ?? currentAddress;
+
+    return (
+        <View style={styles.container}>
+            <Text style={SharedStyles.sectionTitle}>Dirección de Envío</Text>
+
+            {isSelectedAddressUnavailable ? (
+                <Text style={[styles.unavailableText, styles.unavailableSpacing]}>
+                    La dirección elegida ya no está disponible. Seleccioná otra.
+                </Text>
+            ) : null}
+
+            {shownAddress ? (
+                <View style={styles.addressCard}>
+                    <View style={styles.addressHeader}>
+                        <AddressSummary address={shownAddress} />
+
+                        <Pressable onPress={onSelectAddress} style={styles.linkBtn}>
+                            <Text style={styles.linkBtnText}>Cambiar</Text>
+                        </Pressable>
+                    </View>
+                    {selectedAddress ? (
+                        <Text style={styles.changeNote}>
+                            Se guardará al confirmar los cambios.
+                        </Text>
+                    ) : null}
+                </View>
+            ) : (
+                <View style={styles.selectGroup}>
+                    <Text style={styles.missingText}>
+                        Este envío no tiene una dirección registrada.
+                    </Text>
+
                     <Pressable
                         style={({ pressed }) => [
-                            styles.addAddressBtn,
+                            styles.selectPromptCard,
                             pressed && SharedStyles.pressed,
                         ]}
-                        onPress={onAddCustomerAddress}
+                        onPress={onSelectAddress}
                     >
                         <SymbolView
                             name={{
-                                ios: 'plus.circle.fill',
-                                android: 'add_circle',
-                                web: 'add_circle',
+                                ios: 'mappin.circle',
+                                android: 'location_on',
+                                web: 'location_on',
                             }}
-                            size={18}
+                            size={22}
                             tintColor={Colors.primary}
                         />
-                        <Text style={styles.addAddressBtnText}>
-                            Agregar nueva dirección
+
+                        <Text style={styles.selectPromptText}>
+                            Seleccionar dirección de envío
                         </Text>
+
+                        <SymbolView
+                            name={{
+                                ios: 'chevron.right',
+                                android: 'chevron_right',
+                                web: 'chevron_right',
+                            }}
+                            size={16}
+                            tintColor={Colors.textSecondary}
+                        />
                     </Pressable>
                 </View>
             )}
@@ -173,9 +264,21 @@ const styles = StyleSheet.create({
     container: {
         marginBottom: Spacing.lg,
     },
+    unavailableSpacing: {
+        marginBottom: Spacing.sm,
+    },
+    changeNote: {
+        fontSize: 12,
+        color: Colors.textSecondary,
+        marginTop: Spacing.sm,
+    },
+    missingText: {
+        fontSize: 13,
+        color: Colors.textSecondary,
+    },
     warningCard: {
         backgroundColor: Colors.warningLight,
-        borderRadius: 12,
+        borderRadius: Radius.lg,
         padding: Spacing.md,
         borderWidth: 1,
         borderColor: '#FDE68A',
@@ -202,7 +305,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: Colors.surface,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         paddingVertical: Spacing.sm,
         paddingHorizontal: Spacing.md,
         gap: 6,
@@ -216,7 +319,7 @@ const styles = StyleSheet.create({
     },
     addressCard: {
         backgroundColor: Colors.surface,
-        borderRadius: 12,
+        borderRadius: Radius.lg,
         padding: Spacing.md,
         borderWidth: 1,
         borderColor: Colors.border,
@@ -224,24 +327,12 @@ const styles = StyleSheet.create({
     addressHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 6,
-    },
-    labelBadge: {
-        backgroundColor: Colors.primaryLight,
-        paddingHorizontal: Spacing.xs + 2,
-        paddingVertical: 2,
-        borderRadius: 4,
-    },
-    labelBadgeText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: Colors.primary,
+        alignItems: 'flex-start',
+        gap: Spacing.sm,
     },
     addressActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
+        alignItems: 'flex-end',
+        gap: Spacing.xs,
     },
     linkBtn: {
         paddingVertical: 2,
@@ -254,21 +345,16 @@ const styles = StyleSheet.create({
     selectGroup: {
         gap: Spacing.sm,
     },
-    streetText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: Colors.text,
-    },
-    cityText: {
+    unavailableText: {
         fontSize: 13,
-        color: Colors.textSecondary,
-        marginTop: 2,
+        fontWeight: '600',
+        color: Colors.warningText,
     },
     selectPromptCard: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: Colors.surface,
-        borderRadius: 12,
+        borderRadius: Radius.lg,
         padding: Spacing.md,
         borderWidth: 1,
         borderColor: Colors.border,

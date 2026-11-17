@@ -2,12 +2,17 @@ package com.gonzalez.erp.modules.orders.service;
 
 import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.common.util.BusinessDate;
 import com.gonzalez.erp.config.security.SecurityUtils;
+import com.gonzalez.erp.modules.branches.entity.Branch;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
+import com.gonzalez.erp.modules.customers.entity.Address;
 import com.gonzalez.erp.modules.customers.entity.Customer;
 import com.gonzalez.erp.modules.customers.entity.TransactionType;
+import com.gonzalez.erp.modules.customers.repository.AddressRepository;
 import com.gonzalez.erp.modules.customers.repository.CustomerRepository;
 import com.gonzalez.erp.modules.customers.service.CustomerAccountService;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
@@ -16,7 +21,9 @@ import com.gonzalez.erp.modules.inventory.entity.StockMovementType;
 import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
 import com.gonzalez.erp.modules.inventory.repository.StockMovementRepository;
 import com.gonzalez.erp.modules.inventory.repository.StockRepository;
+import com.gonzalez.erp.modules.inventory.service.StockMovementRecorder;
 import com.gonzalez.erp.modules.orders.dto.request.OrderItemRequest;
+import com.gonzalez.erp.modules.orders.dto.request.OrderPromoRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderUpdateRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderCancelRequest;
@@ -25,39 +32,61 @@ import com.gonzalez.erp.modules.payments.repository.PaymentAllocationRepository;
 import com.gonzalez.erp.modules.orders.dto.response.OrderResponse;
 import com.gonzalez.erp.modules.orders.entity.DeliveryType;
 import com.gonzalez.erp.modules.orders.entity.Order;
+import com.gonzalez.erp.modules.orders.entity.OrderChannel;
 import com.gonzalez.erp.modules.orders.entity.OrderItem;
 import com.gonzalez.erp.modules.orders.entity.OrderNumberCounter;
+import com.gonzalez.erp.modules.orders.entity.OrderPromo;
+import com.gonzalez.erp.modules.orders.entity.OrderPromoComponent;
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 import com.gonzalez.erp.modules.orders.entity.SalesType;
+import com.gonzalez.erp.modules.orders.exception.InactiveOrderCustomerException;
+import com.gonzalez.erp.modules.orders.exception.InactiveOrderVariantException;
 import com.gonzalez.erp.modules.orders.exception.InsufficientStockForEditException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderStatusTransitionException;
+import com.gonzalez.erp.modules.orders.exception.InvalidShippingAddressException;
 import com.gonzalez.erp.modules.orders.exception.QuickSaleValidationException;
 import com.gonzalez.erp.modules.orders.mapper.OrderMapper;
 import com.gonzalez.erp.modules.orders.repository.OrderNumberCounterRepository;
 import com.gonzalez.erp.modules.orders.repository.OrderRepository;
+import com.gonzalez.erp.modules.mercadopago.service.MercadoPagoPaymentService;
+import com.gonzalez.erp.modules.payments.entity.PaymentMethod;
 import com.gonzalez.erp.modules.payments.service.OrderPaymentService;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
-import com.gonzalez.erp.modules.users.repository.UserBranchRepository;
+import com.gonzalez.erp.modules.promotions.entity.Promotion;
+import com.gonzalez.erp.modules.promotions.entity.PromotionItem;
+import com.gonzalez.erp.modules.promotions.entity.PromotionStatus;
+import com.gonzalez.erp.modules.promotions.exception.PromotionNotAvailableException;
+import com.gonzalez.erp.modules.promotions.mapper.PromotionMapper;
+import com.gonzalez.erp.modules.promotions.repository.PromotionRepository;
+import com.gonzalez.erp.modules.shipments.entity.Shipment;
+import com.gonzalez.erp.modules.shipments.repository.ShipmentRepository;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import com.gonzalez.erp.modules.orders.entity.PaymentStatus;
+import com.gonzalez.erp.modules.orders.event.WebOrderPaidEvent;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -70,26 +99,29 @@ public class OrderServiceImpl implements OrderService {
     private final OrderNumberCounterRepository orderNumberCounterRepository;
     private final StockRepository stockRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final StockMovementRecorder stockMovementRecorder;
     private final BranchRepository branchRepository;
     private final ProductVariantRepository productVariantRepository;
     private final CustomerRepository customerRepository;
     private final CustomerAccountService customerAccountService;
     private final PaymentAllocationRepository paymentAllocationRepository;
     private final UserRepository userRepository;
-    private final UserBranchRepository userBranchRepository;
+    private final BranchAccessService branchAccessService;
     private final CompanyRepository companyRepository;
     private final OrderPaymentService orderPaymentService;
+    private final AddressRepository addressRepository;
+    private final ShipmentRepository shipmentRepository;
+    private final PromotionRepository promotionRepository;
+    private final ApplicationEventPublisher events;
+    private final MercadoPagoPaymentService mercadoPagoPaymentService;
 
     @Override
-    public PageResponse<OrderResponse> findAll(OrderStatus status, Long branchId, SalesType salesType,
+    public PageResponse<OrderResponse> findAll(OrderStatus status, OrderChannel channel, Long branchId, SalesType salesType,
                                                DeliveryType deliveryType, Long customerId,
                                                PaymentStatus paymentStatus, String query, Pageable pageable) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
-        Long userId = SecurityUtils.getCurrentUserId();
 
-        List<Long> accessibleBranchIds = userBranchRepository.findByUserId(userId).stream()
-                .map(ub -> ub.getBranch().getId())
-                .toList();
+        List<Long> accessibleBranchIds = branchAccessService.accessibleBranchIds();
 
         if (accessibleBranchIds.isEmpty()) {
             return new PageResponse<>(List.of(), pageable.getPageNumber(), pageable.getPageSize(), 0, 0);
@@ -99,14 +131,25 @@ public class OrderServiceImpl implements OrderService {
         boolean hasQuery = !trimmedQuery.isEmpty();
         String likePattern = hasQuery ? "%" + trimmedQuery + "%" : "%";
 
-        return PageResponse.of(
-                orderRepository.search(companyId, accessibleBranchIds, status, salesType, deliveryType,
-                        branchId, customerId, hasQuery, likePattern,
-                        paymentStatus == PaymentStatus.PAID,
-                        paymentStatus == PaymentStatus.PENDING,
-                        paymentStatus == PaymentStatus.PARTIAL,
-                        pageable),
-                this::toOrderResponse);
+        Page<Order> orders = orderRepository.search(companyId, accessibleBranchIds, status, channel, salesType, deliveryType,
+                branchId, customerId, hasQuery, likePattern,
+                paymentStatus == PaymentStatus.PAID,
+                paymentStatus == PaymentStatus.PENDING,
+                paymentStatus == PaymentStatus.PARTIAL,
+                pageable);
+
+        // Una sola consulta para los envíos de la página, no una por pedido.
+        List<Long> shippingOrderIds = orders.getContent().stream()
+                .filter(order -> order.getDeliveryType() == DeliveryType.SHIPPING)
+                .map(Order::getId)
+                .toList();
+        Map<Long, Shipment> shipmentsByOrderId = shippingOrderIds.isEmpty()
+                ? Map.of()
+                : shipmentRepository.findByOrderIdIn(shippingOrderIds).stream()
+                        .collect(Collectors.toMap(shipment -> shipment.getOrder().getId(), Function.identity()));
+
+        return PageResponse.of(orders,
+                order -> toOrderResponse(order, shipmentsByOrderId.get(order.getId())));
     }
 
     @Override
@@ -121,11 +164,20 @@ public class OrderServiceImpl implements OrderService {
         Long userId = SecurityUtils.getCurrentUserId();
         Company company = companyRepository.getReferenceById(companyId);
 
-        validateBranchAccess(request.branchId());
-        validateSalesType(request.salesType(), request.items(), request.customerId(), request.quickSaleAmount());
+        branchAccessService.requireAccessible(request.branchId());
+        validateSalesType(request.salesType(), request.deliveryType(), request.items(), request.promos(),
+                request.quickSaleAmount());
+        if (request.salesType() == SalesType.QUICK_SALE) {
+            rejectQuickSaleDiscount(request.discount());
+        }
         validatePaymentOptions(request);
 
         Customer customer = resolveCustomerOrNull(request.customerId(), companyId);
+        // Solo en el alta: los pedidos ya creados de un cliente desactivado se siguen pudiendo editar.
+        if (customer != null && !customer.isActive()) {
+            throw new InactiveOrderCustomerException(customer.getId());
+        }
+        Address shippingAddress = resolveShippingAddressForCreate(request, customer);
         String orderNumber = generateOrderNumber(company);
 
         OrderStatus status = (request.deliveryType() == DeliveryType.LOCAL_PICKUP)
@@ -145,6 +197,7 @@ public class OrderServiceImpl implements OrderService {
                 .company(company)
                 .salesType(request.salesType())
                 .quickSaleAmount(request.salesType() == SalesType.QUICK_SALE ? request.quickSaleAmount() : null)
+                .paymentMethod(customer == null ? request.paymentMethod() : null)
                 .deliveryType(request.deliveryType())
                 .confirmedAt(confirmedAt)
                 .preparedAt(preparedAt)
@@ -152,66 +205,134 @@ public class OrderServiceImpl implements OrderService {
                 .build();
 
         if (request.salesType() == SalesType.WITH_PRODUCTS) {
-            List<OrderItem> items = buildItemsFromRequest(request.items(), companyId);
+            List<OrderItem> items = buildItemsFromRequest(orEmpty(request.items()), companyId, Map.of());
             order.updateItems(items);
-            order.recalculateTotal();
+            LocalDate today = BusinessDate.today();
+            order.updatePromos(orEmpty(request.promos()).stream()
+                    .map(promoRequest -> buildNewPromo(promoRequest, companyId, today))
+                    .toList());
+            applyDiscount(order, request.discount());
 
             Order saved = orderRepository.saveAndFlush(order);
 
-            Long branchId = request.branchId();
-            List<Long> sortedVariantIds = request.items().stream()
-                    .map(OrderItemRequest::productVariantId)
-                    .distinct()
-                    .sorted()
-                    .toList();
+            reserveStock(saved, request.branchId(), companyId, userId);
 
-            for (Long variantId : sortedVariantIds) {
-                stockRepository.insertIfAbsent(variantId, branchId, companyId);
-            }
-
-            Map<Long, Stock> lockedStocks = new HashMap<>();
-            for (Long variantId : sortedVariantIds) {
-                Stock stock = stockRepository.findByProductVariantIdAndBranchIdForUpdate(variantId, branchId, companyId)
-                        .orElseThrow(() -> new StockNotFoundException(variantId.toString(), branchId));
-                lockedStocks.put(variantId, stock);
-            }
-
-            for (OrderItem item : saved.getItems()) {
-                Stock stock = lockedStocks.get(item.getProductVariant().getId());
-                if (stock.getQuantity() < item.getQuantity()) {
-                    throw new InsufficientStockForEditException(
-                            "Insufficient stock for variant id: " + item.getProductVariant().getId()
-                                    + ". Current quantity: " + stock.getQuantity()
-                                    + ", requested: " + item.getQuantity());
-                }
-            }
-
-            for (OrderItem item : saved.getItems()) {
-                Stock stock = lockedStocks.get(item.getProductVariant().getId());
-                int previousQuantity = stock.getQuantity();
-                stock.setQuantity(previousQuantity - item.getQuantity());
-                stockRepository.save(stock);
-                saveMovement(stock, StockMovementType.SALE, -item.getQuantity(), previousQuantity, saved.getId());
-            }
-
-            return completeCreation(saved, request, companyId, userId);
+            return completeCreation(saved, shippingAddress, request, companyId, userId);
         } else {
             order.recalculateTotal();
             Order saved = orderRepository.saveAndFlush(order);
 
-            return completeCreation(saved, request, companyId, userId);
+            return completeCreation(saved, shippingAddress, request, companyId, userId);
+        }
+    }
+
+    @Override
+    @Transactional
+    public Order createWebOrder(WebOrderCommand command) {
+        Order order = Order.builder()
+                .orderNumber(generateOrderNumber(command.company()))
+                .branch(command.branch())
+                .customer(command.customer())
+                .company(command.company())
+                .channel(OrderChannel.WEB)
+                .status(OrderStatus.PENDING_PAYMENT)
+                .stockReserved(command.reserveStock())
+                .salesType(SalesType.WITH_PRODUCTS)
+                .deliveryType(command.deliveryType())
+                .shippingCost(command.shippingCost())
+                .checkoutKey(command.checkoutKey())
+                .amountPaid(BigDecimal.ZERO)
+                .build();
+        order.updateItems(command.items());
+        order.updatePromos(command.promos());
+        order.recalculateTotal();
+
+        Order saved = orderRepository.saveAndFlush(order);
+        if (command.reserveStock()) {
+            reserveStock(saved, command.branch().getId(), command.company().getId(), null);
+        }
+        if (command.shippingAddress() != null) {
+            saveShipment(saved, command.shippingAddress());
+        }
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    public void cancelUnpaidWebOrder(Order order) {
+        if (order.getChannel() != OrderChannel.WEB || order.getStatus() != OrderStatus.PENDING_PAYMENT) {
+            throw new InvalidOrderStatusTransitionException(
+                    "Only unpaid web orders can be cancelled this way. Status: " + order.getStatus());
+        }
+        // Sin pago no hubo cargo en la cuenta: solo se devuelve el stock, si se llegó a descontar.
+        if (order.isStockReserved()) {
+            releaseStock(order, order.getCompany().getId(), null);
+        }
+        order.cancel();
+        orderRepository.save(order);
+    }
+
+    @Override
+    @Transactional
+    public void confirmWebOrderPayment(Order order, String mpPaymentId) {
+        if (order.getChannel() != OrderChannel.WEB || order.getStatus() != OrderStatus.PENDING_PAYMENT) {
+            throw new InvalidOrderStatusTransitionException(
+                    "Only unpaid web orders can be paid this way. Status: " + order.getStatus());
+        }
+        Long companyId = order.getCompany().getId();
+        // El cargo y el pago van juntos: la cuenta del cliente queda en cero para este pedido.
+        customerAccountService.applyTransaction(
+                order.getCustomer().getId(),
+                companyId,
+                order.getTotal(),
+                TransactionType.ORDER_CHARGE,
+                order.getBranch(),
+                "Cargo por pedido #" + order.getOrderNumber()
+        );
+        orderPaymentService.registerMercadoPagoPayment(order, order.getTotal(), mpPaymentId, companyId);
+        order.markPaid(Instant.now());
+        orderRepository.save(order);
+        events.publishEvent(new WebOrderPaidEvent(order));
+    }
+
+    /** Descuenta el stock del pedido. No depende de la sesión: empresa y autor llegan por parámetro. */
+    private void reserveStock(Order order, Long branchId, Long companyId, Long userId) {
+        // Una variante puede ir suelta y dentro de una promo: el stock se mide por el total.
+        Map<Long, Integer> quantities = order.quantitiesByVariant();
+        Map<Long, Stock> lockedStocks = lockStocks(quantities.keySet(), branchId, companyId, true);
+
+        for (Map.Entry<Long, Integer> entry : quantities.entrySet()) {
+            Stock stock = lockedStocks.get(entry.getKey());
+            if (stock.getQuantity() < entry.getValue()) {
+                throw new InsufficientStockForEditException(
+                        "Insufficient stock for variant id: " + entry.getKey()
+                                + ". Current quantity: " + stock.getQuantity()
+                                + ", requested: " + entry.getValue());
+            }
+        }
+
+        for (Map.Entry<Long, Integer> entry : quantities.entrySet()) {
+            Stock stock = lockedStocks.get(entry.getKey());
+            int previousQuantity = stock.getQuantity();
+            stock.setQuantity(previousQuantity - entry.getValue());
+            stockRepository.save(stock);
+            saveMovement(stock, StockMovementType.SALE, -entry.getValue(), previousQuantity, order.getId(), userId);
         }
     }
 
     /**
-     * Registra el cargo en la cuenta del cliente y aplica, en este orden, el saldo
-     * a favor (si se pidió) y el pago inicial. Ambos se asignan a esta orden aunque
-     * el cliente tenga deudas anteriores. Las ventas sin cliente se cobran en el acto.
+     * Guarda el envío (si lo hay) y registra el cargo en la cuenta del cliente y aplica,
+     * en este orden, el saldo a favor (si se pidió) y el pago inicial. Ambos se asignan a
+     * esta orden aunque el cliente tenga deudas anteriores. Las ventas sin cliente se
+     * cobran en el acto.
      */
-    private OrderResponse completeCreation(Order saved, OrderRequest request, Long companyId, Long userId) {
+    private OrderResponse completeCreation(Order saved, Address shippingAddress, OrderRequest request,
+                                           Long companyId, Long userId) {
+        Shipment shipment = shippingAddress != null ? saveShipment(saved, shippingAddress) : null;
+
         if (saved.getCustomer() == null) {
             saved.setAmountPaid(saved.getTotal());
-            return toOrderResponse(orderRepository.save(saved));
+            return toOrderResponse(orderRepository.save(saved), shipment);
         }
 
         customerAccountService.applyTransaction(
@@ -237,14 +358,25 @@ public class OrderServiceImpl implements OrderService {
             );
         }
 
-        return toOrderResponse(saved);
+        return toOrderResponse(saved, shipment);
     }
 
     private void validatePaymentOptions(OrderRequest request) {
-        if (request.customerId() == null
-                && (Boolean.TRUE.equals(request.applyCredit()) || request.initialPayment() != null)) {
+        if (request.paymentMethod() == PaymentMethod.MERCADO_PAGO
+                || (request.initialPayment() != null && request.initialPayment().method() == PaymentMethod.MERCADO_PAGO)) {
+            throw new InvalidOrderException("MERCADO_PAGO payments are registered only by the store");
+        }
+        if (request.customerId() == null) {
+            if (Boolean.TRUE.equals(request.applyCredit()) || request.initialPayment() != null) {
+                throw new InvalidOrderException(
+                        "Orders without customer are paid at creation; applyCredit and initialPayment are not allowed");
+            }
+            if (request.paymentMethod() == null) {
+                throw new InvalidOrderException("Orders without customer require a paymentMethod");
+            }
+        } else if (request.paymentMethod() != null) {
             throw new InvalidOrderException(
-                    "Orders without customer are paid at creation; applyCredit and initialPayment are not allowed");
+                    "paymentMethod is only for orders without customer; use initialPayment.method");
         }
     }
 
@@ -255,12 +387,16 @@ public class OrderServiceImpl implements OrderService {
         Long userId = SecurityUtils.getCurrentUserId();
 
         Order order = orderRepository.findByIdAndCompanyIdForUpdate(id, companyId)
-                .filter(o -> o.getBranch() != null && isUserAssignedToBranch(userId, o.getBranch().getId()))
+                .filter(o -> branchAccessService.isAccessible(o.getBranch()))
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
 
         if (!order.isEditable()) {
             throw new InvalidOrderStatusTransitionException(
                     "Only TO_PREPARE orders can be edited. Current status: " + order.getStatus());
+        }
+        // El comprador ya pagó ese total por Mercado Pago.
+        if (order.isWeb()) {
+            throw new InvalidOrderStatusTransitionException("Web orders cannot be edited");
         }
 
         BigDecimal oldTotal = order.getTotal() != null ? order.getTotal() : BigDecimal.ZERO;
@@ -269,11 +405,17 @@ public class OrderServiceImpl implements OrderService {
 
         Customer customer = resolveCustomerOrNull(customerId, companyId);
 
+        Address newShippingAddress = null;
+        if (request.shippingAddressId() != null) {
+            if (order.getDeliveryType() != DeliveryType.SHIPPING) {
+                throw new InvalidShippingAddressException(
+                        "shippingAddressId is only allowed for SHIPPING orders");
+            }
+            newShippingAddress = findShippingAddress(request.shippingAddressId(), customer);
+        }
+
         Order saved;
         if (order.getSalesType() == SalesType.QUICK_SALE) {
-            if (customer == null) {
-                throw new QuickSaleValidationException("QUICK_SALE requires a registered customer");
-            }
             BigDecimal quickSaleAmount = request.quickSaleAmount() != null
                     ? request.quickSaleAmount() : order.getQuickSaleAmount();
             if (quickSaleAmount == null || quickSaleAmount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -282,47 +424,49 @@ public class OrderServiceImpl implements OrderService {
             if (request.items() != null && !request.items().isEmpty()) {
                 throw new QuickSaleValidationException("QUICK_SALE cannot have items");
             }
+            if (request.promos() != null && !request.promos().isEmpty()) {
+                throw new QuickSaleValidationException("QUICK_SALE cannot have promos");
+            }
+            rejectQuickSaleDiscount(request.discount());
 
             order.setQuickSaleAmount(quickSaleAmount);
             order.getItems().clear();
+            order.getPromos().clear();
             order.recalculateTotal();
 
             saved = orderRepository.save(order);
         } else {
-            List<OrderItemRequest> newItems = request.items() != null ? request.items() : List.of();
-            if (newItems.isEmpty()) {
-                throw new InvalidOrderException("WITH_PRODUCTS requires at least one item");
+            List<OrderItemRequest> newItems = orEmpty(request.items());
+            List<OrderPromoRequest> newPromos = orEmpty(request.promos());
+            if (newItems.isEmpty() && newPromos.isEmpty()) {
+                throw new InvalidOrderException("WITH_PRODUCTS requires at least one item or promo");
             }
             validateNoDuplicateVariants(newItems);
-
-            List<OrderItem> builtNewItems = buildItemsFromRequest(newItems, companyId);
+            validateNoDuplicatePromos(newPromos);
 
             Long branchId = order.getBranch().getId();
-            Map<Long, Integer> oldQuantities = new HashMap<>();
+            // Antes de tocar el pedido: lo que hoy tiene descontado del stock.
+            Map<Long, Integer> oldQuantities = order.quantitiesByVariant();
+            Map<Long, BigDecimal> soldPrices = new HashMap<>();
             for (OrderItem item : order.getItems()) {
-                oldQuantities.put(item.getProductVariant().getId(), item.getQuantity());
+                soldPrices.put(item.getProductVariant().getId(), item.getUnitPrice());
             }
 
-            Map<Long, Integer> newQuantities = new LinkedHashMap<>();
-            for (OrderItem item : builtNewItems) {
-                newQuantities.put(item.getProductVariant().getId(), item.getQuantity());
-            }
+            // Lo que ya estaba en el pedido conserva el precio con que se vendió.
+            List<OrderItem> builtNewItems = buildItemsFromRequest(newItems, companyId, soldPrices);
+            List<OrderPromo> builtNewPromos = buildPromosForUpdate(newPromos, order, companyId);
+
+            // Si falta stock, la excepción deshace la transacción y con ella estos cambios.
+            order.updateItems(builtNewItems);
+            order.updatePromos(builtNewPromos);
+            Map<Long, Integer> newQuantities = order.quantitiesByVariant();
 
             Set<Long> affectedVariantIds = new HashSet<>();
             affectedVariantIds.addAll(oldQuantities.keySet());
             affectedVariantIds.addAll(newQuantities.keySet());
             List<Long> sortedVariantIds = affectedVariantIds.stream().sorted().toList();
 
-            for (Long variantId : sortedVariantIds) {
-                stockRepository.insertIfAbsent(variantId, branchId, companyId);
-            }
-
-            Map<Long, Stock> lockedStocks = new HashMap<>();
-            for (Long variantId : sortedVariantIds) {
-                Stock stock = stockRepository.findByProductVariantIdAndBranchIdForUpdate(variantId, branchId, companyId)
-                        .orElseThrow(() -> new StockNotFoundException(variantId.toString(), branchId));
-                lockedStocks.put(variantId, stock);
-            }
+            Map<Long, Stock> lockedStocks = lockStocks(sortedVariantIds, branchId, companyId, true);
 
             for (Long variantId : sortedVariantIds) {
                 int oldQty = oldQuantities.getOrDefault(variantId, 0);
@@ -351,17 +495,16 @@ public class OrderServiceImpl implements OrderService {
                 if (delta > 0) {
                     stock.setQuantity(previousQuantity - delta);
                     stockRepository.save(stock);
-                    saveMovement(stock, StockMovementType.SALE, -delta, previousQuantity, order.getId());
+                    saveMovement(stock, StockMovementType.SALE, -delta, previousQuantity, order.getId(), userId);
                 } else {
                     int returnQty = -delta;
                     stock.setQuantity(previousQuantity + returnQty);
                     stockRepository.save(stock);
-                    saveMovement(stock, StockMovementType.RETURN, returnQty, previousQuantity, order.getId());
+                    saveMovement(stock, StockMovementType.RETURN, returnQty, previousQuantity, order.getId(), userId);
                 }
             }
 
-            order.updateItems(builtNewItems);
-            order.recalculateTotal();
+            applyDiscount(order, request.discount() != null ? request.discount() : order.getDiscount());
 
             saved = orderRepository.save(order);
         }
@@ -387,6 +530,10 @@ public class OrderServiceImpl implements OrderService {
             orderPaymentService.trimAllocationsToTotal(saved);
         }
 
+        // Crea el envío si el pedido no lo tenía (los creados antes de guardar la dirección).
+        if (newShippingAddress != null) {
+            return toOrderResponse(saved, saveShipment(saved, newShippingAddress));
+        }
         return toOrderResponse(saved);
     }
 
@@ -394,11 +541,9 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public OrderResponse dispatch(Long id) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
-        Long userId = SecurityUtils.getCurrentUserId();
 
         Order order = orderRepository.findByIdAndCompanyIdForUpdate(id, companyId)
-                .filter(o -> o.getBranch() != null
-                        && isUserAssignedToBranch(userId, o.getBranch().getId()))
+                .filter(o -> branchAccessService.isAccessible(o.getBranch()))
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Order not found with id: " + id));
 
@@ -424,54 +569,113 @@ public class OrderServiceImpl implements OrderService {
         Long userId = SecurityUtils.getCurrentUserId();
 
         Order order = orderRepository.findByIdAndCompanyIdForUpdate(id, companyId)
-                .filter(o -> o.getBranch() != null && isUserAssignedToBranch(userId, o.getBranch().getId()))
+                .filter(o -> branchAccessService.isAccessible(o.getBranch()))
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
 
+        if (order.isWeb()) {
+            cancelPaidWebOrder(order, companyId, userId);
+            return toOrderResponse(order);
+        }
+
+        RefundAction refundAction = (request != null && request.refundAction() != null)
+                ? request.refundAction()
+                : RefundAction.KEEP_AS_CREDIT;
+
+        cancelLocked(order, refundAction, companyId, userId);
+        return toOrderResponse(order);
+    }
+
+    /**
+     * Pedido web pagado que cancela el local: la plata vuelve entera por Mercado Pago, sin elegir
+     * saldo a favor ni efectivo. La devolución va al final y dentro de la transacción: si Mercado
+     * Pago no la hace, la cancelación se deshace y el pedido queda como estaba.
+     */
+    private void cancelPaidWebOrder(Order order, Long companyId, Long userId) {
+        // Antes de cancelar: cancelLocked borra las asignaciones que llevan al pago.
+        List<String> mpPaymentIds = paymentAllocationRepository.findByOrderId(order.getId()).stream()
+                .map(allocation -> allocation.getPayment().getMpPaymentId())
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        cancelLocked(order, RefundAction.REFUND_MONEY, companyId, userId);
+
+        for (String mpPaymentId : mpPaymentIds) {
+            mercadoPagoPaymentService.refundPayment(companyId, mpPaymentId);
+        }
+    }
+
+    @Override
+    @Transactional
+    public OrderResponse assignBranch(Long id, Long branchId) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+        Long userId = SecurityUtils.getCurrentUserId();
+
+        Order order = orderRepository.findByIdAndCompanyIdForUpdate(id, companyId)
+                .filter(o -> branchAccessService.isAccessible(o.getBranch()))
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
+
+        if (order.getStatus() != OrderStatus.TO_ASSIGN) {
+            throw new InvalidOrderStatusTransitionException(
+                    "Only TO_ASSIGN orders can be assigned a branch. Current status: " + order.getStatus());
+        }
+        Branch branch = branchAccessService.requireAccessible(branchId);
+
+        // Si a esa sucursal le falta algo, 409: el local transfiere antes y vuelve a asignar.
+        reserveStock(order, branch.getId(), companyId, userId);
+        order.assignBranch(branch, Instant.now());
+        orderRepository.save(order);
+
+        return toOrderResponse(order);
+    }
+
+    /** Devuelve el stock del pedido. No depende de la sesión: empresa y autor llegan por parámetro. */
+    private void releaseStock(Order order, Long companyId, Long userId) {
+        List<StockMovement> originalMovements = stockMovementRepository
+                .findByReferenceAndCompanyId(order.getId(), REFERENCE_TYPE, companyId);
+
+        // Por variante: las unidades sueltas más las de las promos.
+        Map<Long, Integer> quantities = order.quantitiesByVariant();
+        Map<Long, Stock> lockedStocks = lockStocks(quantities.keySet(), order.getBranch().getId(), companyId, false);
+
+        for (Map.Entry<Long, Integer> entry : quantities.entrySet()) {
+            Stock stock = lockedStocks.get(entry.getKey());
+            int netConsumed = -originalMovements.stream()
+                .filter(m -> m.getStock().getId().equals(stock.getId()))
+                .filter(m -> m.getType() == StockMovementType.SALE
+                        || m.getType() == StockMovementType.RETURN)
+                .mapToInt(StockMovement::getQuantity)
+                .sum();
+
+            if (netConsumed != entry.getValue()) {
+                throw new InvalidOrderException(
+                        "Net stock consumption mismatch for variant id: " + entry.getKey()
+                                + ". Expected: " + entry.getValue() + ", actual net: " + netConsumed);
+            }
+        }
+
+        for (Map.Entry<Long, Integer> entry : quantities.entrySet()) {
+            Stock stock = lockedStocks.get(entry.getKey());
+            int previousQuantity = stock.getQuantity();
+            stock.setQuantity(previousQuantity + entry.getValue());
+            stockRepository.save(stock);
+            saveMovement(stock, StockMovementType.RETURN, entry.getValue(), previousQuantity, order.getId(), userId);
+        }
+    }
+
+    /**
+     * Cancela un pedido ya bloqueado para escritura. El control de acceso es de quien llama:
+     * el ERP mira las sucursales del empleado; acá solo van las reglas del pedido.
+     */
+    private void cancelLocked(Order order, RefundAction refundAction, Long companyId, Long userId) {
         if (!order.canCancel()) {
             throw new InvalidOrderStatusTransitionException(
                     "Cannot cancel order in status: " + order.getStatus());
         }
 
-        if (order.getSalesType() == SalesType.WITH_PRODUCTS && !order.getItems().isEmpty()) {
-            List<StockMovement> originalMovements = stockMovementRepository
-                    .findByReferenceAndCompanyId(order.getId(), REFERENCE_TYPE, companyId);
-
-            List<Long> sortedVariantIds = order.getItems().stream()
-                    .map(item -> item.getProductVariant().getId())
-                    .distinct()
-                    .sorted()
-                    .toList();
-
-            Map<Long, Stock> lockedStocks = new HashMap<>();
-            for (Long variantId : sortedVariantIds) {
-                Stock stock = stockRepository.findByProductVariantIdAndBranchIdForUpdate(variantId, order.getBranch().getId(), companyId)
-                        .orElseThrow(() -> new StockNotFoundException(variantId.toString(), order.getBranch().getId()));
-                lockedStocks.put(variantId, stock);
-            }
-
-            for (OrderItem item : order.getItems()) {
-                Stock stock = lockedStocks.get(item.getProductVariant().getId());
-                int netConsumed = -originalMovements.stream()
-                    .filter(m -> m.getStock().getId().equals(stock.getId()))
-                    .filter(m -> m.getType() == StockMovementType.SALE
-                            || m.getType() == StockMovementType.RETURN)
-                    .mapToInt(StockMovement::getQuantity)
-                    .sum();
-
-                if (netConsumed != item.getQuantity()) {
-                    throw new InvalidOrderException(
-                            "Net stock consumption mismatch for variant id: " + item.getProductVariant().getId()
-                                    + ". Expected: " + item.getQuantity() + ", actual net: " + netConsumed);
-                }
-            }
-
-            for (OrderItem item : order.getItems()) {
-                Stock stock = lockedStocks.get(item.getProductVariant().getId());
-                int previousQuantity = stock.getQuantity();
-                stock.setQuantity(previousQuantity + item.getQuantity());
-                stockRepository.save(stock);
-                saveMovement(stock, StockMovementType.RETURN, item.getQuantity(), previousQuantity, order.getId());
-            }
+        // Un pedido web a asignar nunca descontó stock.
+        if (order.requiresStockValidation() && order.isStockReserved()) {
+            releaseStock(order, companyId, userId);
         }
 
         if (order.getCustomer() != null) {
@@ -488,10 +692,6 @@ public class OrderServiceImpl implements OrderService {
                     "Reversión por cancelación de pedido #" + order.getOrderNumber()
             );
 
-            RefundAction refundAction = (request != null && request.refundAction() != null)
-                    ? request.refundAction()
-                    : RefundAction.KEEP_AS_CREDIT;
-
             if (refundAction == RefundAction.REFUND_MONEY && activeAllocated.compareTo(BigDecimal.ZERO) > 0) {
                 customerAccountService.applyTransaction(
                         order.getCustomer().getId(),
@@ -506,20 +706,24 @@ public class OrderServiceImpl implements OrderService {
 
         order.cancel();
         orderRepository.save(order);
-        return toOrderResponse(order);
     }
 
     private Order findOrderAndValidateAccess(Long id) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
-        Long userId = SecurityUtils.getCurrentUserId();
 
         return orderRepository.findByIdAndCompanyId(id, companyId)
-                .filter(order -> order.getBranch() != null
-                        && isUserAssignedToBranch(userId, order.getBranch().getId()))
+                .filter(order -> branchAccessService.isAccessible(order.getBranch()))
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
     }
 
     private OrderResponse toOrderResponse(Order order) {
+        Shipment shipment = order.getDeliveryType() == DeliveryType.SHIPPING
+                ? shipmentRepository.findByOrderId(order.getId()).orElse(null)
+                : null;
+        return toOrderResponse(order, shipment);
+    }
+
+    private OrderResponse toOrderResponse(Order order, Shipment shipment) {
         BigDecimal total = order.getTotal() != null
                 ? order.getTotal()
                 : BigDecimal.ZERO;
@@ -542,27 +746,11 @@ public class OrderServiceImpl implements OrderService {
 
         return OrderMapper.toResponse(
                 order,
+                shipment,
                 amountPaid,
                 paymentStatus,
                 balance
         );
-    }
-
-    private void validateBranchAccess(Long branchId) {
-        Long companyId = SecurityUtils.requireCurrentCompanyId();
-        Long userId = SecurityUtils.getCurrentUserId();
-
-        branchRepository.findByIdAndCompanyId(branchId, companyId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Branch not found with id: " + branchId + " in the current company"));
-
-        if (!isUserAssignedToBranch(userId, branchId)) {
-            throw new AccessDeniedException("User is not assigned to branch: " + branchId);
-        }
-    }
-
-    private boolean isUserAssignedToBranch(Long userId, Long branchId) {
-        return userBranchRepository.existsByUserIdAndBranchId(userId, branchId);
     }
 
     private Customer resolveCustomerOrNull(Long customerId, Long companyId) {
@@ -574,24 +762,116 @@ public class OrderServiceImpl implements OrderService {
                         "Customer not found with id: " + customerId + " in the current company"));
     }
 
-    private void validateSalesType(SalesType salesType, List<OrderItemRequest> items, Long customerId, BigDecimal quickSaleAmount) {
-        if (salesType == SalesType.QUICK_SALE) {
-            if (customerId == null) {
-                throw new QuickSaleValidationException("QUICK_SALE requires a registered customer");
+    private Address resolveShippingAddressForCreate(OrderRequest request, Customer customer) {
+        if (request.deliveryType() != DeliveryType.SHIPPING) {
+            if (request.shippingAddressId() != null) {
+                throw new InvalidShippingAddressException(
+                        "shippingAddressId is only allowed for SHIPPING orders");
             }
+            return null;
+        }
+        if (request.shippingAddressId() == null) {
+            throw new InvalidShippingAddressException("SHIPPING orders require a shippingAddressId");
+        }
+        return findShippingAddress(request.shippingAddressId(), customer);
+    }
+
+    /** La dirección tiene que ser del cliente del pedido (y por lo tanto de la empresa) y estar activa. */
+    private Address findShippingAddress(Long addressId, Customer customer) {
+        if (customer == null) {
+            throw new InvalidShippingAddressException("SHIPPING orders require a customer");
+        }
+
+        Address address = addressRepository.findByIdAndCustomerId(addressId, customer.getId())
+                .orElseThrow(() -> new InvalidShippingAddressException(
+                        "Address " + addressId + " does not belong to customer " + customer.getId()));
+
+        if (!address.isActive()) {
+            throw new InvalidShippingAddressException("Address " + addressId + " is inactive");
+        }
+        // Calle y ciudad son obligatorias en el envío; direcciones viejas podrían no tenerlas.
+        if (isBlank(address.getStreet()) || isBlank(address.getCity())) {
+            throw new InvalidShippingAddressException("Address " + addressId + " has no street or city");
+        }
+        return address;
+    }
+
+    private Shipment saveShipment(Order order, Address address) {
+        Shipment shipment = shipmentRepository.findByOrderId(order.getId())
+                .orElseGet(() -> Shipment.builder().order(order).build());
+        shipment.copyAddress(address);
+        return shipmentRepository.saveAndFlush(shipment);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    /** Fija el descuento y recalcula el total: un pedido con productos no puede quedar en $0. */
+    private void applyDiscount(Order order, BigDecimal discount) {
+        BigDecimal amount = discount != null ? discount : BigDecimal.ZERO;
+        if (amount.signum() < 0) {
+            throw new InvalidOrderException("discount cannot be negative");
+        }
+        order.setDiscount(amount);
+        order.recalculateTotal();
+        if (amount.signum() > 0 && order.getTotal().signum() <= 0) {
+            throw new InvalidOrderException("discount must be lower than the order subtotal");
+        }
+    }
+
+    // La venta rápida ya se carga con el importe cobrado.
+    private void rejectQuickSaleDiscount(BigDecimal discount) {
+        if (discount != null && discount.signum() != 0) {
+            throw new QuickSaleValidationException("QUICK_SALE cannot have a discount");
+        }
+    }
+
+    private void validateSalesType(SalesType salesType, DeliveryType deliveryType, List<OrderItemRequest> items,
+                                   List<OrderPromoRequest> promos, BigDecimal quickSaleAmount) {
+        if (salesType == SalesType.QUICK_SALE) {
+            // La venta rápida es solo en el local: un envío siempre lleva productos.
+            if (deliveryType != DeliveryType.LOCAL_PICKUP) {
+                throw new QuickSaleValidationException("QUICK_SALE orders must be LOCAL_PICKUP");
+            }
+            // Sin cliente es una venta a consumidor final: se cobra completa al crearse.
             if (quickSaleAmount == null || quickSaleAmount.signum() <= 0) {
                 throw new QuickSaleValidationException("QUICK_SALE requires a positive quickSaleAmount");
             }
             if (items != null && !items.isEmpty()) {
                 throw new QuickSaleValidationException("QUICK_SALE cannot have items");
             }
+            if (promos != null && !promos.isEmpty()) {
+                throw new QuickSaleValidationException("QUICK_SALE cannot have promos");
+            }
             return;
         }
 
-        if (items == null || items.isEmpty()) {
-            throw new InvalidOrderException("WITH_PRODUCTS requires at least one item");
+        if (orEmpty(items).isEmpty() && orEmpty(promos).isEmpty()) {
+            throw new InvalidOrderException("WITH_PRODUCTS requires at least one item or promo");
         }
-        validateNoDuplicateVariants(items);
+        validateNoDuplicateVariants(orEmpty(items));
+        validateNoDuplicatePromos(orEmpty(promos));
+    }
+
+    /** La misma promo puede ir en varias líneas; lo que no se repite es una línea existente. */
+    private void validateNoDuplicatePromos(List<OrderPromoRequest> promos) {
+        Set<Long> seenLines = new HashSet<>();
+        for (OrderPromoRequest promo : promos) {
+            if (promo.id() != null && !seenLines.add(promo.id())) {
+                throw new InvalidOrderException("Duplicate promo line in order promos: " + promo.id());
+            }
+        }
+    }
+
+    private static void requireSellable(ProductVariant variant) {
+        if (!variant.isActive() || !variant.getProduct().isActive()) {
+            throw new InactiveOrderVariantException(variant.getId());
+        }
+    }
+
+    private static <T> List<T> orEmpty(List<T> list) {
+        return list != null ? list : List.of();
     }
 
     private void validateNoDuplicateVariants(List<OrderItemRequest> items) {
@@ -604,7 +884,12 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    private List<OrderItem> buildItemsFromRequest(List<OrderItemRequest> items, Long companyId) {
+    /**
+     * Arma los ítems con el precio actual de cada variante, salvo las que figuran en
+     * {@code soldPrices} (las que el pedido ya tenía al editarlo), que conservan ese precio.
+     */
+    private List<OrderItem> buildItemsFromRequest(List<OrderItemRequest> items, Long companyId,
+                                                  Map<Long, BigDecimal> soldPrices) {
         List<OrderItem> orderItems = new ArrayList<>();
         for (OrderItemRequest itemRequest : items) {
             ProductVariant variant = productVariantRepository
@@ -616,28 +901,148 @@ public class OrderServiceImpl implements OrderService {
                 throw new ResourceNotFoundException(
                         "Product variant not found with id: " + itemRequest.productVariantId());
             }
+            // Lo que el pedido ya tenía se conserva aunque después lo desactiven; lo nuevo, no.
+            if (!soldPrices.containsKey(variant.getId())) {
+                requireSellable(variant);
+            }
 
             orderItems.add(OrderItem.builder()
                     .productVariant(variant)
                     .quantity(itemRequest.quantity())
-                    .unitPrice(variant.getPrice())
+                    .unitPrice(soldPrices.getOrDefault(variant.getId(), variant.getPrice()))
                     .build());
         }
         return orderItems;
     }
 
+    /**
+     * Arma una línea de promo nueva: la promo tiene que estar vigente hoy y las variantes elegidas
+     * tienen que cubrir exactamente lo que lleva de cada producto (p. ej. 2 remeras: una M y una
+     * L, o 2 M), todas activas. El pedido guarda nombre, precio y variantes tal como están ahora.
+     */
+    private OrderPromo buildNewPromo(OrderPromoRequest request, Long companyId, LocalDate today) {
+        if (request.id() != null) {
+            throw new InvalidOrderException("A promo line id is only allowed when editing an order");
+        }
+        if (request.promotionId() == null) {
+            throw new InvalidOrderException("A new promo line requires promotionId");
+        }
+
+        Promotion promotion = promotionRepository.findByIdAndCompanyId(request.promotionId(), companyId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Promotion not found with id: " + request.promotionId()));
+
+        if (promotion.statusOn(today) != PromotionStatus.ACTIVE) {
+            throw new PromotionNotAvailableException(
+                    "Promotion " + promotion.getId() + " is not active today: " + promotion.statusOn(today));
+        }
+
+        Map<Long, Integer> requiredByProduct = new HashMap<>();
+        for (PromotionItem item : promotion.getItems()) {
+            if (!item.getProduct().isActive()) {
+                throw new PromotionNotAvailableException(
+                        "Promotion " + promotion.getId() + " has an inactive product: " + item.getProduct().getId());
+            }
+            requiredByProduct.put(item.getProduct().getId(), item.getQuantity());
+        }
+
+        Map<Long, Integer> chosenByProduct = new HashMap<>();
+        Map<Long, ProductVariant> variantsById = new HashMap<>();
+        Map<Long, Integer> unitsByVariant = new LinkedHashMap<>();
+        for (OrderPromoRequest.PromoVariantRequest choice : orEmpty(request.variants())) {
+            ProductVariant variant = productVariantRepository.findByIdWithProductAndCompany(choice.productVariantId())
+                    .filter(candidate -> candidate.getCompany() != null
+                            && companyId.equals(candidate.getCompany().getId()))
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Product variant not found with id: " + choice.productVariantId()));
+
+            Long productId = variant.getProduct().getId();
+            if (!requiredByProduct.containsKey(productId)) {
+                throw new InvalidOrderException("Variant " + variant.getId()
+                        + " is not of a product of promotion " + promotion.getId());
+            }
+            if (!PromotionMapper.isSellable(variant)) {
+                throw new PromotionNotAvailableException("Variant " + variant.getId() + " is inactive");
+            }
+
+            variantsById.put(variant.getId(), variant);
+            unitsByVariant.merge(variant.getId(), choice.quantity(), Integer::sum);
+            chosenByProduct.merge(productId, choice.quantity(), Integer::sum);
+        }
+
+        if (!chosenByProduct.equals(requiredByProduct)) {
+            throw new InvalidOrderException("The chosen variants must cover each product of promotion "
+                    + promotion.getId() + " exactly. Expected " + requiredByProduct + ", got " + chosenByProduct);
+        }
+
+        OrderPromo promo = OrderPromo.builder()
+                .promotion(promotion)
+                .name(promotion.getName())
+                .unitPrice(promotion.getPrice())
+                .quantity(request.quantity())
+                .build();
+        unitsByVariant.forEach((variantId, units) -> promo.addComponent(OrderPromoComponent.builder()
+                .productVariant(variantsById.get(variantId))
+                .quantity(units)
+                .build()));
+        return promo;
+    }
+
+    /**
+     * Las líneas que el pedido ya tenía (por id) solo cambian de cantidad y conservan lo vendido
+     * aunque la promo haya vencido o cambiado (Order.updatePromos usa de ellas id y quantity);
+     * las nuevas tienen que estar vigentes.
+     */
+    private List<OrderPromo> buildPromosForUpdate(List<OrderPromoRequest> requests, Order order, Long companyId) {
+        Set<Long> currentIds = new HashSet<>();
+        for (OrderPromo existing : order.getPromos()) {
+            currentIds.add(existing.getId());
+        }
+
+        LocalDate today = BusinessDate.today();
+        List<OrderPromo> promos = new ArrayList<>();
+        for (OrderPromoRequest request : requests) {
+            if (request.id() == null) {
+                promos.add(buildNewPromo(request, companyId, today));
+                continue;
+            }
+            if (!currentIds.contains(request.id())) {
+                throw new InvalidOrderException("Promo line " + request.id() + " is not part of order " + order.getId());
+            }
+            OrderPromo reference = OrderPromo.builder().quantity(request.quantity()).build();
+            reference.setId(request.id());
+            promos.add(reference);
+        }
+        return promos;
+    }
+
+    /**
+     * Bloquea el stock de las variantes en la sucursal, en orden de id para no cruzarse con otra
+     * transacción. Con createMissing crea antes las filas que falten (en 0).
+     */
+    private Map<Long, Stock> lockStocks(Collection<Long> variantIds, Long branchId, Long companyId,
+                                        boolean createMissing) {
+        List<Long> sortedVariantIds = variantIds.stream().distinct().sorted().toList();
+
+        if (createMissing) {
+            for (Long variantId : sortedVariantIds) {
+                stockRepository.insertIfAbsent(variantId, branchId, companyId);
+            }
+        }
+
+        Map<Long, Stock> lockedStocks = new HashMap<>();
+        for (Long variantId : sortedVariantIds) {
+            Stock stock = stockRepository.findByProductVariantIdAndBranchIdForUpdate(variantId, branchId, companyId)
+                    .orElseThrow(() -> new StockNotFoundException(variantId.toString(), branchId));
+            lockedStocks.put(variantId, stock);
+        }
+        return lockedStocks;
+    }
+
     private void saveMovement(Stock stock, StockMovementType type, int quantity,
-                              int previousQuantity, Long referenceId) {
-        stockMovementRepository.save(StockMovement.builder()
-                .stock(stock)
-                .type(type)
-                .quantity(quantity)
-                .previousQuantity(previousQuantity)
-                .newQuantity(stock.getQuantity())
-                .reason(null)
-                .referenceId(referenceId)
-                .referenceType(REFERENCE_TYPE)
-                .build());
+                              int previousQuantity, Long referenceId, Long userId) {
+        stockMovementRecorder.record(stock, type, quantity, previousQuantity, null,
+                REFERENCE_TYPE, referenceId, userId);
     }
 
     @Transactional

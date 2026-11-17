@@ -2,6 +2,7 @@ package com.gonzalez.erp.modules.roles.controller;
 
 import com.gonzalez.erp.modules.roles.dto.request.RoleRequest;
 import com.gonzalez.erp.modules.roles.dto.response.RoleResponse;
+import com.gonzalez.erp.modules.roles.entity.Permission;
 import com.gonzalez.erp.modules.roles.service.RoleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -33,6 +34,16 @@ public class RoleController {
     public ResponseEntity<List<RoleResponse>> findAll(
             @RequestParam(required = false) Boolean active) {
         return ResponseEntity.ok(roleService.findAll(active));
+    }
+
+    @GetMapping("/permissions")
+    @Operation(summary = "Listar permisos asignables",
+               description = "Todos los permisos que puede tener un rol, en el orden en que se definen")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Lista de permisos")
+    })
+    public ResponseEntity<List<Permission>> findPermissions() {
+        return ResponseEntity.ok(List.of(Permission.values()));
     }
 
     @GetMapping("/{id}")

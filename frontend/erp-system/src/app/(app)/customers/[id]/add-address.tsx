@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 
-import { AddCustomerAddressForm } from '@/components/customers/AddCustomerAddressForm';
+import { CustomerAddressForm } from '@/components/customers/CustomerAddressForm';
 
 export default function AddCustomerAddressScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -9,5 +9,5 @@ export default function AddCustomerAddressScreen() {
         return null;
     }
 
-    return <AddCustomerAddressForm customerId={id} />;
+    return <CustomerAddressForm customerId={id} />;
 }

@@ -5,11 +5,18 @@ import com.gonzalez.erp.modules.transfers.dto.response.StockTransferResponse;
 import com.gonzalez.erp.modules.transfers.entity.StockTransfer;
 import com.gonzalez.erp.modules.transfers.entity.StockTransferItem;
 
+import java.util.List;
+
 public final class StockTransferMapper {
 
     private StockTransferMapper() {}
 
     public static StockTransferResponse toResponse(StockTransfer transfer) {
+        return toResponse(transfer, transfer.getItems());
+    }
+
+    /** Con los ítems ya cargados aparte (listado paginado), para no recorrer la colección lazy. */
+    public static StockTransferResponse toResponse(StockTransfer transfer, List<StockTransferItem> items) {
         return new StockTransferResponse(
                 transfer.getId(),
                 transfer.getOriginBranch().getId(),
@@ -20,7 +27,7 @@ public final class StockTransferMapper {
                 transfer.getCreatedBy().getId(),
                 transfer.getCreatedBy().getUsername(),
                 transfer.getConfirmedAt(),
-                transfer.getItems().stream()
+                items.stream()
                         .map(StockTransferMapper::toItemResponse)
                         .toList(),
                 transfer.getCreatedAt(),

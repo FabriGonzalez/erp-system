@@ -1,47 +1,61 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import { useMemo } from 'react';
+import { useState } from 'react';
 import {
+    ActivityIndicator,
     FlatList,
-    Pressable,
     RefreshControl,
     StyleSheet,
-    Text,
     View,
 } from 'react-native';
 
 import { CustomerCard } from '@/components/customers/CustomerCard';
 import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { FilterChip } from '@/components/ui/FilterChip';
+import { HeaderButton } from '@/components/ui/HeaderButton';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
-import { useCustomerStore } from '@/stores/customer-store';
+import { CustomerStatusFilter, useCustomerList } from '@/hooks/use-customer-queries';
+import { useAuthStore } from '@/stores/auth-store';
 import { SharedStyles } from '@/styles/shared';
+import { CustomerOrigin } from '@/types/customer';
+import { hasPermission } from '@/utils/permissions';
+
+const STATUS_FILTERS: { value: CustomerStatusFilter; label: string }[] = [
+    { value: 'active', label: 'Activos' },
+    { value: 'inactive', label: 'Inactivos' },
+    { value: 'all', label: 'Todos' },
+];
+
+const ORIGIN_FILTERS: { value: CustomerOrigin | 'all'; label: string }[] = [
+    { value: 'all', label: 'Todos' },
+    { value: 'ERP', label: 'Local' },
+    { value: 'WEB', label: 'Tienda online' },
+];
 
 export default function CustomersScreen() {
+    const [searchQuery, setSearchQuery] = useState('');
+    const [status, setStatus] = useState<CustomerStatusFilter>('active');
+    const [origin, setOrigin] = useState<CustomerOrigin | 'all'>('all');
+    // El backend deja crear clientes a quien los administra o crea pedidos.
+    const canCreate = useAuthStore((state) =>
+        hasPermission(state.user, 'ADMINISTRAR_CLIENTES') || hasPermission(state.user, 'CREAR_PEDIDOS'));
     const {
         customers,
-        searchQuery,
-        isLoading,
-        isError,
-        errorMessage,
-        setSearchQuery,
-        reloadCustomers,
-    } = useCustomerStore();
-
-    const filteredCustomers = useMemo(() => {
-        const query = searchQuery.trim().toLowerCase();
-        if (!query) return customers;
-
-        return customers.filter((customer) => {
-            const matchesName = customer.name.toLowerCase().includes(query);
-            const matchesEmail = customer.email?.toLowerCase().includes(query) ?? false;
-            const matchesPhone = customer.phone?.includes(query) ?? false;
-            return matchesName || matchesEmail || matchesPhone;
-        });
-    }, [customers, searchQuery]);
+        totalElements,
+        isRefreshing,
+        isInitialLoading,
+        isLoadingMore,
+        error,
+        loadMore,
+        refresh,
+    } = useCustomerList({ query: searchQuery, status, origin: origin === 'all' ? undefined : origin });
+    const isError = Boolean(error) && customers.length === 0;
+    const isFiltered = Boolean(searchQuery.trim()) || status !== 'active' || origin !== 'all';
 
     function handleCreateCustomer() {
         router.push('/customers/new');
@@ -56,97 +70,98 @@ export default function CustomersScreen() {
 
     return (
         <Screen style={styles.screen}>
-            {/* Header / Top Bar */}
-            <View style={[SharedStyles.topBar, SharedStyles.topBarElevated]}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [styles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-
-                <View style={styles.titleContainer}>
-                    <Text style={styles.screenTitle}>Clientes</Text>
-                    <Text style={styles.screenSubtitle}>
-                        {customers.length} {customers.length === 1 ? 'cliente registrado' : 'clientes registrados'}
-                    </Text>
-                </View>
-
-                <Pressable
-                    style={({ pressed }) => [
-                        styles.createButton,
-                        pressed && SharedStyles.pressed,
-                    ]}
-                    onPress={handleCreateCustomer}
-                >
-                    <SymbolView
-                        name={{ ios: 'plus', android: 'add', web: 'add' }}
-                        size={18}
-                        tintColor={Colors.white}
-                    />
-                    <Text style={styles.createButtonText}>Nuevo</Text>
-                </Pressable>
-            </View>
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow={isInitialLoading
+                    ? 'Cargando...'
+                    : `${totalElements} ${totalElements === 1 ? 'cliente' : 'clientes'}${isFiltered ? ' encontrados' : ''}`}
+                title="Clientes"
+                right={canCreate ? (
+                    <HeaderButton label="Nuevo" accessibilityLabel="Nuevo cliente" onPress={handleCreateCustomer} />
+                ) : undefined}
+            />
 
             {/* Búsqueda */}
-            <View style={styles.searchContainer}>
+            <View style={SharedStyles.pageToolbar}>
                 <AppInput
-                    placeholder="Buscar cliente por nombre, email o teléfono..."
+                    placeholder="Buscar por nombre, teléfono, email o documento..."
                     value={searchQuery}
                     onChangeText={setSearchQuery}
+                    autoCapitalize="none"
+                    autoCorrect={false}
                 />
+                <View style={styles.filters}>
+                    {STATUS_FILTERS.map((filter) => (
+                        <FilterChip
+                            key={filter.value}
+                            label={filter.label}
+                            selected={status === filter.value}
+                            onPress={() => setStatus(filter.value)}
+                        />
+                    ))}
+                </View>
+                <View style={styles.filters}>
+                    {ORIGIN_FILTERS.map((filter) => (
+                        <FilterChip
+                            key={filter.value}
+                            label={filter.label}
+                            selected={origin === filter.value}
+                            onPress={() => setOrigin(filter.value)}
+                        />
+                    ))}
+                </View>
             </View>
 
-            {isLoading && (
+            {isInitialLoading && (
                 <LoadingState label="Cargando clientes..." />
             )}
 
-            {!isLoading && isError && (
-                <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>{errorMessage ?? 'Error al cargar clientes'}</Text>
-                    <Pressable style={styles.retryButton} onPress={reloadCustomers}>
-                        <Text style={styles.retryButtonText}>Reintentar</Text>
-                    </Pressable>
-                </View>
+            {!isInitialLoading && isError && (
+                <ErrorState message={error} onRetry={refresh} />
             )}
 
-            {!isLoading && !isError && (
+            {!isInitialLoading && !isError && (
                 <FlatList
-                    data={filteredCustomers}
+                    data={customers}
                     keyExtractor={(item) => item.id}
-                    contentContainerStyle={styles.listContainer}
+                    contentContainerStyle={SharedStyles.pageList}
                     showsVerticalScrollIndicator={false}
+                    onEndReached={loadMore}
+                    onEndReachedThreshold={0.5}
+                    ListFooterComponent={
+                        isLoadingMore ? (
+                            <ActivityIndicator style={styles.footerLoader} color={Colors.primary} />
+                        ) : null
+                    }
                     refreshControl={
                         <RefreshControl
-                            refreshing={isLoading}
-                            onRefresh={reloadCustomers}
+                            refreshing={isRefreshing}
+                            onRefresh={refresh}
                             tintColor={Colors.primary}
                         />
                     }
                     ListEmptyComponent={
-                        <EmptyState
-                            title={
-                                searchQuery.trim()
-                                    ? 'No se encontraron clientes'
-                                    : 'No hay clientes registrados'
-                            }
-                            description={
-                                searchQuery.trim()
-                                    ? 'Intenta con otro término de búsqueda.'
-                                    : 'Crea tu primer cliente para comenzar a registrar sus datos y direcciones.'
-                            }
-                            iconName={{ ios: 'person.2', android: 'group', web: 'group' }}
-                            actionLabel={searchQuery.trim() ? 'Limpiar búsqueda' : 'Nuevo cliente'}
-                            onAction={
-                                searchQuery.trim()
-                                    ? () => setSearchQuery('')
-                                    : handleCreateCustomer
-                            }
-                        />
+                        isFiltered ? (
+                            <EmptyState
+                                title="No se encontraron clientes"
+                                description="Probá con otro término o con otro filtro."
+                                iconName={{ ios: 'person.2', android: 'group', web: 'group' }}
+                                actionLabel="Limpiar filtros"
+                                onAction={() => {
+                                    setSearchQuery('');
+                                    setStatus('active');
+                                    setOrigin('all');
+                                }}
+                            />
+                        ) : (
+                            <EmptyState
+                                title="No hay clientes registrados"
+                                description="Creá tu primer cliente para comenzar a registrar sus datos y direcciones."
+                                iconName={{ ios: 'person.2', android: 'group', web: 'group' }}
+                                actionLabel={canCreate ? 'Nuevo cliente' : undefined}
+                                onAction={canCreate ? handleCreateCustomer : undefined}
+                            />
+                        )
                     }
                     renderItem={({ item }) => (
                         <CustomerCard
@@ -164,64 +179,11 @@ const styles = StyleSheet.create({
     screen: {
         padding: 0,
     },
-    backButton: {
-        padding: Spacing.xs,
-        borderRadius: 8,
-        marginRight: Spacing.xs,
-    },
-    titleContainer: {
-        flex: 1,
-    },
-    screenTitle: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    screenSubtitle: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    createButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.primary,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
-        borderRadius: 8,
-        gap: 6,
-    },
-    createButtonText: {
-        color: Colors.white,
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    searchContainer: {
-        paddingHorizontal: Spacing.lg,
+    footerLoader: {
         paddingVertical: Spacing.md,
     },
-    listContainer: {
-        paddingHorizontal: Spacing.lg,
-        paddingBottom: Spacing.xxl * 2,
-    },
-    errorContainer: {
-        padding: Spacing.xl,
-        alignItems: 'center',
-    },
-    errorText: {
-        color: Colors.error,
-        fontSize: 14,
-        marginBottom: Spacing.md,
-    },
-    retryButton: {
-        backgroundColor: Colors.primary,
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.sm,
-        borderRadius: 8,
-    },
-    retryButtonText: {
-        color: Colors.white,
-        fontWeight: '600',
+    filters: {
+        flexDirection: 'row',
+        gap: Spacing.xs,
     },
 });

@@ -1,8 +1,11 @@
 import { SymbolView } from 'expo-symbols';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ListGroup } from '@/components/ui/ListGroup';
+import { ModalCard } from '@/components/ui/ModalCard';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
+import { SharedStyles } from '@/styles/shared';
 import { Category } from '@/types/category';
 
 interface CategoryModalProps {
@@ -11,6 +14,11 @@ interface CategoryModalProps {
     selectedCategoryId: string;
     onSelect: (categoryId: string) => void;
     onClose: () => void;
+    // Si se pasa, aparece "Crear categoría" debajo de la lista. El llamador cierra este
+    // modal antes de abrir el alta: dos Modal superpuestos fallan en iOS.
+    onCreateCategory?: () => void;
+    // iOS: se llama cuando el modal terminó de cerrarse. Recién ahí se puede abrir otro.
+    onDismiss?: () => void;
 }
 
 export function CategoryModal({
@@ -19,6 +27,8 @@ export function CategoryModal({
     selectedCategoryId,
     onSelect,
     onClose,
+    onCreateCategory,
+    onDismiss,
 }: CategoryModalProps) {
     function handleSelect(categoryId: string) {
         onSelect(categoryId);
@@ -26,146 +36,111 @@ export function CategoryModal({
     }
 
     return (
-        <Modal
+        <ModalCard
             visible={visible}
-            animationType="slide"
-            transparent
-            onRequestClose={onClose}
+            title="Elegir categoría"
+            onClose={onClose}
+            onDismiss={onDismiss}
         >
-            <View style={styles.overlay}>
-                <View style={styles.content}>
-                    <View style={styles.header}>
-                        <Text style={styles.title}>Seleccionar Categoría</Text>
-
-                        <Pressable onPress={onClose} style={styles.closeButton}>
-                            <SymbolView
-                                name={{ ios: 'xmark.circle.fill', android: 'close', web: 'close' }}
-                                size={24}
-                                tintColor={Colors.textSecondary}
-                            />
-                        </Pressable>
-                    </View>
-
-                    <ScrollView style={styles.list}>
-                        {categories.map((cat) => {
-                            const isSelected = cat.id === selectedCategoryId;
-                            return (
-                                <Pressable
-                                    key={cat.id}
-                                    style={[
-                                        styles.categoryItem,
-                                        isSelected && styles.categoryItemSelected,
-                                    ]}
-                                    onPress={() => handleSelect(cat.id)}
-                                >
-                                    <View style={styles.categoryItemInfo}>
-                                        <Text
-                                            style={[
-                                                styles.categoryItemName,
-                                                isSelected && styles.categoryItemNameSelected,
-                                            ]}
-                                        >
-                                            {cat.name}
+            {categories.length === 0 ? (
+                <Text style={styles.emptyText}>Todavía no hay categorías.</Text>
+            ) : (
+                <ListGroup>
+                    {categories.map((category) => {
+                        const isSelected = category.id === selectedCategoryId;
+                        return (
+                            <Pressable
+                                key={category.id}
+                                onPress={() => handleSelect(category.id)}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: isSelected }}
+                                style={({ pressed }) => [
+                                    styles.row,
+                                    isSelected && styles.rowSelected,
+                                    pressed && SharedStyles.listItemPressed,
+                                ]}
+                            >
+                                <View style={SharedStyles.listItemTexts}>
+                                    <Text style={[styles.name, isSelected && styles.nameSelected]}>
+                                        {category.name}{category.active ? '' : ' (inactiva)'}
+                                    </Text>
+                                    {category.description ? (
+                                        <Text style={SharedStyles.listItemMeta} numberOfLines={2}>
+                                            {category.description}
                                         </Text>
-                                        {cat.description ? (
-                                            <Text style={styles.categoryItemDesc}>
-                                                {cat.description}
-                                            </Text>
-                                        ) : null}
-                                    </View>
+                                    ) : null}
+                                </View>
+                                {isSelected ? (
+                                    <SymbolView
+                                        name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
+                                        size={22}
+                                        tintColor={Colors.primary}
+                                    />
+                                ) : null}
+                            </Pressable>
+                        );
+                    })}
+                </ListGroup>
+            )}
 
-                                    {isSelected && (
-                                        <SymbolView
-                                            name={{
-                                                ios: 'checkmark.circle.fill',
-                                                android: 'check_circle',
-                                                web: 'check_circle',
-                                            }}
-                                            size={20}
-                                            tintColor={Colors.primary}
-                                        />
-                                    )}
-                                </Pressable>
-                            );
-                        })}
-                    </ScrollView>
-                </View>
-            </View>
-        </Modal>
+            {onCreateCategory ? (
+                <Pressable
+                    style={({ pressed }) => [styles.createButton, pressed && SharedStyles.pressed]}
+                    onPress={onCreateCategory}
+                    accessibilityRole="button"
+                >
+                    <SymbolView
+                        name={{ ios: 'plus', android: 'add', web: 'add' }}
+                        size={18}
+                        tintColor={Colors.primary}
+                    />
+                    <Text style={styles.createButtonText}>Crear categoría</Text>
+                </Pressable>
+            ) : null}
+        </ModalCard>
     );
 }
 
 const styles = StyleSheet.create({
-    overlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.4)',
-        justifyContent: 'flex-end',
-    },
-
-    content: {
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+        paddingVertical: Spacing.md,
+        paddingHorizontal: Spacing.md + 2,
         backgroundColor: Colors.surface,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        maxHeight: '60%',
-        paddingBottom: Spacing.xl,
     },
-
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
-    },
-
-    title: {
-        fontSize: 17,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-
-    closeButton: {
-        padding: 4,
-    },
-
-    list: {
-        padding: Spacing.md,
-    },
-
-    categoryItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: Spacing.md,
-        paddingHorizontal: Spacing.md,
-        borderRadius: 10,
-        marginBottom: Spacing.xs,
-    },
-
-    categoryItemSelected: {
+    rowSelected: {
         backgroundColor: Colors.primaryLight,
     },
-
-    categoryItemInfo: {
-        flex: 1,
-        marginRight: Spacing.sm,
-    },
-
-    categoryItemName: {
+    name: {
         fontSize: 15,
         fontWeight: '600',
         color: Colors.text,
     },
-
-    categoryItemNameSelected: {
+    nameSelected: {
         color: Colors.primary,
     },
-
-    categoryItemDesc: {
-        fontSize: 12,
+    emptyText: {
+        fontSize: 14,
         color: Colors.textSecondary,
-        marginTop: 2,
+        textAlign: 'center',
+        paddingVertical: Spacing.md,
+    },
+    createButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: Spacing.xs,
+        minHeight: 48,
+        borderRadius: Radius.md,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        borderColor: Colors.primary,
+    },
+    createButtonText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: Colors.primary,
     },
 });

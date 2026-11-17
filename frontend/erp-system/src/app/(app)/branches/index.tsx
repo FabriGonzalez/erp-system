@@ -1,58 +1,59 @@
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
     FlatList,
     Pressable,
     RefreshControl,
     StyleSheet,
-    Switch,
     Text,
     View,
 } from 'react-native';
 
 import { BranchFormModal } from '@/components/branches/BranchFormModal';
 import { BranchUsersAssignmentModal } from '@/components/branches/BranchUsersAssignmentModal';
-import { AppButton } from '@/components/ui/AppButton';
+import { ActionChip } from '@/components/ui/ActionChip';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { HeaderButton } from '@/components/ui/HeaderButton';
+import { IconBadge } from '@/components/ui/IconBadge';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/spacing';
+import { Radius, Spacing } from '@/constants/spacing';
+import {
+    useActiveBranch,
+    useBranches,
+    useMyBranches,
+    useSelectBranch,
+    useSetBranchActive,
+} from '@/hooks/use-branch-queries';
 import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
+import { showErrorToast } from '@/stores/toast-store';
 import { SharedStyles } from '@/styles/shared';
 import { Branch } from '@/types/branch';
+import { confirmAction } from '@/utils/confirm';
+import { hasPermission } from '@/utils/permissions';
 
 export default function BranchesListScreen() {
-    const { token, user } = useAuthStore();
-    const {
-        allBranches,
-        isLoading,
-        error,
-        fetchAllBranches,
-        toggleBranchActive,
-        activeBranch,
-        selectAndEnsureAssigned,
-    } = useBranchStore();
+    const user = useAuthStore((state) => state.user);
+    const { branches: allBranches, isLoading, isRefreshing, error, refresh: handleRefresh } = useBranches();
+    const { branches: availableBranches } = useMyBranches();
+    const activeBranch = useActiveBranch();
+    const selectBranch = useSelectBranch();
+    const setBranchActive = useSetBranchActive();
+
+    // Se entra con cualquiera de los dos permisos; cada acción pide el suyo.
+    const canManageBranches = hasPermission(user, 'ADMINISTRAR_SUCURSALES');
+    const canManageUsers = hasPermission(user, 'ADMINISTRAR_USUARIOS');
 
     const [isFormModalVisible, setIsFormModalVisible] = useState(false);
     const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
     const [assigningBranch, setAssigningBranch] = useState<Branch | null>(null);
     const [selectingBranchId, setSelectingBranchId] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (token) {
-            fetchAllBranches(token).catch(() => {});
-        }
-    }, [token, fetchAllBranches]);
-
-    function handleRefresh() {
-        if (token) {
-            fetchAllBranches(token).catch(() => {});
-        }
-    }
+    const [togglingBranchId, setTogglingBranchId] = useState<string | null>(null);
 
     function handleOpenCreate() {
         setEditingBranch(null);
@@ -69,164 +70,124 @@ export default function BranchesListScreen() {
     }
 
     async function handleSelectActive(branch: Branch) {
-        if (!token || !user) return;
         if (activeBranch?.id === branch.id) return;
         setSelectingBranchId(branch.id);
         try {
-            await selectAndEnsureAssigned(branch, user.id, token);
-        } catch (err: any) {
-            Alert.alert(
-                'Error',
-                err?.message || 'No se pudo seleccionar la sucursal como activa.'
-            );
+            await selectBranch.mutateAsync(branch);
+        } catch (err: unknown) {
+            showErrorToast(err, 'No se pudo seleccionar la sucursal como activa.');
         } finally {
             setSelectingBranchId(null);
         }
     }
 
     async function handleToggleActive(branch: Branch) {
-        if (!token) return;
+        if (togglingBranchId) return;
+        if (branch.active) {
+            // Inactiva = no asignada para todos: conviene que quede claro antes de hacerlo.
+            const confirmed = await confirmAction({
+                title: `Desactivar ${branch.name}`,
+                message:
+                    'Mientras esté inactiva nadie va a poder vender, cobrar, ajustar stock ni transferir en ella, ' +
+                    'y sus pedidos dejan de verse en Pedidos, Envíos y Reportes. Podés reactivarla cuando quieras.',
+                confirmLabel: 'Desactivar',
+                destructive: true,
+            });
+            if (!confirmed) return;
+        }
+        setTogglingBranchId(branch.id);
         try {
-            await toggleBranchActive(branch.id, Boolean(branch.active), token);
-        } catch (err: any) {
-            Alert.alert(
-                'Error',
-                err?.message || 'No se pudo cambiar el estado de la sucursal.'
-            );
+            await setBranchActive.mutateAsync({ id: branch.id, active: !branch.active });
+        } catch (err: unknown) {
+            showErrorToast(err, 'No se pudo cambiar el estado de la sucursal.');
+        } finally {
+            setTogglingBranchId(null);
         }
     }
 
     function renderItem({ item }: { item: Branch }) {
         const isActiveBranch = activeBranch?.id === item.id;
         const isSelectingThis = selectingBranchId === item.id;
+        const isTogglingThis = togglingBranchId === item.id;
+        // Elegir una sucursal no asignada la asigna al usuario, y eso exige ADMINISTRAR_USUARIOS.
+        const canSelect = canManageUsers || availableBranches.some((branch) => branch.id === item.id);
 
         return (
             <View
                 style={[
+                    SharedStyles.card,
                     styles.card,
-                    !item.active && styles.inactiveCard,
+                    !item.active && SharedStyles.listItemInactive,
                 ]}
             >
-                <View style={styles.cardMain}>
-                    <View style={styles.cardHeader}>
-                        <Text style={[styles.branchName, !item.active && styles.inactiveText]}>
-                            {item.name}
-                        </Text>
-                        <View
-                            style={[
-                                styles.statusBadge,
-                                item.active ? styles.activeBadge : styles.inactiveBadge,
-                            ]}
-                        >
-                            <View
-                                style={[
-                                    styles.statusDot,
-                                    { backgroundColor: item.active ? Colors.success : Colors.textSecondary },
-                                ]}
-                            />
-                            <Text
-                                style={[
-                                    styles.statusText,
-                                    { color: item.active ? Colors.success : Colors.textSecondary },
-                                ]}
-                            >
-                                {item.active ? 'Activa' : 'Inactiva'}
-                            </Text>
+                <View style={styles.cardTop}>
+                    <IconBadge
+                        icon={{ ios: 'building.2', android: 'store', web: 'store' }}
+                        tone={isActiveBranch ? 'primary' : 'neutral'}
+                        size={44}
+                    />
+                    <View style={SharedStyles.listItemTexts}>
+                        <Text style={SharedStyles.listItemTitle} numberOfLines={1}>{item.name}</Text>
+                        {item.address ? (
+                            <Text style={SharedStyles.listItemMeta} numberOfLines={1}>{item.address}</Text>
+                        ) : null}
+                        {item.phone ? (
+                            <Text style={SharedStyles.listItemMeta}>{item.phone}</Text>
+                        ) : null}
+                        <View style={styles.pills}>
+                            {isActiveBranch ? <StatusPill label="Tu sucursal activa" tone="primary" /> : null}
+                            {!item.active ? <StatusPill label="Inactiva" tone="neutral" /> : null}
                         </View>
                     </View>
-
-                    {item.address ? (
-                        <View style={styles.infoRow}>
+                    {canManageBranches && (
+                        <Pressable
+                            style={({ pressed }) => [styles.iconButton, pressed && SharedStyles.pressed]}
+                            onPress={() => handleOpenEdit(item)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Editar ${item.name}`}
+                        >
                             <SymbolView
-                                name={{ ios: 'mappin', android: 'location_on', web: 'location_on' }}
-                                size={14}
-                                tintColor={Colors.textSecondary}
+                                name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
+                                size={18}
+                                tintColor={Colors.primary}
                             />
-                            <Text style={styles.infoText}>{item.address}</Text>
-                        </View>
-                    ) : null}
-
-                    {item.phone ? (
-                        <View style={styles.infoRow}>
-                            <SymbolView
-                                name={{ ios: 'phone.fill', android: 'phone', web: 'phone' }}
-                                size={14}
-                                tintColor={Colors.textSecondary}
-                            />
-                            <Text style={styles.infoText}>{item.phone}</Text>
-                        </View>
-                    ) : null}
-
-                    {item.active && (
-                        <View style={styles.cardBottomActions}>
-                            <Pressable
-                                style={({ pressed }) => [
-                                    styles.activeSelectButton,
-                                    isActiveBranch && styles.selectedActiveButton,
-                                    pressed && SharedStyles.pressed,
-                                ]}
-                                onPress={() => handleSelectActive(item)}
-                                disabled={isSelectingThis}
-                            >
-                                {isSelectingThis ? (
-                                    <ActivityIndicator size="small" color={Colors.primary} />
-                                ) : (
-                                    <SymbolView
-                                        name={{
-                                            ios: isActiveBranch ? 'checkmark.circle.fill' : 'circle',
-                                            android: isActiveBranch ? 'check_circle' : 'radio_button_unchecked',
-                                            web: isActiveBranch ? 'check_circle' : 'radio_button_unchecked',
-                                        }}
-                                        size={16}
-                                        tintColor={isActiveBranch ? Colors.primary : Colors.textSecondary}
-                                    />
-                                )}
-                                <Text
-                                    style={[
-                                        styles.activeSelectText,
-                                        isActiveBranch && styles.selectedActiveText,
-                                    ]}
-                                >
-                                    {isActiveBranch ? 'Sucursal activa seleccionada' : 'Seleccionar como activa'}
-                                </Text>
-                            </Pressable>
-
-                            <Pressable
-                                style={({ pressed }) => [styles.usersButton, pressed && SharedStyles.pressed]}
-                                onPress={() => handleOpenUsersAssignment(item)}
-                            >
-                                <SymbolView
-                                    name={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
-                                    size={15}
-                                    tintColor={Colors.primary}
-                                />
-                                <Text style={styles.usersButtonText}>Usuarios</Text>
-                            </Pressable>
-                        </View>
+                        </Pressable>
                     )}
                 </View>
 
-                <View style={styles.actionsRow}>
-                    <View style={styles.switchContainer}>
-                        <Switch
-                            value={item.active}
-                            onValueChange={() => handleToggleActive(item)}
-                            trackColor={{ false: Colors.track, true: Colors.primary }}
-                            thumbColor={Colors.white}
-                        />
-                    </View>
+                {((item.active && ((canSelect && !isActiveBranch) || canManageUsers)) || canManageBranches) && (
+                    <View style={styles.cardActions}>
+                        {item.active && canSelect && !isActiveBranch && (
+                            <ActionChip
+                                label="Usar como activa"
+                                icon={{ ios: 'checkmark.circle', android: 'check_circle', web: 'check_circle' }}
+                                tone="neutral"
+                                loading={isSelectingThis}
+                                onPress={() => handleSelectActive(item)}
+                            />
+                        )}
 
-                    <Pressable
-                        style={({ pressed }) => [styles.iconButton, pressed && SharedStyles.pressed]}
-                        onPress={() => handleOpenEdit(item)}
-                    >
-                        <SymbolView
-                            name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
-                            size={18}
-                            tintColor={Colors.primary}
-                        />
-                    </Pressable>
-                </View>
+                        {item.active && canManageUsers && (
+                            <ActionChip
+                                label="Usuarios"
+                                icon={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
+                                onPress={() => handleOpenUsersAssignment(item)}
+                            />
+                        )}
+
+                        {canManageBranches && (
+                            <ActionChip
+                                label={item.active ? 'Desactivar' : 'Activar'}
+                                icon={item.active
+                                    ? { ios: 'pause.circle', android: 'block', web: 'block' }
+                                    : { ios: 'play.circle', android: 'check_circle', web: 'check_circle' }}
+                                tone={item.active ? 'danger' : 'success'}
+                                loading={isTogglingThis}
+                                onPress={() => handleToggleActive(item)}
+                            />
+                        )}
+                    </View>
+                )}
             </View>
         );
     }
@@ -234,62 +195,28 @@ export default function BranchesListScreen() {
 
     return (
         <Screen style={styles.container}>
-            {/* Header */}
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}
-                >
-                    <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>Sucursales</Text>
-                <View style={SharedStyles.headerSpacer} />
-            </View>
-
-            {/* Top banner */}
-            <View style={styles.topBanner}>
-                <View style={styles.topBannerTextContainer}>
-                    <Text style={styles.topBannerTitle}>Gestión de sucursales</Text>
-                    <Text style={styles.topBannerSubtitle}>
-                        Configurá los locales, depósitos y puntos de venta de la empresa.
-                    </Text>
-                </View>
-                <AppButton
-                    title="+ Nueva"
-                    onPress={handleOpenCreate}
-                    style={styles.addButton}
-                />
-            </View>
+            <PageHeader
+                onBack={() => router.back()}
+                eyebrow="Locales, depósitos y puntos de venta"
+                title="Sucursales"
+                right={canManageBranches ? (
+                    <HeaderButton label="Nueva" accessibilityLabel="Nueva sucursal" onPress={handleOpenCreate} />
+                ) : undefined}
+            />
 
             {isLoading && allBranches.length === 0 ? (
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={Colors.primary} />
-                    <Text style={styles.loadingText}>Cargando sucursales...</Text>
-                </View>
+                <LoadingState label="Cargando sucursales..." />
             ) : error && allBranches.length === 0 ? (
-                <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>{error}</Text>
-                    <AppButton
-                        title="Reintentar"
-                        onPress={handleRefresh}
-                        style={styles.retryButton}
-                    />
-                </View>
+                <ErrorState message={error} onRetry={handleRefresh} />
             ) : (
                 <FlatList
                     data={allBranches}
                     keyExtractor={(item) => item.id}
                     renderItem={renderItem}
-                    contentContainerStyle={
-                        allBranches.length === 0 ? SharedStyles.listEmpty : styles.listContainer
-                    }
+                    contentContainerStyle={SharedStyles.pageList}
                     refreshControl={
                         <RefreshControl
-                            refreshing={isLoading}
+                            refreshing={isRefreshing}
                             onRefresh={handleRefresh}
                             colors={[Colors.primary]}
                             tintColor={Colors.primary}
@@ -299,8 +226,8 @@ export default function BranchesListScreen() {
                         <EmptyState
                             title="Sin sucursales registradas"
                             description="Creá la primera sucursal para comenzar a gestionar stock, pedidos y operaciones."
-                            actionLabel="+ Crear Sucursal"
-                            onAction={handleOpenCreate}
+                            actionLabel={canManageBranches ? '+ Crear Sucursal' : undefined}
+                            onAction={canManageBranches ? handleOpenCreate : undefined}
                         />
                     }
                 />
@@ -328,183 +255,34 @@ const styles = StyleSheet.create({
     container: {
         padding: 0,
     },
-    topBanner: {
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.md,
-        backgroundColor: Colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: Spacing.md,
-    },
-    topBannerTextContainer: {
-        flex: 1,
-    },
-    topBannerTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    topBannerSubtitle: {
-        fontSize: 12,
-        color: Colors.textSecondary,
-        marginTop: 2,
-    },
-    addButton: {
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: Spacing.xl,
-    },
-    loadingText: {
-        marginTop: Spacing.sm,
-        fontSize: 14,
-        color: Colors.textSecondary,
-    },
-    errorContainer: {
-        padding: Spacing.xl,
-        alignItems: 'center',
-    },
-    errorText: {
-        fontSize: 14,
-        color: Colors.error,
-        textAlign: 'center',
-        marginBottom: Spacing.md,
-    },
-    retryButton: {
-        minWidth: 140,
-    },
-    listContainer: {
-        padding: Spacing.lg,
-        gap: Spacing.md,
-        paddingBottom: Spacing.xl,
-    },
     card: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        justifyContent: 'space-between',
-        backgroundColor: Colors.surface,
-        borderRadius: 12,
-        padding: Spacing.lg,
-        borderWidth: 1,
-        borderColor: Colors.border,
+        padding: Spacing.md,
+        borderRadius: Radius.lg,
+        gap: Spacing.md,
     },
-    inactiveCard: {
-        backgroundColor: Colors.background,
-        opacity: 0.85,
-    },
-    cardMain: {
-        flex: 1,
-        marginRight: Spacing.md,
-    },
-    cardHeader: {
+    cardTop: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: Spacing.sm,
-        marginBottom: Spacing.xs,
+        gap: Spacing.md,
     },
-    branchName: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.text,
-    },
-    inactiveText: {
-        color: Colors.textSecondary,
-    },
-    statusBadge: {
+    pills: {
         flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 2,
-        borderRadius: 12,
-        gap: 4,
+        flexWrap: 'wrap',
+        gap: Spacing.xs,
     },
-    activeBadge: {
-        backgroundColor: Colors.successSoft,
-    },
-    inactiveBadge: {
-        backgroundColor: Colors.muted,
-    },
-    statusDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-    },
-    statusText: {
-        fontSize: 11,
-        fontWeight: '600',
-    },
-    infoRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        marginTop: 4,
-    },
-    infoText: {
-        fontSize: 13,
-        color: Colors.textSecondary,
-    },
-    cardBottomActions: {
+    cardActions: {
         flexDirection: 'row',
         alignItems: 'center',
         flexWrap: 'wrap',
         gap: Spacing.sm,
-        marginTop: Spacing.sm,
-    },
-    activeSelectButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        paddingVertical: 6,
-        paddingHorizontal: 10,
-        borderRadius: 6,
-        backgroundColor: Colors.background,
-        alignSelf: 'flex-start',
-    },
-    selectedActiveButton: {
-        backgroundColor: Colors.primaryLight,
-    },
-    activeSelectText: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: Colors.textSecondary,
-    },
-    selectedActiveText: {
-        fontWeight: '600',
-        color: Colors.primary,
-    },
-    usersButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        paddingVertical: 6,
-        paddingHorizontal: 10,
-        borderRadius: 6,
-        backgroundColor: Colors.primaryLight,
-    },
-    usersButtonText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: Colors.primary,
-    },
-    actionsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-    },
-    switchContainer: {
-        transform: [{ scale: 0.85 }],
+        paddingTop: Spacing.md,
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
     },
     iconButton: {
-        padding: 6,
-        borderRadius: 8,
+        alignSelf: 'flex-start',
+        padding: 8,
+        borderRadius: Radius.sm,
         backgroundColor: Colors.primaryLight,
     },
 });
-

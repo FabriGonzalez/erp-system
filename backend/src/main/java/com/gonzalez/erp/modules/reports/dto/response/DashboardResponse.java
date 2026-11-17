@@ -1,0 +1,75 @@
+package com.gonzalez.erp.modules.reports.dto.response;
+
+import com.gonzalez.erp.modules.payments.entity.PaymentMethod;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+
+/**
+ * Resumen del dashboard para [from, to) sobre las sucursales asignadas al usuario (o solo
+ * branchId); previousSales es [previousFrom, previousTo). La deuda es de toda la empresa y los
+ * pedidos por despachar son la foto actual: ninguno de los dos depende del rango. salesSeries está
+ * vacía si no se pidió un bucket.
+ */
+public record DashboardResponse(
+        Instant from,
+        Instant to,
+        Instant previousFrom,
+        Instant previousTo,
+        Long branchId,
+        SalesSummary sales,
+        SalesSummary previousSales,
+        List<BranchSales> salesByBranch,
+        List<SalesPoint> salesSeries,
+        CollectionsSummary collections,
+        DebtSummary debt,
+        List<TopProduct> topProducts,
+        PendingOrders pendingOrders,
+        LowStock lowStock
+) {
+
+    public record SalesSummary(long orderCount, BigDecimal total, BigDecimal averageTicket) {
+    }
+
+    public record BranchSales(Long branchId, String branchName, long orderCount, BigDecimal total) {
+    }
+
+    /** Un tramo de la serie: [from, from + largo del bucket), recortado a to el último. */
+    public record SalesPoint(Instant from, long orderCount, BigDecimal total) {
+    }
+
+    /**
+     * Lo cobrado por medio (todos los medios, en cero si no hubo): pagos vigentes de clientes y
+     * ventas sin cliente. Aparte, las ventas sin cliente de antes de guardar su medio.
+     */
+    public record CollectionsSummary(List<MethodTotal> byMethod, BigDecimal withoutMethodTotal) {
+    }
+
+    public record MethodTotal(PaymentMethod method, BigDecimal total) {
+    }
+
+    public record DebtSummary(BigDecimal totalDebt, long debtorCount) {
+    }
+
+    public record TopProduct(Long productVariantId, String productName, String sku, long quantity, BigDecimal total) {
+    }
+
+    // toAssign: pedidos web pagados que esperan que se elija la sucursal.
+    public record PendingOrders(long count, Instant oldestCreatedAt, long toAssign) {
+    }
+
+    public record LowStock(int threshold, long count, List<LowStockItem> items) {
+    }
+
+    public record LowStockItem(
+            Long stockId,
+            Long productVariantId,
+            String productName,
+            String sku,
+            Long branchId,
+            String branchName,
+            int quantity
+    ) {
+    }
+}

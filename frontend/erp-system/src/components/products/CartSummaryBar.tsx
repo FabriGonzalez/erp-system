@@ -7,29 +7,43 @@ import { SharedStyles } from '@/styles/shared';
 
 type CartSummaryBarProps = {
     itemsCount: number;
-    totalAmount: number;
     onPress: () => void;
+    /** Total en pesos; se muestra si no hay detail. */
+    totalAmount?: number;
+    /** Texto en lugar del total, p. ej. qué se eligió cuando no hay precios. */
+    detail?: string;
+    actionLabel?: string;
 };
 
-export function CartSummaryBar({ itemsCount, totalAmount, onPress }: CartSummaryBarProps) {
+export function CartSummaryBar({
+    itemsCount,
+    onPress,
+    totalAmount = 0,
+    detail,
+    actionLabel = 'Ver resumen',
+}: CartSummaryBarProps) {
     if (itemsCount <= 0) return null;
 
     return (
         <View style={styles.stickyCartBar}>
-            <View>
+            <View style={styles.summary}>
                 <Text style={styles.stickyCartCount}>
                     {itemsCount} {itemsCount === 1 ? 'unidad seleccionada' : 'unidades seleccionadas'}
                 </Text>
-                <Text style={styles.stickyCartTotal}>
-                    Total: ${totalAmount.toLocaleString('es-AR')}
-                </Text>
+                {detail ? (
+                    <Text style={styles.detail} numberOfLines={2}>{detail}</Text>
+                ) : (
+                    <Text style={styles.stickyCartTotal}>
+                        Total: ${totalAmount.toLocaleString('es-AR')}
+                    </Text>
+                )}
             </View>
 
             <Pressable
                 style={({ pressed }) => [styles.confirmCartBtn, pressed && SharedStyles.pressed]}
                 onPress={onPress}
             >
-                <Text style={SharedStyles.buttonPrimaryText}>Ver resumen</Text>
+                <Text style={SharedStyles.buttonPrimaryText}>{actionLabel}</Text>
                 <SymbolView
                     name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
                     size={16}
@@ -59,6 +73,15 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 10,
+    },
+    summary: {
+        flex: 1,
+        marginRight: Spacing.md,
+    },
+    detail: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: Colors.text,
     },
     stickyCartCount: {
         fontSize: 12,

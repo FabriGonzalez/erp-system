@@ -2,6 +2,7 @@ package com.gonzalez.erp.modules.shipments.service;
 
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.SecurityUtils;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.orders.entity.Order;
 import com.gonzalez.erp.modules.orders.repository.OrderRepository;
 import com.gonzalez.erp.modules.shipments.dto.request.ShipmentRequest;
@@ -22,6 +23,7 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     private final ShipmentRepository shipmentRepository;
     private final OrderRepository orderRepository;
+    private final BranchAccessService branchAccessService;
 
     @Override
     @Transactional
@@ -96,12 +98,13 @@ public class ShipmentServiceImpl implements ShipmentService {
         return ShipmentMapper.toResponse(shipment);
     }
 
+    // Mismo criterio que OrderServiceImpl: la orden tiene que ser de la empresa y de una
+    // sucursal accesible (asignada y activa).
     private Order findOrderOrThrow(Long orderId) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
-        return orderRepository.findById(orderId)
-                .filter(order -> order.getCompany() != null
-                        && companyId.equals(order.getCompany().getId()))
+        return orderRepository.findByIdAndCompanyId(orderId, companyId)
+                .filter(order -> branchAccessService.isAccessible(order.getBranch()))
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
                                 "Order not found with id: " + orderId));

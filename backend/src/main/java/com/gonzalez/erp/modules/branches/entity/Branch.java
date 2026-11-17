@@ -35,10 +35,18 @@ public class Branch extends BaseEntity {
     @Builder.Default
     private boolean active = true;
 
+    // Orden en que la tienda intenta armar un pedido; null = la sucursal no vende por la web.
+    @Column(name = "store_priority")
+    private Integer storePriority;
+
     public void update(String name, String address, String phone) {
         this.name = name;
         this.address = address;
         this.phone = phone;
+    }
+
+    public void assignStorePriority(Integer storePriority) {
+        this.storePriority = storePriority;
     }
 
     public void deactivate() {

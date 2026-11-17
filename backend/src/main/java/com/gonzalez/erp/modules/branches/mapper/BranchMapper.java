@@ -14,6 +14,7 @@ public final class BranchMapper {
                 branch.getPhone(),
                 branch.getCompany().getId(),
                 branch.isActive(),
+                branch.getStorePriority(),
                 branch.getCreatedAt(),
                 branch.getUpdatedAt()
         );

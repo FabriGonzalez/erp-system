@@ -10,6 +10,8 @@ public record ProductResponse(
         Long categoryId,
         String categoryName,
         boolean active,
+        // Solo lectura: se cambia con PATCH /products/{id}/publication.
+        boolean publishedOnline,
         List<ProductVariantResponse> variants,
         Instant createdAt,
         Instant updatedAt

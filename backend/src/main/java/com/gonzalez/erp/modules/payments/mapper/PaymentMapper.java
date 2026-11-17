@@ -29,12 +29,16 @@ public final class PaymentMapper {
         if (payment == null) {
             return null;
         }
+        return toResponse(payment, payment.getAllocations() != null
+                ? payment.getAllocations()
+                : Collections.emptyList());
+    }
 
-        List<PaymentAllocationResponse> allocations = payment.getAllocations() != null
-                ? payment.getAllocations().stream()
+    /** Con las asignaciones ya cargadas aparte (listados: evita una consulta por pago). */
+    public static PaymentResponse toResponse(Payment payment, List<PaymentAllocation> paymentAllocations) {
+        List<PaymentAllocationResponse> allocations = paymentAllocations.stream()
                 .map(PaymentMapper::toAllocationResponse)
-                .toList()
-                : Collections.emptyList();
+                .toList();
 
         String customerName = null;
         if (payment.getCustomer() != null) {

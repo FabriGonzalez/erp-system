@@ -1,7 +1,10 @@
 package com.gonzalez.erp.modules.customers.service;
 
 import com.gonzalez.erp.common.dto.PageResponse;
+import com.gonzalez.erp.modules.customers.dto.response.AccountTransactionResponse;
 import com.gonzalez.erp.modules.customers.dto.response.CustomerAccountSummaryResponse;
+import com.gonzalez.erp.modules.customers.dto.response.CustomerDebtSummaryResponse;
+import com.gonzalez.erp.modules.customers.dto.response.CustomerPendingOrderResponse;
 import com.gonzalez.erp.modules.customers.dto.response.CustomerDebtorResponse;
 import org.springframework.data.domain.Pageable;
 
@@ -12,6 +15,15 @@ public interface CustomerBalanceService {
     CustomerAccountSummaryResponse getSummary(Long customerId);
 
     PageResponse<CustomerDebtorResponse> findDebtors(String query, Pageable pageable);
+
+    /** Deuda total y cantidad de deudores de la empresa (sin filtrar por sucursal). */
+    CustomerDebtSummaryResponse getDebtSummary(Long companyId);
+
+    /** Órdenes del cliente con saldo pendiente, en el orden en que se les aplican los pagos. */
+    PageResponse<CustomerPendingOrderResponse> findPendingOrders(Long customerId, Pageable pageable);
+
+    /** Movimientos de la cuenta corriente del cliente, del más nuevo al más viejo. */
+    PageResponse<AccountTransactionResponse> findTransactions(Long customerId, Pageable pageable);
 
     /**
      * Saldo a favor disponible: dinero pagado (y no reembolsado) que todavía

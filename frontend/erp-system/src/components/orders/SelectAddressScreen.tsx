@@ -2,27 +2,34 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AddressSummary } from '@/components/customers/AddressSummary';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useCustomer, useCustomerAddresses } from '@/hooks/use-customer-queries';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
 import { SharedStyles } from '@/styles/shared';
 import { CustomerAddress } from '@/types/customer';
-
-type AddressFlow = 'orders' | 'shipments';
+import { ORDER_FORM_ROUTES, OrderFlow } from '@/utils/order-routes';
 
 type SelectAddressScreenProps = {
-    flow: AddressFlow;
+    flow: OrderFlow;
 };
 
 export function SelectAddressScreen({ flow }: SelectAddressScreenProps) {
     const customer = useOrderDraftStore((state) => state.customer);
     const currentAddress = useOrderDraftStore((state) => state.address);
     const setDraftAddress = useOrderDraftStore((state) => state.setAddress);
-    const addAddressRoute = flow === 'shipments'
-        ? '/shipments/add-address'
-        : '/orders/add-address';
+    // Solo las activas: una inactiva no se puede elegir para un envío.
+    const { addresses, error, isLoading, reload } = useCustomerAddresses(customer.id, { activeOnly: true });
+    const addAddressRoute = ORDER_FORM_ROUTES[flow].addAddress;
+    // Las direcciones de un cliente web las administra él desde la tienda. El origen se pide al
+    // backend porque al editar una orden el borrador no lo conoce.
+    const { customer: freshCustomer } = useCustomer(customer.id);
+    const canAddAddress = (freshCustomer ?? customer).origin !== 'WEB';
 
     function handleSelectAddress(address: CustomerAddress) {
         setDraftAddress(address);
@@ -38,13 +45,7 @@ export function SelectAddressScreen({ flow }: SelectAddressScreenProps) {
 
     return (
         <Screen style={styles.screen}>
-            <View style={SharedStyles.header}>
-                <Pressable onPress={() => router.back()} style={({ pressed }) => [SharedStyles.backButton, pressed && SharedStyles.pressed]}>
-                    <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={24} tintColor={Colors.text} />
-                </Pressable>
-                <Text style={SharedStyles.headerTitle}>Seleccionar Dirección</Text>
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader onBack={() => router.back()} title="Elegir dirección" />
 
             <View style={styles.subHeader}>
                 <Text style={styles.customerName}>Cliente: {customer.name}</Text>
@@ -52,26 +53,37 @@ export function SelectAddressScreen({ flow }: SelectAddressScreenProps) {
             </View>
 
             <FlatList
-                data={customer.addresses}
+                data={addresses}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={SharedStyles.listContent}
                 showsVerticalScrollIndicator={false}
-                ListHeaderComponent={
+                ListHeaderComponent={canAddAddress ? (
                     <Pressable style={({ pressed }) => [styles.addAddressBtn, pressed && SharedStyles.pressed]} onPress={handleAddAddress}>
                         <SymbolView name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }} size={18} tintColor={Colors.primary} />
                         <Text style={styles.addAddressBtnText}>Agregar nueva dirección</Text>
                     </Pressable>
+                ) : null}
+                ListEmptyComponent={
+                    isLoading ? (
+                        <LoadingState label="Cargando direcciones..." />
+                    ) : error ? (
+                        <EmptyState title="No se pudieron cargar las direcciones" description={error} actionLabel="Reintentar" onAction={reload} />
+                    ) : (
+                        <EmptyState
+                            title="Sin direcciones registradas"
+                            description={canAddAddress
+                                ? 'Este cliente no tiene direcciones asociadas a su perfil.'
+                                : 'El cliente carga sus direcciones desde su cuenta en la tienda.'}
+                            actionLabel={canAddAddress ? 'Agregar dirección' : undefined}
+                            onAction={canAddAddress ? handleAddAddress : undefined}
+                        />
+                    )
                 }
-                ListEmptyComponent={<EmptyState title="Sin direcciones registradas" description="Este cliente no tiene direcciones asociadas a su perfil." actionLabel="Agregar dirección" onAction={handleAddAddress} />}
                 renderItem={({ item }) => {
                     const isSelected = currentAddress?.id === item.id;
                     return (
                         <Pressable style={({ pressed }) => [styles.addressCard, isSelected && styles.selectedCard, pressed && SharedStyles.pressed]} onPress={() => handleSelectAddress(item)}>
-                            <View style={styles.labelBadge}><Text style={styles.labelBadgeText}>{item.label}</Text></View>
-                            <View style={styles.addressInfo}>
-                                <Text style={styles.streetText}>{item.street} {item.number}</Text>
-                                <Text style={styles.cityText}>{item.city}, {item.province} {item.zipCode ? `(${item.zipCode})` : ''}</Text>
-                            </View>
+                            <AddressSummary address={item} />
                             {isSelected && <SymbolView name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }} size={20} tintColor={Colors.primary} />}
                         </Pressable>
                     );
@@ -88,11 +100,6 @@ const styles = StyleSheet.create({
     subTitle: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
     addAddressBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surface, borderRadius: 12, padding: Spacing.md, borderWidth: 1, borderStyle: 'dashed', borderColor: Colors.primary, gap: Spacing.xs, marginBottom: Spacing.md },
     addAddressBtnText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
-    addressCard: { backgroundColor: Colors.surface, borderRadius: 12, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border, marginBottom: Spacing.sm },
+    addressCard: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.surface, borderRadius: 12, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border, marginBottom: Spacing.sm },
     selectedCard: { borderColor: Colors.primary, backgroundColor: Colors.selected },
-    labelBadge: { alignSelf: 'flex-start', backgroundColor: Colors.primaryLight, paddingHorizontal: Spacing.xs + 2, paddingVertical: 2, borderRadius: 4, marginBottom: 6 },
-    labelBadgeText: { fontSize: 12, fontWeight: '600', color: Colors.primary },
-    addressInfo: { marginBottom: 4 },
-    streetText: { fontSize: 15, fontWeight: '600', color: Colors.text },
-    cityText: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
 });

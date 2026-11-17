@@ -1,18 +1,25 @@
 package com.gonzalez.erp.modules.products.service;
 
+import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
+import com.gonzalez.erp.common.util.SearchText;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.categories.entity.Category;
 import com.gonzalez.erp.modules.categories.repository.CategoryRepository;
 import com.gonzalez.erp.modules.branches.entity.Branch;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
+import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
 import com.gonzalez.erp.modules.inventory.entity.Stock;
+import com.gonzalez.erp.modules.inventory.entity.StockMovementType;
 import com.gonzalez.erp.modules.inventory.repository.StockRepository;
+import com.gonzalez.erp.modules.inventory.service.StockMovementRecorder;
 import com.gonzalez.erp.modules.inventory.service.StockService;
 import com.gonzalez.erp.modules.products.dto.request.InitialStockRequest;
 import com.gonzalez.erp.modules.products.dto.request.ProductRequest;
+import com.gonzalez.erp.modules.products.dto.request.ProductSearchCriteria;
+import com.gonzalez.erp.modules.products.dto.request.ProductStockFilter;
 import com.gonzalez.erp.modules.products.dto.request.ProductUpdateRequest;
 import com.gonzalez.erp.modules.products.dto.request.ProductVariantRequest;
 import com.gonzalez.erp.modules.products.dto.request.ProductVariantStockRequest;
@@ -20,17 +27,27 @@ import com.gonzalez.erp.modules.products.dto.request.ProductVariantUpdateRequest
 import com.gonzalez.erp.modules.products.dto.response.ProductResponse;
 import com.gonzalez.erp.modules.products.dto.response.ProductVariantResponse;
 import com.gonzalez.erp.modules.products.entity.Product;
+import com.gonzalez.erp.modules.products.entity.ProductAttribute;
 import com.gonzalez.erp.modules.products.entity.ProductAttributeValue;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.entity.ProductVariantAttribute;
+import com.gonzalez.erp.modules.products.exception.InvalidProductVariantsException;
+import com.gonzalez.erp.modules.products.exception.PricePermissionRequiredException;
+import com.gonzalez.erp.modules.products.exception.ProductVariantBarcodeAlreadyExistsException;
+import com.gonzalez.erp.modules.products.exception.AttributeNotInCategoryException;
 import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveException;
 import com.gonzalez.erp.modules.products.exception.ProductVariantSkuAlreadyExistsException;
+import com.gonzalez.erp.modules.products.exception.ProductImageRequiredException;
 import com.gonzalez.erp.modules.products.mapper.ProductMapper;
 import com.gonzalez.erp.modules.products.mapper.ProductVariantMapper;
 import com.gonzalez.erp.modules.products.repository.ProductAttributeValueRepository;
+import com.gonzalez.erp.modules.products.repository.ProductImageRepository;
 import com.gonzalez.erp.modules.products.repository.ProductRepository;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
+import com.gonzalez.erp.modules.roles.entity.Permission;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,46 +64,65 @@ public class ProductServiceImpl implements ProductService {
     private final ProductAttributeValueRepository attributeValueRepository;
     private final CategoryRepository categoryRepository;
     private final BranchRepository branchRepository;
+    private final BranchAccessService branchAccessService;
     private final CompanyRepository companyRepository;
     private final StockRepository stockRepository;
     private final StockService stockService;
+    private final StockMovementRecorder stockMovementRecorder;
+    private final ProductImageRepository imageRepository;
 
     @Override
-    public List<ProductResponse> findAll(Boolean active) {
+    public PageResponse<ProductResponse> findAll(ProductSearchCriteria criteria, Pageable pageable) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
+        String search = SearchText.normalize(criteria.query());
+        AttributeValueFilters.Resolved attributes =
+                AttributeValueFilters.resolve(criteria.attributeValueIds(), companyId, attributeValueRepository);
 
-        List<Product> products = (active != null)
-                ? productRepository.findByCompanyIdAndActive(companyId, active)
-                : productRepository.findByCompanyId(companyId);
+        Page<Product> page = productRepository.search(
+                companyId,
+                criteria.active(),
+                criteria.categoryId(),
+                search != null,
+                SearchText.containsPattern(search),
+                criteria.stock() == ProductStockFilter.IN_STOCK || criteria.stock() == ProductStockFilter.SELLABLE,
+                criteria.stock() == ProductStockFilter.OUT_OF_STOCK,
+                criteria.stock() == ProductStockFilter.SELLABLE,
+                criteria.branchId(),
+                attributes.active(),
+                attributes.ids(),
+                attributes.attributeCount(),
+                pageable);
 
+        List<Product> products = page.getContent();
         if (products.isEmpty()) {
-            return List.of();
+            return PageResponse.of(page, product -> ProductMapper.toResponse(product, List.of()));
         }
 
+        // Variantes y stocks de toda la página en una consulta cada uno, no uno por producto.
         List<Long> productIds = products.stream()
                 .map(Product::getId)
                 .toList();
 
-        Map<Long, List<ProductVariantResponse>> variantsByProduct =
-                variantRepository.findByProductIdInWithAttributes(productIds)
-                        .stream()
-                        .collect(Collectors.groupingBy(
-                                pv -> pv.getProduct().getId(),
-                                Collectors.mapping(
-                                        ProductVariantMapper::toResponse,
-                                        Collectors.toList()
-                                )
-                        ));
+        List<ProductVariant> variants =
+                variantRepository.findByProductIdInWithAttributes(productIds);
+        Map<Long, List<Stock>> stocksByVariant = loadStocksByVariant(variants, companyId);
 
-        return products.stream()
-                .map(product -> ProductMapper.toResponse(
-                        product,
-                        variantsByProduct.getOrDefault(
-                                product.getId(),
-                                List.of()
+        Map<Long, List<ProductVariantResponse>> variantsByProduct = variants.stream()
+                .collect(Collectors.groupingBy(
+                        pv -> pv.getProduct().getId(),
+                        Collectors.mapping(
+                                pv -> ProductVariantMapper.toResponse(
+                                        pv,
+                                        stocksByVariant.getOrDefault(pv.getId(), List.of())
+                                ),
+                                Collectors.toList()
                         )
-                ))
-                .toList();
+                ));
+
+        return PageResponse.of(page, product -> ProductMapper.toResponse(
+                product,
+                variantsByProduct.getOrDefault(product.getId(), List.of())
+        ));
     }
 
     @Override
@@ -106,6 +142,8 @@ public class ProductServiceImpl implements ProductService {
     @Transactional
     public ProductResponse create(ProductRequest request) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
+        // Toda variante nueva fija un precio.
+        requirePricePermission();
 
         Category category = findCategoryOrThrow(request.categoryId());
         checkCategoryActive(category);
@@ -160,6 +198,15 @@ public class ProductServiceImpl implements ProductService {
                         companyId
                 );
 
+        /*
+         * Si la edición desactivó la última variante con fotos, la tienda no tendría qué mostrar.
+         * La consulta ve las variantes recién desactivadas: JPA las guarda antes de consultar.
+         * Vale también para la importación de Excel, que edita por acá.
+         */
+        if (product.isPublishedOnline() && !imageRepository.existsVisibleOfProduct(product.getId())) {
+            product.unpublish();
+        }
+
         return ProductMapper.toResponse(
                 product,
                 variantResponses
@@ -198,38 +245,92 @@ public class ProductServiceImpl implements ProductService {
         );
     }
 
+    @Override
+    @Transactional
+    public ProductResponse updatePublication(Long id, boolean publishedOnline) {
+        Product product = findProductOrThrow(id);
+
+        if (publishedOnline) {
+            if (!imageRepository.existsVisibleOfProduct(product.getId())) {
+                throw new ProductImageRequiredException(product.getId());
+            }
+            product.publish();
+        } else {
+            product.unpublish();
+        }
+
+        return ProductMapper.toResponse(
+                product,
+                loadVariantsForProduct(product.getId())
+        );
+    }
+
     private List<ProductVariantResponse> createVariants(
             Product product,
             List<ProductVariantRequest> variantRequests,
             Long companyId
     ) {
-        Set<String> seenSkus = new HashSet<>();
+        validateVariantsWithoutAttributes(
+                variantRequests.stream()
+                        .map(ProductVariantRequest::attributeValueIds)
+                        .toList()
+        );
 
+        // Antes de generar SKUs: se arman con los nombres de los valores.
         for (ProductVariantRequest vr : variantRequests) {
+            validateAttributeValueIds(
+                    vr.attributeValueIds(),
+                    companyId
+            );
+            validateAttributesInCategory(
+                    vr.attributeValueIds(),
+                    product.getCategory(),
+                    Set.of()
+            );
+        }
+
+        List<String> skus = resolveSkus(
+                product.getName(),
+                variantRequests.stream().map(ProductVariantRequest::sku).toList(),
+                variantRequests.stream().map(ProductVariantRequest::attributeValueIds).toList(),
+                companyId
+        );
+
+        Set<String> seenSkus = new HashSet<>();
+        Set<String> seenBarcodes = new HashSet<>();
+
+        for (int i = 0; i < variantRequests.size(); i++) {
+            ProductVariantRequest vr = variantRequests.get(i);
+
             validateSkuUnique(
-                    vr.sku(),
+                    skus.get(i),
                     companyId,
                     null,
                     seenSkus
             );
 
-            validateAttributeValueIds(
-                    vr.attributeValueIds(),
-                    companyId
+            validateBarcodeUnique(
+                    normalizeBarcode(vr.barcode()),
+                    companyId,
+                    null,
+                    seenBarcodes
             );
 
             validateOneValuePerAttribute(
                     vr.attributeValueIds(),
-                    vr.sku()
+                    skus.get(i)
             );
         }
 
-        List<ProductVariantResponse> responses = new ArrayList<>();
+        List<ProductVariant> savedVariants = new ArrayList<>();
 
-        for (ProductVariantRequest vr : variantRequests) {
+        for (int i = 0; i < variantRequests.size(); i++) {
+            ProductVariantRequest vr = variantRequests.get(i);
+
             ProductVariant variant = ProductVariant.builder()
                     .product(product)
-                    .sku(vr.sku())
+                    .sku(skus.get(i))
+                    .barcode(normalizeBarcode(vr.barcode()))
                     .price(vr.price())
                     .company(product.getCompany())
                     .build();
@@ -244,12 +345,10 @@ public class ProductServiceImpl implements ProductService {
 
             createInitialStock(savedVariant, vr.initialStock());
 
-            responses.add(
-                    ProductVariantMapper.toResponse(savedVariant)
-            );
+            savedVariants.add(savedVariant);
         }
 
-        return responses;
+        return toVariantResponses(savedVariants, companyId);
     }
 
     private void createInitialStock(
@@ -263,7 +362,7 @@ public class ProductServiceImpl implements ProductService {
         Set<Long> branchIds = new HashSet<>();
         for (InitialStockRequest stockRequest : initialStock) {
             if (!branchIds.add(stockRequest.branchId())) {
-                throw new IllegalArgumentException(
+                throw new InvalidProductVariantsException(
                         "Initial stock contains duplicate branch id: "
                                 + stockRequest.branchId()
                 );
@@ -284,9 +383,29 @@ public class ProductServiceImpl implements ProductService {
             List<ProductVariantUpdateRequest> variantRequests,
             Long companyId
     ) {
-        Set<String> incomingSkus = variantRequests.stream()
-                .map(ProductVariantUpdateRequest::sku)
-                .collect(Collectors.toSet());
+        validateVariantsWithoutAttributes(
+                variantRequests.stream()
+                        .map(ProductVariantUpdateRequest::attributeValueIds)
+                        .toList()
+        );
+
+        // Antes de generar SKUs: se arman con los nombres de los valores.
+        for (ProductVariantUpdateRequest vr : variantRequests) {
+            validateAttributeValueIds(
+                    vr.attributeValueIds(),
+                    companyId
+            );
+        }
+
+        // Uno generado nunca coincide con una existente: esas también ocupan su SKU.
+        List<String> skus = resolveSkus(
+                product.getName(),
+                variantRequests.stream().map(ProductVariantUpdateRequest::sku).toList(),
+                variantRequests.stream().map(ProductVariantUpdateRequest::attributeValueIds).toList(),
+                companyId
+        );
+
+        Set<String> incomingSkus = new HashSet<>(skus);
 
         List<ProductVariant> existingVariants =
                 variantRepository.findByProductId(product.getId());
@@ -298,11 +417,15 @@ public class ProductServiceImpl implements ProductService {
         }
 
         Set<String> seenSkus = new HashSet<>();
+        Set<String> seenBarcodes = new HashSet<>();
 
-        for (ProductVariantUpdateRequest vr : variantRequests) {
+        for (int i = 0; i < variantRequests.size(); i++) {
+            ProductVariantUpdateRequest vr = variantRequests.get(i);
+            String sku = skus.get(i);
+
             Optional<ProductVariant> existingForSku =
                     existingVariants.stream()
-                            .filter(v -> v.getSku().equals(vr.sku()))
+                            .filter(v -> v.getSku().equals(sku))
                             .findFirst();
 
             Long excludeId = existingForSku
@@ -310,29 +433,50 @@ public class ProductServiceImpl implements ProductService {
                     .orElse(null);
 
             validateSkuUnique(
-                    vr.sku(),
+                    sku,
                     companyId,
                     excludeId,
                     seenSkus
             );
 
-            validateAttributeValueIds(
-                    vr.attributeValueIds(),
-                    companyId
+            validateBarcodeUnique(
+                    normalizeBarcode(vr.barcode()),
+                    companyId,
+                    excludeId,
+                    seenBarcodes
             );
 
             validateOneValuePerAttribute(
                     vr.attributeValueIds(),
-                    vr.sku()
+                    sku
             );
+
+            validateAttributesInCategory(
+                    vr.attributeValueIds(),
+                    product.getCategory(),
+                    existingForSku
+                            .map(ProductServiceImpl::attributeIdsOf)
+                            .orElse(Set.of())
+            );
+
+            // El formulario reenvía todas las variantes: reenviar el mismo precio no cuenta.
+            boolean setsPrice = existingForSku
+                    .map(existing -> existing.getPrice().compareTo(vr.price()) != 0)
+                    .orElse(true);
+            if (setsPrice) {
+                requirePricePermission();
+            }
         }
 
-        List<ProductVariantResponse> responses = new ArrayList<>();
+        List<ProductVariant> savedVariants = new ArrayList<>();
 
-        for (ProductVariantUpdateRequest vr : variantRequests) {
+        for (int i = 0; i < variantRequests.size(); i++) {
+            ProductVariantUpdateRequest vr = variantRequests.get(i);
+            String sku = skus.get(i);
+
             Optional<ProductVariant> existingOpt =
                     existingVariants.stream()
-                            .filter(v -> v.getSku().equals(vr.sku()))
+                            .filter(v -> v.getSku().equals(sku))
                             .findFirst();
 
             ProductVariant variant;
@@ -341,8 +485,9 @@ public class ProductServiceImpl implements ProductService {
                 variant = existingOpt.get();
 
                 variant.update(
-                        vr.sku(),
-                        vr.price()
+                        sku,
+                        vr.price(),
+                        normalizeBarcode(vr.barcode())
                 );
 
                 /*
@@ -354,7 +499,8 @@ public class ProductServiceImpl implements ProductService {
             } else {
                 variant = ProductVariant.builder()
                         .product(product)
-                        .sku(vr.sku())
+                        .sku(sku)
+                        .barcode(normalizeBarcode(vr.barcode()))
                         .price(vr.price())
                         .company(product.getCompany())
                         .build();
@@ -374,16 +520,42 @@ public class ProductServiceImpl implements ProductService {
                     companyId
             );
 
-            responses.add(ProductVariantMapper.toResponse(
-                    savedVariant,
-                    stockRepository.findByProductVariantIdAndCompanyId(
-                            savedVariant.getId(),
-                            companyId
-                    )
-            ));
+            savedVariants.add(savedVariant);
         }
 
-        return responses;
+        return toVariantResponses(savedVariants, companyId);
+    }
+
+    /** Variantes con su stock por sucursal: una sola consulta de stocks para todas. */
+    private List<ProductVariantResponse> toVariantResponses(
+            List<ProductVariant> variants,
+            Long companyId
+    ) {
+        Map<Long, List<Stock>> stocksByVariant = loadStocksByVariant(variants, companyId);
+
+        return variants.stream()
+                .map(variant -> ProductVariantMapper.toResponse(
+                        variant,
+                        stocksByVariant.getOrDefault(variant.getId(), List.of())
+                ))
+                .toList();
+    }
+
+    private Map<Long, List<Stock>> loadStocksByVariant(
+            List<ProductVariant> variants,
+            Long companyId
+    ) {
+        if (variants.isEmpty()) {
+            return Map.of();
+        }
+
+        List<Long> variantIds = variants.stream()
+                .map(ProductVariant::getId)
+                .toList();
+
+        return stockRepository.findByProductVariantIdInAndCompanyId(variantIds, companyId)
+                .stream()
+                .collect(Collectors.groupingBy(stock -> stock.getProductVariant().getId()));
     }
 
     private void createVariantAttributes(
@@ -416,7 +588,7 @@ public class ProductServiceImpl implements ProductService {
         Set<Long> branchIds = new HashSet<>();
         for (ProductVariantStockRequest request : stockRequests) {
             if (!branchIds.add(request.branchId())) {
-                throw new IllegalArgumentException(
+                throw new InvalidProductVariantsException(
                         "Stock contains duplicate branch id: " + request.branchId()
                 );
             }
@@ -446,8 +618,20 @@ public class ProductServiceImpl implements ProductService {
                                     + branch.getId()
                     ));
 
+            int previousQuantity = stock.getQuantity();
+            // La edición reenvía todas las sucursales: solo se exige acceso donde la cantidad cambia.
+            if (previousQuantity != request.quantity()) {
+                branchAccessService.requireAccessible(branch);
+            }
             stock.setQuantity(request.quantity());
             stockRepository.save(stock);
+
+            // Editar el producto sin tocar el stock no deja movimiento.
+            if (previousQuantity != request.quantity()) {
+                stockMovementRecorder.record(stock, StockMovementType.ADJUSTMENT,
+                        request.quantity() - previousQuantity, previousQuantity, null,
+                        StockMovementRecorder.PRODUCT_UPDATE, variant.getProduct().getId());
+            }
         }
     }
 
@@ -459,9 +643,47 @@ public class ProductServiceImpl implements ProductService {
                         List.of(productId)
                 );
 
-        return variants.stream()
-                .map(ProductVariantMapper::toResponse)
-                .toList();
+        return toVariantResponses(variants, SecurityUtils.requireCurrentCompanyId());
+    }
+
+    /*
+     * El SKU de cada variante: el que vino o, si vino vacío, uno generado con Skus.base. Si la
+     * base ya la usa otra variante de la empresa (activa o no) o de este mismo pedido, se le
+     * suma -2, -3… El formulario no lo puede generar: no tiene los SKU del resto de la empresa.
+     */
+    private List<String> resolveSkus(
+            String productName,
+            List<String> requestedSkus,
+            List<List<Long>> attributeValueIdsByVariant,
+            Long companyId
+    ) {
+        Set<String> reserved = requestedSkus.stream()
+                .filter(sku -> sku != null && !sku.isBlank())
+                .collect(Collectors.toCollection(HashSet::new));
+
+        List<String> skus = new ArrayList<>();
+
+        for (int i = 0; i < requestedSkus.size(); i++) {
+            String requested = requestedSkus.get(i);
+
+            if (requested != null && !requested.isBlank()) {
+                skus.add(requested);
+                continue;
+            }
+
+            List<String> valueNames = attributeValueIdsByVariant.get(i).stream()
+                    .map(valueId -> attributeValueRepository.getReferenceById(valueId).getValue())
+                    .toList();
+            String base = Skus.base(productName, valueNames);
+
+            Set<String> taken = new HashSet<>(variantRepository.findSkusWithBase(companyId, base));
+            String candidate = Skus.firstFree(base, sku -> taken.contains(sku) || reserved.contains(sku));
+
+            reserved.add(candidate);
+            skus.add(candidate);
+        }
+
+        return skus;
     }
 
     private void validateSkuUnique(
@@ -490,6 +712,37 @@ public class ProductServiceImpl implements ProductService {
 
         if (existsInDb) {
             throw new ProductVariantSkuAlreadyExistsException(sku);
+        }
+    }
+
+    /** Sin espacios alrededor; vacío = sin código. */
+    static String normalizeBarcode(String barcode) {
+        if (barcode == null || barcode.isBlank()) {
+            return null;
+        }
+        return barcode.trim();
+    }
+
+    private void validateBarcodeUnique(
+            String barcode,
+            Long companyId,
+            Long excludeVariantId,
+            Set<String> seenBarcodes
+    ) {
+        if (barcode == null) {
+            return;
+        }
+
+        if (!seenBarcodes.add(barcode)) {
+            throw new ProductVariantBarcodeAlreadyExistsException(barcode);
+        }
+
+        boolean existsInDb = excludeVariantId != null
+                ? variantRepository.existsByBarcodeAndCompanyIdAndIdNot(barcode, companyId, excludeVariantId)
+                : variantRepository.existsByBarcodeAndCompanyId(barcode, companyId);
+
+        if (existsInDb) {
+            throw new ProductVariantBarcodeAlreadyExistsException(barcode);
         }
     }
 
@@ -522,6 +775,24 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    /*
+     * Un producto sin variantes (p. ej. un pack de medias surtidas) se guarda como
+     * una única variante sin atributos. Si hay varias, cada una necesita atributos
+     * para distinguirse de las demás.
+     */
+    static void validateVariantsWithoutAttributes(
+            List<List<Long>> attributeValueIdsByVariant
+    ) {
+        boolean hasVariantWithoutAttributes = attributeValueIdsByVariant.stream()
+                .anyMatch(List::isEmpty);
+
+        if (hasVariantWithoutAttributes && attributeValueIdsByVariant.size() > 1) {
+            throw new InvalidProductVariantsException(
+                    "A variant without attribute values must be the product's only variant"
+            );
+        }
+    }
+
     private void validateOneValuePerAttribute(
             List<Long> attributeValueIds,
             String sku
@@ -536,7 +807,7 @@ public class ProductServiceImpl implements ProductService {
                     value.getAttribute().getId();
 
             if (!seenAttributes.add(attributeId)) {
-                throw new IllegalArgumentException(
+                throw new InvalidProductVariantsException(
                         "Variant '%s' has multiple values for attribute '%s'"
                                 .formatted(
                                         sku,
@@ -547,7 +818,37 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-    private Product findProductOrThrow(Long id) {
+    /*
+     * Una variante solo puede usar los atributos de la categoría del producto. Los que ya
+     * tenía se conservan aunque no lo sean (se cambió la categoría o se le quitó el atributo),
+     * así el producto se puede seguir editando sin rehacer sus variantes.
+     */
+    private void validateAttributesInCategory(
+            List<Long> attributeValueIds,
+            Category category,
+            Set<Long> alreadyUsedAttributeIds
+    ) {
+        for (Long valueId : attributeValueIds) {
+            ProductAttribute attribute =
+                    attributeValueRepository.getReferenceById(valueId).getAttribute();
+
+            if (!alreadyUsedAttributeIds.contains(attribute.getId())
+                    && !category.allowsAttribute(attribute.getId())) {
+                throw new AttributeNotInCategoryException(
+                        attribute.getName(),
+                        category.getName()
+                );
+            }
+        }
+    }
+
+    private static Set<Long> attributeIdsOf(ProductVariant variant) {
+        return variant.getAttributes().stream()
+                .map(pva -> pva.getAttributeValue().getAttribute().getId())
+                .collect(Collectors.toSet());
+    }
+
+        private Product findProductOrThrow(Long id) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
 
         return productRepository.findByIdAndCompanyId(id, companyId)
@@ -567,6 +868,13 @@ public class ProductServiceImpl implements ProductService {
                                 "Category not found with id: " + id
                         )
                 );
+    }
+
+    /** Fijar o cambiar el precio de una variante exige ADMINISTRAR_PRECIOS además de ADMINISTRAR_PRODUCTOS. */
+    private void requirePricePermission() {
+        if (!SecurityUtils.hasAuthority(Permission.ADMINISTRAR_PRECIOS.name())) {
+            throw new PricePermissionRequiredException();
+        }
     }
 
     private void checkCategoryActive(Category category) {

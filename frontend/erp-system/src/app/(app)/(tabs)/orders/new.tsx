@@ -1,28 +1,31 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 import { OrderForm } from '@/components/orders/OrderForm';
+import { NotFound } from '@/components/ui/NotFound';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useActiveBranch } from '@/hooks/use-branch-queries';
+import { useCreateOrder } from '@/hooks/use-order-queries';
 import { useAuthStore } from '@/stores/auth-store';
-import { useBranchStore } from '@/stores/branch-store';
 import { useOrderDraftStore } from '@/stores/order-draft-store';
-import { useOrderStore } from '@/stores/order-store';
-import { SharedStyles } from '@/styles/shared';
+import { showToast } from '@/stores/toast-store';
 import {
     toBackendCustomerId,
     toOrderItemRequests,
     toOrderPaymentOptions,
+    toOrderPromoRequests,
 } from '@/utils/order-request';
+import { hasPermission } from '@/utils/permissions';
 
 export default function NewOrderScreen() {
+    const canAccess = useAuthStore((state) => hasPermission(state.user, 'CREAR_PEDIDOS'));
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const createOrder = useOrderStore((state) => state.createOrder);
-    const token = useAuthStore((state) => state.token);
+    const createOrder = useCreateOrder();
     const { salesType: salesTypeParam } = useLocalSearchParams<{
         salesType?: string;
     }>();
@@ -33,12 +36,13 @@ export default function NewOrderScreen() {
     const quickSaleAmount = useOrderDraftStore((state) => state.quickSaleAmount);
     const customer = useOrderDraftStore((state) => state.customer);
     const items = useOrderDraftStore((state) => state.items);
+    const promos = useOrderDraftStore((state) => state.promos);
     const resetDraft = useOrderDraftStore((state) => state.reset);
 
-    const activeBranch = useBranchStore((state) => state.activeBranch);
+    const activeBranch = useActiveBranch();
 
     async function handleSubmitOrder() {
-        if (!token || isSubmitting) {
+        if (isSubmitting) {
             return;
         }
 
@@ -47,8 +51,8 @@ export default function NewOrderScreen() {
             return;
         }
 
-        if (salesType === 'WITH_PRODUCTS' && items.length === 0) {
-            setErrorMessage('El pedido debe tener al menos un producto.');
+        if (salesType === 'WITH_PRODUCTS' && items.length === 0 && promos.length === 0) {
+            setErrorMessage('El pedido debe tener al menos un producto o una promo.');
             return;
         }
 
@@ -65,20 +69,21 @@ export default function NewOrderScreen() {
             // El resumen guarda el importe cobrado justo antes de enviar.
             const draft = useOrderDraftStore.getState();
 
-            await createOrder(
-                {
-                    branchId: Number(activeBranch.id),
-                    customerId: toBackendCustomerId(customer),
-                    salesType,
-                    quickSaleAmount: isQuickSale ? quickSaleAmount : undefined,
-                    deliveryType: 'LOCAL_PICKUP',
-                    items: isQuickSale ? undefined : toOrderItemRequests(items),
-                    ...toOrderPaymentOptions(draft),
-                },
-                token,
-            );
+            const order = await createOrder.mutateAsync({
+                branchId: Number(activeBranch.id),
+                customerId: toBackendCustomerId(customer),
+                salesType,
+                quickSaleAmount: isQuickSale ? quickSaleAmount : undefined,
+                deliveryType: 'LOCAL_PICKUP',
+                items: isQuickSale ? undefined : toOrderItemRequests(items),
+                promos: isQuickSale ? undefined : toOrderPromoRequests(promos),
+                discount: isQuickSale ? undefined : draft.discount,
+                ...toOrderPaymentOptions(draft),
+            });
 
             resetDraft();
+            // El toast sigue visible después de volver a Ventas.
+            showToast({ type: 'success', message: `Venta ${order.orderNumber} registrada.` });
             router.back();
         } catch (error) {
             setErrorMessage(
@@ -98,32 +103,19 @@ export default function NewOrderScreen() {
         router.back();
     }
 
+    if (!canAccess) {
+        return (
+            <NotFound
+                headerTitle="Nueva venta"
+                title="Sin permisos"
+                description="Tu usuario no tiene permiso para crear ventas."
+            />
+        );
+    }
+
     return (
         <Screen style={styles.container}>
-            <View style={SharedStyles.header}>
-                <Pressable
-                    onPress={handleCancel}
-                    style={({ pressed }) => [
-                        SharedStyles.backButton,
-                        pressed && SharedStyles.pressed,
-                    ]}
-                    disabled={isSubmitting}
-                >
-                    <SymbolView
-                        name={{
-                            ios: 'chevron.left',
-                            android: 'arrow_back',
-                            web: 'arrow_back',
-                        }}
-                        size={24}
-                        tintColor={Colors.text}
-                    />
-                </Pressable>
-
-                <Text style={SharedStyles.headerTitle}>Nueva Venta</Text>
-
-                <View style={SharedStyles.headerSpacer} />
-            </View>
+            <PageHeader onBack={isSubmitting ? undefined : handleCancel} eyebrow="Ventas" title="Nueva venta" />
 
             {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
 
@@ -131,7 +123,6 @@ export default function NewOrderScreen() {
                 mode="SALE"
                 initialSalesType={salesType}
                 onSubmitOrder={handleSubmitOrder}
-                onCancel={handleCancel}
                 isSubmitting={isSubmitting}
                 submitLabel="Crear venta"
             />

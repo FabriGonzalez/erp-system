@@ -1,7 +1,7 @@
-import { Stock, StockAdjustRequest, StockResponse } from '@/types/stock';
-import { apiFetch } from '@/services/api-client';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+import { PageResponse } from '@/types/order';
+import { Stock, StockAdjustRequest, StockListParams, StockResponse } from '@/types/stock';
+import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { BRANCH_ACCESS_ERRORS, parseResponse } from '@/services/api-error';
 
 function authHeaders(token: string): HeadersInit {
     return {
@@ -10,26 +10,23 @@ function authHeaders(token: string): HeadersInit {
     };
 }
 
-async function handleResponse<T>(response: Response, fallback: string): Promise<T> {
-    if (!response.ok) {
-        let message = '';
-        try {
-            const payload = await response.json();
-            message = payload?.message ?? '';
-        } catch {
-            // Some backend errors do not include a JSON body.
-        }
-        if (response.status === 403) {
-            throw new Error(message || 'No tenés permiso para ajustar el stock.');
-        }
-        if (response.status === 404) throw new Error(message || 'Stock no encontrado.');
-        if (response.status === 409) throw new Error(message || 'No se pudo ajustar el stock.');
-        if (response.status >= 500) {
-            throw new Error(message || 'Error del servidor. Intentá de nuevo más tarde.');
-        }
-        throw new Error(message || fallback);
-    }
-    return response.json();
+const STOCK_ERRORS = {
+    byCode: {
+        ...BRANCH_ACCESS_ERRORS,
+        STOCK_NOT_FOUND: 'Stock no encontrado.',
+        STOCK_ALREADY_EXISTS: 'Ese producto ya tiene stock registrado en la sucursal.',
+        INSUFFICIENT_STOCK: 'No hay stock suficiente.',
+        INVALID_STOCK_QUERY: 'No se pudo cargar el listado de stock.',
+    },
+    byStatus: {
+        403: 'No tenés permiso para ajustar el stock.',
+        404: 'Stock, producto o sucursal no encontrados.',
+        409: 'No se pudo ajustar el stock.',
+    },
+};
+
+function handleResponse<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...STOCK_ERRORS, fallback });
 }
 
 function normalizeStock(data: StockResponse): Stock {
@@ -47,19 +44,24 @@ function normalizeStock(data: StockResponse): Stock {
     };
 }
 
-async function getStocks(path: string, token: string): Promise<Stock[]> {
-    const response = await apiFetch(`${API_BASE_URL}/api/v1/inventory/stocks${path}`, {
+export async function getStocks(
+    params: StockListParams & { page: number; size: number },
+    token: string
+): Promise<PageResponse<Stock>> {
+    const query = new URLSearchParams({ page: String(params.page), size: String(params.size) });
+    if (params.branchId) query.set('branchId', params.branchId);
+    if (params.q?.trim()) query.set('q', params.q.trim());
+    if (params.variantIds?.length) query.set('variantIds', params.variantIds.join(','));
+    if (params.attributeValueIds?.length) query.set('attributeValueIds', params.attributeValueIds.join(','));
+
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/inventory/stocks?${query.toString()}`, {
         headers: authHeaders(token),
     });
-    const data = await handleResponse<StockResponse[]>(
+    const page = await handleResponse<PageResponse<StockResponse>>(
         response,
         'No se pudieron obtener los stocks.'
     );
-    return data.map(normalizeStock);
-}
-
-export function getAllStocks(token: string) {
-    return getStocks('', token);
+    return { ...page, content: page.content.map(normalizeStock) };
 }
 
 export async function getStockById(id: string, token: string): Promise<Stock> {
@@ -70,14 +72,6 @@ export async function getStockById(id: string, token: string): Promise<Stock> {
         response,
         'No se pudo obtener el stock.'
     ));
-}
-
-export function getStocksByBranch(branchId: string, token: string) {
-    return getStocks(`/branch/${branchId}`, token);
-}
-
-export function getStocksByVariant(productVariantId: string, token: string) {
-    return getStocks(`/variant/${productVariantId}`, token);
 }
 
 export async function adjustStock(

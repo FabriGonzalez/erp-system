@@ -3,8 +3,16 @@ import { Slot, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
+import { QueryClientProvider } from '@tanstack/react-query';
+
+import { queryClient } from '@/services/query-client';
 import { useAuthStore } from '@/stores/auth-store';
+import { useDialogStore } from '@/stores/dialog-store';
+import { useToastStore } from '@/stores/toast-store';
 import { SessionExpiredOverlay } from '@/components/SessionExpiredOverlay';
+import { DialogHost } from '@/components/ui/DialogHost';
+import { ToastHost } from '@/components/ui/ToastHost';
+import { homeRoute } from '@/utils/home-route';
 import { StatusBar } from 'expo-status-bar';
 
 export default function RootLayout() {
@@ -19,6 +27,13 @@ export default function RootLayout() {
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  // Avisos y confirmaciones son de la sesión: al entrar, salir o expirar no quedan colgados
+  // (una confirmación pendiente se resuelve como cancelada).
+  useEffect(() => {
+    useToastStore.getState().clear();
+    useDialogStore.getState().dismissAll();
+  }, [user?.id, sessionExpired]);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -39,7 +54,7 @@ export default function RootLayout() {
     }
 
     if (user && inAuthGroup && !sessionExpired) {
-      router.replace('/(app)/(tabs)/shipments');
+      router.replace(homeRoute(user));
     }
   }, [user, isHydrated, segments, router, sessionExpired]);
 
@@ -48,14 +63,17 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <QueryClientProvider client={queryClient}>
       <Head>
         <title>ERP System</title>
       </Head>
       <StatusBar style="dark" />
 
       <Slot />
+      <ToastHost />
+      <DialogHost />
+      {/* Último: el aviso de sesión expirada queda por encima de todo. */}
       <SessionExpiredOverlay key={sessionExpired ? 'expired' : 'active'} />
-    </>
+    </QueryClientProvider>
   );
 }

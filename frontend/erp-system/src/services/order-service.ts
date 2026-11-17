@@ -1,64 +1,54 @@
-import { apiFetch } from '@/services/api-client';
+import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { BRANCH_ACCESS_ERRORS, parseResponse } from '@/services/api-error';
 import { CUSTOMER_ANONYMOUS } from '@/types/customer';
 import {
     Order,
     OrderItem,
     OrderItemResponse,
     OrderListParams,
+    OrderPromo,
+    OrderPromoResponse,
     OrderRequest,
     OrderResponse,
+    OrderShippingAddress,
     OrderUpdateRequest,
     PageResponse,
     RefundAction,
+    ShipmentResponse,
 } from '@/types/order';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
-
-const ERROR_MESSAGES_BY_CODE: Record<string, string> = {
-    INSUFFICIENT_STOCK: 'No hay stock suficiente para completar la operación.',
-    INVALID_STATUS_TRANSITION: 'La orden no está en un estado que permita esta operación.',
-    QUICK_SALE_INVALID: 'La venta rápida requiere un cliente registrado y un importe válido.',
+const ORDER_ERRORS = {
+    byCode: {
+        ...BRANCH_ACCESS_ERRORS,
+        INSUFFICIENT_STOCK: 'No hay stock suficiente para completar la operación.',
+        INVALID_STATUS_TRANSITION: 'La orden no está en un estado que permita esta operación.',
+        QUICK_SALE_INVALID:
+            'La venta rápida es solo con retiro en el local y necesita un importe mayor a $0.',
+        CUSTOMER_INACTIVE: 'El cliente está inactivo y no puede recibir pedidos nuevos.',
+        VARIANT_INACTIVE: 'Uno de los productos o variantes está desactivado: sacalo del pedido.',
+        // En el alta: el pago inicial no puede superar el saldo del pedido.
+        INVALID_PAYMENT: 'El pago inicial no es válido: no puede superar el total del pedido.',
+        INVALID_SHIPPING_ADDRESS:
+            'La dirección de envío no es válida: tiene que ser una dirección activa del cliente, con calle y ciudad.',
+        INVALID_SHIPMENT: 'El envío no se puede actualizar en el estado actual.',
+        PROMOTION_NOT_AVAILABLE:
+            'Una de las promos ya no está vigente o tiene un producto desactivado. Sacala del pedido para continuar.',
+        ORDER_ALREADY_HAS_SHIPMENT: 'La orden ya tiene un envío registrado.',
+        STOCK_NOT_FOUND: 'Uno de los productos no tiene stock en la sucursal.',
+        // Al cancelar un pedido web pagado: la devolución por Mercado Pago no salió.
+        MERCADOPAGO_REJECTED:
+            'Mercado Pago no aceptó devolver el pago, así que el pedido no se canceló. Revisá el saldo de la cuenta de Mercado Pago.',
+        MERCADOPAGO_UNAVAILABLE:
+            'Mercado Pago no responde, así que el pedido no se canceló. Probá de nuevo en unos minutos.',
+    },
+    byStatus: {
+        // Al crear o editar, el 404 puede venir del cliente, la dirección, un producto o la sucursal.
+        404: 'La orden o algo que usa (cliente, dirección, producto o sucursal) ya no existe. Recargá y probá de nuevo.',
+    },
 };
 
-async function handleResponse<T>(
-    response: Response,
-    defaultErrorMessage: string
-): Promise<T> {
-    if (!response.ok) {
-        let errorMessage = '';
-        let errorCode = '';
-
-        try {
-            const errorPayload = await response.json();
-            errorMessage = errorPayload?.message ?? '';
-            errorCode = errorPayload?.code ?? '';
-        } catch {
-            // El backend puede no devolver JSON.
-        }
-
-        const knownMessage = ERROR_MESSAGES_BY_CODE[errorCode];
-        if (knownMessage) {
-            throw new Error(knownMessage);
-        }
-
-        if (response.status === 404) {
-            throw new Error(errorMessage || 'Orden no encontrada.');
-        }
-
-        if (response.status >= 500) {
-            throw new Error(
-                errorMessage || 'Error del servidor. Intentá de nuevo más tarde.'
-            );
-        }
-
-        throw new Error(errorMessage || defaultErrorMessage);
-    }
-
-    if (response.status === 204) {
-        return undefined as unknown as T;
-    }
-
-    return response.json();
+function handleResponse<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...ORDER_ERRORS, fallback });
 }
 
 function authHeaders(token: string): HeadersInit {
@@ -84,10 +74,49 @@ function normalizeOrderItem(item: OrderItemResponse): OrderItem {
     };
 }
 
+function normalizeOrderPromo(promo: OrderPromoResponse): OrderPromo {
+    const quantity = Number(promo.quantity);
+    const unitPrice = Number(promo.unitPrice);
+
+    return {
+        id: String(promo.id),
+        promotionId: String(promo.promotionId),
+        name: promo.name,
+        unitPrice,
+        quantity,
+        subtotal: quantity * unitPrice,
+        components: (promo.components ?? []).map((component) => ({
+            productId: String(component.productId),
+            productName: component.productName,
+            variantId: String(component.productVariantId),
+            sku: component.productVariantSku,
+            variantName: component.variantName ?? '',
+            quantity: Number(component.quantity),
+        })),
+    };
+}
+
+function normalizeShippingAddress(shipment: ShipmentResponse): OrderShippingAddress {
+    const optional = (value?: string | null) => value ?? undefined;
+
+    return {
+        street: shipment.street,
+        number: optional(shipment.number),
+        apartment: optional(shipment.apartment),
+        floor: optional(shipment.floor),
+        city: shipment.city,
+        state: optional(shipment.state),
+        postalCode: optional(shipment.postalCode),
+        country: shipment.country,
+        reference: optional(shipment.reference),
+    };
+}
+
 function normalizeOrder(data: OrderResponse): Order {
     return {
         id: String(data.id),
         orderNumber: data.orderNumber,
+        channel: data.channel,
         customerId:
             data.customerId !== null && data.customerId !== undefined
                 ? String(data.customerId)
@@ -99,11 +128,18 @@ function normalizeOrder(data: OrderResponse): Order {
                 ? Number(data.quickSaleAmount)
                 : undefined,
         deliveryType: data.deliveryType,
+        shippingAddress: data.shipment ? normalizeShippingAddress(data.shipment) : undefined,
         branchId: String(data.branchId),
         branchName: data.branchName,
         items: (data.items ?? []).map(normalizeOrderItem),
+        promos: (data.promos ?? []).map(normalizeOrderPromo),
+        subtotal: Number(data.subtotal ?? data.total),
+        discount: Number(data.discount ?? 0),
         total: Number(data.total),
         amountPaid: Number(data.amountPaid ?? 0),
+        paymentStatus: data.paymentStatus,
+        balance: Number(data.balance ?? 0),
+        paymentMethod: data.paymentMethod ?? undefined,
         status: data.status,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
@@ -118,6 +154,7 @@ function buildListQuery(params: OrderListParams): string {
     if (params.sort) query.set('sort', params.sort);
     if (params.q?.trim()) query.set('q', params.q.trim());
     if (params.status) query.set('status', params.status);
+    if (params.channel) query.set('channel', params.channel);
     if (params.branchId) query.set('branchId', params.branchId);
     if (params.salesType) query.set('salesType', params.salesType);
     if (params.deliveryType) query.set('deliveryType', params.deliveryType);
@@ -211,5 +248,21 @@ export async function dispatchOrder(id: string, token: string): Promise<Order> {
 
     return normalizeOrder(
         await handleResponse<OrderResponse>(response, 'No se pudo despachar la orden.')
+    );
+}
+
+/** Pedido web a asignar: descuenta el stock en esa sucursal y pasa a preparar. */
+export async function assignOrderBranch(id: string, branchId: string, token: string): Promise<Order> {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/orders/${id}/assign-branch`, {
+        method: 'POST',
+        headers: authHeaders(token),
+        body: JSON.stringify({ branchId: Number(branchId) }),
+    });
+
+    return normalizeOrder(
+        await handleResponse<OrderResponse>(
+            response,
+            'No se pudo asignar la sucursal.',
+        )
     );
 }

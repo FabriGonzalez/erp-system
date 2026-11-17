@@ -1,7 +1,7 @@
 import { Branch, BranchRequest } from '@/types/branch';
-import { apiFetch } from '@/services/api-client';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+import { API_BASE_URL, apiFetch } from '@/services/api-client';
+import { parseResponse } from '@/services/api-error';
+import { UserResponse } from '@/types/user';
 
 type BackendBranchResponse = {
     id: number | string;
@@ -27,39 +27,17 @@ function normalizeBranch(data: BackendBranchResponse): Branch {
     };
 }
 
-async function handleResponse<T>(response: Response, defaultErrorMessage: string): Promise<T> {
-    if (!response.ok) {
-        let errorMessage = '';
+const BRANCH_ERRORS = {
+    byCode: {
+        BRANCH_NAME_ALREADY_EXISTS: 'Ya existe una sucursal con ese nombre.',
+    },
+    byStatus: {
+        404: 'Sucursal o usuario no encontrados.',
+    },
+};
 
-        try {
-            const errorPayload = await response.json();
-            errorMessage = errorPayload?.message ?? '';
-        } catch {
-            // El backend puede no devolver JSON.
-        }
-
-        if (response.status === 404) {
-            throw new Error(errorMessage || 'Sucursal no encontrada.');
-        }
-
-        if (response.status === 409) {
-            throw new Error(errorMessage || 'Ya existe una sucursal con ese nombre.');
-        }
-
-        if (response.status >= 500) {
-            throw new Error(
-                errorMessage || 'Error del servidor. Intentá de nuevo más tarde.'
-            );
-        }
-
-        throw new Error(errorMessage || defaultErrorMessage);
-    }
-
-    if (response.status === 204) {
-        return undefined as unknown as T;
-    }
-
-    return response.json();
+function handleResponse<T>(response: Response, fallback: string): Promise<T> {
+    return parseResponse<T>(response, { ...BRANCH_ERRORS, fallback });
 }
 
 /**
@@ -116,30 +94,6 @@ export async function getAllBranches(
     );
 
     return rawList.map(normalizeBranch);
-}
-
-/**
- * Obtiene el detalle de una sucursal por su ID.
- * Endpoint: GET /api/v1/branches/{id}
- */
-export async function getBranchById(
-    id: string,
-    token: string
-): Promise<Branch> {
-    const response = await apiFetch(`${API_BASE_URL}/api/v1/branches/${id}`, {
-        method: 'GET',
-        headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        },
-    });
-
-    const raw = await handleResponse<BackendBranchResponse>(
-        response,
-        'No se pudo obtener la sucursal.'
-    );
-
-    return normalizeBranch(raw);
 }
 
 /**
@@ -263,7 +217,7 @@ export async function assignUserToBranch(
     userId: string,
     branchId: string,
     token: string
-): Promise<BackendUserResponse | null> {
+): Promise<UserResponse | null> {
     const response = await apiFetch(
         `${API_BASE_URL}/api/v1/users/${userId}/branches/${branchId}`,
         {
@@ -279,7 +233,7 @@ export async function assignUserToBranch(
         return null;
     }
 
-    const result = await handleResponse<BackendUserResponse | null>(
+    const result = await handleResponse<UserResponse | null>(
         response,
         'No se pudo asignar el usuario a la sucursal.'
     );
@@ -294,7 +248,7 @@ export async function removeUserFromBranch(
     userId: string,
     branchId: string,
     token: string
-): Promise<BackendUserResponse | null> {
+): Promise<UserResponse | null> {
     const response = await apiFetch(
         `${API_BASE_URL}/api/v1/users/${userId}/branches/${branchId}`,
         {
@@ -310,68 +264,9 @@ export async function removeUserFromBranch(
         return null;
     }
 
-    const result = await handleResponse<BackendUserResponse | null>(
+    const result = await handleResponse<UserResponse | null>(
         response,
         'No se pudo remover la asignación del usuario a la sucursal.'
     );
     return result ?? null;
-}
-
-export type BackendUserResponse = {
-    id: number | string;
-    username: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    roleId?: number | string | null;
-    roleName: string;
-    companyId?: number | string | null;
-    companyName?: string | null;
-    active: boolean;
-};
-
-/**
- * Obtiene los usuarios asignados a una sucursal.
- * Endpoint: GET /api/v1/branches/{branchId}/users
- */
-export async function getBranchUsers(
-    branchId: string,
-    token: string
-): Promise<BackendUserResponse[]> {
-    const response = await apiFetch(
-        `${API_BASE_URL}/api/v1/branches/${branchId}/users`,
-        {
-            method: 'GET',
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-        }
-    );
-
-    return handleResponse<BackendUserResponse[]>(
-        response,
-        'No se pudieron obtener los usuarios de la sucursal.'
-    );
-}
-
-/**
- * Obtiene todos los usuarios de la empresa del usuario autenticado.
- * Endpoint: GET /api/v1/users
- */
-export async function getCompanyUsers(
-    token: string
-): Promise<BackendUserResponse[]> {
-    const response = await apiFetch(`${API_BASE_URL}/api/v1/users`, {
-        method: 'GET',
-        headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        },
-    });
-
-    return handleResponse<BackendUserResponse[]>(
-        response,
-        'No se pudieron obtener los usuarios de la empresa.'
-    );
 }

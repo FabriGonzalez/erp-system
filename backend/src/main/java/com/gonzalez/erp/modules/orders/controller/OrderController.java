@@ -2,11 +2,13 @@ package com.gonzalez.erp.modules.orders.controller;
 
 import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.common.dto.PageResponse;
+import com.gonzalez.erp.modules.orders.dto.request.OrderAssignBranchRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderCancelRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderUpdateRequest;
 import com.gonzalez.erp.modules.orders.dto.response.OrderResponse;
 import com.gonzalez.erp.modules.orders.entity.DeliveryType;
+import com.gonzalez.erp.modules.orders.entity.OrderChannel;
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 import com.gonzalez.erp.modules.orders.entity.PaymentStatus;
 import com.gonzalez.erp.modules.orders.entity.SalesType;
@@ -51,8 +53,10 @@ public class OrderController {
     @ApiResponse(responseCode = "400", description = "Parámetros de paginación u orden inválidos",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     public ResponseEntity<PageResponse<OrderResponse>> findAll(
-            @Parameter(description = "Filtrar por estado: CONFIRMED, TO_PREPARE, SHIPPED o CANCELLED. Si no se envía, retorna todas.")
+            @Parameter(description = "Filtrar por estado. Si no se envía, retorna todas salvo las web sin pagar (PENDING_PAYMENT), que se piden por estado.")
             @RequestParam(required = false) OrderStatus status,
+            @Parameter(description = "Filtrar por canal: ERP o WEB (tienda)")
+            @RequestParam(required = false) OrderChannel channel,
             @Parameter(description = "Filtrar por sucursal")
             @RequestParam(required = false) Long branchId,
             @Parameter(description = "Filtrar por tipo de venta: WITH_PRODUCTS o QUICK_SALE")
@@ -79,7 +83,7 @@ public class OrderController {
         }
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
         return ResponseEntity.ok(orderService.findAll(
-                status, branchId, salesType, deliveryType, customerId, paymentStatus, q, pageable));
+                status, channel, branchId, salesType, deliveryType, customerId, paymentStatus, q, pageable));
     }
 
     @PreAuthorize("hasAnyAuthority('VER_PEDIDOS','CREAR_PEDIDOS','PREPARAR_PEDIDOS')")
@@ -148,7 +152,7 @@ public class OrderController {
 
     @PreAuthorize("hasAuthority('CREAR_PEDIDOS')")
     @PostMapping("/{id}/cancel")
-    @Operation(summary = "Cancelar orden", description = "Cancela una orden CONFIRMED o TO_PREPARE, revierte stock y movimientos contables, permitiendo optar por crédito o reembolso.")
+    @Operation(summary = "Cancelar orden", description = "Cancela una orden CONFIRMED o TO_PREPARE, revierte stock y movimientos contables, permitiendo optar por crédito o reembolso. Una orden web pagada (también TO_ASSIGN) devuelve el pago entero por Mercado Pago e ignora refundAction; si Mercado Pago no lo devuelve, responde 502 y no se cancela.")
     @ApiResponse(responseCode = "200", description = "Orden cancelada exitosamente")
     @ApiResponse(responseCode = "404", description = "Orden o stock no encontrado",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -159,6 +163,23 @@ public class OrderController {
             @PathVariable Long id,
             @RequestBody(required = false) OrderCancelRequest request) {
         return ResponseEntity.ok(orderService.cancel(id, request));
+    }
+
+    @PreAuthorize("hasAuthority('CREAR_PEDIDOS')")
+    @PostMapping("/{id}/assign-branch")
+    @Operation(summary = "Asignar sucursal a un pedido web", description = "Para un pedido web pagado en TO_ASSIGN: descuenta el stock en la sucursal elegida y lo pasa a TO_PREPARE.")
+    @ApiResponse(responseCode = "200", description = "Sucursal asignada")
+    @ApiResponse(responseCode = "403", description = "El usuario no está asignado a la sucursal o está inactiva",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Orden o sucursal no encontrada",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "409", description = "La orden no está a asignar o a la sucursal le falta stock",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<OrderResponse> assignBranch(
+            @Parameter(description = "ID de la orden")
+            @PathVariable Long id,
+            @Valid @RequestBody OrderAssignBranchRequest request) {
+        return ResponseEntity.ok(orderService.assignBranch(id, request.branchId()));
     }
 
     private Sort parseSort(String sort) {

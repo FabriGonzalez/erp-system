@@ -1,6 +1,9 @@
 package com.gonzalez.erp.modules.provisioning.controller;
 
+import com.gonzalez.erp.modules.provisioning.dto.request.ChangeCompanyStatusRequest;
 import com.gonzalez.erp.modules.provisioning.dto.request.ProvisionCompanyRequest;
+import com.gonzalez.erp.modules.provisioning.dto.request.StoreSetupRequest;
+import com.gonzalez.erp.modules.provisioning.dto.response.CompanyResponse;
 import com.gonzalez.erp.modules.provisioning.dto.response.ProvisionCompanyResponse;
 import com.gonzalez.erp.modules.provisioning.service.ProvisioningService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,10 +15,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/provisioning")
@@ -24,6 +32,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProvisioningController {
 
     private final ProvisioningService provisioningService;
+
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
+    @GetMapping("/companies")
+    @Operation(summary = "Listar empresas", description = "Todas las empresas con su estado. Solo PLATFORM_ADMIN.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Lista de empresas"),
+            @ApiResponse(responseCode = "403", description = "No es PLATFORM_ADMIN")
+    })
+    public ResponseEntity<List<CompanyResponse>> findAllCompanies() {
+        return ResponseEntity.ok(provisioningService.findAllCompanies());
+    }
 
     @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     @PostMapping("/companies")
@@ -39,5 +58,41 @@ public class ProvisioningController {
             @Valid @RequestBody ProvisionCompanyRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(provisioningService.provisionCompany(request));
+    }
+
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
+    @PatchMapping("/companies/{id}/status")
+    @Operation(summary = "Cambiar estado de una empresa",
+               description = "ACTIVE, SUSPENDED o CANCELLED. Suspender o cancelar requiere motivo y corta "
+                       + "el acceso de sus usuarios de inmediato. CANCELLED es definitivo.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Estado actualizado"),
+            @ApiResponse(responseCode = "400", description = "Falta el motivo o el estado es inválido"),
+            @ApiResponse(responseCode = "403", description = "No es PLATFORM_ADMIN"),
+            @ApiResponse(responseCode = "404", description = "Empresa no encontrada"),
+            @ApiResponse(responseCode = "409", description = "Transición de estado no permitida")
+    })
+    public ResponseEntity<CompanyResponse> changeCompanyStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody ChangeCompanyStatusRequest request) {
+        return ResponseEntity.ok(provisioningService.changeCompanyStatus(id, request));
+    }
+
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
+    @PatchMapping("/companies/{id}/store")
+    @Operation(summary = "Configurar la tienda web de una empresa",
+               description = "Dominio (se guarda normalizado, p. ej. https://Tienda.com/ → tienda.com) y habilitación. "
+                       + "Solo PLATFORM_ADMIN: la empresa no puede elegir su dominio. Verificar antes que el dominio sea suyo.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Tienda configurada"),
+            @ApiResponse(responseCode = "400", description = "Dominio inválido, o se habilita sin dominio"),
+            @ApiResponse(responseCode = "403", description = "No es PLATFORM_ADMIN"),
+            @ApiResponse(responseCode = "404", description = "Empresa no encontrada"),
+            @ApiResponse(responseCode = "409", description = "Otra empresa ya usa ese dominio (STORE_DOMAIN_ALREADY_EXISTS)")
+    })
+    public ResponseEntity<CompanyResponse> configureStore(
+            @PathVariable Long id,
+            @Valid @RequestBody StoreSetupRequest request) {
+        return ResponseEntity.ok(provisioningService.configureStore(id, request));
     }
 }
