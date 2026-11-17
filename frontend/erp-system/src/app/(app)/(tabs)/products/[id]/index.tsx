@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { AttributeValuesLabel } from '@/components/attributes/AttributeValuesLabel';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { HeaderButton } from '@/components/ui/HeaderButton';
 import { ListGroup } from '@/components/ui/ListGroup';
@@ -133,14 +134,15 @@ export default function ProductDetailScreen() {
                             return (
                                 <View key={variant.id} style={styles.variantRow}>
                                     <View style={SharedStyles.listItemTexts}>
-                                        <Text style={styles.variantAttributes}>
-                                            {variant.attributes.length
-                                                ? variant.attributes
-                                                    .map((attribute) => attribute.valueName)
-                                                    .filter(Boolean)
-                                                    .join(' / ')
-                                                : 'Variante única'}
-                                        </Text>
+                                        <AttributeValuesLabel
+                                            values={variant.attributes.map((attribute) => ({
+                                                name: attribute.valueName,
+                                                swatch: attribute.swatch,
+                                            }))}
+                                            separator=" / "
+                                            fallback="Variante única"
+                                            textStyle={styles.variantAttributes}
+                                        />
                                         <Text style={SharedStyles.listItemMeta}>SKU {variant.sku}</Text>
                                     </View>
                                     <View style={styles.variantRight}>

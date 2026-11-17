@@ -1,6 +1,7 @@
 import { SymbolView } from 'expo-symbols';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ColorSwatchPreview } from '@/components/attributes/ColorSwatchPreview';
 import { IconBadge } from '@/components/ui/IconBadge';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { Colors } from '@/constants/colors';
@@ -74,8 +75,8 @@ export function ProductSelectionCard({
     const variantAttributes = product.variants.flatMap((variant) => variant.attributes);
     const attributeName = (attributeId: string) =>
         variantAttributes.find((attribute) => attribute.attributeId === attributeId)?.attributeName ?? 'Atributo';
-    const valueName = (valueId: string) =>
-        variantAttributes.find((attribute) => attribute.attributeValueId === valueId)?.valueName ?? valueId;
+    const valueOf = (valueId: string) =>
+        variantAttributes.find((attribute) => attribute.attributeValueId === valueId);
 
     return (
         <Pressable
@@ -178,17 +179,19 @@ export function ProductSelectionCard({
                             <View style={styles.chips}>
                                 {attributeOptions(product, attributeId).map((valueId) => {
                                     const isSelected = selectedAttributes[attributeId] === valueId;
+                                    const value = valueOf(valueId);
                                     return (
                                         <Pressable
                                             key={valueId}
-                                            style={[styles.chip, isSelected && styles.chipSelected]}
+                                            style={[styles.chip, value?.swatch && styles.chipWithSwatch, isSelected && styles.chipSelected]}
                                             onPress={(event) => {
                                                 event.stopPropagation();
                                                 onSelectAttribute(attributeId, valueId);
                                             }}
                                         >
+                                            {value?.swatch ? <ColorSwatchPreview colors={value.swatch.colors} size={14} /> : null}
                                             <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                                                {valueName(valueId)}
+                                                {value?.valueName ?? valueId}
                                             </Text>
                                         </Pressable>
                                     );
@@ -265,6 +268,11 @@ const styles = StyleSheet.create({
     chipSelected: {
         backgroundColor: Colors.primary,
         borderColor: Colors.primary,
+    },
+    chipWithSwatch: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: Spacing.xs,
     },
     chipText: {
         fontSize: 13,
