@@ -18,11 +18,17 @@ export type ProductAttributeResponse = {
     updatedAt?: string | null;
 };
 
+/** Muestra de color de un valor: colores #RRGGBB en orden, el primero es el primario. */
+export type ColorSwatch = {
+    colors: string[];
+};
+
 export type ProductAttributeValue = {
     id: string;
     attributeId: string;
     attributeName?: string;
     name: string;
+    swatch: ColorSwatch | null;
     active: boolean;
     createdAt?: string | null;
     updatedAt?: string | null;
@@ -30,6 +36,8 @@ export type ProductAttributeValue = {
 
 export type ProductAttributeValueRequest = {
     value: string;
+    /** null la borra: al editar hay que mandar siempre la muestra actual. */
+    swatch: ColorSwatch | null;
 };
 
 export type ProductAttributeValueResponse = {
@@ -37,6 +45,7 @@ export type ProductAttributeValueResponse = {
     attributeId: number | string;
     attributeName: string;
     value: string;
+    swatch?: ColorSwatch | null;
     active: boolean;
     createdAt?: string | null;
     updatedAt?: string | null;

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { ProductAttributeFormModal } from '@/components/attributes/ProductAttributeFormModal';
+import { ColorSwatchPreview } from '@/components/attributes/ColorSwatchPreview';
 import { ProductAttributeValueFormModal } from '@/components/attributes/ProductAttributeValueFormModal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterChip } from '@/components/ui/FilterChip';
@@ -145,6 +146,7 @@ export default function AttributeDetailScreen() {
     function renderValueItem({ item }: { item: ProductAttributeValue }) {
         return (
             <View style={[SharedStyles.card, SharedStyles.listItem, !item.active && SharedStyles.listItemInactive]}>
+                {item.swatch ? <ColorSwatchPreview colors={item.swatch.colors} size={28} /> : null}
                 <View style={SharedStyles.listItemTexts}>
                     <Text style={SharedStyles.listItemTitle}>{item.name}</Text>
                     {!item.active ? <StatusPill label="Inactivo" tone="neutral" /> : null}
@@ -161,7 +163,7 @@ export default function AttributeDetailScreen() {
                     style={({ pressed }) => [styles.iconButton, pressed && SharedStyles.pressed]}
                     onPress={() => handleOpenEditValue(item)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Renombrar ${item.name}`}
+                    accessibilityLabel={`Editar ${item.name}`}
                 >
                     <SymbolView
                         name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
@@ -253,6 +255,7 @@ export default function AttributeDetailScreen() {
                 attributeName={attribute.name}
                 valueId={editingValue?.id}
                 initialName={editingValue?.name ?? ''}
+                initialSwatch={editingValue?.swatch ?? null}
                 onClose={() => {
                     setIsValueModalVisible(false);
                     setEditingValue(null);
