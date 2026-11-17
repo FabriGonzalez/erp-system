@@ -8,6 +8,10 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import java.util.List;
 
 @Entity
 @Table(
@@ -38,8 +42,14 @@ public class ProductAttributeValue extends BaseEntity {
     @Builder.Default
     private boolean active = true;
 
-    public void update(String value) {
+    // Colores de la muestra en orden (#RRGGBB); null si el valor no tiene muestra.
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "swatch_colors", columnDefinition = "varchar(7)[]")
+    private List<String> swatchColors;
+
+    public void update(String value, List<String> swatchColors) {
         this.value = value;
+        this.swatchColors = swatchColors;
     }
 
     public void deactivate() {

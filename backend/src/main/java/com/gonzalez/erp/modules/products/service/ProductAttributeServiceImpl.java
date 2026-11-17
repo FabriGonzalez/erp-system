@@ -4,6 +4,7 @@ import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.config.security.SecurityUtils;
 import com.gonzalez.erp.modules.companies.entity.Company;
 import com.gonzalez.erp.modules.companies.repository.CompanyRepository;
+import com.gonzalez.erp.modules.products.dto.ColorSwatch;
 import com.gonzalez.erp.modules.products.dto.request.ProductAttributeRequest;
 import com.gonzalez.erp.modules.products.dto.request.ProductAttributeValueRequest;
 import com.gonzalez.erp.modules.products.dto.response.ProductAttributeResponse;
@@ -51,7 +52,7 @@ public class ProductAttributeServiceImpl implements ProductAttributeService {
     public List<ProductAttributeValueResponse> findValues(Long attributeId) {
         findAttributeOrThrow(attributeId);
         return attributeValueRepository.findByAttributeId(attributeId).stream()
-                .map(this::toValueResponse)
+                .map(ProductAttributeMapper::toValueResponse)
                 .toList();
     }
 
@@ -59,7 +60,7 @@ public class ProductAttributeServiceImpl implements ProductAttributeService {
     public List<ProductAttributeValueResponse> findAllValues(Boolean active) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
         return attributeValueRepository.findAllByCompanyIdWithAttribute(companyId, active).stream()
-                .map(this::toValueResponse)
+                .map(ProductAttributeMapper::toValueResponse)
                 .toList();
     }
 
@@ -125,10 +126,11 @@ public class ProductAttributeServiceImpl implements ProductAttributeService {
         ProductAttributeValue attributeValue = ProductAttributeValue.builder()
                 .attribute(attribute)
                 .value(request.value())
+                .swatchColors(ColorSwatch.toColumn(request.swatch()))
                 .build();
 
         ProductAttributeValue saved = attributeValueRepository.saveAndFlush(attributeValue);
-        return toValueResponse(saved);
+        return ProductAttributeMapper.toValueResponse(saved);
     }
 
     @Override
@@ -142,8 +144,8 @@ public class ProductAttributeServiceImpl implements ProductAttributeService {
                     request.value(), attributeValue.getAttribute().getName());
         }
 
-        attributeValue.update(request.value());
-        return toValueResponse(attributeValue);
+        attributeValue.update(request.value(), ColorSwatch.toColumn(request.swatch()));
+        return ProductAttributeMapper.toValueResponse(attributeValue);
     }
 
     @Override
@@ -151,7 +153,7 @@ public class ProductAttributeServiceImpl implements ProductAttributeService {
     public ProductAttributeValueResponse deactivateValue(Long valueId) {
         ProductAttributeValue attributeValue = findValueOrThrow(valueId);
         attributeValue.deactivate();
-        return toValueResponse(attributeValue);
+        return ProductAttributeMapper.toValueResponse(attributeValue);
     }
 
     @Override
@@ -159,7 +161,7 @@ public class ProductAttributeServiceImpl implements ProductAttributeService {
     public ProductAttributeValueResponse activateValue(Long valueId) {
         ProductAttributeValue attributeValue = findValueOrThrow(valueId);
         attributeValue.activate();
-        return toValueResponse(attributeValue);
+        return ProductAttributeMapper.toValueResponse(attributeValue);
     }
 
     private ProductAttribute findAttributeOrThrow(Long id) {
@@ -176,17 +178,5 @@ public class ProductAttributeServiceImpl implements ProductAttributeService {
         return attributeValueRepository.findByIdAndAttributeCompanyId(id, companyId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Attribute value not found with id: " + id));
-    }
-
-    private ProductAttributeValueResponse toValueResponse(ProductAttributeValue value) {
-        return new ProductAttributeValueResponse(
-                value.getId(),
-                value.getAttribute().getId(),
-                value.getAttribute().getName(),
-                value.getValue(),
-                value.isActive(),
-                value.getCreatedAt(),
-                value.getUpdatedAt()
-        );
     }
 }
