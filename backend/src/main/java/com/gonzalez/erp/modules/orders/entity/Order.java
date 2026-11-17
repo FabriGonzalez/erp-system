@@ -47,8 +47,9 @@ public class Order extends BaseEntity {
     @JoinColumn(name = "customer_id")
     private Customer customer;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "created_by", nullable = false)
+    // Null en los pedidos de la tienda: no los carga un empleado.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by")
     private User createdBy;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -56,8 +57,18 @@ public class Order extends BaseEntity {
     private Company company;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    @Builder.Default
+    private OrderChannel channel = OrderChannel.ERP;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private OrderStatus status;
+
+    // Falso si se cobró sin descontar stock (ninguna sucursal podía armarlo sola): al cancelarlo no se devuelve nada.
+    @Column(name = "stock_reserved", nullable = false)
+    @Builder.Default
+    private boolean stockReserved = true;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "sales_type", nullable = false, length = 20)
@@ -79,6 +90,25 @@ public class Order extends BaseEntity {
     @Column(nullable = false, precision = 12, scale = 2)
     @Builder.Default
     private BigDecimal discount = BigDecimal.ZERO;
+
+    // Solo en pedidos web con envío; ya está sumado al total.
+    @Column(name = "shipping_cost", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal shippingCost = BigDecimal.ZERO;
+
+    // Clave del intento de compra en la tienda: el reintento devuelve este pedido en vez de crear otro.
+    @Column(name = "checkout_key", length = 64)
+    private String checkoutKey;
+
+    // Pedidos web: hasta cuándo vale la reserva y el link de pago de Mercado Pago.
+    @Column(name = "payment_expires_at")
+    private Instant paymentExpiresAt;
+
+    @Column(name = "mp_preference_id", length = 100)
+    private String mpPreferenceId;
+
+    @Column(name = "payment_url", length = 500)
+    private String paymentUrl;
 
     @Column(nullable = false, precision = 12, scale = 2)
     @Builder.Default
@@ -131,13 +161,64 @@ public class Order extends BaseEntity {
                     "Order is already cancelled");
         }
 
-        if (status != OrderStatus.CONFIRMED && status != OrderStatus.TO_PREPARE) {
+        // Un pedido web sin pagar se cancela desde la tienda (o al vencer); el ERP sigue usando canCancel().
+        if (!canCancel() && status != OrderStatus.PENDING_PAYMENT) {
             throw new InvalidOrderException(
                     "Cannot cancel order in status: " + status);
         }
 
         this.status = OrderStatus.CANCELLED;
         this.cancelledAt = Instant.now();
+    }
+
+    /**
+     * Pedido web pagado: sigue el mismo camino que una venta del local (retiro listo o envío a
+     * preparar). Si no se descontó stock, falta elegir la sucursal que lo arma.
+     */
+    public void markPaid(Instant now) {
+        if (status != OrderStatus.PENDING_PAYMENT) {
+            throw new InvalidOrderException("Only PENDING_PAYMENT orders can be paid. Current status: " + status);
+        }
+        if (!stockReserved) {
+            this.status = OrderStatus.TO_ASSIGN;
+        } else if (deliveryType == DeliveryType.SHIPPING) {
+            this.status = OrderStatus.TO_PREPARE;
+            this.preparedAt = now;
+        } else {
+            this.status = OrderStatus.CONFIRMED;
+            this.confirmedAt = now;
+        }
+    }
+
+    /**
+     * Pedido web pagado que ninguna sucursal armaba sola: un empleado elige la que lo arma (el stock
+     * lo descuenta quien llama) y sigue como cualquier envío.
+     */
+    public void assignBranch(Branch branch, Instant now) {
+        if (status != OrderStatus.TO_ASSIGN) {
+            throw new InvalidOrderException("Only TO_ASSIGN orders can be assigned a branch. Current status: " + status);
+        }
+        this.branch = branch;
+        this.stockReserved = true;
+        this.status = OrderStatus.TO_PREPARE;
+        this.preparedAt = now;
+    }
+
+    public boolean isWeb() {
+        return channel == OrderChannel.WEB;
+    }
+
+    public void attachPaymentLink(String preferenceId, String url, Instant expiresAt) {
+        this.mpPreferenceId = preferenceId;
+        this.paymentUrl = url;
+        this.paymentExpiresAt = expiresAt;
+    }
+
+    /** El link sirve solo mientras el pedido espera el pago y la reserva no venció. */
+    public String pendingPaymentUrl(Instant now) {
+        boolean payable = status == OrderStatus.PENDING_PAYMENT
+                && paymentExpiresAt != null && paymentExpiresAt.isAfter(now);
+        return payable ? paymentUrl : null;
     }
 
     public void addItem(OrderItem item) {
@@ -238,13 +319,13 @@ public class Order extends BaseEntity {
             BigDecimal promosTotal = promos.stream()
                     .map(promo -> promo.getUnitPrice().multiply(BigDecimal.valueOf(promo.getQuantity())))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            this.total = itemsTotal.add(promosTotal).subtract(discount);
+            this.total = itemsTotal.add(promosTotal).subtract(discount).add(shippingCost);
         }
     }
 
-    /** Lo que suman los productos y las promos, antes del descuento. */
+    /** Lo que suman los productos y las promos, antes del descuento y sin el envío. */
     public BigDecimal getSubtotal() {
-        return total.add(discount);
+        return total.add(discount).subtract(shippingCost);
     }
 
     public boolean isConfirmed() {
@@ -271,8 +352,9 @@ public class Order extends BaseEntity {
         return isToPrepare() && deliveryType == DeliveryType.SHIPPING;
     }
 
+    // TO_ASSIGN solo existe en pedidos web: ya pagado, se cancela devolviendo el pago.
     public boolean canCancel() {
-        return isConfirmed() || isToPrepare();
+        return isConfirmed() || isToPrepare() || status == OrderStatus.TO_ASSIGN;
     }
 
     public boolean requiresStockValidation() {

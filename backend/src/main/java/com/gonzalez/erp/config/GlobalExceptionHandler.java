@@ -4,15 +4,21 @@ import com.gonzalez.erp.common.dto.ErrorResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.modules.auth.exception.InvalidPasswordChangeException;
 import com.gonzalez.erp.modules.auth.exception.TooManyLoginAttemptsException;
+import com.gonzalez.erp.modules.mercadopago.exception.MercadoPagoException;
+import com.gonzalez.erp.modules.store.dto.StoreCheckoutErrorResponse;
+import com.gonzalez.erp.modules.store.exception.StoreAuthException;
+import com.gonzalez.erp.modules.store.exception.StoreCheckoutException;
 import com.gonzalez.erp.modules.companies.exception.CompanyNameAlreadyExistsException;
 import com.gonzalez.erp.modules.companies.exception.CompanyNotActiveException;
 import com.gonzalez.erp.modules.companies.exception.CompanyTaxIdAlreadyExistsException;
 import com.gonzalez.erp.modules.companies.exception.InvalidCompanyStatusTransitionException;
+import com.gonzalez.erp.modules.companies.exception.StoreDomainAlreadyExistsException;
 import com.gonzalez.erp.modules.branches.exception.BranchAccessDeniedException;
 import com.gonzalez.erp.modules.branches.exception.BranchInactiveException;
 import com.gonzalez.erp.modules.branches.exception.BranchNameAlreadyExistsException;
 import com.gonzalez.erp.modules.categories.exception.CategoryNameAlreadyExistsException;
 import com.gonzalez.erp.modules.customers.exception.CustomerDocumentAlreadyExistsException;
+import com.gonzalez.erp.modules.customers.exception.CustomerManagedByStoreException;
 import com.gonzalez.erp.modules.customers.exception.InvalidCustomerAddressException;
 import com.gonzalez.erp.modules.customers.exception.InvalidCustomerDocumentException;
 import com.gonzalez.erp.modules.customers.exception.InvalidCustomerRequestException;
@@ -22,6 +28,7 @@ import com.gonzalez.erp.modules.inventory.exception.InvalidStockMovementQueryExc
 import com.gonzalez.erp.modules.inventory.exception.InvalidStockQueryException;
 import com.gonzalez.erp.modules.inventory.exception.StockNotFoundException;
 import com.gonzalez.erp.modules.orders.exception.InactiveOrderCustomerException;
+import com.gonzalez.erp.modules.orders.exception.InactiveOrderVariantException;
 import com.gonzalez.erp.modules.orders.exception.InsufficientStockForEditException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderStatusTransitionException;
@@ -29,10 +36,12 @@ import com.gonzalez.erp.modules.orders.exception.InvalidShippingAddressException
 import com.gonzalez.erp.modules.orders.exception.QuickSaleValidationException;
 import com.gonzalez.erp.modules.payments.exception.InvalidPaymentException;
 import com.gonzalez.erp.modules.products.exception.AttributeNotInCategoryException;
+import com.gonzalez.erp.modules.products.exception.InvalidProductImageException;
 import com.gonzalez.erp.modules.products.exception.InvalidProductQueryException;
 import com.gonzalez.erp.modules.products.exception.InvalidProductVariantsException;
 import com.gonzalez.erp.modules.products.exception.PricePermissionRequiredException;
 import com.gonzalez.erp.modules.products.exception.ProductAttributeNameAlreadyExistsException;
+import com.gonzalez.erp.modules.products.exception.ProductImageRequiredException;
 import com.gonzalez.erp.modules.products.exception.ProductAttributeValueAlreadyExistsException;
 import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveException;
 import com.gonzalez.erp.modules.products.exception.ProductSkuAlreadyExistsException;
@@ -70,6 +79,7 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.time.Instant;
 import java.util.List;
 
 @RestControllerAdvice
@@ -104,6 +114,34 @@ public class GlobalExceptionHandler {
                         ex.getMessage(),
                         request.getRequestURI(),
                         "PRICE_PERMISSION_REQUIRED"
+                ));
+    }
+
+    @ExceptionHandler(InvalidProductImageException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidProductImage(
+            InvalidProductImageException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.UNPROCESSABLE_CONTENT)
+                .body(ErrorResponse.of(
+                        HttpStatus.UNPROCESSABLE_CONTENT.value(),
+                        HttpStatus.UNPROCESSABLE_CONTENT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        ex.getCode()
+                ));
+    }
+
+    @ExceptionHandler(ProductImageRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleProductImageRequired(
+            ProductImageRequiredException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(
+                        HttpStatus.CONFLICT.value(),
+                        HttpStatus.CONFLICT.getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        "PRODUCT_IMAGE_REQUIRED"
                 ));
     }
 
@@ -166,6 +204,47 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(StoreAuthException.class)
+    public ResponseEntity<ErrorResponse> handleStoreAuth(StoreAuthException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(ex.getStatus())
+                .body(ErrorResponse.of(
+                        ex.getStatus().value(),
+                        ex.getStatus().getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        ex.getCode()
+                ));
+    }
+
+    @ExceptionHandler(MercadoPagoException.class)
+    public ResponseEntity<ErrorResponse> handleMercadoPago(MercadoPagoException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(ex.getStatus())
+                .body(ErrorResponse.of(
+                        ex.getStatus().value(),
+                        ex.getStatus().getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        ex.getCode()
+                ));
+    }
+
+    @ExceptionHandler(StoreCheckoutException.class)
+    public ResponseEntity<StoreCheckoutErrorResponse> handleStoreCheckout(StoreCheckoutException ex, HttpServletRequest request) {
+        return ResponseEntity
+                .status(ex.getStatus())
+                .body(new StoreCheckoutErrorResponse(
+                        Instant.now(),
+                        ex.getStatus().value(),
+                        ex.getStatus().getReasonPhrase(),
+                        ex.getMessage(),
+                        request.getRequestURI(),
+                        ex.getCode(),
+                        ex.getQuote()
+                ));
+    }
+
     @ExceptionHandler(CompanyNotActiveException.class)
     public ResponseEntity<ErrorResponse> handleCompanyNotActive(
             CompanyNotActiveException ex, HttpServletRequest request) {
@@ -211,6 +290,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleResourceNotFound(
             ResourceNotFoundException ex, HttpServletRequest request) {
+        logNotFound(request, ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of(
@@ -226,6 +306,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             CompanyNameAlreadyExistsException.class,
             CompanyTaxIdAlreadyExistsException.class,
+            StoreDomainAlreadyExistsException.class,
             BranchNameAlreadyExistsException.class,
             CategoryNameAlreadyExistsException.class,
             ProductSkuAlreadyExistsException.class,
@@ -234,13 +315,15 @@ public class GlobalExceptionHandler {
             ProductAttributeNameAlreadyExistsException.class,
             ProductAttributeValueAlreadyExistsException.class,
             ProductCategoryNotActiveException.class,
-            CustomerDocumentAlreadyExistsException.class
+            CustomerDocumentAlreadyExistsException.class,
+            CustomerManagedByStoreException.class
     })
     public ResponseEntity<ErrorResponse> handleConflict(
             RuntimeException ex, HttpServletRequest request) {
         String code = switch (ex) {
             case CompanyNameAlreadyExistsException e -> "COMPANY_NAME_ALREADY_EXISTS";
             case CompanyTaxIdAlreadyExistsException e -> "COMPANY_TAX_ID_ALREADY_EXISTS";
+            case StoreDomainAlreadyExistsException e -> "STORE_DOMAIN_ALREADY_EXISTS";
             case BranchNameAlreadyExistsException e -> "BRANCH_NAME_ALREADY_EXISTS";
             case CategoryNameAlreadyExistsException e -> "CATEGORY_NAME_ALREADY_EXISTS";
             case ProductSkuAlreadyExistsException e -> "PRODUCT_SKU_ALREADY_EXISTS";
@@ -249,6 +332,7 @@ public class GlobalExceptionHandler {
             case ProductAttributeNameAlreadyExistsException e -> "ATTRIBUTE_NAME_ALREADY_EXISTS";
             case ProductAttributeValueAlreadyExistsException e -> "ATTRIBUTE_VALUE_ALREADY_EXISTS";
             case ProductCategoryNotActiveException e -> "CATEGORY_INACTIVE";
+            case CustomerManagedByStoreException e -> "CUSTOMER_MANAGED_BY_STORE";
             default -> "CUSTOMER_DOCUMENT_ALREADY_EXISTS";
         };
         return ResponseEntity
@@ -359,6 +443,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(StockNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleStockNotFound(
             StockNotFoundException ex, HttpServletRequest request) {
+        logNotFound(request, ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of(
@@ -492,6 +577,7 @@ public class GlobalExceptionHandler {
             QuickSaleValidationException.class,
             InvalidPaymentException.class,
             InactiveOrderCustomerException.class,
+            InactiveOrderVariantException.class,
             InvalidShippingAddressException.class,
             InvalidShipmentException.class
     })
@@ -499,6 +585,7 @@ public class GlobalExceptionHandler {
             RuntimeException ex, HttpServletRequest request) {
         String code = ex instanceof QuickSaleValidationException ? "QUICK_SALE_INVALID"
                 : ex instanceof InactiveOrderCustomerException ? "CUSTOMER_INACTIVE"
+                : ex instanceof InactiveOrderVariantException ? "VARIANT_INACTIVE"
                 : ex instanceof InvalidShippingAddressException ? "INVALID_SHIPPING_ADDRESS"
                 : ex instanceof InvalidShipmentException ? "INVALID_SHIPMENT"
                 : ex instanceof InvalidPaymentException ? "INVALID_PAYMENT"
@@ -631,6 +718,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorResponse> handleNoResource(
             NoResourceFoundException ex, HttpServletRequest request) {
+        logNotFound(request, "Endpoint not found");
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of(
@@ -640,6 +728,11 @@ public class GlobalExceptionHandler {
                         request.getRequestURI(),
                         "NOT_FOUND"
                 ));
+    }
+
+    /** Sin stack trace: alcanza con saber qué recurso faltó y en qué request. */
+    private void logNotFound(HttpServletRequest request, String message) {
+        log.warn("404 on {} {}: {}", request.getMethod(), request.getRequestURI(), message);
     }
 
     /** Lo inesperado se loguea completo y no se le muestra el detalle interno al cliente. */

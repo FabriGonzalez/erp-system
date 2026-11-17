@@ -53,6 +53,12 @@ public class Customer extends BaseEntity {
     @Builder.Default
     private boolean active = true;
 
+    // Lo fija el alta (ERP o registro en la tienda) y no cambia: no tiene setter ni entra en update().
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    @Builder.Default
+    private CustomerOrigin origin = CustomerOrigin.ERP;
+
     @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = false)
     @Builder.Default
     private List<Address> addresses = new ArrayList<>();
@@ -66,6 +72,18 @@ public class Customer extends BaseEntity {
         this.documentType = documentType;
         this.documentNumber = documentNumber;
         this.observations = observations;
+    }
+
+    /** Ficha creada en la tienda: sus datos de contacto y direcciones los administra el comprador. */
+    public boolean isManagedByStore() {
+        return origin == CustomerOrigin.WEB;
+    }
+
+    /** Lo que el comprador edita desde la tienda: documento y observaciones no se tocan. */
+    public void updateContact(String firstName, String lastName, String phone) {
+        this.firstName = firstName;
+        this.lastName = lastName;
+        this.phone = phone;
     }
 
     public void deactivate() {

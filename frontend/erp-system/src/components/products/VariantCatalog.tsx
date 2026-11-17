@@ -83,16 +83,21 @@ export function VariantCatalog({
             q: searchQuery,
             categoryId: selectedCategoryId ?? undefined,
             active: true,
-            stock: 'IN_STOCK',
+            // Solo cuenta el stock de variantes activas: si todas las que tienen stock están
+            // desactivadas, el producto no aparece.
+            stock: 'SELLABLE',
             branchId,
             attributeValueIds: attributeValueIds.length ? attributeValueIds : undefined,
         },
         { enabled: Boolean(branchId), staleTime: 0 },
     );
 
-    // Se elige entre las variantes con stock que coinciden con el filtro de atributos.
+    // Se elige entre las variantes activas con stock que coinciden con el filtro de atributos.
+    // Una desactivada puede seguir teniendo stock: no se ofrece.
     function isSelectable(variant: ProductVariant) {
-        return (variant.stockByBranch[branchId] ?? 0) > 0 && variantMatchesFilter(variant, attributeFilter);
+        return variant.active !== false
+            && (variant.stockByBranch[branchId] ?? 0) > 0
+            && variantMatchesFilter(variant, attributeFilter);
     }
 
     function getSelectedVariant(product: Product) {

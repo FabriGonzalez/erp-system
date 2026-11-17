@@ -37,9 +37,11 @@ import com.gonzalez.erp.modules.products.exception.ProductVariantBarcodeAlreadyE
 import com.gonzalez.erp.modules.products.exception.AttributeNotInCategoryException;
 import com.gonzalez.erp.modules.products.exception.ProductCategoryNotActiveException;
 import com.gonzalez.erp.modules.products.exception.ProductVariantSkuAlreadyExistsException;
+import com.gonzalez.erp.modules.products.exception.ProductImageRequiredException;
 import com.gonzalez.erp.modules.products.mapper.ProductMapper;
 import com.gonzalez.erp.modules.products.mapper.ProductVariantMapper;
 import com.gonzalez.erp.modules.products.repository.ProductAttributeValueRepository;
+import com.gonzalez.erp.modules.products.repository.ProductImageRepository;
 import com.gonzalez.erp.modules.products.repository.ProductRepository;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
 import com.gonzalez.erp.modules.roles.entity.Permission;
@@ -67,6 +69,7 @@ public class ProductServiceImpl implements ProductService {
     private final StockRepository stockRepository;
     private final StockService stockService;
     private final StockMovementRecorder stockMovementRecorder;
+    private final ProductImageRepository imageRepository;
 
     @Override
     public PageResponse<ProductResponse> findAll(ProductSearchCriteria criteria, Pageable pageable) {
@@ -81,8 +84,9 @@ public class ProductServiceImpl implements ProductService {
                 criteria.categoryId(),
                 search != null,
                 SearchText.containsPattern(search),
-                criteria.stock() == ProductStockFilter.IN_STOCK,
+                criteria.stock() == ProductStockFilter.IN_STOCK || criteria.stock() == ProductStockFilter.SELLABLE,
                 criteria.stock() == ProductStockFilter.OUT_OF_STOCK,
+                criteria.stock() == ProductStockFilter.SELLABLE,
                 criteria.branchId(),
                 attributes.active(),
                 attributes.ids(),
@@ -194,6 +198,15 @@ public class ProductServiceImpl implements ProductService {
                         companyId
                 );
 
+        /*
+         * Si la edición desactivó la última variante con fotos, la tienda no tendría qué mostrar.
+         * La consulta ve las variantes recién desactivadas: JPA las guarda antes de consultar.
+         * Vale también para la importación de Excel, que edita por acá.
+         */
+        if (product.isPublishedOnline() && !imageRepository.existsVisibleOfProduct(product.getId())) {
+            product.unpublish();
+        }
+
         return ProductMapper.toResponse(
                 product,
                 variantResponses
@@ -229,6 +242,26 @@ public class ProductServiceImpl implements ProductService {
         return ProductMapper.toResponse(
                 product,
                 variantResponses
+        );
+    }
+
+    @Override
+    @Transactional
+    public ProductResponse updatePublication(Long id, boolean publishedOnline) {
+        Product product = findProductOrThrow(id);
+
+        if (publishedOnline) {
+            if (!imageRepository.existsVisibleOfProduct(product.getId())) {
+                throw new ProductImageRequiredException(product.getId());
+            }
+            product.publish();
+        } else {
+            product.unpublish();
+        }
+
+        return ProductMapper.toResponse(
+                product,
+                loadVariantsForProduct(product.getId())
         );
     }
 

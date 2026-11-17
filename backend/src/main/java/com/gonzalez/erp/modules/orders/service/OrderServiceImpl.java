@@ -4,6 +4,7 @@ import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.common.exception.ResourceNotFoundException;
 import com.gonzalez.erp.common.util.BusinessDate;
 import com.gonzalez.erp.config.security.SecurityUtils;
+import com.gonzalez.erp.modules.branches.entity.Branch;
 import com.gonzalez.erp.modules.branches.repository.BranchRepository;
 import com.gonzalez.erp.modules.branches.service.BranchAccessService;
 import com.gonzalez.erp.modules.companies.entity.Company;
@@ -31,6 +32,7 @@ import com.gonzalez.erp.modules.payments.repository.PaymentAllocationRepository;
 import com.gonzalez.erp.modules.orders.dto.response.OrderResponse;
 import com.gonzalez.erp.modules.orders.entity.DeliveryType;
 import com.gonzalez.erp.modules.orders.entity.Order;
+import com.gonzalez.erp.modules.orders.entity.OrderChannel;
 import com.gonzalez.erp.modules.orders.entity.OrderItem;
 import com.gonzalez.erp.modules.orders.entity.OrderNumberCounter;
 import com.gonzalez.erp.modules.orders.entity.OrderPromo;
@@ -38,6 +40,7 @@ import com.gonzalez.erp.modules.orders.entity.OrderPromoComponent;
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 import com.gonzalez.erp.modules.orders.entity.SalesType;
 import com.gonzalez.erp.modules.orders.exception.InactiveOrderCustomerException;
+import com.gonzalez.erp.modules.orders.exception.InactiveOrderVariantException;
 import com.gonzalez.erp.modules.orders.exception.InsufficientStockForEditException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderException;
 import com.gonzalez.erp.modules.orders.exception.InvalidOrderStatusTransitionException;
@@ -46,6 +49,8 @@ import com.gonzalez.erp.modules.orders.exception.QuickSaleValidationException;
 import com.gonzalez.erp.modules.orders.mapper.OrderMapper;
 import com.gonzalez.erp.modules.orders.repository.OrderNumberCounterRepository;
 import com.gonzalez.erp.modules.orders.repository.OrderRepository;
+import com.gonzalez.erp.modules.mercadopago.service.MercadoPagoPaymentService;
+import com.gonzalez.erp.modules.payments.entity.PaymentMethod;
 import com.gonzalez.erp.modules.payments.service.OrderPaymentService;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.repository.ProductVariantRepository;
@@ -59,7 +64,9 @@ import com.gonzalez.erp.modules.shipments.entity.Shipment;
 import com.gonzalez.erp.modules.shipments.repository.ShipmentRepository;
 import com.gonzalez.erp.modules.users.repository.UserRepository;
 import com.gonzalez.erp.modules.orders.entity.PaymentStatus;
+import com.gonzalez.erp.modules.orders.event.WebOrderPaidEvent;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -76,6 +83,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -104,9 +112,11 @@ public class OrderServiceImpl implements OrderService {
     private final AddressRepository addressRepository;
     private final ShipmentRepository shipmentRepository;
     private final PromotionRepository promotionRepository;
+    private final ApplicationEventPublisher events;
+    private final MercadoPagoPaymentService mercadoPagoPaymentService;
 
     @Override
-    public PageResponse<OrderResponse> findAll(OrderStatus status, Long branchId, SalesType salesType,
+    public PageResponse<OrderResponse> findAll(OrderStatus status, OrderChannel channel, Long branchId, SalesType salesType,
                                                DeliveryType deliveryType, Long customerId,
                                                PaymentStatus paymentStatus, String query, Pageable pageable) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
@@ -121,7 +131,7 @@ public class OrderServiceImpl implements OrderService {
         boolean hasQuery = !trimmedQuery.isEmpty();
         String likePattern = hasQuery ? "%" + trimmedQuery + "%" : "%";
 
-        Page<Order> orders = orderRepository.search(companyId, accessibleBranchIds, status, salesType, deliveryType,
+        Page<Order> orders = orderRepository.search(companyId, accessibleBranchIds, status, channel, salesType, deliveryType,
                 branchId, customerId, hasQuery, likePattern,
                 paymentStatus == PaymentStatus.PAID,
                 paymentStatus == PaymentStatus.PENDING,
@@ -205,28 +215,7 @@ public class OrderServiceImpl implements OrderService {
 
             Order saved = orderRepository.saveAndFlush(order);
 
-            // Una variante puede ir suelta y dentro de una promo: el stock se mide por el total.
-            Long branchId = request.branchId();
-            Map<Long, Integer> quantities = saved.quantitiesByVariant();
-            Map<Long, Stock> lockedStocks = lockStocks(quantities.keySet(), branchId, companyId, true);
-
-            for (Map.Entry<Long, Integer> entry : quantities.entrySet()) {
-                Stock stock = lockedStocks.get(entry.getKey());
-                if (stock.getQuantity() < entry.getValue()) {
-                    throw new InsufficientStockForEditException(
-                            "Insufficient stock for variant id: " + entry.getKey()
-                                    + ". Current quantity: " + stock.getQuantity()
-                                    + ", requested: " + entry.getValue());
-                }
-            }
-
-            for (Map.Entry<Long, Integer> entry : quantities.entrySet()) {
-                Stock stock = lockedStocks.get(entry.getKey());
-                int previousQuantity = stock.getQuantity();
-                stock.setQuantity(previousQuantity - entry.getValue());
-                stockRepository.save(stock);
-                saveMovement(stock, StockMovementType.SALE, -entry.getValue(), previousQuantity, saved.getId());
-            }
+            reserveStock(saved, request.branchId(), companyId, userId);
 
             return completeCreation(saved, shippingAddress, request, companyId, userId);
         } else {
@@ -234,6 +223,100 @@ public class OrderServiceImpl implements OrderService {
             Order saved = orderRepository.saveAndFlush(order);
 
             return completeCreation(saved, shippingAddress, request, companyId, userId);
+        }
+    }
+
+    @Override
+    @Transactional
+    public Order createWebOrder(WebOrderCommand command) {
+        Order order = Order.builder()
+                .orderNumber(generateOrderNumber(command.company()))
+                .branch(command.branch())
+                .customer(command.customer())
+                .company(command.company())
+                .channel(OrderChannel.WEB)
+                .status(OrderStatus.PENDING_PAYMENT)
+                .stockReserved(command.reserveStock())
+                .salesType(SalesType.WITH_PRODUCTS)
+                .deliveryType(command.deliveryType())
+                .shippingCost(command.shippingCost())
+                .checkoutKey(command.checkoutKey())
+                .amountPaid(BigDecimal.ZERO)
+                .build();
+        order.updateItems(command.items());
+        order.updatePromos(command.promos());
+        order.recalculateTotal();
+
+        Order saved = orderRepository.saveAndFlush(order);
+        if (command.reserveStock()) {
+            reserveStock(saved, command.branch().getId(), command.company().getId(), null);
+        }
+        if (command.shippingAddress() != null) {
+            saveShipment(saved, command.shippingAddress());
+        }
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    public void cancelUnpaidWebOrder(Order order) {
+        if (order.getChannel() != OrderChannel.WEB || order.getStatus() != OrderStatus.PENDING_PAYMENT) {
+            throw new InvalidOrderStatusTransitionException(
+                    "Only unpaid web orders can be cancelled this way. Status: " + order.getStatus());
+        }
+        // Sin pago no hubo cargo en la cuenta: solo se devuelve el stock, si se llegó a descontar.
+        if (order.isStockReserved()) {
+            releaseStock(order, order.getCompany().getId(), null);
+        }
+        order.cancel();
+        orderRepository.save(order);
+    }
+
+    @Override
+    @Transactional
+    public void confirmWebOrderPayment(Order order, String mpPaymentId) {
+        if (order.getChannel() != OrderChannel.WEB || order.getStatus() != OrderStatus.PENDING_PAYMENT) {
+            throw new InvalidOrderStatusTransitionException(
+                    "Only unpaid web orders can be paid this way. Status: " + order.getStatus());
+        }
+        Long companyId = order.getCompany().getId();
+        // El cargo y el pago van juntos: la cuenta del cliente queda en cero para este pedido.
+        customerAccountService.applyTransaction(
+                order.getCustomer().getId(),
+                companyId,
+                order.getTotal(),
+                TransactionType.ORDER_CHARGE,
+                order.getBranch(),
+                "Cargo por pedido #" + order.getOrderNumber()
+        );
+        orderPaymentService.registerMercadoPagoPayment(order, order.getTotal(), mpPaymentId, companyId);
+        order.markPaid(Instant.now());
+        orderRepository.save(order);
+        events.publishEvent(new WebOrderPaidEvent(order));
+    }
+
+    /** Descuenta el stock del pedido. No depende de la sesión: empresa y autor llegan por parámetro. */
+    private void reserveStock(Order order, Long branchId, Long companyId, Long userId) {
+        // Una variante puede ir suelta y dentro de una promo: el stock se mide por el total.
+        Map<Long, Integer> quantities = order.quantitiesByVariant();
+        Map<Long, Stock> lockedStocks = lockStocks(quantities.keySet(), branchId, companyId, true);
+
+        for (Map.Entry<Long, Integer> entry : quantities.entrySet()) {
+            Stock stock = lockedStocks.get(entry.getKey());
+            if (stock.getQuantity() < entry.getValue()) {
+                throw new InsufficientStockForEditException(
+                        "Insufficient stock for variant id: " + entry.getKey()
+                                + ". Current quantity: " + stock.getQuantity()
+                                + ", requested: " + entry.getValue());
+            }
+        }
+
+        for (Map.Entry<Long, Integer> entry : quantities.entrySet()) {
+            Stock stock = lockedStocks.get(entry.getKey());
+            int previousQuantity = stock.getQuantity();
+            stock.setQuantity(previousQuantity - entry.getValue());
+            stockRepository.save(stock);
+            saveMovement(stock, StockMovementType.SALE, -entry.getValue(), previousQuantity, order.getId(), userId);
         }
     }
 
@@ -279,6 +362,10 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private void validatePaymentOptions(OrderRequest request) {
+        if (request.paymentMethod() == PaymentMethod.MERCADO_PAGO
+                || (request.initialPayment() != null && request.initialPayment().method() == PaymentMethod.MERCADO_PAGO)) {
+            throw new InvalidOrderException("MERCADO_PAGO payments are registered only by the store");
+        }
         if (request.customerId() == null) {
             if (Boolean.TRUE.equals(request.applyCredit()) || request.initialPayment() != null) {
                 throw new InvalidOrderException(
@@ -297,6 +384,7 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public OrderResponse update(Long id, OrderUpdateRequest request) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
+        Long userId = SecurityUtils.getCurrentUserId();
 
         Order order = orderRepository.findByIdAndCompanyIdForUpdate(id, companyId)
                 .filter(o -> branchAccessService.isAccessible(o.getBranch()))
@@ -305,6 +393,10 @@ public class OrderServiceImpl implements OrderService {
         if (!order.isEditable()) {
             throw new InvalidOrderStatusTransitionException(
                     "Only TO_PREPARE orders can be edited. Current status: " + order.getStatus());
+        }
+        // El comprador ya pagó ese total por Mercado Pago.
+        if (order.isWeb()) {
+            throw new InvalidOrderStatusTransitionException("Web orders cannot be edited");
         }
 
         BigDecimal oldTotal = order.getTotal() != null ? order.getTotal() : BigDecimal.ZERO;
@@ -403,12 +495,12 @@ public class OrderServiceImpl implements OrderService {
                 if (delta > 0) {
                     stock.setQuantity(previousQuantity - delta);
                     stockRepository.save(stock);
-                    saveMovement(stock, StockMovementType.SALE, -delta, previousQuantity, order.getId());
+                    saveMovement(stock, StockMovementType.SALE, -delta, previousQuantity, order.getId(), userId);
                 } else {
                     int returnQty = -delta;
                     stock.setQuantity(previousQuantity + returnQty);
                     stockRepository.save(stock);
-                    saveMovement(stock, StockMovementType.RETURN, returnQty, previousQuantity, order.getId());
+                    saveMovement(stock, StockMovementType.RETURN, returnQty, previousQuantity, order.getId(), userId);
                 }
             }
 
@@ -474,47 +566,116 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public OrderResponse cancel(Long id, OrderCancelRequest request) {
         Long companyId = SecurityUtils.requireCurrentCompanyId();
+        Long userId = SecurityUtils.getCurrentUserId();
 
         Order order = orderRepository.findByIdAndCompanyIdForUpdate(id, companyId)
                 .filter(o -> branchAccessService.isAccessible(o.getBranch()))
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
 
+        if (order.isWeb()) {
+            cancelPaidWebOrder(order, companyId, userId);
+            return toOrderResponse(order);
+        }
+
+        RefundAction refundAction = (request != null && request.refundAction() != null)
+                ? request.refundAction()
+                : RefundAction.KEEP_AS_CREDIT;
+
+        cancelLocked(order, refundAction, companyId, userId);
+        return toOrderResponse(order);
+    }
+
+    /**
+     * Pedido web pagado que cancela el local: la plata vuelve entera por Mercado Pago, sin elegir
+     * saldo a favor ni efectivo. La devolución va al final y dentro de la transacción: si Mercado
+     * Pago no la hace, la cancelación se deshace y el pedido queda como estaba.
+     */
+    private void cancelPaidWebOrder(Order order, Long companyId, Long userId) {
+        // Antes de cancelar: cancelLocked borra las asignaciones que llevan al pago.
+        List<String> mpPaymentIds = paymentAllocationRepository.findByOrderId(order.getId()).stream()
+                .map(allocation -> allocation.getPayment().getMpPaymentId())
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        cancelLocked(order, RefundAction.REFUND_MONEY, companyId, userId);
+
+        for (String mpPaymentId : mpPaymentIds) {
+            mercadoPagoPaymentService.refundPayment(companyId, mpPaymentId);
+        }
+    }
+
+    @Override
+    @Transactional
+    public OrderResponse assignBranch(Long id, Long branchId) {
+        Long companyId = SecurityUtils.requireCurrentCompanyId();
+        Long userId = SecurityUtils.getCurrentUserId();
+
+        Order order = orderRepository.findByIdAndCompanyIdForUpdate(id, companyId)
+                .filter(o -> branchAccessService.isAccessible(o.getBranch()))
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
+
+        if (order.getStatus() != OrderStatus.TO_ASSIGN) {
+            throw new InvalidOrderStatusTransitionException(
+                    "Only TO_ASSIGN orders can be assigned a branch. Current status: " + order.getStatus());
+        }
+        Branch branch = branchAccessService.requireAccessible(branchId);
+
+        // Si a esa sucursal le falta algo, 409: el local transfiere antes y vuelve a asignar.
+        reserveStock(order, branch.getId(), companyId, userId);
+        order.assignBranch(branch, Instant.now());
+        orderRepository.save(order);
+
+        return toOrderResponse(order);
+    }
+
+    /** Devuelve el stock del pedido. No depende de la sesión: empresa y autor llegan por parámetro. */
+    private void releaseStock(Order order, Long companyId, Long userId) {
+        List<StockMovement> originalMovements = stockMovementRepository
+                .findByReferenceAndCompanyId(order.getId(), REFERENCE_TYPE, companyId);
+
+        // Por variante: las unidades sueltas más las de las promos.
+        Map<Long, Integer> quantities = order.quantitiesByVariant();
+        Map<Long, Stock> lockedStocks = lockStocks(quantities.keySet(), order.getBranch().getId(), companyId, false);
+
+        for (Map.Entry<Long, Integer> entry : quantities.entrySet()) {
+            Stock stock = lockedStocks.get(entry.getKey());
+            int netConsumed = -originalMovements.stream()
+                .filter(m -> m.getStock().getId().equals(stock.getId()))
+                .filter(m -> m.getType() == StockMovementType.SALE
+                        || m.getType() == StockMovementType.RETURN)
+                .mapToInt(StockMovement::getQuantity)
+                .sum();
+
+            if (netConsumed != entry.getValue()) {
+                throw new InvalidOrderException(
+                        "Net stock consumption mismatch for variant id: " + entry.getKey()
+                                + ". Expected: " + entry.getValue() + ", actual net: " + netConsumed);
+            }
+        }
+
+        for (Map.Entry<Long, Integer> entry : quantities.entrySet()) {
+            Stock stock = lockedStocks.get(entry.getKey());
+            int previousQuantity = stock.getQuantity();
+            stock.setQuantity(previousQuantity + entry.getValue());
+            stockRepository.save(stock);
+            saveMovement(stock, StockMovementType.RETURN, entry.getValue(), previousQuantity, order.getId(), userId);
+        }
+    }
+
+    /**
+     * Cancela un pedido ya bloqueado para escritura. El control de acceso es de quien llama:
+     * el ERP mira las sucursales del empleado; acá solo van las reglas del pedido.
+     */
+    private void cancelLocked(Order order, RefundAction refundAction, Long companyId, Long userId) {
         if (!order.canCancel()) {
             throw new InvalidOrderStatusTransitionException(
                     "Cannot cancel order in status: " + order.getStatus());
         }
 
-        if (order.requiresStockValidation()) {
-            List<StockMovement> originalMovements = stockMovementRepository
-                    .findByReferenceAndCompanyId(order.getId(), REFERENCE_TYPE, companyId);
-
-            // Por variante: las unidades sueltas más las de las promos.
-            Map<Long, Integer> quantities = order.quantitiesByVariant();
-            Map<Long, Stock> lockedStocks = lockStocks(quantities.keySet(), order.getBranch().getId(), companyId, false);
-
-            for (Map.Entry<Long, Integer> entry : quantities.entrySet()) {
-                Stock stock = lockedStocks.get(entry.getKey());
-                int netConsumed = -originalMovements.stream()
-                    .filter(m -> m.getStock().getId().equals(stock.getId()))
-                    .filter(m -> m.getType() == StockMovementType.SALE
-                            || m.getType() == StockMovementType.RETURN)
-                    .mapToInt(StockMovement::getQuantity)
-                    .sum();
-
-                if (netConsumed != entry.getValue()) {
-                    throw new InvalidOrderException(
-                            "Net stock consumption mismatch for variant id: " + entry.getKey()
-                                    + ". Expected: " + entry.getValue() + ", actual net: " + netConsumed);
-                }
-            }
-
-            for (Map.Entry<Long, Integer> entry : quantities.entrySet()) {
-                Stock stock = lockedStocks.get(entry.getKey());
-                int previousQuantity = stock.getQuantity();
-                stock.setQuantity(previousQuantity + entry.getValue());
-                stockRepository.save(stock);
-                saveMovement(stock, StockMovementType.RETURN, entry.getValue(), previousQuantity, order.getId());
-            }
+        // Un pedido web a asignar nunca descontó stock.
+        if (order.requiresStockValidation() && order.isStockReserved()) {
+            releaseStock(order, companyId, userId);
         }
 
         if (order.getCustomer() != null) {
@@ -531,10 +692,6 @@ public class OrderServiceImpl implements OrderService {
                     "Reversión por cancelación de pedido #" + order.getOrderNumber()
             );
 
-            RefundAction refundAction = (request != null && request.refundAction() != null)
-                    ? request.refundAction()
-                    : RefundAction.KEEP_AS_CREDIT;
-
             if (refundAction == RefundAction.REFUND_MONEY && activeAllocated.compareTo(BigDecimal.ZERO) > 0) {
                 customerAccountService.applyTransaction(
                         order.getCustomer().getId(),
@@ -549,7 +706,6 @@ public class OrderServiceImpl implements OrderService {
 
         order.cancel();
         orderRepository.save(order);
-        return toOrderResponse(order);
     }
 
     private Order findOrderAndValidateAccess(Long id) {
@@ -708,6 +864,12 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    private static void requireSellable(ProductVariant variant) {
+        if (!variant.isActive() || !variant.getProduct().isActive()) {
+            throw new InactiveOrderVariantException(variant.getId());
+        }
+    }
+
     private static <T> List<T> orEmpty(List<T> list) {
         return list != null ? list : List.of();
     }
@@ -738,6 +900,10 @@ public class OrderServiceImpl implements OrderService {
             if (variant.getCompany() == null || !companyId.equals(variant.getCompany().getId())) {
                 throw new ResourceNotFoundException(
                         "Product variant not found with id: " + itemRequest.productVariantId());
+            }
+            // Lo que el pedido ya tenía se conserva aunque después lo desactiven; lo nuevo, no.
+            if (!soldPrices.containsKey(variant.getId())) {
+                requireSellable(variant);
             }
 
             orderItems.add(OrderItem.builder()
@@ -874,9 +1040,9 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private void saveMovement(Stock stock, StockMovementType type, int quantity,
-                              int previousQuantity, Long referenceId) {
+                              int previousQuantity, Long referenceId, Long userId) {
         stockMovementRecorder.record(stock, type, quantity, previousQuantity, null,
-                REFERENCE_TYPE, referenceId);
+                REFERENCE_TYPE, referenceId, userId);
     }
 
     @Transactional

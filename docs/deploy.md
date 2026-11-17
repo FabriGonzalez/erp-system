@@ -242,7 +242,7 @@ de qué entorno la toma y a qué canal escucha:
    eas env:list preview
    ```
    Hoy `preview` apunta al backend de Render (sección 11). `production` todavía no tiene la
-   variable: se carga con el dominio definitivo (etapa 26 del plan).
+   variable: se carga con el dominio definitivo (etapa 30 del plan, lanzamiento).
 3. Compilar: `eas build -p android --profile apk`.
 4. Al terminar, EAS da un link para descargar el APK. Se lo pasás a los clientes; Android pide
    permitir "instalar apps de origen desconocido".

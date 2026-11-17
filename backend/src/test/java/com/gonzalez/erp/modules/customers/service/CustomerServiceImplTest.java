@@ -9,6 +9,7 @@ import com.gonzalez.erp.modules.customers.dto.request.CustomerRequest;
 import com.gonzalez.erp.modules.customers.dto.response.CustomerResponse;
 import com.gonzalez.erp.modules.customers.entity.Address;
 import com.gonzalez.erp.modules.customers.entity.Customer;
+import com.gonzalez.erp.modules.customers.entity.CustomerOrigin;
 import com.gonzalez.erp.modules.customers.exception.InvalidCustomerAddressException;
 import com.gonzalez.erp.modules.customers.repository.AddressRepository;
 import com.gonzalez.erp.modules.customers.repository.CustomerRepository;
@@ -111,16 +112,32 @@ class CustomerServiceImplTest {
         Address main = Address.builder().label("Casa").street("Corrientes").city("CABA")
                 .mainAddress(true).customer(withAddress).build();
         Pageable pageable = PageRequest.of(0, 20);
-        when(customerRepository.searchWithoutText(COMPANY_ID, null, pageable))
+        when(customerRepository.searchWithoutText(COMPANY_ID, null, null, pageable))
                 .thenReturn(new PageImpl<>(List.of(withAddress, withoutAddress), pageable, 2));
         when(addressRepository.findByCustomerIdInAndActiveTrue(List.of(10L, 11L))).thenReturn(List.of(main));
 
-        PageResponse<CustomerResponse> page = customerService.findAll(null, "  ", pageable);
+        PageResponse<CustomerResponse> page = customerService.findAll(null, null, "  ", pageable);
 
         verify(addressRepository, times(1)).findByCustomerIdInAndActiveTrue(eq(List.of(10L, 11L)));
         assertThat(page.content()).extracting(CustomerResponse::addressCount).containsExactly(1, 0);
         assertThat(page.content().get(0).mainAddress().label()).isEqualTo("Casa");
         assertThat(page.content().get(1).mainAddress()).isNull();
+        // Las fichas cargadas en el ERP (y las que existían antes de la tienda) son ERP.
+        assertThat(page.content()).extracting(CustomerResponse::origin).containsOnly(CustomerOrigin.ERP);
+    }
+
+    @Test
+    void theListCanBeFilteredByOrigin() {
+        Customer web = Customer.builder().firstName("Compradora").company(company).origin(CustomerOrigin.WEB).build();
+        web.setId(12L);
+        Pageable pageable = PageRequest.of(0, 20);
+        when(customerRepository.searchWithText(COMPANY_ID, null, CustomerOrigin.WEB, "compradora", pageable))
+                .thenReturn(new PageImpl<>(List.of(web), pageable, 1));
+        when(addressRepository.findByCustomerIdInAndActiveTrue(List.of(12L))).thenReturn(List.of());
+
+        PageResponse<CustomerResponse> page = customerService.findAll(null, CustomerOrigin.WEB, "Compradora", pageable);
+
+        assertThat(page.content()).extracting(CustomerResponse::origin).containsExactly(CustomerOrigin.WEB);
     }
 
     @Test

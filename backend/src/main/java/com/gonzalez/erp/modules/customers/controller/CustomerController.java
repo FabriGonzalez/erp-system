@@ -3,6 +3,7 @@ package com.gonzalez.erp.modules.customers.controller;
 import com.gonzalez.erp.common.dto.PageResponse;
 import com.gonzalez.erp.modules.customers.dto.request.CustomerRequest;
 import com.gonzalez.erp.modules.customers.dto.response.CustomerResponse;
+import com.gonzalez.erp.modules.customers.entity.CustomerOrigin;
 import com.gonzalez.erp.modules.customers.exception.InvalidCustomerRequestException;
 import com.gonzalez.erp.modules.customers.service.CustomerService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,6 +34,7 @@ public class CustomerController {
     @Operation(summary = "Listar clientes",
                description = "Paginado. q busca por nombre, apellido, nombre completo, teléfono, email o documento. "
                        + "sort: name (apellido y nombre) o createdAt, con ,asc o ,desc. "
+                       + "origin: ERP (cargados en el ERP) o WEB (registrados en la tienda); sin origin, todos. "
                        + "Cada cliente incluye la cantidad de direcciones activas y la principal.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Página de clientes"),
@@ -40,6 +42,7 @@ public class CustomerController {
     })
     public ResponseEntity<PageResponse<CustomerResponse>> findAll(
             @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) CustomerOrigin origin,
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -49,7 +52,7 @@ public class CustomerController {
                     "page must be >= 0 and size between 1 and " + MAX_PAGE_SIZE);
         }
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        return ResponseEntity.ok(customerService.findAll(active, q, pageable));
+        return ResponseEntity.ok(customerService.findAll(active, origin, q, pageable));
     }
 
     @GetMapping("/{id}")

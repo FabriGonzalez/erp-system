@@ -1,8 +1,21 @@
 # Plan de las etapas que quedan
 
-Estado al 2026-10-23, rama `feature/promotions` (etapa 20 implementada, sin commitear). Para
-retomar: pasarle este archivo a Claude y elegir la etapa (la 21 está sin planear; la 22 tiene plan
-general).
+Para retomar: pasarle este archivo a Claude.
+
+## Qué sigue (orden al 2026-11-04)
+
+1. **Etapa 22 — Backend de la tienda web** (en curso). 22A terminada el 2026-11-04 (rama
+   `feature/store-22a`, plan en `backend/docs/etapa-22a-tienda.md`). 22B planeada, sin código
+   (rama `feature/store-22b`, plan en `backend/docs/etapa-22b-cuentas.md`; "mis pedidos" se
+   propone pasar a 22C). Después: refactor de servicios (22C.2), 22C y 22D.
+2. **Etapa 28 — Endurecimiento de seguridad.**
+3. **Etapa 29 — Facturación electrónica con ARCA.**
+4. **Etapa 30 — Lanzamiento** (con el primer pago / VPS propio).
+5. Sin fecha: Etapa 21 (asistente de voz, idea) y "Pendientes chicos".
+
+Hechas: 1 a 20, 24 (Excel), 25 (rediseño) y 27 (reportes como dashboard). Los números no se
+reutilizan: aparecen en los commits ("Etapa 24: …"). Por eso ARCA y lanzamiento, que eran la 23 y
+la 26, pasaron a 29 y 30 el 2026-11-03 (decisión del usuario).
 
 ## Cómo se trabaja (vale para todas las etapas)
 
@@ -1468,14 +1481,14 @@ solo con **Mercado Pago** (decisión del usuario: sin otras pasarelas ni transfe
 Cómo cambia el trabajo:
 - **Orden:** 22A (subida apagada, `storeEnabled = false`) → 22B → refactor de servicios (22C.2,
   solo) → resto de 22C → 22D → habilitar la tienda para un cliente.
-- **Staging:** Render + Neon quedan como entorno de pruebas (no se dan de baja en la etapa 26):
+- **Staging:** Render + Neon quedan como entorno de pruebas (no se dan de baja en la etapa 30):
   ahí se prueban el webhook de Mercado Pago y cada migración sobre una copia de producción.
 - **Migraciones sobre datos reales:** `Customer.origin` con `ERP` por defecto, `created_by`
   nullable, `CHECK` de los enums nuevos. Backup a mano y deploy fuera del horario del comercio.
 - **Versiones de la app:** cambios del backend solo aditivos; la app con las etiquetas de los
   estados nuevos tiene que llegar antes de habilitar la tienda (una vieja muestra la píldora vacía).
 - **Antes de habilitarla:** tests de aislamiento también sobre `/store/**`; almacenamiento de
-  imágenes elegido de nuevo (Oracle quedó descartado: R2 o B2); dominio y mails de la etapa 26.
+  imágenes elegido de nuevo (Oracle quedó descartado: R2 o B2); dominio y mails de la etapa 30.
 - **Estimación:** 22A 5-6 días, 22B 3-4, refactor 1,5-2, 22C 5-7, 22D 3-4: 17-23 días; con
   los endpoints ★ de abajo (cotizar el carrito, OAuth de Mercado Pago, retomar el pago) **19-25
   días** (4-5 semanas). Lo más incierto es Mercado Pago. No incluye el sitio de la tienda.
@@ -1498,7 +1511,11 @@ ERP: sueltos (variante, cantidad) y líneas de promo (`promotionId`, `quantity`,
 unidad). El carrito **no reserva stock**: se reserva en el checkout (`PENDING_PAYMENT`).
 `POST /store/cart/quote` devuelve precios web actuales, total, disponibilidad por línea y avisos
 de cambios; el checkout vuelve a validar todo con la misma función. Carrito en el backend (varios
-dispositivos, mails de carrito abandonado) solo si un cliente lo pide.
+dispositivos, mails de carrito abandonado) solo si un cliente lo pide. **Duración del carrito
+(2026-11-10):** la empresa la configura desde el panel de la tienda; pasado ese tiempo el sitio
+vacía el carrito del navegador. Como no reserva stock, es solo de experiencia: el backend expone
+el valor en la configuración pública de la tienda y no valida nada. Falta decidir si cuenta desde
+la creación o desde el último cambio, el valor por defecto y si "sin vencimiento" es una opción.
 
 **Endpoints estimados (2026-10-28).** ★ = no estaban en el plan. Las rutas exactas se fijan en el
 plan detallado de cada parte.
@@ -1605,33 +1622,212 @@ plan detallado de cada parte.
 ### 22C — Checkout, asignación de sucursal y Mercado Pago
 
 1. **Modelo:** `Order.channel` (`ERP`, `WEB`); `createdBy` pasa a opcional (los web no tienen
-   empleado; igual en `Payment` y `StockMovement`); estados nuevos `PENDING_PAYMENT` y
+   empleado; igual en `Payment`; `StockMovement` ya lo era); estados nuevos `PENDING_PAYMENT` y
    `TO_ASSIGN`; `PaymentMethod.MERCADO_PAGO`; prioridad de sucursal para la tienda (`Branch`).
+   **Decisiones del usuario (2026-11-09):**
+   - **Cambia lo decidido el 2026-10-20:** cada dueño elige de qué sucursales se muestra y se vende
+     stock (`Branch.storePriority`; vacío = no participa), en lugar de sumar siempre todas. Con
+     sucursales lejanas marca una sola y nunca hay pedidos a asignar.
+   - `TO_ASSIGN` es **después de pagar**: el pedido nace `PENDING_PAYMENT` y al acreditarse pasa a
+     `TO_ASSIGN` (pagado, falta sucursal). `Order.stockReserved = false` evita devolver al vencer
+     un stock que nunca se descontó. Lleva como sucursal provisoria la primera por prioridad.
+   - `MERCADO_PAGO` no se puede elegir en el ERP (el backend lo rechaza y el selector de la app
+     usa una lista fija de 4 medios), pero se ve como texto: **"Pago en tienda web"** (22D).
+   - Un solo medio `MERCADO_PAGO`, sin separar tarjeta o dinero en cuenta.
 2. **Servicios sin token de empleado:** extraer de `OrderServiceImpl` / pagos / stock la lógica que
    hoy lee `SecurityUtils` para que reciba empresa y autor explícitos; el ERP sigue pasando los del
-   token y la tienda los del contexto de tienda. Alcance (relevado el 2026-10-28): `OrderServiceImpl`
-   (7 llamadas), `PaymentServiceImpl` (6), lo que descuenta y devuelve stock en `StockServiceImpl`
-   y `StockMovementRecorder`: unas 20-25 llamadas en 4-5 archivos, no todo el backend. Va **como
-   cambio aparte, antes del checkout** (refactor sin funcionalidad nueva, con los tests y los de
-   aislamiento en verde, unos días en producción antes de seguir). Descartado (decisión del
-   usuario): un "usuario sistema" por empresa con un token de empleado simulado en el checkout.
+   token y la tienda los del contexto de tienda. **Alcance real (relevado el 2026-11-09):** solo
+   `StockMovementRecorder` y `OrderServiceImpl` (`reserveStock`, `releaseStock`, `cancelLocked`).
+   `OrderPaymentServiceImpl.registerOrderPayment` ya recibe empresa y autor; `PaymentServiceImpl`
+   no se usa (reparte el pago entre las deudas más viejas y el de Mercado Pago va a su pedido);
+   `StockServiceImpl` son ajustes del ERP (los pedidos descuentan por su cuenta), y
+   `BranchAccessService` es el permiso del empleado (la web elige sucursal por prioridad). Va
+   **como commit aparte, antes del checkout** (refactor sin funcionalidad nueva, con los tests y
+   los de aislamiento en verde). Decisión del usuario del 2026-11-09: no se esperan días en
+   producción antes de seguir. Descartado (decisión del usuario): un "usuario sistema" por empresa
+   con un token de empleado simulado en el checkout.
 3. **Checkout:** `POST /store/checkout` (ítems, retiro o envío a una dirección propia). El backend
    valida precio y stock, elige la sucursal (la primera por prioridad con todos los ítems), crea
    el pedido `PENDING_PAYMENT` descontando stock (reserva) y la preferencia de Mercado Pago;
-   devuelve la URL de pago. Si ninguna sucursal alcanza pero la suma sí: pedido `TO_ASSIGN` sin
-   descontar hasta asignarlo (se informa al comprador que puede demorar).
+   devuelve la URL de pago. Si ninguna sucursal alcanza pero la suma sí: pedido sin descontar
+   stock que al pagarse pasa a `TO_ASSIGN`. La cotización del carrito avisa ese caso y el sitio
+   muestra que los productos pueden demorar unos días más porque salen de distintas sucursales.
+   Descartado (decisión del usuario, 2026-11-09): filtrar el catálogo según lo que hay en el
+   carrito, al estilo Full de Mercado Libre. Propuesta para el paso 4: excluir el pago en
+   efectivo (Rapipago/Pago Fácil) de la preferencia, porque no se acredita antes de que venza la
+   reserva; falta confirmarla.
+   **Decisiones del usuario (2026-11-09):** la ruta es `POST /store/me/checkout`; en retiro la
+   sucursal la elige el comprador entre las que arman el pedido completo; el envío pasa por una
+   interfaz `ShippingProvider` con una primera implementación "a coordinar" (costo 0, sumado al
+   total en `orders.shipping_cost`). **Antes de habilitar una tienda hay que elegir un provider
+   real** (tarifas propias o un correo: Andreani, Correo Argentino, Mercado Envíos).
+   **Hecho (2b, 2026-11-10):** `POST /store/me/checkout` crea el pedido `PENDING_PAYMENT` (canal
+   WEB, sin autor) con la misma evaluación que la cotización y el precio web; no carga la cuenta
+   del cliente (eso pasa al acreditarse el pago). Migración V11: `orders.shipping_cost` y
+   `orders.checkout_key` (única por empresa). Decisiones del usuario:
+   - Retiro solo en una sucursal que arma el pedido completo; si ninguna puede, el sitio avisa y
+     ofrece envío (409 `PICKUP_NOT_AVAILABLE` si igual llega).
+   - Para comprar hacen falta nombre y teléfono (409 `PROFILE_INCOMPLETE`); con envío, dirección
+     propia con calle, número, ciudad, provincia y código postal (409 `ADDRESS_INCOMPLETE`),
+     porque un correo real la va a necesitar.
+   - La misma `checkoutKey` devuelve el pedido ya creado (doble clic o reintento); usada por otro
+     comprador, 409 `CHECKOUT_KEY_IN_USE`.
+   - Tope de 3 pedidos sin pagar por comprador (409 `TOO_MANY_PENDING_ORDERS`); el comprador se
+     bloquea durante el checkout para que el tope y la clave no se pasen en paralelo.
+   - Límite de pedidos por IP en el checkout: va en la etapa 28.
+   El total esperado es el de la cotización, sin envío; `CART_CHANGED` y `CART_UNAVAILABLE`
+   devuelven la cotización actual en `quote`.
+   **Hecho (paso 3, "Mis pedidos", 2026-11-10):** `GET /store/me/orders` (paginado, los más nuevos
+   primero), `GET /store/me/orders/{id}` y `POST /store/me/orders/{id}/cancel`. Solo pedidos del
+   comprador con canal WEB; uno ajeno o una venta del local dan 404. Decisiones del usuario:
+   - Estado propio de la tienda (`StoreOrderStatus`): `AWAITING_PAYMENT`, `PREPARING` (incluye
+     `TO_ASSIGN`), `READY_FOR_PICKUP` (retiro pagado), `SHIPPED`, `CANCELLED`.
+   - Los cancelados se muestran. Cada línea lleva foto (la de la variante o la portada).
+   - El comprador cancela solo pedidos **sin pagar**, sin límite de tiempo (409
+     `ORDER_NOT_CANCELLABLE` si ya se pagó o se canceló). Una vez pagado no se cancela desde la
+     tienda.
+   **Requisito antes de habilitar una tienda — botón de arrepentimiento** (Ley 24.240 art. 34 y
+   Res. 424/2020; confirmarlo con un profesional): el comprador puede revocar la compra desde que
+   paga hasta 10 días corridos después de recibirla. No cancela solo: manda una solicitud que el
+   local resuelve en el ERP (frenar el despacho o coordinar la devolución, a cargo del vendedor, y
+   reintegrar por Mercado Pago). Necesita saber la fecha de entrega ("retirado/entregado", 22D).
+   Va después del paso 4. Un producto fallado es garantía, no arrepentimiento: al principio, por
+   contacto con el local.
 4. **Mercado Pago:** credenciales por empresa (guardadas cifradas); webhook público
    `POST /store/payments/mercadopago` con verificación de firma, idempotente; pago aprobado →
    `Payment` en la cuenta del cliente, pedido pasa al estado normal (retiro/envío) y mail de
    confirmación. Rechazado o vencido → se cancela y devuelve stock.
+   Partido en 4a1 (conectar la cuenta), 4a2 (renovación automática), 4b (preferencia y retomar el
+   pago) y 4c (webhook). Decidido el 2026-11-11 para el 4a1:
+   - OAuth con PKCE: `GET /companies/me/mercadopago/connect` (`ADMINISTRAR_TIENDA`) devuelve la URL
+     de autorización; Mercado Pago vuelve a `GET /mercadopago/oauth/callback` (público), que cambia
+     el código por los tokens y muestra una página HTML simple (cuando exista el panel de la tienda,
+     redirige ahí). También `GET` (estado) y `DELETE` (desconectar, solo de nuestro lado).
+   - El `state` va cifrado (empresa, usuario, vencimiento de 10 min y verificador de PKCE), sin tabla.
+   - Tokens cifrados con AES-GCM y `APP_ENCRYPTION_KEY` (general, la reutiliza ARCA); el texto
+     cifrado lleva la versión de la clave (`v1:`) para poder rotarla.
+   - Una cuenta de Mercado Pago no se puede conectar a dos empresas (409): el webhook del 4c sabe
+     sin dudas de qué empresa es cada pago.
+   - Sin `MERCADOPAGO_CLIENT_ID` la conexión responde 503; con Mercado Pago habilitado y sin clave
+     de cifrado el backend no arranca. La app de Mercado Pago necesita `offline_access` (renovar).
+   4a2: tarea diaria (4 h, hora de Argentina) que renueva los tokens con menos de 30 días (el
+   `refresh_token` cambia en cada renovación), una transacción por conexión. Decidido el
+   2026-11-11: si Mercado Pago rechaza la renovación o el token ya venció, la conexión pasa a
+   `RECONNECT_REQUIRED` y se manda un mail, una sola vez, solo a quien la conectó (si sigue activo
+   y tiene email); si Mercado Pago no responde, se reintenta al día siguiente sin avisar. El panel
+   de la tienda muestra un cartel con `reconnectRequired` de `GET /companies/me/mercadopago`. En
+   el 4b, con la conexión para reconectar, el checkout responde que el pago no está disponible.
+   Sin bloqueo entre servidores (una sola instancia); con varias, agregar uno (p. ej. ShedLock).
+   **Hecho (4b, 2026-11-11):** el checkout arma la preferencia de Mercado Pago con el token de la
+   empresa y devuelve `paymentUrl` y `paymentExpiresAt`. Migración V14: `orders.payment_expires_at`,
+   `mp_preference_id` y `payment_url`. Decisiones del usuario:
+   - La reserva dura 30 minutos para todas las empresas (`STORE_PAYMENT_WINDOW`) y la preferencia
+     vence a la vez (`expires` + `expiration_date_to`).
+   - Sin comisión de la plataforma por venta (`marketplace_fee` no se manda) por ahora.
+   - La llamada a Mercado Pago va dentro de la transacción del checkout: si falla (502
+     `MERCADOPAGO_UNAVAILABLE`/`MERCADOPAGO_REJECTED`) no queda pedido ni reserva y se reintenta
+     con la misma `checkoutKey`. Si algún día el volumen lo pide, se pasa a pedirla después del commit.
+   - Sin conexión, para reconectar o con el token vencido: 409 `PAYMENT_UNAVAILABLE`, antes de reservar.
+   - `notification_url` va en el 4c, junto con el webhook.
+   Cómo se arma: un solo ítem por el total ("Pedido N - tienda"), `external_reference` = id del
+   pedido, email del comprador, `binary_mode` (sin pagos pendientes que se acrediten tarde),
+   sin `ticket` ni `atm`, vuelta a `https://{dominio}/pedidos/{id}` con `auto_return` solo si
+   la URL es https. Retomar el pago: "Mis pedidos" (detalle) y la misma `checkoutKey` devuelven
+   el link mientras el pedido espera el pago y la reserva no venció; no hay endpoint aparte.
+   **Hecho (4c, 2026-11-11):** webhook `POST /api/v1/mercadopago/webhook` (público, fuera de la
+   cadena de la tienda porque Mercado Pago no llega por el dominio de ninguna tienda; cambia la ruta
+   `/store/payments/mercadopago` de arriba). Migración V15: `payments.mp_payment_id` única.
+   - Firma `x-signature` (HMAC-SHA256 con `MERCADOPAGO_WEBHOOK_SECRET` sobre
+     `id:{data.id};request-id:{x-request-id};ts:{ts};`): inválida → 401. Con Mercado Pago habilitado
+     y sin la clave, el backend no arranca. `MERCADOPAGO_NOTIFICATION_URL` va en cada preferencia
+     (vacía en desarrollo).
+   - Del aviso solo se usan `user_id` (qué empresa) y `data.id` (qué pago); el pago se consulta a
+     Mercado Pago con el token de la empresa y se valida pedido WEB de esa empresa, `approved`, ARS
+     y monto igual al total. Pedido bloqueado + `mp_payment_id` único: el aviso repetido no cobra dos veces.
+   - Aprobado → cargo + pago `MERCADO_PAGO` sin autor (la cuenta queda en cero) y el pedido pasa a
+     `CONFIRMED` (retiro), `TO_PREPARE` (envío) o `TO_ASSIGN` (sin stock descontado).
+   - Decisiones del usuario: un pago **rechazado no cancela** (el comprador reintenta mientras dure
+     la reserva; cambia "rechazado → se cancela" de arriba). Un pago aprobado de un pedido que ya no
+     lo espera (cancelado, o pagado dos veces desde dos pestañas) **se devuelve entero** por Mercado
+     Pago. Al cancelar desde "Mis pedidos" se vence el link en Mercado Pago después del commit; si
+     falla, la cancelación queda igual y la devolución cubre un pago que entre.
+   - Monto o moneda distintos: no se aplica y queda un log de error. Devoluciones y contracargos
+     hechos después desde el panel de Mercado Pago: fuera de alcance por ahora.
+   - `external_reference` = `erp-order-{id}` (cambia el número pelado del 4b): la cuenta es del
+     local y puede cobrar otras ventas con referencias propias; un número que coincida con un
+     pedido nuestro no se acredita ni se devuelve. Solo se reconoce ese formato exacto.
+   - Devolución rechazada por Mercado Pago (sin saldo, pago viejo): log `MANUAL REFUND NEEDED` y
+     200, sin reintentar en loop; si Mercado Pago no responde, 502 y el aviso se reintenta. En la
+     22D, mostrarle al local en el ERP los pagos que hay que devolver a mano.
+   **Requisito antes de habilitar una tienda — prueba con el sandbox de Mercado Pago** (decidido
+   el 2026-11-11; se hace cuando exista el sitio de la tienda), con cuentas de prueba de vendedor
+   y comprador, el backend expuesto por https y tarjetas de prueba: pagar un pedido (pasa a
+   pagado, cuenta en cero); cancelar con el link abierto (el link deja de aceptar pagos); pagar
+   dos veces el mismo pedido (el segundo aparece devuelto en ambos paneles); reenviar un aviso
+   desde el panel de notificaciones (no duplica nada); y ver si los avisos de `notification_url`
+   llegan firmados (si no, configurar el webhook en el panel de la app en lugar de la preferencia).
+   Los tests simulan Mercado Pago: prueban qué decide el backend, no la llamada real.
 5. **Vencimiento de reservas:** tarea `@Scheduled` que cancela pedidos `PENDING_PAYMENT` viejos
-   (p. ej. 30 min) y devuelve el stock.
+   (p. ej. 30 min) y devuelve el stock. Decidido en el 4c: cancela con **10 minutos de margen**
+   después de `payment_expires_at` (el link ya no acepta pagos y terminan los que estaban en curso).
+   También va acá el mail de "pedido confirmado" al acreditarse el pago.
+   **Hecho (2026-11-11):**
+   - `StoreReservationExpiryJob` cada 5 minutos (`STORE_EXPIRY_CRON`, margen `STORE_EXPIRY_GRACE`,
+     10 min). Cada pedido en su propia transacción, bloqueado y revisado de nuevo antes de
+     cancelarlo: un pago que entra a la vez gana y el pedido se saltea; uno que falla no frena al
+     resto. No vence el link en Mercado Pago (ya venció solo).
+   - Mail al comprador cuando vence ("se canceló, no se te cobró nada", decisión del usuario).
+   - Mail de pedido confirmado con las líneas (producto, variante y cantidad; promos con sus
+     productos, sin precio por línea), total, retiro o envío y link al pedido (decisión del usuario).
+     Pedidos publica `WebOrderPaidEvent` y la tienda arma el mail (`StoreOrderMails`): pedidos y
+     Mercado Pago no dependen de la tienda.
 
 ### 22D — Pedidos web en el ERP
 
 1. Listados con filtro por canal y marca "Web"; los `PENDING_PAYMENT` no cuentan como venta.
 2. Pedidos `TO_ASSIGN`: elegir sucursal (con transferencia previa si hace falta) y descontar.
 3. Reportes: las ventas web suman cuando están pagadas.
+
+**Relevamiento (2026-11-13).** Los reportes ya excluyen `PENDING_PAYMENT` (paso 1 de 22C). El
+listado del ERP mezcla los web sin pagar con las ventas y no recibe el canal. `TO_ASSIGN` no se
+puede despachar, cancelar ni editar, y no hay cómo asignarle sucursal; se ve solo en la sucursal
+provisoria. Un pedido web pagado se podría editar y cancelar como una venta del local (con saldo a
+favor o devolución en efectivo). `PaymentMethodPicker` arma la lista desde las etiquetas: agregar
+la de `MERCADO_PAGO` la volvería elegible. Con una sola sucursal en la tienda nunca hay
+`TO_ASSIGN`: el checkout reserva en esa sucursal o rechaza la compra.
+
+**Decisiones del usuario (2026-11-13):**
+- Los `PENDING_PAYMENT` se ocultan por defecto en el listado; se ven con el filtro de estado
+  "Esperando pago".
+- Un pedido web pagado se puede cancelar desde el ERP con devolución total automática por
+  Mercado Pago (reusa la del webhook). Si Mercado Pago la rechaza, no se cancela y se muestra el
+  error. Casos: falta física del producto, comprador que pide cancelar antes del despacho.
+- Mostrar en el ERP las devoluciones que rechazó Mercado Pago: más adelante (hoy solo el log).
+- Fecha de retirado/entregado: más adelante, junto con el botón de arrepentimiento.
+- Asignar sucursal usa el permiso `CREAR_PEDIDOS` (el mismo que cancelar).
+
+**Partes (un commit cada una):**
+- **22D.1 — backend.** `GET /orders` con filtro `channel` y sin `PENDING_PAYMENT` salvo que se pida
+  ese estado; `channel` en `OrderResponse`. `POST /orders/{id}/assign-branch` (`branchId`): solo
+  `TO_ASSIGN`, sucursal asignada y activa con todo el stock (si no, 409 y el local hace antes una
+  transferencia); descuenta, `stockReserved = true` y pasa a `TO_PREPARE`. Cargo y pago quedan en
+  la sucursal provisoria. Editar un pedido web → 409. Cancelar un web pagado (`TO_PREPARE`,
+  `CONFIRMED`, `TO_ASSIGN`) → devolución por Mercado Pago, stock solo si se descontó. Dashboard:
+  contador de pedidos web a asignar en la tarjeta de atención.
+- **22D.2 — frontend del ERP.** Estados y etiquetas ("Esperando pago", "A asignar", "Pago en
+  tienda web"); `PaymentMethodPicker` con lista fija de 4; filtro Todos/Local/Web y marca "Web"
+  en el listado; detalle con marca, modal "Asignar sucursal" y cancelar adaptado (sin elegir saldo
+  a favor ni efectivo); servicio, hook y mensajes de los códigos nuevos.
+  **Decisiones (2026-11-13):** los `TO_ASSIGN` se ven en una sección "Web a asignar" de Envíos
+  (solo si hay; de todas las sucursales del usuario, porque la sucursal es provisoria). En
+  Operaciones, chips "Web" y "Sin pagar" en la misma fila. Recuadro "Web a asignar" en "Para
+  atender" de Reportes, solo si es mayor a 0. Modal de asignar: sucursales por prioridad (la
+  provisoria primero), qué le falta a cada una y de dónde traerlo (una consulta a
+  `/inventory/stocks?variantIds=`), con una "Recomendada" (la que arma todo o la que necesita menos
+  transferencias). Botón "Transferir y asignar": crea las transferencias (una por origen) y asigna,
+  desde el frontend; solo con `TRANSFERIR_STOCK` y orígenes asignados al usuario, si no la
+  sugerencia queda como texto. Antes de ejecutar vuelve a pedir el stock y, si la sugerencia
+  cambió, no hace nada y avisa; si algo falla en el medio, recalcula y dice qué se llegó a hacer.
 
 ### Validación (cada parte)
 
@@ -1645,10 +1841,41 @@ plan detallado de cada parte.
 **Fuera de alcance.** El sitio de la tienda, cupones, costo de envío calculado, facturación
 electrónica, compra como invitado.
 
-## Etapa 23 — Facturación electrónica con ARCA (antes del lanzamiento)
+## Etapa 28 — Endurecimiento de seguridad (después del backend de la tienda)
+
+Pedido del usuario (2026-11-03): se hace **apenas termine el backend de la tienda (etapa 22)**, y en
+todo caso antes de ARCA (29) y del lanzamiento (30). Sale de una revisión de los puntos principales (no una
+auditoría completa): puntaje 7/10. Contra bots automáticos está bien cubierta (consultas con
+parámetros, bloqueo de intentos de login, Swagger solo en desarrollo, errores sin detalle, secretos
+por variables, BCrypt, contenedor sin root, HTTPS, aislamiento entre empresas probado); los caminos
+realistas para un ataque dirigido son los de abajo. Orden por riesgo:
+
+1. **2FA para el admin de plataforma** (TOTP con app autenticadora). Hoy una sola contraseña
+   controla todas las empresas (crear, suspender, configurar tiendas).
+2. **Sesión del ERP en la web:** el token va en `AsyncStorage` (en web es `localStorage`, legible
+   por un XSS) y dura 7 días (`JWT_EXPIRATION_MS`). Acortar la vida del token y renovarlo con
+   `/auth/refresh` (ya existe); `SecureStore` en el celular; evaluar cookie `HttpOnly` para la web.
+3. **Revisión automática de dependencias** (Dependabot de GitHub u OWASP Dependency-Check): hoy
+   nadie avisa si una librería (Spring, POI, SDK de AWS) tiene una vulnerabilidad conocida.
+4. **Headers de seguridad en Caddy** para la web: `Content-Security-Policy` (la defensa principal
+   contra XSS) y `Strict-Transport-Security`.
+5. **Monitoreo y alertas** (Sentry, ya anotado en la etapa 30): detectar rápido acorta el daño.
+
+Menores:
+- La contraseña que pone el admin al resetear a otro usuario acepta 6 caracteres
+  (`PasswordResetRequest`); la que elige el usuario pide 8 con letras y números
+  (`ChangePasswordRequest`). Igualarlas.
+- El bloqueo de intentos de login vive en memoria (`LoginAttemptService`): se reinicia con el
+  servidor y no se comparte entre instancias.
+- Límite de pedidos por IP en `/store/**` (hoy solo lectura pública: el riesgo es carga o copia
+  del catálogo, no filtración). Incluye `POST /store/me/checkout` (decisión del usuario del
+  2026-11-10: no se hizo en 22C; hoy solo frena el tope de 3 compras sin pagar por comprador).
+
+## Etapa 29 — Facturación electrónica con ARCA (antes del lanzamiento; era la 23)
 
 Charlado el 2026-10-26. **Decisión del usuario (2026-10-28): va antes del lanzamiento** (la app no
-sale a producción sin facturación); la tienda web (22) queda para después. Antes de arrancar hay que
+sale a producción sin facturación). Orden actualizado el 2026-11-03: después de la tienda (22) y de
+seguridad (28). Antes de arrancar hay que
 releer el manual vigente de WSFEv1 (`wsfev1-COMPG.pdf`, v4.7 o posterior) y confirmar los puntos
 marcados "a confirmar".
 
@@ -1877,7 +2104,7 @@ grandes, deshacer una importación.
   comprobó que detecta una fuga sacando a propósito el filtro de empresa de categorías. Un endpoint
   nuevo que reciba ids se suma a `readPathsOfB()` o a `attacks()`.
 
-## Etapa 25 — Rediseño visual (estilo "A") y estilos compartidos — EN CURSO
+## Etapa 25 — Rediseño visual (estilo "A") y estilos compartidos — HECHA
 
 Decidido el 2026-10-27 sobre el lienzo https://claude.ai/artifact/TcTV14bqmKLUyTgKhBFPiB (el usuario
 eligió la opción A y aprobó Envíos, Productos y Más con ese estilo). Pedido del usuario: aplicarlo a
@@ -2029,13 +2256,13 @@ header de la pila y la barra de pestañas siguen a todo el ancho. Propuesta orig
 principales, layouts propios para ancho grande (p. ej. Ventas en dos columnas, la barra de pestañas
 como menú lateral en escritorio). Archivos `.web.tsx` solo si una pantalla cambia por completo.
 
-## Etapa 26 — Lanzamiento (con el primer pago / VPS propio)
+## Etapa 30 — Lanzamiento (con el primer pago / VPS propio; era la 26)
 
 Pedido del usuario (2026-10-28): juntar acá lo que no se puede hacer hasta tener un cliente que
 pague o un VPS propio. Hasta entonces las demos siguen en Render + Neon (`docs/deploy.md` §11). No
 es funcionalidad nueva: es lo que hace falta para que un comercio use el ERP todos los días sin
-riesgo de perder datos. La facturación con ARCA (etapa 23) tiene que estar hecha antes; la tienda
-web (22) viene después.
+riesgo de perder datos. La tienda web (22), seguridad (28) y la facturación con ARCA (29) tienen
+que estar hechas antes (orden del 2026-11-03).
 
 **Antes de arrancar (no espera al lanzamiento).** Conviene hacerlo ya, mientras se hacen demos:
 - ~~Actualizaciones sin APK nuevo (EAS Update / `expo-updates`)~~ (2026-10-28): `runtimeVersion`
@@ -2078,7 +2305,7 @@ web (22) viene después.
 10. **Render y Neon.** Al migrar, dejarlos como staging (demos y pruebas de la tienda web, ver
     etapa 22); que ningún APK de cliente quede apuntando ahí.
 
-## Etapa 27 — Reportes como dashboard (propuesta C) — HECHA, SIN PROBAR EN LA APP
+## Etapa 27 — Reportes como dashboard (propuesta C) — HECHA
 
 Pedido del usuario (2026-11-02): la pantalla de Reportes está muy cargada (seis secciones
 apiladas); que sea un dashboard más prolijo, manejado con filtros. Se hicieron tres propuestas en

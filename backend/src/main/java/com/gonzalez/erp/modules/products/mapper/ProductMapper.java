@@ -18,6 +18,7 @@ public final class ProductMapper {
                 product.getCategory().getId(),
                 product.getCategory().getName(),
                 product.isActive(),
+                product.isPublishedOnline(),
                 variantResponses,
                 product.getCreatedAt(),
                 product.getUpdatedAt()

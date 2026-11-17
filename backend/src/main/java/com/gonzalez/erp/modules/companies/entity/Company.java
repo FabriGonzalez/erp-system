@@ -15,6 +15,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.ColumnDefault;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
@@ -51,10 +52,47 @@ public class Company extends BaseEntity {
     @Column(name = "status_changed_at")
     private Instant statusChangedAt;
 
+    // Dominio y habilitación los carga el operador: la empresa no puede reclamar un dominio ajeno.
+    @Column(name = "store_domain", unique = true)
+    private String storeDomain;
+
+    @Column(name = "store_enabled", nullable = false)
+    @Builder.Default
+    private boolean storeEnabled = false;
+
+    // Remitente de los mails de la tienda; null = MAIL_FROM. También lo carga solo el operador.
+    @Column(name = "store_mail_from", length = 254)
+    private String storeMailFrom;
+
+    @Column(name = "store_price_adjustment_percent", nullable = false, precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal storePriceAdjustmentPercent = BigDecimal.ZERO;
+
+    @Column(name = "store_rounding_step", nullable = false)
+    @Builder.Default
+    private int storeRoundingStep = 10;
+
     public void update(String name, String legalName, String taxId) {
         this.name = name;
         this.legalName = legalName;
         this.taxId = taxId;
+    }
+
+    public void updateStorePricing(BigDecimal priceAdjustmentPercent, int roundingStep) {
+        this.storePriceAdjustmentPercent = priceAdjustmentPercent;
+        this.storeRoundingStep = roundingStep;
+    }
+
+    /** Solo lo llama el operador (provisioning): la empresa no elige su dominio. */
+    public void configureStore(String storeDomain, boolean storeEnabled, String storeMailFrom) {
+        this.storeDomain = storeDomain;
+        this.storeEnabled = storeEnabled;
+        this.storeMailFrom = storeMailFrom;
+    }
+
+    /** La tienda atiende si está habilitada, tiene dominio y la empresa está activa. */
+    public boolean isStoreOpen() {
+        return storeEnabled && storeDomain != null && isActive();
     }
 
     public boolean isActive() {

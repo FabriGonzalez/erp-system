@@ -2,6 +2,7 @@ package com.gonzalez.erp.modules.provisioning.controller;
 
 import com.gonzalez.erp.modules.provisioning.dto.request.ChangeCompanyStatusRequest;
 import com.gonzalez.erp.modules.provisioning.dto.request.ProvisionCompanyRequest;
+import com.gonzalez.erp.modules.provisioning.dto.request.StoreSetupRequest;
 import com.gonzalez.erp.modules.provisioning.dto.response.CompanyResponse;
 import com.gonzalez.erp.modules.provisioning.dto.response.ProvisionCompanyResponse;
 import com.gonzalez.erp.modules.provisioning.service.ProvisioningService;
@@ -75,5 +76,23 @@ public class ProvisioningController {
             @PathVariable Long id,
             @Valid @RequestBody ChangeCompanyStatusRequest request) {
         return ResponseEntity.ok(provisioningService.changeCompanyStatus(id, request));
+    }
+
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
+    @PatchMapping("/companies/{id}/store")
+    @Operation(summary = "Configurar la tienda web de una empresa",
+               description = "Dominio (se guarda normalizado, p. ej. https://Tienda.com/ → tienda.com) y habilitación. "
+                       + "Solo PLATFORM_ADMIN: la empresa no puede elegir su dominio. Verificar antes que el dominio sea suyo.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Tienda configurada"),
+            @ApiResponse(responseCode = "400", description = "Dominio inválido, o se habilita sin dominio"),
+            @ApiResponse(responseCode = "403", description = "No es PLATFORM_ADMIN"),
+            @ApiResponse(responseCode = "404", description = "Empresa no encontrada"),
+            @ApiResponse(responseCode = "409", description = "Otra empresa ya usa ese dominio (STORE_DOMAIN_ALREADY_EXISTS)")
+    })
+    public ResponseEntity<CompanyResponse> configureStore(
+            @PathVariable Long id,
+            @Valid @RequestBody StoreSetupRequest request) {
+        return ResponseEntity.ok(provisioningService.configureStore(id, request));
     }
 }

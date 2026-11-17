@@ -43,6 +43,7 @@ public final class CustomerMapper {
                 customer.getObservations(),
                 customer.getCompany().getId(),
                 customer.isActive(),
+                customer.getOrigin(),
                 addressCount,
                 mainAddress,
                 customer.getCreatedAt(),

@@ -21,6 +21,7 @@ import com.gonzalez.erp.modules.orders.entity.Order;
 import com.gonzalez.erp.modules.orders.entity.OrderItem;
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 import com.gonzalez.erp.modules.orders.entity.SalesType;
+import com.gonzalez.erp.modules.orders.exception.InactiveOrderVariantException;
 import com.gonzalez.erp.modules.orders.repository.OrderNumberCounterRepository;
 import com.gonzalez.erp.modules.orders.repository.OrderRepository;
 import com.gonzalez.erp.modules.payments.repository.PaymentAllocationRepository;
@@ -46,6 +47,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 /** Al editar un envío, lo que ya estaba conserva el precio con que se vendió. */
@@ -146,6 +148,37 @@ class OrderUpdatePriceTest {
         assertThat(priceOf(order, SOLD_VARIANT_ID)).isEqualByComparingTo("1000");
         assertThat(priceOf(order, NEW_VARIANT_ID)).isEqualByComparingTo("500");
         assertThat(order.getTotal()).isEqualByComparingTo("2000");
+    }
+
+    @Test
+    void aSoldVariantDeactivatedLaterStaysInTheOrder() {
+        ProductVariant sold = variant(SOLD_VARIANT_ID, "1000");
+        Order order = orderWith(sold, 1);
+        sold.setActive(false);
+        stubUpdate(order, sold);
+
+        orderService.update(ORDER_ID,
+                new OrderUpdateRequest(null, List.of(new OrderItemRequest(SOLD_VARIANT_ID, 2)), null, null, null));
+
+        assertThat(order.getItems()).singleElement().satisfies(item -> assertThat(item.getQuantity()).isEqualTo(2));
+    }
+
+    @Test
+    void anInactiveVariantCannotBeAdded() {
+        ProductVariant sold = variant(SOLD_VARIANT_ID, "1000");
+        Order order = orderWith(sold, 1);
+        ProductVariant added = variant(NEW_VARIANT_ID, "500");
+        added.setActive(false);
+        when(orderRepository.findByIdAndCompanyIdForUpdate(ORDER_ID, COMPANY_ID)).thenReturn(Optional.of(order));
+        when(branchAccessService.isAccessible(branch)).thenReturn(true);
+        when(customerRepository.findByIdAndCompanyId(CUSTOMER_ID, COMPANY_ID)).thenReturn(Optional.of(customer));
+        when(productVariantRepository.findByIdWithProductAndCompany(SOLD_VARIANT_ID)).thenReturn(Optional.of(sold));
+        when(productVariantRepository.findByIdWithProductAndCompany(NEW_VARIANT_ID)).thenReturn(Optional.of(added));
+
+        assertThatThrownBy(() -> orderService.update(ORDER_ID, new OrderUpdateRequest(null, List.of(
+                new OrderItemRequest(SOLD_VARIANT_ID, 1),
+                new OrderItemRequest(NEW_VARIANT_ID, 1)), null, null, null)))
+                .isInstanceOf(InactiveOrderVariantException.class);
     }
 
     private void stubUpdate(Order order, ProductVariant... variants) {

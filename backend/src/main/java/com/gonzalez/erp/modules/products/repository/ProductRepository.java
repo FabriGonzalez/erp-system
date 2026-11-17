@@ -23,6 +23,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
      * :attributeCount atributos distintos (uno de cada atributo pedido), y el stock se suma solo
      * de esas variantes. Sin filtro, :attributeValueIds trae un id que no existe (IN no acepta
      * listas vacías).
+     * Con :onlyActiveVariants, "con stock" suma solo las variantes activas (lo que se puede vender).
      * La respuesta usa el nombre de la categoría: se trae en la misma consulta.
      */
     @EntityGraph(attributePaths = "category")
@@ -46,6 +47,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             AND (:onlyInStock = false
                  OR (SELECT COALESCE(SUM(s.quantity), 0) FROM Stock s
                      WHERE s.productVariant.product = p
+                     AND (:onlyActiveVariants = false OR s.productVariant.active = true)
                      AND (:branchId IS NULL OR s.branch.id = :branchId)
                      AND (:hasAttributeFilter = false
                           OR (SELECT COUNT(DISTINCT va.attributeValue.attribute.id) FROM ProductVariantAttribute va
@@ -80,6 +82,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             AND (:onlyInStock = false
                  OR (SELECT COALESCE(SUM(s.quantity), 0) FROM Stock s
                      WHERE s.productVariant.product = p
+                     AND (:onlyActiveVariants = false OR s.productVariant.active = true)
                      AND (:branchId IS NULL OR s.branch.id = :branchId)
                      AND (:hasAttributeFilter = false
                           OR (SELECT COUNT(DISTINCT va.attributeValue.attribute.id) FROM ProductVariantAttribute va
@@ -102,6 +105,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             @Param("search") String search,
             @Param("onlyInStock") boolean onlyInStock,
             @Param("onlyOutOfStock") boolean onlyOutOfStock,
+            @Param("onlyActiveVariants") boolean onlyActiveVariants,
             @Param("branchId") Long branchId,
             @Param("hasAttributeFilter") boolean hasAttributeFilter,
             @Param("attributeValueIds") List<Long> attributeValueIds,

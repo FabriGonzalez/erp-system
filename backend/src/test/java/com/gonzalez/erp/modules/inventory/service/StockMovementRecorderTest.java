@@ -77,4 +77,16 @@ class StockMovementRecorderTest {
         assertThat(movement.getReferenceId()).isEqualTo(100L);
         assertThat(movement.getCreatedBy()).isSameAs(user);
     }
+
+    @Test
+    void anExplicitAuthorDoesNotNeedAnEmployeeSession() {
+        SecurityContextHolder.clearContext();
+        Stock stock = Stock.builder().quantity(3).build();
+        when(userRepository.getReferenceById(USER_ID)).thenReturn(user);
+        when(stockMovementRepository.save(any(StockMovement.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        StockMovement movement = recorder.record(stock, StockMovementType.SALE, -2, 5, null, "ORDER", 100L, USER_ID);
+
+        assertThat(movement.getCreatedBy()).isSameAs(user);
+    }
 }

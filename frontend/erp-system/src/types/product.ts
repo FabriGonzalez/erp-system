@@ -135,7 +135,8 @@ export type ProductListParams = {
     q?: string;
     categoryId?: string;
     active?: boolean;
-    stock?: Exclude<StockFilter, 'ALL'>;
+    /** SELLABLE: con stock contando solo las variantes activas (catálogo de ventas). */
+    stock?: Exclude<StockFilter, 'ALL'> | 'SELLABLE';
     branchId?: string;
     /** Una misma variante tiene que tener, de cada atributo, alguno de estos valores. */
     attributeValueIds?: string[];

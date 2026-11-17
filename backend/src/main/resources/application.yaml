@@ -18,6 +18,19 @@ spring:
   flyway:
     baseline-on-migrate: true
     baseline-version: 1
+  # SMTP genérico: cambiando las variables sirve cualquier proveedor. Los defaults apuntan a
+  # Mailpit de docker-compose. Con timeouts cortos un servidor caído no deja hilos colgados.
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${MAIL_STARTTLS:false}
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
   jpa:
     hibernate:
       ddl-auto: validate
@@ -44,6 +57,49 @@ app:
   jwt:
     secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION_MS:604800000}
+  # Fotos de producto (S3-compatible). Los defaults apuntan al contenedor de docker-compose.
+  storage:
+    endpoint: ${STORAGE_ENDPOINT:http://localhost:9000}
+    region: ${STORAGE_REGION:us-east-1}
+    bucket: ${STORAGE_BUCKET:erp-images}
+    access-key: ${STORAGE_ACCESS_KEY:rustfsadmin}
+    secret-key: ${STORAGE_SECRET_KEY:rustfsadmin}
+    # Base de las URL que ven la tienda y el panel (bucket de lectura pública o CDN delante).
+    public-url: ${STORAGE_PUBLIC_URL:http://localhost:9000/erp-images}
+  # Mails de la tienda: salen del remitente de la tienda (si el operador lo cargó) o de MAIL_FROM,
+  # con el nombre de la tienda como nombre visible. Los
+  # links van al dominio de la tienda; en desarrollo, STORE_LINK_SCHEME=http y STORE_LINK_PORT=3000.
+  mail:
+    from: ${MAIL_FROM:no-reply@erp.local}
+  store:
+    link-scheme: ${STORE_LINK_SCHEME:https}
+    link-port: ${STORE_LINK_PORT:}
+    # Cuánto se reserva el stock de una compra sin pagar; el link de Mercado Pago vence a la vez.
+    payment-window: ${STORE_PAYMENT_WINDOW:30m}
+    # Vencimiento de reservas: cada 5 minutos cancela las compras sin pagar cuyo link venció hace
+    # más que el margen (deja terminar los pagos en curso). "-" en el cron la apaga.
+    expiry-cron: ${STORE_EXPIRY_CRON:0 */5 * * * *}
+    expiry-grace: ${STORE_EXPIRY_GRACE:10m}
+    # Client ID de la app de Google Cloud. Vacío = "Continuar con Google" deshabilitado (503).
+    google-client-id: ${GOOGLE_CLIENT_ID:}
+  # Clave para los secretos que hay que poder leer de nuevo (tokens de Mercado Pago): base64 de 32
+  # bytes al azar (p. ej. `openssl rand -base64 32`). Si se pierde, hay que reconectar las cuentas.
+  encryption:
+    key: ${APP_ENCRYPTION_KEY:}
+  # App de Mercado Pago de la plataforma (OAuth, con PKCE y offline_access). Sin client ID, la
+  # conexión de cuentas responde 503. La redirect URI es la del callback del backend y tiene que
+  # estar cargada igual en la app de Mercado Pago. TEST_MODE=true con credenciales de prueba.
+  mercadopago:
+    client-id: ${MERCADOPAGO_CLIENT_ID:}
+    client-secret: ${MERCADOPAGO_CLIENT_SECRET:}
+    redirect-uri: ${MERCADOPAGO_REDIRECT_URI:}
+    test-mode: ${MERCADOPAGO_TEST_MODE:false}
+    # Webhook de pagos: la clave secreta de la app (obligatoria con client ID) y la URL pública de
+    # POST /api/v1/mercadopago/webhook que va en cada preferencia (vacía = sin avisos, desarrollo).
+    webhook-secret: ${MERCADOPAGO_WEBHOOK_SECRET:}
+    notification-url: ${MERCADOPAGO_NOTIFICATION_URL:}
+    # Renovación de tokens: todos los días a las 4 (hora de Argentina). "-" la apaga.
+    renewal-cron: ${MERCADOPAGO_RENEWAL_CRON:0 0 4 * * *}
   platform-admin:
     username: ${ERP_PLATFORM_ADMIN_USERNAME:platform_admin}
     email: ${ERP_PLATFORM_ADMIN_EMAIL:platform@erp.local}

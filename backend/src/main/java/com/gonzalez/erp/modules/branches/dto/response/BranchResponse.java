@@ -9,6 +9,7 @@ public record BranchResponse(
         String phone,
         Long companyId,
         boolean active,
+        Integer storePriority,
         Instant createdAt,
         Instant updatedAt
 ) {}

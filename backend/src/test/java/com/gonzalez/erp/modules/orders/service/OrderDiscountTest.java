@@ -15,6 +15,7 @@ import com.gonzalez.erp.modules.inventory.entity.Stock;
 import com.gonzalez.erp.modules.inventory.repository.StockMovementRepository;
 import com.gonzalez.erp.modules.inventory.repository.StockRepository;
 import com.gonzalez.erp.modules.inventory.service.StockMovementRecorder;
+import com.gonzalez.erp.modules.orders.dto.request.InitialPaymentRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderItemRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderRequest;
 import com.gonzalez.erp.modules.orders.dto.request.OrderUpdateRequest;
@@ -183,6 +184,27 @@ class OrderDiscountTest {
         assertThatThrownBy(() -> orderService.create(request)).isInstanceOf(QuickSaleValidationException.class);
     }
 
+    // --- Mercado Pago solo lo registra la tienda ---
+
+    @Test
+    void aWalkInSaleCannotBePaidWithMercadoPago() {
+        when(branchAccessService.requireAccessible(BRANCH_ID)).thenReturn(branch);
+        OrderRequest request = new OrderRequest(BRANCH_ID, null, SalesType.QUICK_SALE, new BigDecimal("500"),
+                DeliveryType.LOCAL_PICKUP, null, null, null, null, null, null, PaymentMethod.MERCADO_PAGO);
+
+        assertThatThrownBy(() -> orderService.create(request)).isInstanceOf(InvalidOrderException.class);
+    }
+
+    @Test
+    void anInitialPaymentCannotBeMercadoPago() {
+        when(branchAccessService.requireAccessible(BRANCH_ID)).thenReturn(branch);
+        OrderRequest request = new OrderRequest(BRANCH_ID, CUSTOMER_ID, SalesType.QUICK_SALE, new BigDecimal("500"),
+                DeliveryType.LOCAL_PICKUP, null, null, null, null,
+                new InitialPaymentRequest(new BigDecimal("500"), PaymentMethod.MERCADO_PAGO), null, null);
+
+        assertThatThrownBy(() -> orderService.create(request)).isInstanceOf(InvalidOrderException.class);
+    }
+
     // --- Edición ---
 
     @Test
@@ -220,6 +242,16 @@ class OrderDiscountTest {
         assertThatThrownBy(() -> orderService.update(ORDER_ID, new OrderUpdateRequest(null,
                 List.of(new OrderItemRequest(VARIANT_ID, 1)), null, null, null)))
                 .isInstanceOf(InvalidOrderException.class);
+    }
+
+    @Test
+    void shippingIsAddedToTheTotalButNotToTheSubtotal() {
+        Order order = shipmentWith(2, new BigDecimal("1000"));
+        order.setShippingCost(new BigDecimal("2500"));
+        order.recalculateTotal();
+
+        assertThat(order.getTotal()).isEqualByComparingTo("29500");
+        assertThat(order.getSubtotal()).isEqualByComparingTo("28000");
     }
 
     // --- Ayudas ---

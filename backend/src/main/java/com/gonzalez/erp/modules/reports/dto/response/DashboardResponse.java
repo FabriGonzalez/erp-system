@@ -55,7 +55,8 @@ public record DashboardResponse(
     public record TopProduct(Long productVariantId, String productName, String sku, long quantity, BigDecimal total) {
     }
 
-    public record PendingOrders(long count, Instant oldestCreatedAt) {
+    // toAssign: pedidos web pagados que esperan que se elija la sucursal.
+    public record PendingOrders(long count, Instant oldestCreatedAt, long toAssign) {
     }
 
     public record LowStock(int threshold, long count, List<LowStockItem> items) {

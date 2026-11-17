@@ -25,6 +25,7 @@ const ORDER_ERRORS = {
         QUICK_SALE_INVALID:
             'La venta rápida es solo con retiro en el local y necesita un importe mayor a $0.',
         CUSTOMER_INACTIVE: 'El cliente está inactivo y no puede recibir pedidos nuevos.',
+        VARIANT_INACTIVE: 'Uno de los productos o variantes está desactivado: sacalo del pedido.',
         // En el alta: el pago inicial no puede superar el saldo del pedido.
         INVALID_PAYMENT: 'El pago inicial no es válido: no puede superar el total del pedido.',
         INVALID_SHIPPING_ADDRESS:
@@ -34,9 +35,15 @@ const ORDER_ERRORS = {
             'Una de las promos ya no está vigente o tiene un producto desactivado. Sacala del pedido para continuar.',
         ORDER_ALREADY_HAS_SHIPMENT: 'La orden ya tiene un envío registrado.',
         STOCK_NOT_FOUND: 'Uno de los productos no tiene stock en la sucursal.',
+        // Al cancelar un pedido web pagado: la devolución por Mercado Pago no salió.
+        MERCADOPAGO_REJECTED:
+            'Mercado Pago no aceptó devolver el pago, así que el pedido no se canceló. Revisá el saldo de la cuenta de Mercado Pago.',
+        MERCADOPAGO_UNAVAILABLE:
+            'Mercado Pago no responde, así que el pedido no se canceló. Probá de nuevo en unos minutos.',
     },
     byStatus: {
-        404: 'Orden no encontrada.',
+        // Al crear o editar, el 404 puede venir del cliente, la dirección, un producto o la sucursal.
+        404: 'La orden o algo que usa (cliente, dirección, producto o sucursal) ya no existe. Recargá y probá de nuevo.',
     },
 };
 
@@ -109,6 +116,7 @@ function normalizeOrder(data: OrderResponse): Order {
     return {
         id: String(data.id),
         orderNumber: data.orderNumber,
+        channel: data.channel,
         customerId:
             data.customerId !== null && data.customerId !== undefined
                 ? String(data.customerId)
@@ -146,6 +154,7 @@ function buildListQuery(params: OrderListParams): string {
     if (params.sort) query.set('sort', params.sort);
     if (params.q?.trim()) query.set('q', params.q.trim());
     if (params.status) query.set('status', params.status);
+    if (params.channel) query.set('channel', params.channel);
     if (params.branchId) query.set('branchId', params.branchId);
     if (params.salesType) query.set('salesType', params.salesType);
     if (params.deliveryType) query.set('deliveryType', params.deliveryType);
@@ -239,5 +248,21 @@ export async function dispatchOrder(id: string, token: string): Promise<Order> {
 
     return normalizeOrder(
         await handleResponse<OrderResponse>(response, 'No se pudo despachar la orden.')
+    );
+}
+
+/** Pedido web a asignar: descuenta el stock en esa sucursal y pasa a preparar. */
+export async function assignOrderBranch(id: string, branchId: string, token: string): Promise<Order> {
+    const response = await apiFetch(`${API_BASE_URL}/api/v1/orders/${id}/assign-branch`, {
+        method: 'POST',
+        headers: authHeaders(token),
+        body: JSON.stringify({ branchId: Number(branchId) }),
+    });
+
+    return normalizeOrder(
+        await handleResponse<OrderResponse>(
+            response,
+            'No se pudo asignar la sucursal.',
+        )
     );
 }

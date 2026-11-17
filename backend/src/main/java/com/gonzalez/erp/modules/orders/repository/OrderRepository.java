@@ -2,6 +2,9 @@ package com.gonzalez.erp.modules.orders.repository;
 
 import com.gonzalez.erp.modules.orders.entity.DeliveryType;
 import com.gonzalez.erp.modules.orders.entity.Order;
+import com.gonzalez.erp.modules.orders.entity.OrderChannel;
+import com.gonzalez.erp.modules.orders.entity.OrderItem;
+import com.gonzalez.erp.modules.orders.entity.OrderPromoComponent;
 import com.gonzalez.erp.modules.orders.entity.OrderStatus;
 import com.gonzalez.erp.modules.orders.entity.SalesType;
 import jakarta.persistence.LockModeType;
@@ -21,9 +24,57 @@ import java.util.Optional;
 public interface OrderRepository extends JpaRepository<Order, Long> {
     Optional<Order> findByIdAndCompanyId(Long id, Long companyId);
 
+    Optional<Order> findByCompanyIdAndCheckoutKey(Long companyId, String checkoutKey);
+
+    long countByCustomerIdAndStatus(Long customerId, OrderStatus status);
+
+    // --- Mis pedidos de la tienda: siempre por empresa, cliente y canal juntos ---
+
+    Page<Order> findByCompanyIdAndCustomerIdAndChannel(Long companyId, Long customerId, OrderChannel channel,
+                                                       Pageable pageable);
+
+    Optional<Order> findByIdAndCompanyIdAndCustomerIdAndChannel(Long id, Long companyId, Long customerId,
+                                                                OrderChannel channel);
+
+    /** Líneas sueltas de varios pedidos con variante y producto, para armarlos sin una consulta por línea. */
+    @Query("""
+            SELECT i FROM OrderItem i
+            JOIN FETCH i.productVariant v
+            JOIN FETCH v.product
+            WHERE i.order.id IN :orderIds
+            ORDER BY i.id ASC
+            """)
+    List<OrderItem> findItemsWithProductByOrderIdIn(@Param("orderIds") Collection<Long> orderIds);
+
+    /** Componentes de promo de varios pedidos con su línea, variante y producto. */
+    @Query("""
+            SELECT c FROM OrderPromoComponent c
+            JOIN FETCH c.orderPromo p
+            JOIN FETCH c.productVariant v
+            JOIN FETCH v.product
+            WHERE p.order.id IN :orderIds
+            ORDER BY p.id ASC, c.id ASC
+            """)
+    List<OrderPromoComponent> findPromoComponentsWithProductByOrderIdIn(@Param("orderIds") Collection<Long> orderIds);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT o FROM Order o WHERE o.id = :id AND o.company.id = :companyId")
     Optional<Order> findByIdAndCompanyIdForUpdate(@Param("id") Long id, @Param("companyId") Long companyId);
+
+    // Sin empresa a propósito: lo usa la tarea de vencimiento, que recorre todas las tiendas.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Order o WHERE o.id = :id")
+    Optional<Order> findByIdForUpdate(@Param("id") Long id);
+
+    /** Pedidos de la tienda sin pagar cuya reserva venció antes de {@code cutoff}, los más viejos primero. */
+    @Query("""
+            SELECT o.id FROM Order o
+            WHERE o.channel = com.gonzalez.erp.modules.orders.entity.OrderChannel.WEB
+            AND o.status = com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT
+            AND o.paymentExpiresAt < :cutoff
+            ORDER BY o.paymentExpiresAt ASC
+            """)
+    List<Long> findExpiredWebOrderIds(@Param("cutoff") Instant cutoff);
 
     // Órdenes que pueden recibir pagos: cualquier orden no cancelada del cliente.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -44,7 +95,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     );
 
     /**
-     * Órdenes no canceladas con saldo pendiente. Cada fila es
+     * Órdenes con saldo pendiente: ni canceladas ni web sin pagar, que todavía no son deuda. Cada fila es
      * [customerId (Long), orderId (Long), total (BigDecimal), allocated (BigDecimal), createdAt (Instant)].
      * Si customerId es null, devuelve las de todos los clientes de la empresa.
      */
@@ -56,7 +107,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             WHERE o.company.id = :companyId
             AND o.customer IS NOT NULL
             AND (:customerId IS NULL OR o.customer.id = :customerId)
-            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.status NOT IN (com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED, com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
             AND o.total > (SELECT COALESCE(SUM(pa2.amount), 0) FROM PaymentAllocation pa2 WHERE pa2.order = o)
             ORDER BY o.createdAt ASC, o.id ASC
             """)
@@ -76,7 +127,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             JOIN FETCH o.branch
             WHERE o.company.id = :companyId
             AND o.customer.id = :customerId
-            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.status NOT IN (com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED, com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
             AND o.total > (SELECT COALESCE(SUM(pa2.amount), 0) FROM PaymentAllocation pa2 WHERE pa2.order = o)
             ORDER BY o.createdAt ASC, o.id ASC
             """,
@@ -84,7 +135,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             SELECT COUNT(o) FROM Order o
             WHERE o.company.id = :companyId
             AND o.customer.id = :customerId
-            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.status NOT IN (com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED, com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
             AND o.total > (SELECT COALESCE(SUM(pa2.amount), 0) FROM PaymentAllocation pa2 WHERE pa2.order = o)
             """)
     Page<Object[]> findPendingOrders(
@@ -98,7 +149,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT COALESCE(MAX(CAST(SUBSTRING(o.orderNumber, 5) AS INTEGER)), 0) FROM Order o WHERE o.company.id = :companyId")
     Long getMaxOrderNumberForCompany(@Param("companyId") Long companyId);
 
-    // --- Reportes: pedidos no cancelados con createdAt en [from, to) ---
+    // --- Reportes: pedidos ni cancelados ni web sin pagar, con createdAt en [from, to) ---
 
     /** Ventas por sucursal. Cada fila es [branchId (Long), branchName (String), count (Long), total (BigDecimal)]. */
     @Query("""
@@ -107,7 +158,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             JOIN o.branch b
             WHERE o.company.id = :companyId
             AND b.id IN :branchIds
-            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.status NOT IN (com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED, com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
             AND o.createdAt >= :from AND o.createdAt < :to
             GROUP BY b.id, b.name
             ORDER BY COALESCE(SUM(o.total), 0) DESC, b.id ASC
@@ -128,7 +179,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             FROM Order o
             WHERE o.company.id = :companyId
             AND o.branch.id IN :branchIds
-            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.status NOT IN (com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED, com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
             AND o.createdAt >= :from AND o.createdAt < :to
             """)
     List<Object[]> findSalesInRange(
@@ -148,7 +199,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             WHERE o.company.id = :companyId
             AND o.branch.id IN :branchIds
             AND o.customer IS NULL
-            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.status NOT IN (com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED, com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
             AND o.createdAt >= :from AND o.createdAt < :to
             GROUP BY o.paymentMethod
             """)
@@ -172,7 +223,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             JOIN v.product p
             WHERE o.company.id = :companyId
             AND o.branch.id IN :branchIds
-            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.status NOT IN (com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED, com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
             AND o.createdAt >= :from AND o.createdAt < :to
             GROUP BY v.id, p.name, v.sku
             ORDER BY SUM(i.quantity) DESC, v.id ASC
@@ -199,7 +250,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             JOIN v.product p
             WHERE o.company.id = :companyId
             AND o.branch.id IN :branchIds
-            AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED
+            AND o.status NOT IN (com.gonzalez.erp.modules.orders.entity.OrderStatus.CANCELLED, com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
             AND o.createdAt >= :from AND o.createdAt < :to
             GROUP BY v.id, p.name, v.sku
             """)
@@ -223,13 +274,19 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("branchIds") Collection<Long> branchIds
     );
 
+    /** Pedidos web pagados que esperan que un empleado elija la sucursal (foto actual). */
+    long countByCompanyIdAndBranchIdInAndStatus(Long companyId, Collection<Long> branchIds, OrderStatus status);
+
+    // Sin estado no trae los web sin pagar: son reservas, no ventas; se ven pidiendo ese estado.
     // Las ventas sin cliente se cobran al crearse, por eso cuentan siempre como pagadas.
     @Query(value = """
             SELECT o FROM Order o
             LEFT JOIN o.customer c
             WHERE o.company.id = :companyId
             AND o.branch.id IN :branchIds
-            AND (:status IS NULL OR o.status = :status)
+            AND ((:status IS NULL AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
+                 OR o.status = :status)
+            AND (:channel IS NULL OR o.channel = :channel)
             AND (:salesType IS NULL OR o.salesType = :salesType)
             AND (:deliveryType IS NULL OR o.deliveryType = :deliveryType)
             AND (:branchId IS NULL OR o.branch.id = :branchId)
@@ -253,7 +310,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             LEFT JOIN o.customer c
             WHERE o.company.id = :companyId
             AND o.branch.id IN :branchIds
-            AND (:status IS NULL OR o.status = :status)
+            AND ((:status IS NULL AND o.status <> com.gonzalez.erp.modules.orders.entity.OrderStatus.PENDING_PAYMENT)
+                 OR o.status = :status)
+            AND (:channel IS NULL OR o.channel = :channel)
             AND (:salesType IS NULL OR o.salesType = :salesType)
             AND (:deliveryType IS NULL OR o.deliveryType = :deliveryType)
             AND (:branchId IS NULL OR o.branch.id = :branchId)
@@ -276,6 +335,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("companyId") Long companyId,
             @Param("branchIds") Collection<Long> branchIds,
             @Param("status") OrderStatus status,
+            @Param("channel") OrderChannel channel,
             @Param("salesType") SalesType salesType,
             @Param("deliveryType") DeliveryType deliveryType,
             @Param("branchId") Long branchId,

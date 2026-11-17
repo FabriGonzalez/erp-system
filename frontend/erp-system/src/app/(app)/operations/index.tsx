@@ -12,22 +12,27 @@ import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useActiveBranch } from '@/hooks/use-branch-queries';
-import { useOrders } from '@/hooks/use-order-queries';
+import { OrderListFilters, useOrders } from '@/hooks/use-order-queries';
 import { SharedStyles } from '@/styles/shared';
-import { DeliveryType, Order } from '@/types/order';
+import { Order } from '@/types/order';
 
-type OperationsFilter = 'ALL' | 'SALES' | 'SHIPMENTS';
+type OperationsFilter = 'ALL' | 'SALES' | 'SHIPMENTS' | 'WEB' | 'UNPAID_WEB';
 
 const FILTERS: { label: string; value: OperationsFilter }[] = [
     { label: 'Todas', value: 'ALL' },
     { label: 'Ventas', value: 'SALES' },
     { label: 'Envíos', value: 'SHIPMENTS' },
+    { label: 'Web', value: 'WEB' },
+    { label: 'Sin pagar', value: 'UNPAID_WEB' },
 ];
 
-const DELIVERY_TYPE_BY_FILTER: Record<OperationsFilter, DeliveryType | undefined> = {
-    ALL: undefined,
-    SALES: 'LOCAL_PICKUP',
-    SHIPMENTS: 'SHIPPING',
+// Sin estado el backend no trae los web sin pagar: son reservas, se ven solo con su filtro.
+const PARAMS_BY_FILTER: Record<OperationsFilter, Omit<OrderListFilters, 'branchId'>> = {
+    ALL: {},
+    SALES: { deliveryType: 'LOCAL_PICKUP' },
+    SHIPMENTS: { deliveryType: 'SHIPPING' },
+    WEB: { channel: 'WEB' },
+    UNPAID_WEB: { channel: 'WEB', status: 'PENDING_PAYMENT' },
 };
 
 export default function OperationsScreen() {
@@ -41,7 +46,7 @@ export default function OperationsScreen() {
         error,
         loadMore,
         refresh,
-    } = useOrders({ branchId: activeBranch?.id, deliveryType: DELIVERY_TYPE_BY_FILTER[filter] });
+    } = useOrders({ branchId: activeBranch?.id, ...PARAMS_BY_FILTER[filter] });
 
     function handleOpen(order: Order) {
         router.push({ pathname: '/operations/[id]', params: { id: order.id } });

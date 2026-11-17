@@ -69,6 +69,16 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
 
     @Override
     public void registerOrderPayment(Order order, BigDecimal amount, PaymentMethod method, Long userId, Long companyId) {
+        register(order, amount, method, userId, null, companyId);
+    }
+
+    @Override
+    public void registerMercadoPagoPayment(Order order, BigDecimal amount, String mpPaymentId, Long companyId) {
+        register(order, amount, PaymentMethod.MERCADO_PAGO, null, mpPaymentId, companyId);
+    }
+
+    private void register(Order order, BigDecimal amount, PaymentMethod method, Long userId, String mpPaymentId,
+                          Long companyId) {
         Customer customer = requireCustomer(order);
 
         if (amount == null || amount.signum() <= 0) {
@@ -88,7 +98,8 @@ public class OrderPaymentServiceImpl implements OrderPaymentService {
                 .amount(amount)
                 .method(method)
                 .status(PaymentStatus.ACTIVE)
-                .createdBy(userRepository.getReferenceById(userId))
+                .createdBy(userId != null ? userRepository.getReferenceById(userId) : null)
+                .mpPaymentId(mpPaymentId)
                 .build());
 
         customerAccountService.applyTransaction(
