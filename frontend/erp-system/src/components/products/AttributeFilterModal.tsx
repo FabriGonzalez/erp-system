@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { AppButton } from '@/components/ui/AppButton';
+import { ColorSwatchPreview } from '@/components/attributes/ColorSwatchPreview';
 import { FilterChip } from '@/components/ui/FilterChip';
 import { ModalCard } from '@/components/ui/ModalCard';
 import { SectionHeader } from '@/components/ui/SectionHeader';
@@ -89,6 +90,7 @@ export function AttributeFilterModal({ value, onApply, onClose, categoryId }: At
                                 <FilterChip
                                     key={item.id}
                                     label={item.name}
+                                    leading={item.swatch ? <ColorSwatchPreview colors={item.swatch.colors} size={14} /> : undefined}
                                     selected={draft[attribute.id]?.includes(item.id) ?? false}
                                     onPress={() => toggle(attribute.id, item.id)}
                                 />

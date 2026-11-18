@@ -1,3 +1,5 @@
+import { AttributeValuesLabel } from '@/components/attributes/AttributeValuesLabel';
+import { ColorSwatchPreview } from '@/components/attributes/ColorSwatchPreview';
 import { ProductAttributeFormModal } from '@/components/attributes/ProductAttributeFormModal';
 import { ProductAttributeValueFormModal } from '@/components/attributes/ProductAttributeValueFormModal';
 import { CategoryFormModal } from '@/components/categories/CategoryFormModal';
@@ -443,6 +445,7 @@ export function ProductForm({
                                                     <FilterChip
                                                         key={value.id}
                                                         label={value.name}
+                                                        leading={value.swatch ? <ColorSwatchPreview colors={value.swatch.colors} size={14} /> : undefined}
                                                         selected={selected}
                                                         onPress={() => toggleValue(attribute.id, value.id)}
                                                     />
@@ -476,19 +479,13 @@ export function ProductForm({
                             style={[SharedStyles.card, styles.variantCard]}
                         >
                             {variantMode && (
-                                <Text style={styles.variantTitle}>
-                                    {variant.attributes
-                                        .map(
-                                            (attribute) =>
-                                                attributeValues.find(
-                                                    (value) =>
-                                                        value.id ===
-                                                        attribute.attributeValueId,
-                                                )?.name,
-                                        )
-                                        .filter(Boolean)
-                                        .join(' / ') || 'Variante manual'}
-                                </Text>
+                                <AttributeValuesLabel
+                                    values={variant.attributes.map((attribute) =>
+                                        attributeValues.find((value) => value.id === attribute.attributeValueId) ?? {})}
+                                    separator=" / "
+                                    fallback="Variante manual"
+                                    textStyle={styles.variantTitle}
+                                />
                             )}
 
                             <View style={styles.row}>

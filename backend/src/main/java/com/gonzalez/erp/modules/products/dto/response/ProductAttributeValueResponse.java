@@ -1,5 +1,7 @@
 package com.gonzalez.erp.modules.products.dto.response;
 
+import com.gonzalez.erp.modules.products.dto.ColorSwatch;
+
 import java.time.Instant;
 
 public record ProductAttributeValueResponse(
@@ -7,6 +9,7 @@ public record ProductAttributeValueResponse(
         Long attributeId,
         String attributeName,
         String value,
+        ColorSwatch swatch,
         boolean active,
         Instant createdAt,
         Instant updatedAt

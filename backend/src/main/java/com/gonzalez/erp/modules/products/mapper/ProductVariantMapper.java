@@ -26,15 +26,7 @@ public final class ProductVariantMapper {
                 : List.of();
 
         List<ProductAttributeValueResponse> attributeValues = attrs.stream()
-                .map(a -> new ProductAttributeValueResponse(
-                        a.getAttributeValue().getId(),
-                        a.getAttributeValue().getAttribute().getId(),
-                        a.getAttributeValue().getAttribute().getName(),
-                        a.getAttributeValue().getValue(),
-                        a.getAttributeValue().isActive(),
-                        a.getAttributeValue().getCreatedAt(),
-                        a.getAttributeValue().getUpdatedAt()
-                ))
+                .map(a -> ProductAttributeMapper.toValueResponse(a.getAttributeValue()))
                 .toList();
 
         return new ProductVariantResponse(

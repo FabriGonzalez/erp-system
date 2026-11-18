@@ -91,7 +91,9 @@ class StoreCatalogTests {
         jdbc.update("UPDATE branches SET store_priority = id WHERE id IN (?, ?)", central, warehouse);
         Long size = id(call(a, "POST", "/product-attributes", Map.of("name", "Talle"), STORE_A));
         Long m = id(call(a, "POST", "/product-attributes/" + size + "/values", Map.of("value", "M"), STORE_A));
-        Long l = id(call(a, "POST", "/product-attributes/" + size + "/values", Map.of("value", "L"), STORE_A));
+        // Los colores llegan en minúsculas y se guardan en mayúsculas.
+        Long l = id(call(a, "POST", "/product-attributes/" + size + "/values",
+                Map.of("value", "L", "swatch", Map.of("colors", List.of("#000000", "#ffffff"))), STORE_A));
         Long shirts = id(call(a, "POST", "/categories", Map.of("name", "Remeras", "attributeIds", List.of(size)), STORE_A));
         Long old = id(call(a, "POST", "/categories", Map.of("name", "Viejas"), STORE_A));
         ids.put("shirts", shirts);
@@ -250,6 +252,7 @@ class StoreCatalogTests {
         JsonNode first = variants.get(0);
         assertThat(first.get("attributes").get(0).get("name").asString()).isEqualTo("Talle");
         assertThat(first.get("attributes").get(0).get("value").asString()).isEqualTo("M");
+        assertThat(first.get("attributes").get(0).get("swatch").isNull()).isTrue();
         assertThat(decimal(first, "price")).isEqualByComparingTo("1100");
         assertThat(first.get("availability").asString()).isEqualTo("AVAILABLE");
         // Sin fotos propias, la variante muestra las del producto.
@@ -257,6 +260,8 @@ class StoreCatalogTests {
         JsonNode second = variants.get(1);
         assertThat(decimal(second, "price")).isEqualByComparingTo("2200");
         assertThat(second.get("availability").asString()).isEqualTo("LOW_STOCK");
+        assertThat(urls(second.get("attributes").get(0).get("swatch").get("colors")))
+                .containsExactly("#000000", "#FFFFFF");
 
         JsonNode sweater = ok(store(STORE_A, "/store/products/" + ids.get("sweater")));
         assertThat(urls(sweater.get("images"))).singleElement().satisfies(url -> assertThat(url).endsWith("/v.png"));
@@ -341,6 +346,27 @@ class StoreCatalogTests {
         // Nada del ERP: ni el precio ERP, ni fechas de inicio, ni estado.
         assertThat(combo.properties().stream().map(Map.Entry::getKey).toList()).containsExactlyInAnyOrder(
                 "id", "name", "description", "webPrice", "regularWebPrice", "savings", "availability", "endDate", "items");
+    }
+
+    @Test
+    void invalidSwatchesAreRejectedAndEditingWithoutSwatchClearsIt() {
+        Long attribute = id(call(adminA, "POST", "/product-attributes", Map.of("name", "Color"), STORE_A));
+        String values = "/product-attributes/" + attribute + "/values";
+        List<String> six = List.of("#000000", "#111111", "#222222", "#333333", "#444444", "#555555");
+        assertThat(call(adminA, "POST", values, Map.of("value", "Seis", "swatch", Map.of("colors", six)), STORE_A).status())
+                .isEqualTo(400);
+        assertThat(call(adminA, "POST", values, Map.of("value", "Rojo", "swatch", Map.of("colors", List.of("red"))), STORE_A).status())
+                .isEqualTo(400);
+        assertThat(call(adminA, "POST", values, Map.of("value", "Vacio", "swatch", Map.of("colors", List.of())), STORE_A).status())
+                .isEqualTo(400);
+
+        JsonNode boca = ok(call(adminA, "POST", values,
+                Map.of("value", "Boca", "swatch", Map.of("colors", List.of("#003A8C", "#FFD100", "#003A8C"))), STORE_A));
+        assertThat(urls(boca.get("swatch").get("colors"))).containsExactly("#003A8C", "#FFD100", "#003A8C");
+
+        JsonNode edited = ok(call(adminA, "PATCH", "/product-attributes/values/" + boca.get("id").asLong(),
+                Map.of("value", "Boca"), STORE_A));
+        assertThat(edited.get("swatch").isNull()).isTrue();
     }
 
     @Test

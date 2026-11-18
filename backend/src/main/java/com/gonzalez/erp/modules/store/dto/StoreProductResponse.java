@@ -1,5 +1,7 @@
 package com.gonzalez.erp.modules.store.dto;
 
+import com.gonzalez.erp.modules.products.dto.ColorSwatch;
+
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -26,6 +28,8 @@ public record StoreProductResponse(
 
     public record Attribute(
             String name,
-            String value
+            String value,
+            // null si el valor no tiene muestra de color.
+            ColorSwatch swatch
     ) {}
 }

@@ -355,7 +355,7 @@ class ProductImportServiceImplTest {
     }
 
     private static ProductAttributeValueResponse valueResponse(Long id) {
-        return new ProductAttributeValueResponse(id, null, null, null, true, null, null);
+        return new ProductAttributeValueResponse(id, null, null, null, null, true, null, null);
     }
 
     private static byte[] csv(String content) {

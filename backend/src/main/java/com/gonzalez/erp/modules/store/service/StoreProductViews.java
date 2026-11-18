@@ -1,5 +1,6 @@
 package com.gonzalez.erp.modules.store.service;
 
+import com.gonzalez.erp.modules.products.dto.ColorSwatch;
 import com.gonzalez.erp.modules.products.entity.ProductImage;
 import com.gonzalez.erp.modules.products.entity.ProductVariant;
 import com.gonzalez.erp.modules.products.entity.ProductVariantAttribute;
@@ -56,7 +57,8 @@ public class StoreProductViews {
         return variant.getAttributes().stream()
                 .map(ProductVariantAttribute::getAttributeValue)
                 .filter(Objects::nonNull)
-                .map(value -> new StoreProductResponse.Attribute(value.getAttribute().getName(), value.getValue()))
+                .map(value -> new StoreProductResponse.Attribute(
+                        value.getAttribute().getName(), value.getValue(), ColorSwatch.fromColumn(value.getSwatchColors())))
                 .sorted(Comparator.comparing(StoreProductResponse.Attribute::name))
                 .toList();
     }

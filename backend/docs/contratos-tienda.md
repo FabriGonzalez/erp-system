@@ -83,6 +83,7 @@ Con el BFF no se usa, porque los pedidos salen del servidor de Next y no del nav
 - `availability` (`StoreAvailability`): `AVAILABLE`, `LOW_STOCK`, `OUT_OF_STOCK`. Nunca se expone la cantidad exacta.
 - `deliveryType`: `LOCAL_PICKUP` o `SHIPPING`.
 - `fulfillment` (`StoreFulfillment`): `SINGLE_BRANCH`; `MULTIPLE_BRANCHES` (hay stock sumando sucursales pero ninguna lo arma sola: el sitio avisa que puede demorar); `UNAVAILABLE` (alguna línea no se puede comprar, o el carrito está vacío).
+- `attributes` (`Attribute`): `{ "name", "value", "swatch" }`, ordenados por nombre. `swatch` es la muestra de color que se carga en el ERP en el valor del atributo: `{ "colors": ["#000000", "#FFFFFF"] }`, de 1 a 5 colores `#RRGGBB` en mayúsculas, el primero es el primario; `null` si el valor no tiene muestra. Cómo se dibuja (liso, rayas, mitades) lo decide la tienda. Viene igual en el catálogo y en los pedidos.
 - Precios: `BigDecimal` en ARS, siempre **precio web** (precio del ERP con el ajuste y el redondeo de la tienda).
 - Fechas: `Instant` en ISO-8601 UTC; `endDate` de promos es `LocalDate` (`2026-11-30`).
 
@@ -150,7 +151,7 @@ Producto oculto, inexistente o de otra tienda: 404.
   "variants": [
     {
       "id": 11,
-      "attributes": [ { "name": "Talle", "value": "M" } ],
+      "attributes": [ { "name": "Color", "value": "Negro", "swatch": { "colors": ["#000000"] } }, { "name": "Talle", "value": "M", "swatch": null } ],
       "price": 25000,
       "images": ["https://..."],
       "availability": "LOW_STOCK"
@@ -412,7 +413,7 @@ Base: `/me/orders`. Un pedido inexistente, de otro comprador o que sea una venta
   },
   "items": [
     { "productId": 4, "productVariantId": 11, "productName": "Buzo",
-      "attributes": [ { "name": "Talle", "value": "M" } ],
+      "attributes": [ { "name": "Talle", "value": "M", "swatch": null } ],
       "quantity": 1, "unitPrice": 25000, "lineTotal": 25000, "imageUrl": "https://..." }
   ],
   "promos": [

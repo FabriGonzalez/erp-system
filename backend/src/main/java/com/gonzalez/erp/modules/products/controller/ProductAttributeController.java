@@ -107,7 +107,7 @@ public class ProductAttributeController {
 
     @PreAuthorize("hasAuthority('ADMINISTRAR_PRODUCTOS')")
     @PostMapping("/{id}/values")
-    @Operation(summary = "Agregar valor al atributo", description = "Agrega un valor a un atributo existente. El valor debe ser único dentro del atributo.")
+    @Operation(summary = "Agregar valor al atributo", description = "Agrega un valor a un atributo existente. El valor debe ser único dentro del atributo. La muestra de color (hasta 5 colores #RRGGBB) es opcional.")
     @ApiResponse(responseCode = "201", description = "Valor agregado exitosamente")
     @ApiResponse(responseCode = "409", description = "Ya existe un valor con ese texto para este atributo",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -121,7 +121,7 @@ public class ProductAttributeController {
 
     @PreAuthorize("hasAuthority('ADMINISTRAR_PRODUCTOS')")
     @PatchMapping("/values/{valueId}")
-    @Operation(summary = "Actualizar valor", description = "Actualiza el texto de un valor de atributo.")
+    @Operation(summary = "Actualizar valor", description = "Actualiza el texto y la muestra de color de un valor de atributo. Sin swatch, la muestra se borra.")
     public ResponseEntity<ProductAttributeValueResponse> updateValue(
             @Parameter(description = "ID del valor")
             @PathVariable Long valueId,
