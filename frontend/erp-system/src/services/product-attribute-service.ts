@@ -47,6 +47,7 @@ function normalizeValue(data: ProductAttributeValueResponse): ProductAttributeVa
         attributeId: String(data.attributeId),
         attributeName: data.attributeName,
         name: data.value,
+        swatch: data.swatch ?? null,
         active: data.active,
         createdAt: data.createdAt ?? null,
         updatedAt: data.updatedAt ?? null,
@@ -118,7 +119,7 @@ async function mutateValue(
     const response = await apiFetch(`${API_BASE_URL}/api/v1/product-attributes${path}`, {
         method,
         headers: headers(token),
-        body: data ? JSON.stringify({ value: data.value.trim() }) : undefined,
+        body: data ? JSON.stringify({ value: data.value.trim(), swatch: data.swatch }) : undefined,
     });
     return normalizeValue(await responseData<ProductAttributeValueResponse>(
         response,

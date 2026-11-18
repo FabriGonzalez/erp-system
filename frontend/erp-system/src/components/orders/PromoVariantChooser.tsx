@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { AttributeValuesLabel } from '@/components/attributes/AttributeValuesLabel';
 import { AppButton } from '@/components/ui/AppButton';
 import { ModalScreen } from '@/components/ui/ModalScreen';
 import { Colors } from '@/constants/colors';
@@ -23,10 +24,6 @@ type PromoVariantChooserProps = {
 
 /** Variante elegida para cada unidad, por producto de la promo. */
 type Selections = Record<string, (ProductVariant | null)[]>;
-
-function variantLabel(variant: ProductVariant) {
-    return variant.attributes.map((attribute) => attribute.valueName).filter(Boolean).join(' · ') || 'Única';
-}
 
 /**
  * Elige la variante de cada unidad de una promo (2 remeras: una M y una L, o las dos M). Una
@@ -158,9 +155,15 @@ function ProductUnits({ item, branchId, selected, countChosen, onSelect }: Produ
                                         onPress={() => onSelect(unit, variant)}
                                         disabled={!isAvailable}
                                     >
-                                        <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                                            {variantLabel(variant)}
-                                        </Text>
+                                        <AttributeValuesLabel
+                                            values={variant.attributes.map((attribute) => ({
+                                                name: attribute.valueName,
+                                                swatch: attribute.swatch,
+                                            }))}
+                                            separator=" · "
+                                            fallback="Única"
+                                            textStyle={[styles.chipText, isSelected && styles.chipTextSelected]}
+                                        />
                                         <Text style={[styles.chipDetail, isSelected && styles.chipTextSelected]}>
                                             {isAvailable ? formatCurrency(variant.price) : 'Sin stock'}
                                         </Text>

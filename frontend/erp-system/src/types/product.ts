@@ -1,4 +1,4 @@
-import type { ProductAttributeValueResponse } from '@/types/product-attribute';
+import type { ColorSwatch, ProductAttributeValueResponse } from '@/types/product-attribute';
 
 export type Category = {
     id: string;
@@ -31,6 +31,7 @@ export type ProductVariantAttribute = {
     // Vienen en el producto del backend; las variantes que arma el formulario solo tienen ids.
     attributeName?: string;
     valueName?: string;
+    swatch?: ColorSwatch | null;
 };
 
 export type ProductUpdateRequest = {

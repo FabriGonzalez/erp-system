@@ -67,6 +67,7 @@ function normalizeProduct(data: ProductResponse): Product {
                     attributeValueId: String(attribute.id),
                     attributeName: attribute.attributeName,
                     valueName: attribute.value,
+                    swatch: attribute.swatch ?? null,
                 })),
                 stockByBranch: Object.fromEntries(
                     (variant.stock ?? []).map((stock) => [
